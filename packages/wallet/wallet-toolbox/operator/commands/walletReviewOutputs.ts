@@ -67,8 +67,9 @@ async function reviewUserOutputs(
     }
   )
   if (release) await verifyReleasedOutputs(storage, sdk, userId, result.outputs)
+  const { numericTotalOutputs } = await import('../../out/src/index.js')
   return {
-    invalidOutputs: result.totalOutputs,
+    invalidOutputs: numericTotalOutputs(result),
     invalidSatoshis: result.outputs.reduce((sum, output) => sum + output.satoshis, 0)
   }
 }

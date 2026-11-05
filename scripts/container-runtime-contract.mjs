@@ -212,6 +212,17 @@ const contracts = {
     ],
     forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
+  },
+  'webrtpay-relay': {
+    port: 8787,
+    environment: {
+      PUBLIC_URLS: 'wss://relay.container-contract.example'
+    },
+    invalidEnvironment: { PORT: 'invalid' },
+    liveness: '/health',
+    readiness: '/ready',
+    transaction: { method: 'GET', path: '/health', status: 200 },
+    migration: 'not-applicable'
   }
 }
 

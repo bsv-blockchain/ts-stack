@@ -2,9 +2,9 @@
 id: test-quality-governance
 title: 'Test Quality and Skip Governance'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-26'
-last_verified: '2026-08-26'
+version: '1.2.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, testing]
@@ -77,8 +77,8 @@ pnpm --filter @bsv/sdk test:resource
 
 ## Property-based security tests
 
-Required CI uses `fast-check` to generate and shrink unexpected inputs across
-25 packages and the stack's highest-risk trust boundaries:
+Required CI uses `fast-check` to generate and shrink unexpected inputs at the
+registered packages' highest-risk trust boundaries:
 
 - binary and text codecs: SDK Base58Check, DID base64url/multibase/SD-JWT,
   Bitcoin script numbers, asset outpoints, wallet action packs, and native BDK
@@ -109,8 +109,8 @@ Every property suite and package declaration is registered under
 `propertyTesting` in the policy. The governance check rejects a removed suite,
 an unregistered `*.property.test.ts`, a missing package command, an undeclared
 library/version, a missing trust-boundary/invariant description, or a run budget
-below 300 generated cases. It also inventories all 33 package manifests: each
-must either own a registered property suite or have a dated, owned exclusion
+below 300 generated cases. It also inventories all package manifests discovered
+under `packages/`: each must either own a registered property suite or have a dated, owned exclusion
 that explains why the package is only an adapter, composition layer, example,
 or platform harness. This prevents both silent coverage gaps and low-value
 properties added solely to increase a package count.
@@ -151,76 +151,41 @@ Changes that introduce a new parser, codec, serializer, cryptographic framing
 rule, network destination, or authorization decision must extend this registry
 when an arbitrary-input invariant can be stated.
 
-## Mutation-validated fuzzing
+<a id="mutation-validated-fuzzing"></a>
 
-Property generation is only valuable when its assertions can detect a broken
-invariant. Every one of the 25 registered property suites therefore has a
-matching Stryker mutation target. The target mutates the implementation owned
-by that property boundary and runs the smallest relevant combination of
-property and deterministic regression tests. This catches weak round trips,
-uncorrelated generators, assertions that only prove “did not throw,” and rare
-boundaries that random generation is unlikely to reach.
+## Background mutation findings
 
-The machine-readable ratchet is
-`governance/mutation-testing/policy.json`. For each target it records the same
-package, risk, trust boundary, and property suite as the property policy, plus
-its measured minimum mutation score. All targets reject:
+Mutation testing audits the strength of deterministic and property assertions.
+It runs only as background work and never blocks editing, pushes, PR review,
+merge, publication or deployment. This applies to every risk tier and shared
+control. Scores, old receipts and open mutation findings are not admission inputs.
 
-- any `NoCoverage` mutant in the selected implementation boundary;
-- any compile-error or runtime-error mutant, which does not prove test
-  detection; and
-- a mutation-score regression below the target's reviewed baseline.
+The complete target/property/source registry remains in
+`governance/mutation-testing/policy.json` and `targets.mjs`. No target, canonical
+site, property case, deterministic seed, native fixture or per-mutant deadline is
+removed to make the audit appear successful. Raw scores, survivors, uncovered and
+invalid sites remain visible. Property interruptions and Jest runner deadlines
+reported as kills are separately identified as incomplete assertion evidence.
 
-Surviving mutants are not automatically ignored. Review them to decide whether
-they reveal a missing negative case, an insufficiently correlated generator,
-an unasserted observable result, redundant implementation logic, or a genuinely
-equivalent transformation. Prefer a deterministic regression plus the general
-property when a survivor identifies a concrete boundary. Narrow a mutation
-scope only to the implementation contract described by the registered
-property; never exclude product code merely to raise the score.
+The independent workflow accepts one explicit target/partition from main, has a
+30-minute audit job cap and five-minute reporter cap, and retains available raw
+reports for 30 days. It has no workflow-call or qualified-source output and no
+automatic full-registry schedule. Failed, canceled and incomplete audits raise a
+metadata-only triage issue with source/run links; no raw potentially sensitive
+failure payload is copied into an issue. Successful audits do not automatically
+close existing findings. Security findings follow the private security policy.
 
-Pull requests run targets whose registered implementation, property,
-regression, configuration, or policy inputs changed. Lockfile changes select
-only targets owned by importers whose dependency snapshots changed. Root
-mutation engine, workspace toolchain, or scheduled full-matrix workflow changes
-fan out to all targets; selector, scoring, unrelated SDK, CI, or governance
-edits do not. Selector and score evaluation are covered by the zero-install
-repository contract. The independent `Mutation quality` workflow runs the full
-matrix every Sunday and can run one exact target manually. Targets execute
-in parallel, reuse one workspace build, cancel unfinished siblings after a
-failure, and preserve machine-readable reports for 30 days. Mutation runs use
-the policy's fixed 300-case fast-check seed by default so the dry run and every
-mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
-`FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit replay
-or deeper local investigation.
+Triage survivors into a missing oracle, redundant/equivalent transformation or
+actual product defect. Add a focused regression for a reproduced contract failure
+and handle it under normal defect/security policy. The actual contract tests
+remain relevant to affected changes; the campaign remains nonblocking.
 
-Pull-request CI applies the same dependency graph to package regressions,
-browser/mobile consumers, infrastructure, and runtime images. Empty image and
-infrastructure matrices do not allocate build runners. The standalone
-TypeScript conformance workflow runs only when its vectors, specifications,
-generator, or workflow change; SDK-dependent conformance behavior remains an
-affected workspace regression. Cheap repository, dependency, scope, and Sonar
-checks gate installation and compilation, matrix lanes cancel siblings on a
-failure, and every CI job has a reviewed timeout instead of GitHub's six-hour
-default. The zero-install orchestration tests enforce these resource and
-fail-fast controls.
+Earlier whole-campaign scheduling and qualification records are preserved in Git
+history and `governance/mutation-testing/REVIEW-*.md`. They are historical evidence,
+not current release or contribution requirements. Fast unit and installed-compiler
+control tests remain ordinary code tests; they do not execute mutation campaigns.
 
-List and run targets locally:
-
-```sh
-pnpm test:mutation --list
-pnpm test:mutation --target p2p-messages
-pnpm test:mutation --all
-```
-
-The mutation score follows Stryker's valid-mutant definition: killed and timed
-out mutants are detected; survived and uncovered mutants are undetected;
-compile and runtime errors are excluded from the score but rejected separately
-by this repository's policy. A score is a ratchet, not a substitute for
-reviewing the surviving-mutant report and the semantic quality of each
-generator.
-
-Before running a governed non-PR suite, read its policy prerequisites. After the
-run, perform its cleanup and attach evidence to the tracker or release record.
-No private credential, production wallet data, or secret output belongs in CI
-logs.
+The former reusable admission executor `mutation-execution.yml` is removed,
+including its unused checkout and interpolated matrix shell commands. Git history
+retains old executions; only the bounded standalone background audit remains.
+No publisher or CI caller can invoke the retired executor.

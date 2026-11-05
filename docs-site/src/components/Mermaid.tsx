@@ -13,37 +13,39 @@ export default function Mermaid({ code }: Readonly<Props>) {
   useEffect(() => {
     if (!ref.current) return
 
-    import('mermaid').then(({ default: mermaid }) => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'dark',
-        themeVariables: {
-          primaryColor: '#16161f',
-          primaryTextColor: '#e2e8f0',
-          primaryBorderColor: '#2a2a3d',
-          lineColor: '#6b7280',
-          secondaryColor: '#111119',
-          tertiaryColor: '#0c0c14',
-          background: '#0c0c14',
-          mainBkg: '#16161f',
-          nodeBorder: '#2a2a3d',
-          clusterBkg: '#111119',
-          titleColor: '#e2e8f0',
-          edgeLabelBackground: '#16161f',
-          attributeBackgroundColorEven: '#111119',
-          attributeBackgroundColorOdd: '#16161f'
-        },
-        fontFamily: "'JetBrains Mono', monospace"
-      })
-
-      const id = `mermaid-${renderId}`
-      mermaid
-        .render(id, code)
-        .then(({ svg }) => {
-          if (ref.current) ref.current.innerHTML = svg
+    import('mermaid')
+      .then(({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          themeVariables: {
+            primaryColor: '#16161f',
+            primaryTextColor: '#e2e8f0',
+            primaryBorderColor: '#2a2a3d',
+            lineColor: '#6b7280',
+            secondaryColor: '#111119',
+            tertiaryColor: '#0c0c14',
+            background: '#0c0c14',
+            mainBkg: '#16161f',
+            nodeBorder: '#2a2a3d',
+            clusterBkg: '#111119',
+            titleColor: '#e2e8f0',
+            edgeLabelBackground: '#16161f',
+            attributeBackgroundColorEven: '#111119',
+            attributeBackgroundColorOdd: '#16161f'
+          },
+          fontFamily: "'JetBrains Mono', monospace"
         })
-        .catch(err => setError(String(err)))
-    })
+
+        const id = `mermaid-${renderId}`
+        mermaid
+          .render(id, code)
+          .then(({ svg }) => {
+            if (ref.current) ref.current.innerHTML = svg
+          })
+          .catch(err => setError(String(err)))
+      })
+      .catch(err => setError(String(err)))
   }, [code])
 
   if (error) {

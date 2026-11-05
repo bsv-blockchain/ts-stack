@@ -10,6 +10,11 @@ import { StorageProvider } from '../StorageProvider'
 import { WalletStorageManager } from '../WalletStorageManager'
 import { syncTransferDigest } from '../remoting/SyncTransfer'
 
+// A smaller response cap than production's 8 MiB keeps every staged-transfer path
+// (oversized record, multi-part writes and reads, resume, lost acknowledgements)
+// while moving under a fifth of the bytes; parts stay at the production 256 KiB.
+const responseCapBytes = 1024 * 1024
+
 async function local(): Promise<StorageIdb> {
   const s = new StorageIdb(StorageProvider.createStorageBaseOptions('test'))
   s.dbName = `sync-large-${randomUUID()}`
@@ -36,6 +41,7 @@ test.each([0, 1000])(
       wallet: remote.wallet,
       monetize: false,
       logRpcRequests: false,
+      maxRpcResponseBytes: responseCapBytes,
       calculateRequestPrice: async () => 0
     })
     let client: StorageClient | undefined
@@ -49,8 +55,9 @@ test.each([0, 1000])(
       const manager = new WalletStorageManager(identityKey, source)
       await manager.makeAvailable()
       const { user } = await source.findOrInsertUser(identityKey)
-      // Synthetic storage bytes, never funded, signed or broadcast. Larger than the 8 MiB response cap even in base64.
-      const bytes = new Uint8Array(7 * 1024 * 1024).fill(173)
+      // Synthetic storage bytes, never funded, signed or broadcast. Larger than the response cap
+      // before base64, and six parts with a partial last part.
+      const bytes = new Uint8Array(5 * 256 * 1024 + 4096).fill(173)
       const now = new Date()
       await source.insertTransaction({
         transactionId: 0,
@@ -142,6 +149,7 @@ test.each([0, 1000])(
         wallet: remote.wallet,
         monetize: false,
         logRpcRequests: false,
+        maxRpcResponseBytes: responseCapBytes,
         calculateRequestPrice: async () => 0
       })
       server.start()
@@ -223,7 +231,7 @@ test.each([0, 1000])(
       await restored.dropAllData()
       delayedTransport.mockRestore()
     }
-    // The 1-second-latency variant deliberately spans hundreds of authenticated
+    // The 1-second-latency variant deliberately spans dozens of authenticated
     // transport calls after the authenticated framing/retry gates; keep the production
     // deadlines under test without letting Jest's harness deadline pre-empt it.
   },

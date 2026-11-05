@@ -5,6 +5,13 @@
 
 Mobile build of [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) — the reference [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) wallet implementation. It provides mobile-safe wallet, signer, services, monitor, and remote storage APIs without Knex, SQLite/MySQL native bindings, IndexedDB, or Node-only IO.
 
+Remote `StorageClient` calls accept `authFetchOptions` in the existing third
+constructor argument. For a longer authenticated request, configure both
+`requestTimeoutMs` and `responseTimeoutMs` with an SDK that supports the latter.
+Omission preserves the installed SDK defaults; existing SDK peer ranges and
+consumer calls are unchanged. See the
+[remote storage timeout guide](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox#remote-storage-timeouts).
+
 Use this package in:
 
 - React Native apps
@@ -12,6 +19,20 @@ Use this package in:
 - Other mobile runtimes that provide `fetch`, Web Crypto, and the required web-compatible globals
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
+
+## Local recovery capability boundary
+
+The coordinated 2.15.0 source candidate preserves this wrapper's existing APIs
+and SDK peer range. Core's new local SQLite action/funding recovery controllers
+are separate Node deep imports; this package does not bundle or expose them.
+An upgrade does not give IndexedDB, mobile or remote storage a durable operation
+journal. Ordinary BRC-100 methods retain their existing behavior.
+
+When a host separately adopts core recovery, preserve its whole consistent
+wallet database and keys. Ordinary entity export/sync does not include those
+auxiliary journals. Reconcile outstanding core operations before rollback;
+wrapper retries or a new payment cannot substitute for retained recovery state.
+See the [local recovery guide](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/).
 
 ## Receiving already-broadcast payments
 
@@ -242,3 +263,10 @@ against the requested explicit inputs, synchronize the accepted winner, then
 read fresh state before rebuilding. Upgrade the application SDK alongside the
 wallet parser. Use the existing JSON wallet API for structured review errors;
 the binary wire format is unchanged. No database or call migration is required.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

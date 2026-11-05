@@ -7,11 +7,12 @@ function evidence(selected = true) {
   const required = [
     'repository-health',
     'scope',
+    'build',
+    'policy',
     'prepare',
     'package-artifacts',
     'infra-scope',
-    'build-and-test',
-    'mutation-quality'
+    'build-and-test'
   ]
   const lanes = [
     'standard-tests',
@@ -20,13 +21,14 @@ function evidence(selected = true) {
     'wallet-browser-platform',
     'wallet-mobile-platform',
     'coverage-sdk',
+    'coverage-sdk-thresholds',
+    'sdk-browser-contract',
     'coverage-did',
     'coverage-wallet',
     'coverage-wallet-monitor',
     'coverage-verifast',
     'coverage-other',
     'coverage-upload',
-    'mutation-tests',
     'infra',
     'docs-validate',
     'conformance'
@@ -42,8 +44,7 @@ function evidence(selected = true) {
       'standard-packages',
       'dependent-test-packages',
       'browser-packages',
-      'coverage-other-packages',
-      'mutation-targets'
+      'coverage-other-packages'
     ].map(key => [key, selected ? '["selected"]' : '[]'])
   )
   Object.assign(
@@ -111,26 +112,18 @@ test('PRs require real analysis and dependency review; out-of-scope failures sti
   assert.match(validateCiResults(needs, 'pull_request').join('\n'), /coverage-sdk/)
 })
 
-test('failed PR prerequisites cannot turn suppressed mutation into qualified scope skips', () => {
+test('background mutation failures, cancellations and missing results never enter admission', () => {
   for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
     const needs = evidence()
-    needs['dependency-review'].result = 'success'
-    needs['sonar-zero-findings'].result = result
-    needs['mutation-tests'].result = 'skipped'
-    const errors = validateCiResults(needs, 'pull_request')
-    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
-    assert.ok(errors.some(error => error.startsWith('mutation-tests:')))
-  }
-})
-
-test('successful diagnostic mutation never bypasses a failed required PR gate', () => {
-  for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
-    const needs = evidence()
-    needs['dependency-review'].result = 'success'
-    needs['sonar-zero-findings'].result = result
-    needs['mutation-tests'].result = 'success'
-    const errors = validateCiResults(needs, 'pull_request')
-    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
+    needs['mutation-tests'] = { result }
+    needs['mutation-quality'] = { result }
+    assert.deepEqual(validateCiResults(needs, 'push'), [])
+    needs['sonar-zero-findings'].result = 'failure'
+    assert.ok(
+      validateCiResults(needs, 'pull_request').some(error =>
+        error.startsWith('sonar-zero-findings:')
+      )
+    )
   }
 })
 

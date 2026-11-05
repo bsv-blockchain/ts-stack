@@ -1,11 +1,17 @@
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import {
   buildPairingUri,
+  DEFAULT_ACCEPTED_SCHEMAS,
   parsePairingUri,
   verifyPairingSignature
 } from '../src/shared/pairingUri.js'
 import { bytesToBase64url } from '../src/shared/encoding.js'
-import { PROTOCOL_ID } from '../src/types.js'
+import { PROTOCOL_ID, type PairingParams } from '../src/types.js'
+import {
+  LOCAL_NETWORK_AUTHORITIES,
+  LOOPBACK_AUTHORITIES,
+  PUBLIC_AUTHORITIES
+} from './fixtures/localDevelopmentHosts.js'
 
 // A valid compressed secp256k1 public key (deterministic for tests)
 const BACKEND_KEY = PrivateKey.fromRandom().toPublicKey().toString()
@@ -148,7 +154,7 @@ describe('parsePairingUri validation', () => {
     expect(result.error).toMatch(/origin/i)
   })
 
-  it('rejects remote HTTP origins but allows loopback development origins', () => {
+  it('rejects remote HTTP origins but allows loopback development origins by default', () => {
     expect(() =>
       buildPairingUri({ ...VALID_BUILD_PARAMS, origin: 'http://app.example.com' })
     ).toThrow(/HTTPS/)
@@ -157,9 +163,61 @@ describe('parsePairingUri validation', () => {
     const remote = remoteUrl.toString()
     expect(parsePairingUri(remote).error).toMatch(/HTTPS/)
 
-    for (const origin of ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://[::1]:3000']) {
-      expect(parsePairingUri(buildPairingUri({ ...VALID_BUILD_PARAMS, origin })).error).toBeNull()
+    for (const authority of LOOPBACK_AUTHORITIES) {
+      const origin = `http://${authority}`
+      const parsed = parsePairingUri(buildPairingUri({ ...VALID_BUILD_PARAMS, origin }))
+      expect(parsed.error).toBeNull()
+      expect(parsed.params?.origin).toBe(origin)
     }
+    for (const authority of PUBLIC_AUTHORITIES) {
+      const origin = `http://${authority}`
+      for (const allowLocalNetworkHttp of [false, true]) {
+        expect(() =>
+          buildPairingUri({ ...VALID_BUILD_PARAMS, origin, allowLocalNetworkHttp })
+        ).toThrow('pairing origin must be HTTPS')
+      }
+      const forged = new URL(buildPairingUri(VALID_BUILD_PARAMS))
+      forged.searchParams.set('origin', origin)
+      expect(parsePairingUri(forged.toString()).error).toMatch(/HTTPS/)
+      expect(
+        parsePairingUri(forged.toString(), undefined, { allowLocalNetworkHttp: true }).error
+      ).toBe('origin must be HTTPS, except for loopback or local-network development')
+    }
+  })
+
+  it('accepts private-network HTTP origins only with allowLocalNetworkHttp', () => {
+    for (const authority of LOCAL_NETWORK_AUTHORITIES) {
+      const origin = `http://${authority}`
+      expect(() => buildPairingUri({ ...VALID_BUILD_PARAMS, origin })).toThrow(
+        'allowLocalNetworkHttp'
+      )
+      const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, origin, allowLocalNetworkHttp: true })
+
+      const rejected = parsePairingUri(uri)
+      expect(rejected.params).toBeNull()
+      // Phone-side errors reach wallet users, so they carry no developer hint.
+      expect(rejected.error).toBe('origin must be HTTPS, except for loopback development')
+      expect(parsePairingUri(uri, DEFAULT_ACCEPTED_SCHEMAS, {}).params).toBeNull()
+
+      const accepted = parsePairingUri(uri, DEFAULT_ACCEPTED_SCHEMAS, {
+        allowLocalNetworkHttp: true
+      })
+      expect(accepted.error).toBeNull()
+      expect(accepted.params?.origin).toBe(origin)
+    }
+  })
+
+  it('rejects a non-boolean allowLocalNetworkHttp', () => {
+    const uri = buildPairingUri(VALID_BUILD_PARAMS)
+    expect(
+      parsePairingUri(uri, undefined, { allowLocalNetworkHttp: 'true' as unknown as boolean }).error
+    ).toBe('allowLocalNetworkHttp must be a boolean')
+    expect(() =>
+      buildPairingUri({
+        ...VALID_BUILD_PARAMS,
+        allowLocalNetworkHttp: 1 as unknown as boolean
+      })
+    ).toThrow('allowLocalNetworkHttp must be a boolean')
   })
 })
 
@@ -212,6 +270,14 @@ describe('verifyPairingSignature', () => {
     expect(await verifyPairingSignature(await makeSignedParams())).toBe(true)
   })
 
+  it('rejects rather than throwing synchronously when params are missing', async () => {
+    let result: Promise<boolean> | undefined
+    expect(() => {
+      result = verifyPairingSignature(null as unknown as PairingParams)
+    }).not.toThrow()
+    await expect(result).rejects.toThrow(TypeError)
+  })
+
   it('returns false when backendIdentityKey is tampered', async () => {
     const params = await makeSignedParams()
     const otherKey = PrivateKey.fromRandom().toPublicKey().toString()
@@ -230,6 +296,15 @@ describe('verifyPairingSignature', () => {
     expect(
       await verifyPairingSignature({ ...params, expiry: String(Number(params.expiry) + 9999) })
     ).toBe(false)
+  })
+
+  it('verifies a private-network HTTP origin only with allowLocalNetworkHttp', async () => {
+    const params = await makeSignedParams({ origin: 'http://192.168.1.20:3000' })
+    expect(await verifyPairingSignature(params)).toBe(false)
+    expect(await verifyPairingSignature(params, { allowLocalNetworkHttp: false })).toBe(false)
+    expect(await verifyPairingSignature(params, { allowLocalNetworkHttp: true })).toBe(true)
+    const loopback = await makeSignedParams({ origin: 'http://127.0.0.1:3000' })
+    expect(await verifyPairingSignature(loopback)).toBe(true)
   })
 
   it('returns false when sig is absent', async () => {

@@ -29,6 +29,18 @@ const hostLabel = fc
 const origin = fc
   .array(hostLabel, { minLength: 1, maxLength: 4 })
   .map(labels => `https://${labels.join('.')}.org`)
+const octet = fc.integer({ min: 0, max: 255 })
+const ipv4 = fc.tuple(
+  fc.oneof(fc.constantFrom(9, 10, 11, 126, 127, 128, 172, 191, 192, 193), octet),
+  fc.oneof(fc.constantFrom(15, 16, 31, 32, 167, 168, 169), octet),
+  octet,
+  octet
+)
+
+/** Reference classifier for the plain-HTTP IPv4 development ranges. */
+function isPrivateOrLoopbackIpv4([a, b]: number[]): boolean {
+  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
 const protocol = fc.tuple(
   fc.integer({ min: 0, max: 2 }),
   fc.stringMatching(/^[a-z][a-z0-9]{4,79}$/)
@@ -132,6 +144,30 @@ describe('wallet pairing URI properties', () => {
       url.searchParams.set('protocolID', invalidProtocol)
       expect(parsePairingUri(url.toString()).params).toBeNull()
     }
+  })
+
+  test('accepts plain-HTTP IPv4 origins exactly for loopback, plus private ranges when opted in', () => {
+    const valid = buildPairingUri({
+      sessionId: 'session',
+      backendIdentityKey: BACKEND_KEY,
+      protocolID: '[0,"pairing"]',
+      origin: 'https://wallet.example.org',
+      expiry: FUTURE_EXPIRY
+    })
+    fc.assert(
+      fc.property(ipv4, fc.boolean(), fc.boolean(), (address, asInteger, allowLocalNetworkHttp) => {
+        const host = asInteger
+          ? String(address.reduce((value, part) => value * 256 + part, 0))
+          : address.join('.')
+        const url = new URL(valid)
+        url.searchParams.set('origin', `http://${host}:3000`)
+        const accepted =
+          parsePairingUri(url.toString(), undefined, { allowLocalNetworkHttp }).params !== null
+        expect(accepted).toBe(
+          address[0] === 127 || (allowLocalNetworkHttp && isPrivateOrLoopbackIpv4(address))
+        )
+      })
+    )
   })
 
   test('rejects each missing field, ambiguous credentials, and malformed protocol tuples', () => {

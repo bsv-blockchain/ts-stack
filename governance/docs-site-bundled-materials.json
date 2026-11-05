@@ -189,7 +189,7 @@
     },
     {
       "name": "cytoscape",
-      "version": "3.34.3",
+      "version": "3.34.4",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -553,7 +553,7 @@
     },
     {
       "name": "dompurify",
-      "version": "3.4.15",
+      "version": "3.4.17",
       "kind": "vite",
       "packageLicense": "(MPL-2.0 OR Apache-2.0)",
       "licenseExpression": "Apache-2.0",
@@ -837,7 +837,7 @@
     },
     {
       "name": "uuid",
-      "version": "14.0.2",
+      "version": "14.0.3",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",

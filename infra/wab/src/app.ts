@@ -173,6 +173,12 @@ app.post('/auth/phone-change/finalize', authenticationLimiter, PhoneChangeContro
 
 // Administrative support routes are unavailable unless WAB_ADMIN_TOKEN is set.
 app.post('/admin/demo-accounts', adminLimiter, requireWABAdmin, DemoAccountController.manage)
+app.post(
+  '/admin/faucet/reconcile',
+  adminLimiter,
+  requireWABAdmin,
+  AdminController.reconcileFaucetPayment
+)
 app.post('/admin/ump-pin', adminLimiter, requireWABAdmin, AdminController.setUMPTokenPin)
 app.post(
   '/admin/registration/reopen',

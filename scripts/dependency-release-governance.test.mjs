@@ -13,11 +13,14 @@ import {
   collectOverrides,
   immutableDeploymentImages,
   isAutomationPullRequest,
+  isRegistryNotFound,
   parsePnpmOverrides,
   publishedInstallContexts,
   validateDependabotExclusions,
   validateDependencyReleaseGovernance,
-  validatePullRequestEvidence
+  validatePullRequestEvidence,
+  validateRoutineSchedule,
+  validateSecurityUpdateGroups
 } from './dependency-release-governance.mjs'
 
 const dependencyPolicy = JSON.parse(
@@ -28,16 +31,25 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 27)
+  assert.equal(overrides.length, 28)
+  assert.deepEqual(
+    overrides.filter(entry => entry.selector === 'nodemon'),
+    []
+  )
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
   assert.equal(
-    overrides.find(entry => entry.selector === 'brace-expansion@<5.0.11')?.value,
-    '5.0.11'
+    overrides.find(entry => entry.selector === 'brace-expansion@<5.0.12')?.value,
+    '5.0.12'
   )
   assert.equal(overrides.find(entry => entry.selector === 'engine.io@<6.6.10')?.value, '6.6.10')
-  assert.equal(overrides.filter(entry => entry.selector === 'toml@<4.2.0').length, 1)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'puppeteer-core@25.11.0>chromium-bidi')?.value,
+    "'-'"
+  )
+  assert.equal(overrides.find(entry => entry.selector === 'zod@>=4.0.0 <4.6.6')?.value, '4.6.7')
+  assert.equal(overrides.filter(entry => entry.selector.startsWith('toml')).length, 0)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)
   assert.equal(overrides.find(entry => entry.selector === 'lodash-es@<4.18.0')?.value, '4.18.1')
@@ -182,6 +194,63 @@ test('Dependabot rejects parent paths before GitHub disables every update job', 
     ),
     []
   )
+})
+
+test('grouped Dependabot schedule and lockfile refresh stay aligned', () => {
+  const routine = dependencyPolicy.routineUpdates
+  const dependabot = fs.readFileSync(path.join(process.cwd(), routine.dependabotConfig), 'utf8')
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), routine.lockfileRefresh.workflow),
+    'utf8'
+  )
+  assert.deepEqual(validateRoutineSchedule(routine, dependabot, workflow), [])
+
+  const monthly = dependabot
+    .replace("interval: cron\n      cronjob: '0 6 1,15 * *'", 'interval: monthly')
+    .replace(
+      'multi-ecosystem-group: stack-maintenance',
+      'multi-ecosystem-group: monthly-stack-maintenance'
+    )
+  assert.deepEqual(validateRoutineSchedule(routine, monthly, workflow), [
+    'Dependabot stack-maintenance schedule must set interval: cron',
+    'Dependabot stack-maintenance schedule must set cronjob: 0 6 1,15 * *',
+    'Dependabot update references unknown group monthly-stack-maintenance'
+  ])
+
+  // Security updates share the branch prefix, so the group title must be
+  // required independently.
+  const renamed = workflow
+    .replaceAll('dependabot-stack_maintenance-', 'dependabot-other-')
+    .replaceAll('the \\"stack-maintenance\\" group', 'the \\"other\\" group')
+  assert.deepEqual(
+    validateRoutineSchedule(routine, dependabot, `${renamed}\non: pull_request_target`),
+    [
+      `${routine.lockfileRefresh.workflow} must contain "dependabot-stack_maintenance-"`,
+      `${routine.lockfileRefresh.workflow} must contain ${JSON.stringify('the \\"stack-maintenance\\" group')}`,
+      `${routine.lockfileRefresh.workflow} must not run on pull_request_target`
+    ]
+  )
+})
+
+test('security-update groups follow the repository security-update setting', () => {
+  const group = `    groups:
+      root-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+`
+  const twoGroups = `${group}${group.replace('root-security', 'infra-security')}`
+  const disabled = { automatedPullRequests: false }
+  const enabled = { automatedPullRequests: true }
+
+  assert.deepEqual(validateSecurityUpdateGroups(disabled, ''), [])
+  assert.deepEqual(validateSecurityUpdateGroups(disabled, group), [
+    'Dependabot security-update groups are inert while automated security PRs are disabled'
+  ])
+  assert.deepEqual(validateSecurityUpdateGroups(enabled, twoGroups), [])
+  assert.deepEqual(validateSecurityUpdateGroups(enabled, group), [
+    'Dependabot must group immediate root and infrastructure npm security updates'
+  ])
 })
 
 function installReport(names) {
@@ -369,4 +438,62 @@ test('dependency resolution has no release-age block and retains real security c
   const lock = fs.readFileSync('pnpm-lock.yaml', 'utf8')
   assert.doesNotMatch(lock, /handlebars@4\.7\.9:/)
   assert.match(lock, /handlebars@4\.7\.10:/)
+})
+
+test('only a completed npm E404 is registry absence, never authentication or observer failure', () => {
+  const error = { code: 1, stdout: JSON.stringify({ error: { code: 'E404' } }) }
+  assert.equal(isRegistryNotFound(error), true)
+  for (const value of [
+    undefined,
+    { ...error, code: 'ETIMEDOUT' },
+    { ...error, killed: true },
+    { ...error, signal: 'SIGTERM' },
+    { ...error, stdout: '' },
+    { ...error, stdout: JSON.stringify({ error: { code: 'E401' } }) },
+    { ...error, stdout: JSON.stringify({ error: { code: 'E403' } }) },
+    { ...error, stdout: JSON.stringify({ error: { code: 'EAI_AGAIN' } }) }
+  ]) {
+    assert.equal(isRegistryNotFound(value), false)
+  }
+})
+
+test('explicit initial-release holds stay in complete reports without inventing published consumers', () => {
+  const names = ['@bsv/sdk', '@bsv/new']
+  const report = installReport(names)
+  const initial = {
+    name: '@bsv/new',
+    sourceVersion: '0.1.0',
+    publishedLatest: null,
+    recordedPublishedBaseline: '0.0.0',
+    status: 'first-party-initial-release-held',
+    registryNotFound: true
+  }
+  report.packages[1] = initial
+  const contexts = publishedInstallContexts(report, names, ['@bsv/new'])
+  assert.equal(contexts.length, 1)
+  assert.equal(contexts[0].name, '@bsv/sdk')
+  assert.throws(() => publishedInstallContexts(report, names, []))
+  assert.throws(() =>
+    publishedInstallContexts({ ...report, packages: [initial] }, names, ['@bsv/new'])
+  )
+  assert.throws(() =>
+    publishedInstallContexts({ ...report, packages: [initial, initial] }, names, ['@bsv/new'])
+  )
+  for (const change of [
+    { recordedPublishedBaseline: '1.0.0' },
+    { registryNotFound: false },
+    { publishedLatest: '0.1.0' },
+    { sourceVersion: '0.0.0' },
+    { sourceVersion: 'latest' },
+    { integrity: 'unverified' },
+    { provenance: false }
+  ]) {
+    assert.throws(() =>
+      publishedInstallContexts(
+        { ...report, packages: [report.packages[0], { ...initial, ...change }] },
+        names,
+        ['@bsv/new']
+      )
+    )
+  }
 })

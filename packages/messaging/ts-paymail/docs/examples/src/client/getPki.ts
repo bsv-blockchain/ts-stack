@@ -12,4 +12,7 @@ const client = new PaymailClient()
     pki1,
     pki2
   })
-})()
+})().catch(error => {
+  console.error(error)
+  process.exitCode = 1
+})

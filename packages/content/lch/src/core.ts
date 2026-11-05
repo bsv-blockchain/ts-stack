@@ -411,6 +411,9 @@ export interface LicenseOptions {
   encryption?: SegmentedEncryptionDescriptor
   notBefore?: number | bigint
   notAfter?: number | bigint
+  /** Explicit opt-in profile semantics; ordinary Licenses omit both fields. */
+  extensions?: Record<string, LCHValue>
+  critical?: string[]
 }
 
 export class LCHIssuer {
@@ -466,6 +469,15 @@ export class LCHIssuer {
   }
 
   async issueLicense(options: LicenseOptions): Promise<SignedObject> {
+    const extensionValue = ownDataValue(options, 'extensions', 'License options'),
+      extensions =
+        extensionValue === undefined
+          ? undefined
+          : snapshotLCHRecord(extensionValue, 'License extensions'),
+      critical = snapshotStringArray(
+        ownDataValue(options, 'critical', 'License options'),
+        'License critical identifiers'
+      )
     lchAssert(
       toHex(options.issuer) === toHex(this.signer.identityKey),
       'ERR_LCH_SIGNATURE',
@@ -518,6 +530,10 @@ export class LCHIssuer {
       fulfillments: options.fulfillments ?? [],
       keyGrants: (options.keyGrants ?? []) as unknown as Array<Record<string, LCHValue>>
     }
+    if (extensions !== undefined) body.extensions = extensions
+    if (critical !== undefined) body.critical = critical
+    validateExtensionIdentifiers(body)
+    validateCriticalIdentifiers(body, new Set(critical ?? []))
     return signObject('license', body, this.signer)
   }
 

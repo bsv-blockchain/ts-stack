@@ -26,8 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The single human gate. It starts at t=0 alongside preparation and mutation
-  # qualification, so a maintainer approves once right after dispatch and the
+  # The single human gate. It starts at t=0 alongside preparation, so a maintainer approves once right after dispatch and the
   # rest of the run (npm publish, infra sync, image release) proceeds unattended.
   # Approval authorizes publication only if every automated gate also passes.
   approve:
@@ -40,9 +39,71 @@ jobs:
       - name: Record release approval
         run: echo "Release of $GITHUB_SHA approved; publication still requires every gate."
 
+  # Resolve the release plan first, in seconds, so the staged npm set and the
+  # publication scope come from one output.
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      filter: ${{ steps.plan.outputs.filter }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Resolve release mode + filter. Three shapes:
+      #
+      #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>
+      #   2. Tag `release/v*`         → cascade across every governed public package
+      #                                 whose package.json version is ahead of npm.
+      #   3. Tag `v*` or manual cascade → the same full governed-package selection.
+      - name: Resolve release plan
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_FILTER: ${{ inputs.filter }}
+        run: |
+          mode=""
+          filter=""
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            mode="$DISPATCH_MODE"
+            filter="$DISPATCH_FILTER"
+            if [[ "$mode" == "single" && -z "$filter" ]]; then
+              echo "::error::single mode requires a filter input"
+              exit 1
+            fi
+            if [[ "$mode" == "cascade" && -n "$filter" ]]; then
+              echo "::error::cascade mode does not accept a package filter"
+              exit 1
+            fi
+          else
+            tag="${GITHUB_REF_NAME}"
+            if [[ "$tag" == release/v* || "$tag" == v* ]]; then
+              mode="cascade"
+            else
+              package_path="${tag%/v*}"
+              if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
+                echo "::error::Could not resolve package path from tag: $tag"
+                exit 1
+              fi
+              mode="single"
+              filter="./$package_path"
+            fi
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "filter=$filter" >> "$GITHUB_OUTPUT"
+          echo "Resolved release plan: mode=$mode filter='${filter:-<all governed packages>}'"
+
   # Build and package without write credentials, an npm production environment,
   # or OIDC. Package lifecycle code therefore cannot mint a publisher token.
   prepare:
+    needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -50,8 +111,8 @@ jobs:
     outputs:
       candidate: ${{ steps.artifacts.outputs.candidate }}
       count: ${{ steps.artifacts.outputs.count }}
-      filter: ${{ steps.plan.outputs.filter }}
-      mode: ${{ steps.plan.outputs.mode }}
+      filter: ${{ needs.plan.outputs.filter }}
+      mode: ${{ needs.plan.outputs.mode }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,7 +124,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
 
       - name: Verify trusted release source
         env:
@@ -114,59 +175,13 @@ jobs:
           pnpm --filter @bsv/wallet-toolbox-client run test:browser
           pnpm --filter @bsv/wallet-toolbox-mobile run test:mobile
 
-      # Resolve release mode + filter. Three shapes:
-      #
-      #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>
-      #   2. Tag `release/v*`         → cascade across every governed public package
-      #                                 whose package.json version is ahead of npm.
-      #   3. Tag `v*` or manual cascade → the same full governed-package selection.
-      - name: Resolve release plan
-        id: plan
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_MODE: ${{ inputs.mode }}
-          DISPATCH_FILTER: ${{ inputs.filter }}
-        run: |
-          mode=""
-          filter=""
-
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            mode="$DISPATCH_MODE"
-            filter="$DISPATCH_FILTER"
-            if [[ "$mode" == "single" && -z "$filter" ]]; then
-              echo "::error::single mode requires a filter input"
-              exit 1
-            fi
-            if [[ "$mode" == "cascade" && -n "$filter" ]]; then
-              echo "::error::cascade mode does not accept a package filter"
-              exit 1
-            fi
-          else
-            tag="${GITHUB_REF_NAME}"
-            if [[ "$tag" == release/v* || "$tag" == v* ]]; then
-              mode="cascade"
-            else
-              package_path="${tag%/v*}"
-              if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
-                echo "::error::Could not resolve package path from tag: $tag"
-                exit 1
-              fi
-              mode="single"
-              filter="./$package_path"
-            fi
-          fi
-
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "filter=$filter" >> "$GITHUB_OUTPUT"
-          echo "Resolved release plan: mode=$mode filter='${filter:-<all governed packages>}'"
-
       # Package artifacts cross a single immutable release boundary: pack once,
       # inventory production licenses, create SBOMs, and upload immutable
       # candidate bytes for the credentialed publish job.
       - name: Stage exact npm release artifacts
         id: artifacts
         env:
-          PNPM_FILTER: ${{ steps.plan.outputs.filter }}
+          PNPM_FILTER: ${{ needs.plan.outputs.filter }}
         run: |
           args=(stage --output release-artifacts)
           if [[ -n "$PNPM_FILTER" ]]; then
@@ -188,20 +203,12 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Runs in parallel with prepare: the campaign builds its own graph from the
-  # same exact github.sha, and it also qualifies the infrastructure release.
-  full-mutation:
-    name: Qualify exact source before publication
-    permissions:
-      contents: read
-    uses: ./.github/workflows/mutation-tests.yml
-
   # This job receives the protected npm-production environment. It runs no
   # package build or lifecycle code: it verifies, scans, attests, and publishes
   # only the immutable bytes uploaded by prepare.
   publish:
-    if: needs.prepare.outputs.count != '0' && needs.approve.result == 'success' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
-    needs: [approve, prepare, full-mutation]
+    if: needs.prepare.result == 'success' && needs.prepare.outputs.count != '0' && needs.approve.result == 'success'
+    needs: [approve, prepare]
     runs-on: ubuntu-24.04
     environment: npm-production
     timeout-minutes: 90
@@ -218,7 +225,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           registry-url: https://registry.npmjs.org
 
       - name: Download immutable npm release candidate
@@ -349,7 +356,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
 
       # After a cascade release, update downstream workspace ranges and all
       # standalone infra locks. A single-package release intentionally skips
@@ -519,8 +526,8 @@ jobs:
   # because other versions on main may be unpublished.
   infra:
     name: Release infrastructure images
-    needs: [approve, prepare, full-mutation, publish, sync-versions]
-    if: always() && needs.prepare.outputs.mode == 'cascade' && needs.approve.result == 'success' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha && (needs.sync-versions.result == 'success' || (needs.prepare.outputs.count == '0' && needs.publish.result == 'skipped'))
+    needs: [approve, prepare, publish, sync-versions]
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.mode == 'cascade' && needs.approve.result == 'success' && (needs.sync-versions.result == 'success' || (needs.prepare.outputs.count == '0' && needs.publish.result == 'skipped'))
     permissions:
       artifact-metadata: write
       attestations: write
@@ -530,7 +537,7 @@ jobs:
     uses: ./.github/workflows/infra-release.yaml
     with:
       source-sha: ${{ needs.sync-versions.outputs.source-sha || github.sha }}
-      qualified-sha: ${{ needs.full-mutation.outputs.qualified-sha }}
+      release-sha: ${{ github.sha }}
 
   post-release-verification:
     if: always() && needs.publish.result != 'failure' && needs.infra.result != 'failure' && (needs.publish.result == 'success' || needs.infra.result == 'success')

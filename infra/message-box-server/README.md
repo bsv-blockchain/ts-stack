@@ -9,8 +9,33 @@ The maintained source lives in
 [`bsv-blockchain/ts-stack`](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server).
 The service is distributed as a container; it is not a public npm package.
 
+The standalone lock selects `@fastify/busboy` 3.2.2 within its existing
+transitive dependency range, addressing
+[GHSA-xjh9-v7x6-24jw](https://github.com/advisories/GHSA-xjh9-v7x6-24jw) and
+[GHSA-x8mw-p69m-v3mx](https://github.com/advisories/GHSA-x8mw-p69m-v3mx).
+No service API, request ceiling, runtime requirement or database migration
+changes. Use the frozen lock and the protected container release process;
+existing deployed images receive the fix only through a separately authorized
+image promotion.
+
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for all runtime ceilings, BRC-105 pricing, capacity evidence, and HPA prerequisites.
+
+## Privacy Notice
+
+Message Box encrypts message content end to end between sender and recipient,
+so the host operator cannot read what you send. Private keys never leave your
+wallet, and the server returns messages only after it authenticates the
+recipient's identity key.
+
+To deliver messages, the operator can still see some metadata: when messages
+are sent and received, message size, and which identity keys (pseudonyms)
+exchange messages with each other, and the IP addresses that connect. Identity
+keys are not names, but repeated use can link activity over time.
+
+This balance keeps delivery simple and reliable while keeping content private.
+If unlinkability matters to you, use separate identity keys for each context
+or run your own Message Box server.
 
 ## Runtime model
 
@@ -266,6 +291,33 @@ for acknowledgements or live delivery.
 The in-memory connection map is process-local. Horizontally scaled deployments
 need sticky routing or an authenticated shared broker.
 
+A `joinRoom` is answered: `joinedRoom` with the room on success, `joinFailed`
+with a `reason` and a `code` on refusal. The refusal names the room it refused
+whenever the server could read one, because a client may have several joins in
+flight and this event is the only reply any of them gets.
+
+### Live delivery of a stored message
+
+A message stored over HTTP is announced on `sendMessage-<roomId>`, the same
+event a socket send broadcasts on. The room is the recipient's subscription,
+so how the sender transmitted is not something the recipient subscribed to.
+
+The announcement is best effort and never replaces `listMessages`:
+
+- It reaches only this process's sockets. A recipient joined on another
+  process of a scaled-out deployment is not reached, which is the same
+  constraint as the connection map above.
+- **A send carrying a payment is never announced.** The announcement carries
+  the request body, which holds no payment, while the stored row holds
+  `{ message, payment }`. A recipient that acknowledged on the announcement
+  would delete the row before its wallet internalized the output, and only
+  `listMessages` internalizes. Paid messages are therefore polled.
+- A send the route refused is never announced.
+
+The fan-out is bounded by `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`, the
+same limit the send route applies to push notifications over the same
+recipient list.
+
 ## Container
 
 The multi-stage Dockerfile uses a digest-pinned Node 24 Alpine base, installs
@@ -290,3 +342,11 @@ implementation tests are the contract evidence.
 ## License
 
 See [LICENSE.txt](./LICENSE.txt).
+
+The same isolated lock review selects `ip-address` 10.7.1 within the existing
+parent range. It clears the reviewed address-classification and bounded-parser
+advisories while retaining the package's Node, module and type contracts. Only
+that existing node's version, resolved URL and integrity change; all other
+package entries and settings are retained. A frozen install, unexcluded audit,
+native rebuild, build, lint and the full original service suite qualify this
+source change before the protected image gate.

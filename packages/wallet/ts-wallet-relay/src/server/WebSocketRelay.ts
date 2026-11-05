@@ -30,10 +30,22 @@ interface TopicEntry {
 interface BufferedMessage {
   envelope: WireEnvelope
   expiresAt: number
+  /** Sent by a role=desktop socket, as opposed to the server's own sendToMobile/sendToDesktop. */
+  fromDesktop: boolean
 }
 
 export type Role = 'desktop' | 'mobile'
-export type MessageHandler = (topic: string, envelope: WireEnvelope, role: Role) => void
+/**
+ * Invoked for every inbound message. `connectionId` identifies the sending socket; pass it
+ * to `acceptMobile` to accept that mobile socket. Handlers declared with three parameters keep
+ * working; code that calls a MessageHandler itself must pass the fourth argument.
+ */
+export type MessageHandler = (
+  topic: string,
+  envelope: WireEnvelope,
+  role: Role,
+  connectionId: number
+) => void
 export type TopicValidator = (topic: string) => boolean
 export type TokenValidator = (topic: string, token: string | null) => boolean
 export type ConnectHandler = (topic: string) => void
@@ -71,6 +83,9 @@ export interface SocketCloseInfo {
 interface SocketState {
   topic: string
   role: Role
+  connectionId: number
+  /** Mobile only: set by acceptMobile. With the hold enabled, desktop traffic waits for it. */
+  accepted: boolean
   connectedAt: number
   missedPongs: number
   closeCause: SocketCloseCause
@@ -108,6 +123,20 @@ export interface WebSocketRelayOptions {
   maxMissedHeartbeats?: number
   /** Maximum live/buffered topics. Default 1,000. */
   maxTopics?: number
+  /**
+   * When true, messages from a role=desktop socket, live or buffered, reach a mobile socket
+   * only after `acceptMobile(topic, connectionId)` accepted that socket. Held messages are
+   * flushed on acceptance and discarded when an unaccepted mobile socket leaves; each new
+   * mobile socket starts unaccepted. `sendToMobile` is never held. Default false, which keeps
+   * the relay a plain forwarder. `WalletRelayService` enables it and accepts a mobile socket
+   * once its pairing_approved message decrypts.
+   *
+   * Held messages reach the phone after anything the backend sent before `acceptMobile`
+   * (e.g. pairing_ack), so they need sequence numbers above the backend's. A role=desktop
+   * socket that connects while messages are held receives the buffer, its own held messages
+   * included, and those messages are then no longer delivered to the phone.
+   */
+  holdDesktopTrafficUntilAccepted?: boolean
 }
 
 /**
@@ -124,6 +153,7 @@ export interface WebSocketRelayOptions {
  * - Origin header validated against allowedOrigins (or legacy allowedOrigin)
  *   when present — browser clients only; native mobile clients are exempt
  * - role=desktop connections validated via onValidateDesktopToken callback when set
+ * - With `holdDesktopTrafficUntilAccepted`, desktop messages wait for `acceptMobile`
  */
 export class WebSocketRelay {
   private readonly wss: WebSocketServer
@@ -141,6 +171,8 @@ export class WebSocketRelay {
   private readonly server: Server
   private readonly path: string
   private readonly maxTopics: number
+  private readonly holdDesktopTraffic: boolean
+  private nextConnectionId = 0
   private closed = false
   private readonly upgradeListener:
     ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null = null
@@ -167,6 +199,7 @@ export class WebSocketRelay {
         `heartbeatIntervalMs must be an integer between 1 and ${MAX_HEARTBEAT_INTERVAL_MS}, got ${interval}`
       )
     }
+    this.holdDesktopTraffic = options?.holdDesktopTrafficUntilAccepted === true
     this.server = server
     this.path = options?.path ?? '/ws'
     this.wss = new WebSocketServer({
@@ -253,12 +286,43 @@ export class WebSocketRelay {
     this.onMobileConnectCb = handler
   }
 
+  /**
+   * Accept the mobile socket identified by `connectionId` (from the onIncoming handler) and
+   * deliver the desktop messages held for it. Returns false, and accepts nothing, when that
+   * socket is no longer the topic's open mobile socket.
+   */
+  acceptMobile(topic: string, connectionId: number): boolean {
+    if (!this.isCurrentMobile(topic, connectionId)) return false
+    const entry = this.topics.get(topic)!
+    const mobile = entry.mobile!
+    this.socketState.get(mobile)!.accepted = true
+    const now = Date.now()
+    const held = entry.buffer.filter(m => m.fromDesktop && m.expiresAt > now)
+    entry.buffer = entry.buffer.filter(m => !m.fromDesktop)
+    for (const { envelope } of held) {
+      mobile.send(stringifyBRC100(envelope))
+    }
+    return true
+  }
+
+  /**
+   * True while the socket identified by `connectionId` (from the onIncoming handler) is the
+   * topic's open mobile socket. Check it after any asynchronous work started by a mobile
+   * message, before acting on the topic: the socket may have closed or been replaced since.
+   */
+  isCurrentMobile(topic: string, connectionId: number): boolean {
+    const mobile = this.topics.get(topic)?.mobile
+    if (mobile?.readyState !== WebSocket.OPEN) return false
+    return this.socketState.get(mobile)?.connectionId === connectionId
+  }
+
   /** Forcibly close the mobile socket for a topic (e.g. auth timeout or proof failure). */
   disconnectMobile(topic: string): void {
     const entry = this.topics.get(topic)
     if (entry?.mobile) {
       const state = this.socketState.get(entry.mobile)
       if (state) state.closeCause = 'server'
+      if (this.isHeldFrom(entry.mobile)) this.dropHeld(entry)
       entry.mobile.close(1008, 'Authentication failed')
       entry.mobile = null
     }
@@ -427,22 +491,26 @@ export class WebSocketRelay {
       }
     }
 
-    // Flush any messages buffered while this side was disconnected
-    const now = Date.now()
-    const toFlush = entry.buffer.filter(m => m.expiresAt > now)
-    entry.buffer = []
-    for (const { envelope } of toFlush) {
-      ws.send(stringifyBRC100(envelope))
-    }
-
     const state: SocketState = {
       topic,
       role,
+      connectionId: ++this.nextConnectionId,
+      accepted: false,
       connectedAt: Date.now(),
       missedPongs: 0,
       closeCause: 'client'
     }
     this.socketState.set(ws, state)
+
+    // Flush any messages buffered while this side was disconnected. Desktop messages
+    // stay held for a mobile socket that has not been accepted yet.
+    const now = Date.now()
+    const live = entry.buffer.filter(m => m.expiresAt > now)
+    const hold = role === 'mobile' && this.holdDesktopTraffic
+    entry.buffer = hold ? live.filter(m => m.fromDesktop) : []
+    for (const { envelope } of hold ? live.filter(m => !m.fromDesktop) : live) {
+      ws.send(stringifyBRC100(envelope))
+    }
     ws.on('pong', () => {
       state.missedPongs = 0
     })
@@ -462,17 +530,18 @@ export class WebSocketRelay {
 
         // Route to the other side
         const other = role === 'mobile' ? entry.desktop : entry.mobile
-        if (other?.readyState === WebSocket.OPEN) {
+        const held = role === 'desktop' && other !== null && this.isHeldFrom(other)
+        if (other?.readyState === WebSocket.OPEN && !held) {
           other.send(stringifyBRC100(envelope))
         } else if (role === 'desktop') {
           // Only buffer desktop→mobile messages. Mobile→desktop messages are
           // handled by the onMessage callback; buffering them here would cause
           // re-delivery to mobile on reconnect (inflating lastSeq on mobile).
-          this.buffer(topic, envelope)
+          this.buffer(topic, envelope, true)
         }
 
         // Notify service layer (e.g. to process pairing_approved)
-        this.onMessage?.(topic, envelope, role)
+        this.onMessage?.(topic, envelope, role, state.connectionId)
       } catch {
         // Malformed message — drop silently
       }
@@ -491,6 +560,7 @@ export class WebSocketRelay {
       this.socketState.delete(ws)
       this.reportSocketClose(info)
       if (entry[role] === ws) {
+        if (role === 'mobile' && this.holdDesktopTraffic && !state.accepted) this.dropHeld(entry)
         entry[role] = null
         try {
           this.onDisconnectCb?.(topic, role, info)
@@ -531,14 +601,24 @@ export class WebSocketRelay {
     }
   }
 
-  private buffer(topic: string, envelope: WireEnvelope): void {
+  private buffer(topic: string, envelope: WireEnvelope, fromDesktop = false): void {
     const entry = this.getOrCreateTopic(topic)
     const now = Date.now()
     entry.buffer = entry.buffer.filter(m => m.expiresAt > now)
     if (entry.buffer.length >= BUFFER_MAX_PER_TOPIC) {
       entry.buffer.shift()
     }
-    entry.buffer.push({ envelope, expiresAt: now + BUFFER_TTL_MS })
+    entry.buffer.push({ envelope, expiresAt: now + BUFFER_TTL_MS, fromDesktop })
+  }
+
+  /** True when desktop messages must not reach this mobile socket yet. */
+  private isHeldFrom(mobile: WebSocket): boolean {
+    return this.holdDesktopTraffic && this.socketState.get(mobile)?.accepted !== true
+  }
+
+  /** Discard desktop messages held for a mobile socket that was never accepted. */
+  private dropHeld(entry: TopicEntry): void {
+    entry.buffer = entry.buffer.filter(m => !m.fromDesktop)
   }
 
   private runHeartbeat(): void {

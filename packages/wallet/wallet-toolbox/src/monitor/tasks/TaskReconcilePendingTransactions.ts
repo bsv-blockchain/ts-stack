@@ -3,6 +3,7 @@ import { StatusForTxidResult } from '../../sdk/WalletServices.interfaces'
 import { EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import {
+  failPendingDescendants,
   quarantineReqInputs,
   quarantineReqInputsFromFailedParents
 } from '../../storage/methods/reconcileFailedTransactionInputs'
@@ -35,6 +36,7 @@ interface ReconcilePendingCheckpoint {
 
 interface AppliedTerminalVerdict {
   result: StatusForTxidResult
+  descendants: string[]
 }
 
 /**
@@ -231,7 +233,7 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
           await sp.updateTransactionsStatus(req.notify.transactionIds, 'failed', trx)
         }
         if (result.inputConflict === true) {
-          const quarantined = await quarantineReqInputs(req, sp, trx)
+          const quarantined = await quarantineReqInputs(req, sp, trx, undefined, { extraInfo: result.description })
           req.addHistoryNote({
             when: new Date().toISOString(),
             what: 'proactiveInputQuarantine',
@@ -252,11 +254,12 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
           })
           await req.updateStorageDynamicProperties(sp, trx)
         }
-        applied = { result }
+        applied = { result, descendants: await failPendingDescendants([req.txid], sp, trx) }
       })
     })
     if (applied) {
       this.monitor.callOnTransactionStatusChanged(reqApi.txid, applied.result.providerStatus ?? 'REJECTED')
+      for (const txid of applied.descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
     }
     return applied
   }

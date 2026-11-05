@@ -413,7 +413,7 @@ describe('GoChaintracksServiceClient', () => {
       maxReorgHeaders: 2,
       fetch: jest.fn() as unknown as typeof fetch
     }) as any
-    let consume!: (payload: unknown) => void
+    let consume!: (payload: unknown, signal: AbortSignal) => Promise<void>
     jest.spyOn(client, 'subscribe').mockImplementation(async (_type, _path, onPayload) => {
       consume = onPayload
       return 'reorg-test'
@@ -433,7 +433,9 @@ describe('GoChaintracksServiceClient', () => {
       { depth: 2, oldTip, newTip, deactivatedHeaders: [oldTip, oldTip] },
       { depth: 2, oldTip, newTip, deactivatedHeaders: [oldTip, other] }
     ]) {
-      expect(() => consume(payload)).toThrow()
+      const previousErrors = client.streamErrorCount
+      await consume(payload, new AbortController().signal)
+      expect(client.streamErrorCount).toBe(previousErrors + 1)
     }
     expect(listener).not.toHaveBeenCalled()
   })
@@ -450,13 +452,17 @@ describe('GoChaintracksServiceClient', () => {
     await expect(client.subscribeHeaders(jest.fn())).rejects.toThrow('id space')
   })
 
-  test('ignores comments and malformed SSE frames while preserving an incomplete tail', () => {
+  test('ignores comments and malformed SSE frames while preserving an incomplete tail', async () => {
     const client = new GoChaintracksServiceClient('main', 'https://arcade.example/v2') as any
     const listener = jest.fn()
     expect(
-      client.processSseBuffer(': keepalive\n\ndata: {broken\n\ndata: {"height":1}\n\ndata: {"tail"', listener)
+      await client.processSseBuffer(
+        ': keepalive\n\ndata: {broken\n\ndata: {"height":1}\n\ndata: {"tail"',
+        listener,
+        new AbortController().signal
+      )
     ).toBe('data: {"tail"')
-    expect(listener).toHaveBeenCalledWith({ height: 1 })
+    expect(listener).toHaveBeenCalledWith({ height: 1 }, expect.any(AbortSignal))
   })
 
   test('rejects invalid lengths and non-byte streamed bodies and accepts a bodyless response', async () => {

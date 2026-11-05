@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.0'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.15.4'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -14,6 +14,21 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+The 2.15.4 source candidate keeps approved non-spending permissions in memory
+when their on-chain tokens cannot be funded. Grants expire with the manager
+or their approved expiry; no session grant is persisted. Grant methods still
+report `WERR_INSUFFICIENT_FUNDS`, while grouped and counterparty waiters resume.
+Spending still requires its token. Other mint errors retain the existing behavior.
+
+The 2.15.3 source candidate restores ordinary import of exactly framed legacy
+AtomicBEEF with surplus unrelated branches. It retains the declared payment and
+its dependencies, reruns strict SDK argument validation, and preserves native
+proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
+remain rejected. No API, wire or schema migration is required. Upgrade the host
+and remote Storage separately; reconcile and retry the original import instead
+of creating or broadcasting a replacement payment. Source is not publication or
+deployment.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
@@ -72,27 +87,15 @@ The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
 
-BEEF requests and schema-declared storage response bytes use the existing
-negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
-and identical transaction/proof bytes. Authentication and payload ceilings
-remain unchanged; upgrade both clients and active storage for the savings.
+## Local recovery capability boundary
 
-IndexedDB treats empty certificate certifier/type, transaction status and
-output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
-arrays, partial predicates and user ownership remain enforced. No API, wire
-or database migration is required.
-
-Internalizing an unproven transaction new to a user attempts broadcast before
-storing recipient outputs, including a sender's no-send transaction already
-known to shared storage. Rejected broadcasts return a review-actions error
-and store no recipient outputs. Transactions backed by a mining proof are
-not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
-
-Confirmed internalization resolves and checks the block header before the
-IndexedDB writer opens. A valid mined AtomicBEEF is stored after an
-asynchronous header lookup. A missing or malformed header, or an invalid
-proof, still rejects and leaves no proven transaction, transaction, or
-requested output. Upgrade this client; no API, wire or schema migration is required.
+The coordinated 2.15.0 candidate preserves this wrapper's ordinary API and SDK
+peer range. The core package's new SQLite action/funding controllers are separate
+Node deep imports. This wrapper does not expose them or grant IndexedDB, mobile
+or remote storage a durable operation journal. If a host separately adopts core
+recovery, preserve its complete wallet database and keys and reconcile outstanding
+operations before rollback; ordinary entity export/sync omits that auxiliary state.
+See [local action recovery](../../guides/local-action-recovery.md).
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.

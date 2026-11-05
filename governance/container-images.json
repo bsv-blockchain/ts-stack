@@ -5,8 +5,8 @@
   "baseImages": [
     {
       "name": "Node.js",
-      "version": "24.20.0-alpine3.24",
-      "digest": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+      "version": "24.22.1-alpine3.24",
+      "digest": "sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53",
       "discoveryReference": "node",
       "references": ["node", "public.ecr.aws/docker/library/node"],
       "refreshOwner": "dependabot-docker",
@@ -94,6 +94,16 @@
       "license": "LicenseRef-Open-BSV-License-6",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra",
+      "release": "ghcr-keyless"
+    },
+    {
+      "name": "webrtpay-relay",
+      "path": "infra/webrtpay-relay",
+      "title": "BSV WebRTPay Signalling Relay",
+      "description": "Signalling relay and TURN credential issuer for direct WebRTC payments between BSV wallets",
+      "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay",
       "release": "ghcr-keyless"
     }
   ]

@@ -1,3 +1,10 @@
+import {
+  CERTIFICATE_COMPATIBILITY_CALL,
+  CERTIFICATE_COMPATIBILITY_VERSION,
+  readCertificateCompatibility,
+  readCertificateType,
+  encodeWireCertificate
+} from './CertificateWireCompatibility.js'
 import { WalletInterface, SecurityLevel } from '../Wallet.interfaces.js'
 import WalletWire, { MAX_WALLET_WIRE_FRAME_BYTES } from './WalletWire.js'
 import {
@@ -19,6 +26,7 @@ import {
   validateOriginator
 } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import { isBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
 
@@ -276,8 +284,11 @@ export default class WalletWireProcessor implements WalletWire {
       const callCode = messageReader.readUInt8()
 
       // Map call code to call name
-      const callName = calls[callCode] // calls is enum
-      if (callName === undefined || callName === '') {
+      let callName = calls[callCode] // calls is enum
+      if (
+        callCode !== CERTIFICATE_COMPATIBILITY_CALL &&
+        (callName === undefined || callName === '')
+      ) {
         // Invalid call code
         throw new Error(`Invalid call code: ${callCode}`)
       }
@@ -295,6 +306,10 @@ export default class WalletWireProcessor implements WalletWire {
 
       // Read parameters
       const paramsReader = messageReader // Remaining bytes
+      const profile = readCertificateCompatibility(paramsReader, callCode)
+      if (profile.probe) return Uint8Array.from([0, CERTIFICATE_COMPATIBILITY_VERSION])
+      callName = calls[profile.operation]
+      const compatibility = profile.compatibility
 
       switch (callName) {
         case 'createAction':
@@ -1264,7 +1279,12 @@ export default class WalletWireProcessor implements WalletWire {
               args.seekPermission = this.#readOptionalBooleanFlag(paramsReader, 'seekPermission')
             })()
 
-            // Call the method
+            // The optional request extension selects the spendability layout.
+            // Unextended requests retain the deployed SDK 2/3 response bytes.
+            const includeSpendable = !paramsReader.eof()
+            if (includeSpendable && paramsReader.readUInt8() !== 1) {
+              throw new Error('Invalid listOutputs encoding extension: expected 1')
+            }
             this.#assertRequestConsumed(paramsReader, callName)
             validateWalletArgs(callName, args)
             const listOutputsResult = await this.#invokeValidatedWallet(
@@ -1272,17 +1292,40 @@ export default class WalletWireProcessor implements WalletWire {
               args,
               async () => await this.wallet.listOutputs(args, originator)
             )
-            const outputsPage = this.#requirePageTotal(
-              listOutputsResult.totalOutputs,
-              listOutputsResult.outputs,
-              'listOutputs result'
-            )
+            let outputsPage: { total: number; records: typeof listOutputsResult.outputs }
+            if (isBalanceQuery(args.basket)) {
+              // A BRC-112 balance (validated above) is not an output count: no 2^32 - 1 bound.
+              // JSON carries any magnitude; the varint cannot carry 2^64 or more.
+              if (listOutputsResult.totalOutputs >= 2 ** 64) {
+                throw new Error(
+                  'listOutputs balance totalOutputs must be below 2^64 (unsigned 64-bit wire representation)'
+                )
+              }
+              outputsPage = {
+                total: listOutputsResult.totalOutputs,
+                records: listOutputsResult.outputs
+              }
+            } else {
+              outputsPage = this.#requirePageTotal(
+                listOutputsResult.totalOutputs,
+                listOutputsResult.outputs,
+                'listOutputs result'
+              )
+            }
+
+            if (!includeSpendable && listOutputsResult.outputs.some(output => !output.spendable)) {
+              throw new Error(
+                'Non-spendable listOutputs records require the spendable encoding extension or JSON'
+              )
+            }
 
             // Serialize the result
             const resultWriter = new WriterUint8Array()
             resultWriter.writeUInt8(0) // errorByte = 0
 
             // totalOutputs
+            // A negative marker cannot be mistaken for a legacy output count.
+            if (includeSpendable) resultWriter.writeVarIntNum(-1)
             resultWriter.writeVarIntNum(outputsPage.total)
 
             // BEEF length and BEEF or -1
@@ -1311,6 +1354,9 @@ export default class WalletWireProcessor implements WalletWire {
                   resultWriter.writeVarIntNum(lockingScriptBytes.length)
                   resultWriter.write(lockingScriptBytes)
                 }
+
+                // Spendability is explicit only on negotiated connections.
+                if (includeSpendable) resultWriter.writeInt8(output.spendable ? 1 : 0)
 
                 // customInstructions
                 if (output.customInstructions === undefined) {
@@ -2010,8 +2056,7 @@ export default class WalletWireProcessor implements WalletWire {
               )
               args.types = []
               for (let i = 0; i < typesLength; i++) {
-                const typeBytes = paramsReader.read(32)
-                args.types.push(toBase64(typeBytes))
+                args.types.push(readCertificateType(paramsReader, compatibility))
               }
 
               // Read limit and offset
@@ -2064,7 +2109,7 @@ export default class WalletWireProcessor implements WalletWire {
                   cert.fields,
                   cert.signature
                 )
-                const certBin = certificate.toBinary()
+                const certBin = encodeWireCertificate(certificate, compatibility)
 
                 // Write certificate binary length and data
                 resultWriter.writeVarIntNum(certBin.length)
@@ -2118,8 +2163,7 @@ export default class WalletWireProcessor implements WalletWire {
             const cert: any = {}
 
             // Read type
-            const typeBytes = paramsReader.read(32)
-            cert.type = toBase64(typeBytes)
+            cert.type = readCertificateType(paramsReader, compatibility)
 
             // Read subject
             const subjectBytes = paramsReader.read(33)
@@ -2229,8 +2273,7 @@ export default class WalletWireProcessor implements WalletWire {
             const args: any = {}
 
             // Read type
-            const typeBytes = paramsReader.read(32)
-            args.type = toBase64(typeBytes)
+            args.type = readCertificateType(paramsReader, compatibility)
 
             // Read serialNumber
             const serialNumberBytes = paramsReader.read(32)
@@ -2292,7 +2335,7 @@ export default class WalletWireProcessor implements WalletWire {
             )
 
             // Serialize the result
-            const result = this.#serializeDiscoveryResult(discoverResult)
+            const result = this.#serializeDiscoveryResult(discoverResult, compatibility)
 
             // Return the response
             const responseWriter = new WriterUint8Array()
@@ -2355,7 +2398,7 @@ export default class WalletWireProcessor implements WalletWire {
             )
 
             // Serialize the result
-            const result = this.#serializeDiscoveryResult(discoverResult)
+            const result = this.#serializeDiscoveryResult(discoverResult, compatibility)
 
             // Return the response
             const responseWriter = new WriterUint8Array()
@@ -2475,7 +2518,7 @@ export default class WalletWireProcessor implements WalletWire {
     return { privileged, privilegedReason }
   }
 
-  #serializeDiscoveryResult(discoverResult: any): Uint8Array {
+  #serializeDiscoveryResult(discoverResult: any, compatibility: boolean): Uint8Array {
     const resultWriter = new WriterUint8Array()
     const certificatesPage = this.#requirePageTotal(
       discoverResult.totalCertificates,
@@ -2498,7 +2541,7 @@ export default class WalletWireProcessor implements WalletWire {
         cert.fields,
         cert.signature
       )
-      const certBin = certificate.toBinary()
+      const certBin = encodeWireCertificate(certificate, compatibility)
 
       // Write certificate binary length and data
       resultWriter.writeVarIntNum(certBin.length)

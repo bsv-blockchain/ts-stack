@@ -1,6 +1,6 @@
 # ── Stage 1: build ──────────────────────────────────────────
-# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS build
+# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN npm run build
 RUN npm ci --omit=dev --ignore-scripts
 
 # ── Stage 2: production ────────────────────────────────────
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)

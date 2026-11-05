@@ -2,8 +2,36 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MongoClient, type Db, type Document, type MongoClientOptions } from 'mongodb'
-import { MongoMemoryReplSet } from 'mongodb-memory-server'
-import type { StorageScope } from '../../storage/AdmissionStorage.js'
+import { MongoBinary, MongoMemoryReplSet } from 'mongodb-memory-server'
+import type { StorageScope } from '@bsv/overlay'
+
+/** Obtain the fixed test binary once, before isolated suite workers start. */
+export default async function prepareMongoReplicaFixture(): Promise<void> {
+  await MongoBinary.getPath({ version: '8.2.6' })
+}
+
+/** Serial startup for this fixture's unauthenticated, isolated replica members. */
+export class SequentialMongoFixtureReplicaSet extends MongoMemoryReplSet {
+  protected override async initAllServers(): Promise<void> {
+    if (this.servers.length !== 0) {
+      return this.servers.reduce(
+        (pending, server) => pending.then(() => server.start(true)),
+        Promise.resolve()
+      )
+    }
+    const count = Math.max(this.instanceOpts.length, this.replSetOpts.count ?? 1)
+    // Each original start must settle before the next probe or replica cleanup.
+    return Array.from({ length: count }, (_, index) => index).reduce(
+      (pending, index) =>
+        pending.then(() => {
+          const server = this._initServer(this.getInstanceOpts(this.instanceOpts[index]))
+          this.servers.push(server)
+          return server.start()
+        }),
+      Promise.resolve()
+    )
+  }
+}
 
 /** Owns only randomly named databases, ports and temporary mongod files. */
 export interface MongoReplicaFixture {
@@ -23,19 +51,14 @@ export interface MongoReplicaFixture {
 
 export async function createMongoReplicaFixture(): Promise<MongoReplicaFixture> {
   const appName = `overlay-s02-${randomUUID()}`
-  const replicaSet = new MongoMemoryReplSet({
+  const replicaSet = new SequentialMongoFixtureReplicaSet({
     binary: { version: '8.2.6' },
     replSet: {
       name: `s02-${randomUUID()}`,
       count: 3,
       storageEngine: 'wiredTiger',
       ip: '127.0.0.1',
-      args: [
-        '--setParameter',
-        'enableTestCommands=1',
-        '--wiredTigerCacheSizeGB',
-        '0.25'
-      ],
+      args: ['--setParameter', 'enableTestCommands=1', '--wiredTigerCacheSizeGB', '0.25'],
       configSettings: { electionTimeoutMillis: 2000, heartbeatIntervalMillis: 500 }
     },
     instanceOpts: [{ launchTimeout: 60000 }, { launchTimeout: 60000 }, { launchTimeout: 60000 }]

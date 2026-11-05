@@ -168,6 +168,7 @@ These deployable projects are not included in `pnpm-workspace.yaml`; they keep t
 | [`infra/uhrp-server-cloud-bucket`](infra/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments                         |
 | [`infra/wallet-infra`](infra/wallet-infra)                         | `@bsv/wallet-infra` private                                                          | UTXO management server                                                   |
 | [`infra/wab`](infra/wab)                                           | `@bsv/wab-server` private                                                            | Wallet Authentication Backend                                            |
+| [`infra/webrtpay-relay`](infra/webrtpay-relay)                     | `@bsv/webrtpay-relay` private                                                        | WebRTPay signalling relay for direct WebRTC payments                     |
 
 ## Conformance Vectors
 

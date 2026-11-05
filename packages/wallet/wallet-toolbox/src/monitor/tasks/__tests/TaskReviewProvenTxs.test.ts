@@ -31,13 +31,16 @@ function makeMonitor(options: {
     async ({ height }: { height: number }) => options.staleRootsByHeight?.[height] ?? []
   )
   const findMonitorEvents = jest.fn(async () => options.monitorEvents || [])
-  const findProvenTxs = jest.fn().mockResolvedValue(options.provenTxs ?? [])
+  const getProvenTxsReviewStartHeight = jest.fn(async () => {
+    const heights = (options.provenTxs ?? [{ height: 0 }]).map(row => row.height)
+    return heights.length === 0 ? undefined : Math.min(...heights)
+  })
   const runAsStorageProvider = jest.fn(
     async (fn: any) =>
       await fn({
         findStaleMerkleRoots,
         findMonitorEvents,
-        findProvenTxs
+        getProvenTxsReviewStartHeight
       })
   )
   const reproveHeightMerkleRoot = jest.fn(async (height: number, staleRoot: string) => {
@@ -151,7 +154,7 @@ describe('TaskReviewProvenTxs tests', () => {
     expect(lastReviewedHeight).toBe(20)
   })
 
-  test('3 runTask starts from height 0 on cold start and caps the range by batch size and minimum age', async () => {
+  test('3 runTask starts from the earliest proof and caps the range by batch size and minimum age', async () => {
     const m = makeMonitor({
       tipHeight: 250,
       reviewResult: {
@@ -300,7 +303,7 @@ describe('TaskReviewProvenTxs tests', () => {
     expect(m.reproveHeightMerkleRoot).toHaveBeenCalledWith(121, 'root-121-old')
     expect(checkpoint.reviewedThroughHeight).toBe(152)
     expect(checkpoint.retryHeights).toEqual([])
-    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 121')
+    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 121..121')
     expect(checkpoint.reviewLog).toContain('reviewing heights 151..152')
   })
 
@@ -339,7 +342,7 @@ describe('TaskReviewProvenTxs tests', () => {
     await expect(task.getLastReviewedHeight()).resolves.toBe(16)
   })
 
-  test('12 retry work is deduplicated, bounded, and retained in checkpoint order', async () => {
+  test('12 retry work is deduplicated, bounded, and retained with a durable fair cursor', async () => {
     const m = makeMonitor({
       tipHeight: 250,
       monitorEvents: [
@@ -359,11 +362,11 @@ describe('TaskReviewProvenTxs tests', () => {
 
     const checkpoint = JSON.parse(await task.runTask())
 
-    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(1, 125)
-    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(2, 123)
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(1, 123)
+    expect(m.chaintracks.findHeaderForHeight).toHaveBeenNthCalledWith(2, 124)
     expect(checkpoint.reviewedThroughHeight).toBe(150)
-    expect(checkpoint.retryHeights).toEqual([124, 151])
-    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 125,123')
+    expect(checkpoint.retryHeights).toEqual([124, 125, 151])
+    expect(checkpoint.reviewLog).toContain('retrying unresolved heights 123..124')
     expect(checkpoint.reviewLog).not.toContain('reviewing heights')
   })
 
@@ -387,7 +390,7 @@ describe('TaskReviewProvenTxs tests', () => {
     })
     const firstTask = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100, 1, 2)
     const firstCheckpoint = await firstTask.runTask()
-    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([123, 121, 122])
+    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([121, 122, 123])
     monitorEvents.unshift({ details: firstCheckpoint })
 
     const restartedTask = new TaskReviewProvenTxs(m.monitor as any, 0, 100, 100, 1, 2)
@@ -399,7 +402,7 @@ describe('TaskReviewProvenTxs tests', () => {
       [123, 'old'],
       [121, 'old']
     ])
-    expect(nextCheckpoint.retryHeights).toEqual([122, 121])
+    expect(nextCheckpoint.retryHeights).toEqual([121, 122])
     expect(nextCheckpoint.updatedTransactions).toBe(1)
     expect(nextCheckpoint.reviewedThroughHeight).toBe(150)
   })
@@ -421,7 +424,7 @@ describe('TaskReviewProvenTxs tests', () => {
     })
     const firstTask = new TaskReviewProvenTxs(m.monitor as any)
     const firstCheckpoint = await firstTask.runTask()
-    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([150, 121])
+    expect(JSON.parse(firstCheckpoint).retryHeights).toEqual([121, 150])
     expect(m.chaintracks.findHeaderForHeight).toHaveBeenCalledTimes(1)
     expect(m.chaintracks.findHeaderForHeight).toHaveBeenCalledWith(121)
     monitorEvents.unshift({ details: firstCheckpoint })
@@ -448,10 +451,112 @@ describe('TaskReviewProvenTxs tests', () => {
     jest
       .spyOn(task.storage, 'runAsStorageProvider')
       .mockImplementation(
-        async (fn: any) => await fn({ findMonitorEvents: m.findMonitorEvents, findProvenTxs: async () => [] })
+        async (fn: any) =>
+          await fn({ findMonitorEvents: m.findMonitorEvents, getProvenTxsReviewStartHeight: async () => undefined })
       )
 
     await expect(task.getLastReviewedHeight()).resolves.toBeUndefined()
     await expect(task.runTask()).rejects.toThrow('chain tip height')
+  })
+  test('an empty wallet leaves no checkpoint, then starts at its first proof', async () => {
+    const provenTxs: Array<{ height: number }> = []
+    const monitorEvents: Array<{ details?: string }> = []
+    const m = makeMonitor({ tipHeight: 971500, provenTxs, monitorEvents })
+    const first = new TaskReviewProvenTxs(m.monitor as any)
+    expect(await first.runTask()).toBe('')
+    provenTxs.push({ height: 971225 })
+    const restarted = new TaskReviewProvenTxs(m.monitor as any)
+    const review = jest.spyOn(restarted, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    expect(JSON.parse(await restarted.runTask()).startHeight).toBe(971225)
+    expect(review).toHaveBeenCalledWith(new HeightRange(971225, 971324))
+  })
+
+  test('an old empty-prefix checkpoint skips forward without losing older pending work', async () => {
+    const m = makeMonitor({
+      tipHeight: 971500,
+      provenTxs: [{ height: 971225 }, { height: 971200 }],
+      monitorEvents: [{ details: JSON.stringify({ reviewedThroughHeight: 99, retryHeights: [17] }) }]
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any)
+    const review = jest.spyOn(task, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    const checkpoint = JSON.parse(await task.runTask())
+    expect(review).toHaveBeenNthCalledWith(1, new HeightRange(17, 17))
+    expect(review).toHaveBeenNthCalledWith(2, new HeightRange(971200, 971299))
+    expect(checkpoint.startHeight).toBe(971200)
+  })
+
+  test('a fragmented retry checkpoint survives large diagnostics and parser limits without losing heights', async () => {
+    const heights = Array.from({ length: 1000 }, (_, index) => 2_000_000_000 + index * 2)
+    const monitorEvents = [{ details: JSON.stringify({ reviewedThroughHeight: 99, retryHeights: [] as number[] }) }]
+    const m = makeMonitor({
+      tipHeight: 2_000_003_000,
+      provenTxs: [{ height: 2_000_000_000 }],
+      monitorEvents,
+      reviewResult: {
+        log: '\u0000'.repeat(20_000),
+        reviewedHeights: 1000,
+        mismatchedHeights: 0,
+        affectedTransactions: 0,
+        updatedTransactions: 0,
+        unresolvedHeights: heights
+      }
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any, 0, 1000, 0)
+    jest.spyOn(task, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    const details = await task.runTask()
+    expect(details.length).toBeLessThan(8192)
+    const checkpoint = JSON.parse(details)
+    expect(checkpoint.retryRecovery.ranges.length).toBeLessThanOrEqual(128)
+    for (const height of heights) {
+      expect(checkpoint.retryRecovery.ranges.some(([min, max]: number[]) => height >= min && height <= max)).toBe(true)
+    }
+    monitorEvents.unshift({ details })
+    const restored = await new TaskReviewProvenTxs(m.monitor as any).getLastCheckpoint()
+    expect(restored?.retryRecovery?.ranges).toEqual(checkpoint.retryRecovery.ranges)
+  })
+  test('a malformed explicit recovery queue falls back to a previous valid durable checkpoint', async () => {
+    const m = makeMonitor({
+      tipHeight: 500,
+      monitorEvents: [
+        {
+          details: JSON.stringify({
+            reviewedThroughHeight: 400,
+            retryRecovery: { ranges: 'corrupt', cursor: 0 },
+            retryHeights: []
+          })
+        },
+        { details: JSON.stringify({ reviewedThroughHeight: 300, retryHeights: [17] }) }
+      ]
+    })
+    const checkpoint = await new TaskReviewProvenTxs(m.monitor as any).getLastCheckpoint()
+    expect(checkpoint?.reviewedThroughHeight).toBe(300)
+    expect(checkpoint?.retryRecovery?.ranges).toEqual([[17, 17]])
+  })
+  test('a completed bootstrap resumes the bounded audit without rescanning the proof table', async () => {
+    const m = makeMonitor({
+      tipHeight: 500,
+      monitorEvents: [{ details: JSON.stringify({ reviewedThroughHeight: 200, bootstrapComplete: true }) }]
+    })
+    const task = new TaskReviewProvenTxs(m.monitor as any)
+    const minimum = jest.spyOn(task as any, 'getFirstProvenHeight')
+    jest.spyOn(task, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    const result = JSON.parse(await task.runTask())
+    expect(result.startHeight).toBe(201)
+    expect(result.bootstrapComplete).toBe(true)
+    expect(minimum).not.toHaveBeenCalled()
+  })
+  test('retry-only work in an empty legacy wallet does not finish bootstrap before its first proof', async () => {
+    const provenTxs: Array<{ height: number }> = []
+    const monitorEvents = [{ details: JSON.stringify({ reviewedThroughHeight: 99, retryHeights: [17] }) }]
+    const m = makeMonitor({ tipHeight: 971500, provenTxs, monitorEvents })
+    const empty = new TaskReviewProvenTxs(m.monitor as any)
+    jest.spyOn(empty, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    const details = await empty.runTask()
+    expect(JSON.parse(details).bootstrapComplete).toBe(false)
+    monitorEvents.unshift({ details })
+    provenTxs.push({ height: 971225 })
+    const funded = new TaskReviewProvenTxs(m.monitor as any)
+    jest.spyOn(funded, 'reviewHeightRange').mockResolvedValue(m.reviewHeightRange())
+    expect(JSON.parse(await funded.runTask()).startHeight).toBe(971225)
   })
 })

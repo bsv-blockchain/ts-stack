@@ -12,4 +12,7 @@ const client = new PaymailClient()
     publicProfile1,
     publicProfile2
   })
-})()
+})().catch(error => {
+  console.error(error)
+  process.exitCode = 1
+})

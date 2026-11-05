@@ -1,13 +1,19 @@
 version: 2
 
-# One coordinated version-maintenance PR per month. This is the closest
-# supported cadence to the requested "about every three weeks", and the open
-# limit plus automatic rebasing prevents a new queue from forming behind it.
+# One coordinated version-maintenance PR on the 1st and 15th of each month.
+# Cron cannot express "every other week"; these fixed dates are the closest
+# twice-monthly cadence. The open limit prevents a new queue from forming
+# behind it. The Dependency lockfile refresh workflow then adds one commit
+# re-resolving transitive dependencies within declared ranges; Dependabot stops
+# rebasing after that commit, so merge or close the PR before the next run.
+# Automated security-update PRs are disabled for the repository: Dependabot
+# alerts stay on, and advisory fixes arrive through this grouped PR and its
+# refresh (governance/dependency-release-policy.json#routineUpdates).
 multi-ecosystem-groups:
-  monthly-stack-maintenance:
+  stack-maintenance:
     schedule:
-      interval: monthly
-      time: '06:00'
+      interval: cron
+      cronjob: '0 6 1,15 * *'
       timezone: America/Los_Angeles
     open-pull-requests-limit: 1
     labels:
@@ -24,7 +30,7 @@ updates:
       - /tools/codegen/node
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7
@@ -41,16 +47,9 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
-    groups:
-      root-security:
-        applies-to: security-updates
-        patterns:
-          - '*'
-        exclude-patterns:
-          - '@bsv/*'
 
   # Infra services live outside the pnpm workspace and maintain package-lock
-  # files. Dependabot can update them in the same monthly PR; release-time
+  # files. Dependabot can update them in the same grouped PR; release-time
   # version synchronization continues to own their @bsv/* ranges.
   - package-ecosystem: npm
     directories:
@@ -62,9 +61,10 @@ updates:
       - /infra/uhrp-server-cloud-bucket/notifier
       - /infra/wab
       - /infra/wallet-infra
+      - /infra/webrtpay-relay
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     # The npm updater currently fetches unrelated ancestor pnpm support files
     # and mistakes these standalone package-lock projects for sub-workspaces.
@@ -87,13 +87,6 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
-    groups:
-      infra-security:
-        applies-to: security-updates
-        patterns:
-          - '*'
-        exclude-patterns:
-          - '@bsv/*'
 
   # Keep deployment manifests current. Runtime Dockerfiles are digest-only, so
   # exclude them from this scan: Dependabot treats their bare `node` dependency
@@ -114,9 +107,10 @@ updates:
       - /infra/wab/deploy
       - /infra/wallet-infra
       - /infra/wallet-infra/guides/kube_samples
+      - /infra/webrtpay-relay
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7
@@ -150,7 +144,7 @@ updates:
     directory: /governance
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7
@@ -166,7 +160,7 @@ updates:
     directory: /tools/codegen
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7
@@ -175,7 +169,7 @@ updates:
     directory: /tools/codegen
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7
@@ -184,7 +178,7 @@ updates:
     directory: /
     patterns:
       - '*'
-    multi-ecosystem-group: monthly-stack-maintenance
+    multi-ecosystem-group: stack-maintenance
     rebase-strategy: auto
     cooldown:
       default-days: 7

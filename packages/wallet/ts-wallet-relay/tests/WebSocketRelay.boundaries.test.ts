@@ -1,7 +1,7 @@
 import http from 'node:http'
 import { WebSocket } from 'ws'
 import { DESKTOP_TOKEN_PROTOCOL_PREFIX, DESKTOP_WS_PROTOCOL } from '../src/types.js'
-import { WebSocketRelay } from '../src/server/WebSocketRelay.js'
+import { WebSocketRelay, type WebSocketRelayOptions } from '../src/server/WebSocketRelay.js'
 
 const TOPIC_A = 'A'.repeat(43)
 const TOPIC_B = 'B'.repeat(43)
@@ -31,7 +31,44 @@ function closed(socket: WebSocket): Promise<{ code: number; reason: string }> {
   })
 }
 
+/** Ciphertexts of every envelope the socket receives, in order. */
+function collect(socket: WebSocket): string[] {
+  const received: string[] = []
+  socket.on('message', data => {
+    received.push((JSON.parse(`${data}`) as { ciphertext: string }).ciphertext)
+  })
+  return received
+}
+
+async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for relay state')
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+}
+
+/** Relays started by a test, closed after it whether it passes or fails. */
+const running: Array<{ server: http.Server; relay: WebSocketRelay }> = []
+
+async function startRelay(
+  options?: WebSocketRelayOptions
+): Promise<{ relay: WebSocketRelay; port: number }> {
+  const server = http.createServer()
+  const relay = new WebSocketRelay(server, options)
+  running.push({ server, relay })
+  return { relay, port: await listen(server) }
+}
+
 describe('WebSocketRelay boundary and authority enforcement', () => {
+  afterEach(async () => {
+    for (const { server, relay } of running.splice(0)) {
+      relay.close()
+      server.closeAllConnections()
+      if (server.listening) await stop(server)
+    }
+  })
+
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER, Number.NaN])(
     'rejects unsafe topic capacity %s',
     maxTopics => {
@@ -155,6 +192,149 @@ describe('WebSocketRelay boundary and authority enforcement', () => {
     first.close()
     relay.close()
     await stop(server)
+  })
+
+  it('forwards desktop traffic to mobile immediately when the hold is not enabled', async () => {
+    const { relay, port } = await startRelay()
+    const desktop = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=desktop`)
+    await opened(desktop)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'AQID' }))
+    await waitFor(() => (relay as any).topics.get(TOPIC_A)?.buffer.length === 1)
+
+    const mobile = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const received = collect(mobile)
+    await opened(mobile)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BAUG' }))
+    await waitFor(() => received.length === 2)
+    expect(received).toEqual(['AQID', 'BAUG'])
+
+    mobile.close()
+    desktop.close()
+  })
+
+  it('holds desktop traffic until the mobile socket is accepted', async () => {
+    const { relay, port } = await startRelay({ holdDesktopTrafficUntilAccepted: true })
+    const connections: number[] = []
+    relay.onIncoming((_topic, _envelope, role, connectionId) => {
+      if (role === 'mobile') connections.push(connectionId)
+    })
+    const desktop = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=desktop`)
+    await opened(desktop)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'AQID' }))
+    await waitFor(() => (relay as any).topics.get(TOPIC_A)?.buffer.length === 1)
+
+    const mobile = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const received = collect(mobile)
+    await opened(mobile)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BAUG' }))
+    mobile.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BwgJ' }))
+    await waitFor(() => connections.length === 1)
+    // The relay's own sends are not held.
+    relay.sendToMobile(TOPIC_A, { topic: TOPIC_A, ciphertext: 'CgsM' })
+    await waitFor(() => received.length >= 1)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(received).toEqual(['CgsM'])
+
+    expect(relay.isCurrentMobile(TOPIC_A, connections[0]!)).toBe(true)
+    expect(relay.isCurrentMobile(TOPIC_A, connections[0]! + 1)).toBe(false)
+    expect(relay.isCurrentMobile(TOPIC_B, connections[0]!)).toBe(false)
+    expect(relay.acceptMobile(TOPIC_A, connections[0]! + 1)).toBe(false)
+    expect(relay.acceptMobile(TOPIC_B, connections[0]!)).toBe(false)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(received).toEqual(['CgsM'])
+
+    expect(relay.acceptMobile(TOPIC_A, connections[0]!)).toBe(true)
+    await waitFor(() => received.length === 3)
+    expect(received).toEqual(['CgsM', 'AQID', 'BAUG'])
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'DQ4P' }))
+    await waitFor(() => received.length === 4)
+    expect(received[3]).toBe('DQ4P')
+
+    mobile.close()
+    desktop.close()
+  })
+
+  it('drops held desktop traffic when an unaccepted mobile leaves and holds it for the next one', async () => {
+    const { relay, port } = await startRelay({ holdDesktopTrafficUntilAccepted: true })
+    const connections: number[] = []
+    relay.onIncoming((_topic, _envelope, role, connectionId) => {
+      if (role === 'mobile') connections.push(connectionId)
+    })
+    const desktop = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=desktop`)
+    await opened(desktop)
+
+    const first = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const firstReceived = collect(first)
+    const firstClosed = closed(first)
+    await opened(first)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'AQID' }))
+    await waitFor(() => (relay as any).topics.get(TOPIC_A)?.buffer.length === 1)
+    relay.disconnectMobile(TOPIC_A)
+    await firstClosed
+    expect(firstReceived).toEqual([])
+    expect((relay as any).topics.get(TOPIC_A)?.buffer ?? []).toHaveLength(0)
+
+    const second = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const secondReceived = collect(second)
+    await opened(second)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BAUG' }))
+    second.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BwgJ' }))
+    await waitFor(() => connections.length === 1)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(secondReceived).toEqual([])
+    expect(relay.acceptMobile(TOPIC_A, connections[0]!)).toBe(true)
+    await waitFor(() => secondReceived.length === 1)
+    expect(secondReceived).toEqual(['BAUG'])
+
+    // A socket that leaves on its own also discards what was held for it.
+    const secondClosed = closed(second)
+    second.close()
+    await secondClosed
+    const third = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const thirdClosed = closed(third)
+    await opened(third)
+    desktop.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'CgsM' }))
+    await waitFor(() => (relay as any).topics.get(TOPIC_A)?.buffer.length === 1)
+    // The id of the socket this one replaced does not accept it.
+    expect(relay.acceptMobile(TOPIC_A, connections[0]!)).toBe(false)
+    expect((relay as any).topics.get(TOPIC_A)?.buffer).toHaveLength(1)
+    third.close()
+    await thirdClosed
+    await waitFor(() => ((relay as any).topics.get(TOPIC_A)?.buffer ?? []).length === 0)
+
+    desktop.close()
+  })
+
+  it('hands held messages to a reconnecting desktop instead of the phone', async () => {
+    const { relay, port } = await startRelay({ holdDesktopTrafficUntilAccepted: true })
+    const connections: number[] = []
+    relay.onIncoming((_topic, _envelope, role, connectionId) => {
+      if (role === 'mobile') connections.push(connectionId)
+    })
+    const first = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=desktop`)
+    await opened(first)
+    const mobile = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=mobile`)
+    const received = collect(mobile)
+    await opened(mobile)
+    mobile.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'BwgJ' }))
+    await waitFor(() => connections.length === 1)
+    first.send(JSON.stringify({ topic: TOPIC_A, ciphertext: 'AQID' }))
+    await waitFor(() => (relay as any).topics.get(TOPIC_A)?.buffer.length === 1)
+
+    // Known behaviour: a desktop connecting during the hold receives the buffer.
+    const second = new WebSocket(`ws://127.0.0.1:${port}/ws?topic=${TOPIC_A}&role=desktop`)
+    const secondReceived = collect(second)
+    await opened(second)
+    await waitFor(() => secondReceived.length === 1)
+    expect(secondReceived).toEqual(['AQID'])
+    expect((relay as any).topics.get(TOPIC_A)?.buffer).toHaveLength(0)
+
+    expect(relay.acceptMobile(TOPIC_A, connections[0]!)).toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(received).toEqual([])
+
+    mobile.close()
+    second.close()
   })
 
   it('contains mobile setup callback failures and replaces only authenticated desktops', async () => {

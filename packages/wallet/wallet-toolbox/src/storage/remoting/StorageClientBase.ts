@@ -113,6 +113,13 @@ type RemoteStorageSettings = TableSettings & {
 
 export interface StorageClientOptions {
   /**
+   * Options forwarded to AuthFetch's existing fifth constructor argument.
+   * Omission preserves the SDK defaults. Available options follow the installed
+   * SDK; extending an authenticated request requires both its transport timeout
+   * and response-wait timeout to cover the intended operation.
+   */
+  authFetchOptions?: ConstructorParameters<typeof AuthFetch>[4]
+  /**
    * Send compact tagged binary request values after the server advertises
    * support. Leave disabled during rolling deployments where an endpoint may
    * still route requests to legacy server instances.
@@ -289,7 +296,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   public settings?: RemoteStorageSettings
 
   constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
-    this.authClient = new AuthFetch(wallet)
+    this.authClient = new AuthFetch(wallet, undefined, undefined, undefined, options.authFetchOptions)
     this.endpointUrl = normalizeStorageEndpointUrl(endpointUrl)
     this.binaryRequests = options.binaryRequests === true
     this.telemetry = new Telemetry(options.telemetry)

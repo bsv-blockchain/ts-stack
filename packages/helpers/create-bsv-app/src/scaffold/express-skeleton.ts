@@ -48,6 +48,7 @@ app.listen(PORT, () => {
   return [
     { path: 'package.json', content: JSON.stringify(pkg, null, 2) + '\n' },
     { path: 'tsconfig.json', content: JSON.stringify(tsconfig, null, 2) + '\n' },
+    { path: '.gitignore', content: 'node_modules\ndist\n.env\n' },
     { path: 'src/index.ts', content: index }
   ]
 }

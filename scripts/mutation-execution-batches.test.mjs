@@ -1,0 +1,283 @@
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import test from 'node:test'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { mutationExecutionMatrix, selectedMutationPartition } from './mutation-partitions.mjs'
+import {
+  mutationBuildIdentity,
+  mutationExecutionBatches,
+  mutationExecutionDigest,
+  verifyMutationExecutionBatches,
+  verifyMutationExecutionIdentity,
+  verifySelectedExecution
+} from './mutation-execution-batches.mjs'
+import { REPOSITORY_ROOT } from './repository-health.mjs'
+
+const matrixFor = count => ({
+  include: Array.from({ length: count }, (_, index) => ({
+    target: `fixture-${index}`,
+    partition: 'whole'
+  }))
+})
+
+test('real complete planner output verifies every immutable batch and binds the original runtime', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mutation-build-runtime-'))
+  const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
+  const identityInputs = [
+    'governance/mutation-testing/targets.mjs',
+    'governance/mutation-testing/policy.json',
+    'governance/mutation-testing/durations.json',
+    'governance/mutation-testing/stryker.config.mjs',
+    'scripts/mutation-testing.mjs',
+    'scripts/mutation-final-qualification.mjs',
+    'scripts/mutation-partitions.mjs',
+    'scripts/mutation-partition-evidence.mjs',
+    'scripts/mutation-execution-batches.mjs',
+    '.github/workflows/mutation-tests.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json'
+  ]
+  try {
+    const sources = execFileSync('/usr/bin/git', ['ls-files', '-z', 'packages'], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8'
+    })
+      .split('\0')
+      .filter(file => file.endsWith('.ts'))
+    for (const file of [...identityInputs, ...sources]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true })
+      copyFileSync(join(REPOSITORY_ROOT, file), join(root, file))
+    }
+    git(['init', '--quiet'])
+    git(['add', '.'])
+    git([
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Fixture'
+    ])
+    const environment = {
+      GITHUB_SHA: git(['rev-parse', 'HEAD']).trim(),
+      GITHUB_RUN_ID: '100',
+      GITHUB_RUN_ATTEMPT: '2',
+      BUILD_ARTIFACT_ID: '300',
+      BUILD_ARTIFACT_NAME: 'mutation-build-outputs-100-2'
+    }
+    mkdirSync(join(root, '.ci-artifacts'))
+    for (const file of ['build-outputs.tar.gz', '.ci-artifacts/build-outputs.tar.gz'])
+      writeFileSync(join(root, file), 'Identical fixture archive; never extracted')
+    const identity = await mutationBuildIdentity(root, environment)
+    assert.equal(identity.nodeVersion, process.version)
+    assert.equal(Object.keys(identity).length, 7)
+    const selected = Object.keys(buildMutationTargets(root))
+    const cli = (script, args, extraEnvironment = {}) =>
+      execFileSync(process.execPath, [join(REPOSITORY_ROOT, 'scripts', script), ...args], {
+        cwd: REPOSITORY_ROOT,
+        env: { ...process.env, ...extraEnvironment },
+        encoding: 'utf8'
+      }).trim()
+    const matrix = JSON.parse(
+      cli('mutation-partition-evidence.mjs', ['matrix', '--selected', JSON.stringify(selected)])
+    )
+    const plannerEnvironment = { MUTATION_MATRIX: JSON.stringify(matrix) }
+    const batches = JSON.parse(cli('mutation-execution-batches.mjs', ['plan'], plannerEnvironment))
+    const matrixDigest = cli('mutation-execution-batches.mjs', ['digest'], plannerEnvironment)
+    const unscheduled = mutationExecutionMatrix(selected, buildMutationTargets(root))
+    assert.ok(batches.include.length > 1)
+    assert.notDeepEqual(matrix, unscheduled)
+    assert.notEqual(matrixDigest, mutationExecutionDigest(unscheduled))
+    assert.deepEqual(
+      batches.include.flatMap(batch => batch.executionMatrix.include),
+      matrix.include
+    )
+    const verify = (value, batch = batches.include[0], overrides = {}) =>
+      verifySelectedExecution(root, {
+        ...environment,
+        EXECUTION_IDENTITY: JSON.stringify(value),
+        SELECTED_TARGETS: JSON.stringify(selected),
+        MUTATION_MATRIX_DIGEST: matrixDigest,
+        EXECUTION_BATCH: String(batch.batch),
+        EXECUTION_MATRIX: JSON.stringify(batch.executionMatrix),
+        ...overrides
+      })
+    const legacy = { ...identity }
+    delete legacy.nodeVersion
+    await Promise.all(
+      batches.include.flatMap(batch => [verify(identity, batch), verify(legacy, batch)])
+    )
+    await assert.rejects(
+      verify(identity, undefined, { MUTATION_MATRIX_DIGEST: mutationExecutionDigest(unscheduled) }),
+      /Stale or malformed execution matrixDigest/
+    )
+    const reordered = structuredClone(batches.include[0])
+    reordered.executionMatrix.include.reverse()
+    await assert.rejects(verify(identity, reordered), /differs from the original complete matrix/)
+    await assert.rejects(
+      verify(identity, undefined, { SELECTED_TARGETS: JSON.stringify(selected.slice(1)) }),
+      /Stale or malformed execution matrixDigest/
+    )
+    const otherRuntime = process.version === 'v24.18.0' ? 'v24.19.0' : 'v24.18.0'
+    await assert.rejects(
+      verify({ ...identity, nodeVersion: otherRuntime }),
+      /Stale execution runtime/
+    )
+    for (const version of [
+      '',
+      'latest',
+      '24.19.0',
+      'v24.19',
+      'v024.19.0',
+      'v24.019.0',
+      'v24.19.0-extra',
+      null
+    ])
+      await assert.rejects(
+        verify({ ...identity, nodeVersion: version }),
+        /Invalid build identity runtime/
+      )
+    for (const value of [
+      { ...identity, unexpected: true },
+      { ...legacy, unexpected: true }
+    ])
+      await assert.rejects(verify(value), /Unexpected build identity fields/)
+    for (const field of [
+      'sourceSha',
+      'runId',
+      'runAttempt',
+      'archiveDigest',
+      'artifactId',
+      'artifactName'
+    ])
+      await assert.rejects(verify({ ...identity, [field]: 'different' }))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('ordered execution batches preserve zero, boundary and multiple complete inventories', () => {
+  for (const count of [0, 1, 255, 256, 257, 512, 513, 1000]) {
+    const matrix = matrixFor(count),
+      before = structuredClone(matrix)
+    const batches = mutationExecutionBatches(matrix)
+    assert.equal(batches.include.length, Math.ceil(count / 256))
+    assert.deepEqual(
+      batches.include.flatMap(row => row.executionMatrix.include),
+      matrix.include
+    )
+    for (const [index, batch] of batches.include.entries()) {
+      assert.equal(batch.batch, index + 1)
+      assert.ok(
+        batch.executionMatrix.include.length > 0 && batch.executionMatrix.include.length <= 256
+      )
+    }
+    verifyMutationExecutionBatches(matrix, batches)
+    assert.deepEqual(matrix, before)
+  }
+})
+
+test('malformed, duplicate, sparse, decorated and oversized execution inventories fail closed', () => {
+  const accessor = { partition: 'whole' }
+  Object.defineProperty(accessor, 'target', {
+    enumerable: true,
+    get() {
+      throw new Error('Getter must not execute')
+    }
+  })
+  const decorated = { target: 'fixture', partition: 'whole' }
+  Object.defineProperty(decorated, 'hidden', { value: true })
+  for (const matrix of [
+    null,
+    {},
+    { include: null },
+    { include: Array(1) },
+    { include: [null] },
+    { include: [accessor] },
+    { include: [decorated] },
+    { include: [{ target: 'fixture', partition: 'whole', unknown: true }] },
+    { include: [{ target: 'fixture', partition: 'whole;exit' }] },
+    {
+      include: [
+        { target: 'fixture', partition: 'whole' },
+        { target: 'fixture', partition: 'whole' }
+      ]
+    },
+    { include: [], unknown: true },
+    matrixFor(65537)
+  ])
+    assert.throws(() => mutationExecutionBatches(matrix))
+  for (const maximum of [0, -1, 1.5, 257, Infinity, NaN])
+    assert.throws(() => mutationExecutionBatches(matrixFor(1), maximum))
+  assert.throws(() => mutationExecutionBatches(matrixFor(257), 1))
+})
+
+test('missing, repeated, unexpected and reordered batches cannot satisfy the original flat union', () => {
+  const matrix = matrixFor(513),
+    batches = mutationExecutionBatches(matrix)
+  for (const altered of [
+    { include: batches.include.slice(1) },
+    { include: [...batches.include, batches.include[0]] },
+    { include: [...batches.include].reverse() },
+    mutationExecutionBatches(matrix, 128)
+  ])
+    assert.throws(() => verifyMutationExecutionBatches(matrix, altered))
+  const altered = structuredClone(batches)
+  altered.include[0].executionMatrix.include[0].target = 'unexpected'
+  assert.throws(() => verifyMutationExecutionBatches(matrix, altered))
+})
+
+test('the real complete flat inventory crosses a scheduling boundary without changing any part configuration', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT),
+    matrix = mutationExecutionMatrix(Object.keys(targets), targets)
+  const before = structuredClone(matrix),
+    batches = mutationExecutionBatches(matrix, 128)
+  assert.ok(batches.include.length > 1)
+  assert.deepEqual(
+    batches.include.flatMap(row => row.executionMatrix.include),
+    matrix.include
+  )
+  assert.deepEqual(matrix, before)
+  for (const row of batches.include.flatMap(batch => batch.executionMatrix.include)) {
+    const part = selectedMutationPartition(row.target, targets[row.target], row.partition)
+    assert.deepEqual({ ...part, mutate: targets[row.target].mutate }, targets[row.target])
+  }
+})
+
+test('every batch rejects a different source, run, attempt, archive, matrix or ordered slice', () => {
+  const matrix = matrixFor(257),
+    actual = {
+      sourceSha: 'a'.repeat(40),
+      runId: '100',
+      runAttempt: '2',
+      archiveDigest: 'b'.repeat(64),
+      matrixDigest: mutationExecutionDigest(matrix),
+      executionMatrix: matrix
+    }
+  for (const batch of mutationExecutionBatches(matrix).include) {
+    const request = { ...actual, batch: batch.batch, executionMatrix: batch.executionMatrix }
+    verifyMutationExecutionIdentity(request, actual)
+    for (const field of ['sourceSha', 'runId', 'runAttempt', 'archiveDigest', 'matrixDigest']) {
+      const digestWidth = field === 'sourceSha' ? 40 : 64
+      const changed = field.startsWith('run') ? '3' : 'c'.repeat(digestWidth)
+      assert.throws(() => verifyMutationExecutionIdentity({ ...request, [field]: changed }, actual))
+      assert.throws(() =>
+        verifyMutationExecutionIdentity({ ...request, [field]: undefined }, actual)
+      )
+    }
+    for (const invalid of [0, 3, 1.5, '1'])
+      assert.throws(() => verifyMutationExecutionIdentity({ ...request, batch: invalid }, actual))
+    assert.throws(() =>
+      verifyMutationExecutionIdentity({ ...request, executionMatrix: { include: [] } }, actual)
+    )
+    assert.throws(() =>
+      verifyMutationExecutionIdentity(request, { ...actual, matrixDigest: 'c'.repeat(64) })
+    )
+  }
+})

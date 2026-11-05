@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Serialize recovery ancestor reads to preserve healthy provider fallback; recover accepted callback/unconfirmed requests with unchanged proof and script checks.
+
+- WAB 1.8.17 also labels funding actions from durable reservation state and
+  automatically reconciles retained signed payments after an ambiguous response
+  or process replacement. It verifies ancestry and scripts before resubmitting
+  the same transaction ID; it never allocates a second grant. Bounded legacy
+  discovery covers older unlabelled reservations.
+- WAB 1.8.17 adds admin-authenticated reconciliation of an ambiguous faucet
+  reservation against a confirmed transaction and Chaintracks-validated proof.
+  Recovery requires the saved puzzle, amount and output index, preserves
+  eligibility markers, and returns the original payment on registration retry.
+  It does not issue another grant. No schema migration is required; see the
+  README for recovery and rollback instructions.
+
 - WAB 1.7.0 accepts explicit `expiresAtEpochMs: null` for store-mandated
   non-expiring demo credentials. Omitted expiry remains invalid; revocation,
   admin rotation, namespace isolation and persistent guess limits still apply.
@@ -25,6 +39,9 @@ All notable changes to this project will be documented in this file.
   resolutions to their patched versions; no new dependency or override is added.
 
 ### Security
+
+- Update the locked `follow-redirects` dependency to 1.16.2 for
+  GHSA-mrwp-f3q8-3g9p without changing dependency ranges or lifecycle policy.
 
 - Preserve detached authentication identity and faucet-payment evidence across
   unlink, phone transfer, and account/share deletion so re-registration cannot

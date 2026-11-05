@@ -5,7 +5,7 @@ import {
   MockedBSV_SDK,
   MockTransaction
 } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager, PermissionsManagerConfig } from '../WalletPermissionsManager'
+import { WalletPermissionsManager, PermissionsManagerConfig, withBrc205Capabilities } from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -811,10 +811,51 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     expect(underlying.getNetwork).toHaveBeenCalledTimes(1)
   })
 
-  it('should proxy getVersion', async () => {
+  it('should proxy getVersion, advertising the built-in BRC-177 module per BRC-205', async () => {
     const result = await manager.getVersion({}, 'someone.com')
-    expect(result.version).toBe('vendor-1.0.0')
+    expect(result.version).toBe('vendor-1.0.0; brc177-nosend=2;')
     expect(underlying.getVersion).toHaveBeenCalledTimes(1)
+  })
+
+  it('getVersion lists every module capability by scheme id and key, without repeating a key', async () => {
+    const module = (capabilities: Record<string, string>) => ({
+      capabilities,
+      onRequest: async (req: { args: object }) => ({ args: req.args }),
+      onResponse: async (res: unknown) => res
+    })
+    const withModules = new WalletPermissionsManager(underlying, 'admin.com', {
+      permissionModules: {
+        zeta: module({ 'brc999-zeta': '1', 'brc177-nosend': '9' }),
+        color: module({ 'brc207-color': '5', 'brc207-color-attested': '1' })
+      }
+    })
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
+      'vendor-1.0.0; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
+    )
+    underlying.getVersion.mockResolvedValueOnce({ version: 'vendor-1.0.0; account-label=Pocket%20Photos;' })
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
+      'vendor-1.0.0; account-label=Pocket%20Photos; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
+    )
+  })
+
+  it('withBrc205Capabilities skips invalid attributes and leaves a string without additions alone', () => {
+    const module = (capabilities: Record<string, string>) => ({
+      capabilities,
+      onRequest: async (req: { args: object }) => ({ args: req.args }),
+      onResponse: async (res: unknown) => res
+    })
+    expect(withBrc205Capabilities('vendor-1.0.0', {})).toBe('vendor-1.0.0')
+    expect(withBrc205Capabilities('vendor-1.0.0;', {})).toBe('vendor-1.0.0;')
+    expect(withBrc205Capabilities('vendor-1.0.0; a=b', {})).toBe('vendor-1.0.0; a=b')
+    expect(
+      withBrc205Capabilities('vendor-1.0.0', {
+        bad: module({ 'Brc1-upper': '1', 'brc1-space': 'a b', 'brc1-empty': '', 'brc1-pct': '%zz' })
+      })
+    ).toBe('vendor-1.0.0')
+    expect(
+      withBrc205Capabilities('vendor-1.0.0; brc1-x=1', { m: module({ 'brc1-x': '2', 'brc2-y': 'a~b.c_d-e%2F' }) })
+    ).toBe('vendor-1.0.0; brc1-x=1; brc2-y=a~b.c_d-e%2F;')
+    expect(withBrc205Capabilities('vendor-1.0.0;', { m: module({ 'brc2-y': '1' }) })).toBe('vendor-1.0.0; brc2-y=1;')
   })
 
   /* -------------------------------------------------------------------------

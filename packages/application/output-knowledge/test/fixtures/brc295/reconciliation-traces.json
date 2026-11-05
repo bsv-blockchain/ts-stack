@@ -1,0 +1,1770 @@
+[
+  {
+    "name": "worker-order-BA",
+    "watch": ["P:0", "A:0", "B:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "receive",
+        "names": ["B"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["B"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:pending", "B:pending"],
+          "walletActions": 0,
+          "current": [],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final", "B:conflicting"],
+          "walletActions": 0,
+          "current": ["A:0"],
+          "spent": ["P:0->A"],
+          "orders": {
+            "A": {
+              "readyAt": 1,
+              "depth": 0,
+              "firstRaw": 1,
+              "context": "base"
+            },
+            "B": {
+              "readyAt": 2,
+              "depth": 0,
+              "firstRaw": 2,
+              "context": "base"
+            }
+          }
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "worker-order-AB",
+    "watch": ["P:0", "A:0", "B:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "receive",
+        "names": ["B"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:pending", "B:pending"],
+          "walletActions": 0,
+          "current": [],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "verify",
+        "names": ["B"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final", "B:conflicting"],
+          "walletActions": 0,
+          "current": ["A:0"],
+          "spent": ["P:0->A"],
+          "orders": {
+            "A": {
+              "readyAt": 1,
+              "depth": 0,
+              "firstRaw": 1,
+              "context": "base"
+            },
+            "B": {
+              "readyAt": 2,
+              "depth": 0,
+              "firstRaw": 2,
+              "context": "base"
+            }
+          }
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "successor-before-parent-across-hosts",
+    "watch": ["P:3", "Q:0", "QC:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["QC"],
+        "source": "host-b"
+      },
+      {
+        "op": "verify",
+        "names": ["QC"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["QC:unresolved"],
+          "walletActions": 0,
+          "current": ["P:3"]
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "receive",
+        "names": ["Q"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["Q"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["Q:selected-final", "QC:selected-final"],
+          "walletActions": 0,
+          "current": ["QC:0"],
+          "spent": ["P:3->Q", "Q:0->QC"],
+          "orders": {
+            "Q": {
+              "readyAt": 2,
+              "depth": 0,
+              "firstRaw": 2,
+              "context": "base"
+            },
+            "QC": {
+              "readyAt": 2,
+              "depth": 1,
+              "firstRaw": 1,
+              "context": "base"
+            }
+          }
+        }
+      },
+      {
+        "op": "receive",
+        "names": ["Q"],
+        "source": "host-c"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["Q:selected-final", "QC:selected-final"],
+          "walletActions": 0,
+          "current": ["QC:0"],
+          "spent": ["P:3->Q", "Q:0->QC"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "incomplete-earlier-is-not-eligible-first",
+    "watch": ["P:0", "E:0", "B:0", "X:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["E"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["E"]
+      },
+      {
+        "op": "receive",
+        "names": ["B"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["B"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["B:selected-final", "E:unresolved"],
+          "walletActions": 0,
+          "current": ["B:0"]
+        }
+      },
+      {
+        "op": "receive",
+        "names": ["X"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["X"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["B:selected-final", "E:conflicting", "X:selected-final"],
+          "walletActions": 0,
+          "current": ["B:0", "X:0"],
+          "spent": ["P:0->B"],
+          "orders": {
+            "B": {
+              "readyAt": 2,
+              "depth": 0,
+              "firstRaw": 2,
+              "context": "base"
+            },
+            "E": {
+              "readyAt": 3,
+              "depth": 1,
+              "firstRaw": 1,
+              "context": "base"
+            },
+            "X": {
+              "readyAt": 3,
+              "depth": 0,
+              "firstRaw": 3,
+              "context": "base"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "inclusion-overrides-and-reorg-restores-descendants",
+    "watch": ["P:0", "A:0", "AC:0", "B:0", "BC:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "receive",
+        "names": ["AC"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["AC"]
+      },
+      {
+        "op": "receive",
+        "names": ["B"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["B"]
+      },
+      {
+        "op": "receive",
+        "names": ["BC"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["BC"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [
+            "A:selected-final",
+            "AC:selected-final",
+            "B:conflicting",
+            "BC:dependent-conflict"
+          ],
+          "walletActions": 0,
+          "current": ["AC:0"],
+          "spent": ["A:0->AC", "P:0->A"]
+        }
+      },
+      {
+        "op": "view",
+        "id": "included"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:conflicting", "AC:dependent-conflict", "B:included", "BC:selected-final"],
+          "walletActions": 0,
+          "view": "included",
+          "current": ["BC:0"],
+          "spent": ["B:0->BC", "P:0->B"]
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "view",
+        "id": "fork"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [
+            "A:selected-final",
+            "AC:selected-final",
+            "B:conflicting",
+            "BC:dependent-conflict"
+          ],
+          "walletActions": 0,
+          "view": "fork",
+          "current": ["AC:0"],
+          "spent": ["A:0->AC", "P:0->A"]
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "invalid-signature-does-not-reserve-spend",
+    "watch": ["P:0", "A:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["badSignature"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["badSignature"]
+      },
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final", "badSignature:invalid"],
+          "walletActions": 0,
+          "current": ["A:0"],
+          "spent": ["P:0->A"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "valid-nonfinal-replacement-survives-maturation",
+    "watch": ["P:1", "P:2", "N:0", "R:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-final"],
+          "walletActions": 0,
+          "current": ["R:0"],
+          "spent": ["P:1->R", "P:2->R"]
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-equal",
+    "watch": ["P:1", "P:2", "R:0", "equal:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["equal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["equal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "equal:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-incomparable",
+    "watch": ["P:1", "P:2", "R:0", "incomparable:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["incomparable"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["incomparable"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "incomparable:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-largeMaximum",
+    "watch": ["P:1", "P:2", "R:0", "largeMaximum:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["largeMaximum"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["largeMaximum"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "largeMaximum:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-reordered",
+    "watch": ["P:1", "P:2", "R:0", "reordered:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["reordered"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["reordered"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "reordered:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-partial",
+    "watch": ["P:1", "P:2", "R:0", "partial:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["partial"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["partial"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "partial:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-extraInput",
+    "watch": ["P:1", "P:2", "R:0", "extraInput:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["extraInput"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["extraInput"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "extraInput:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "reject-replacement-locktimeOnly",
+    "watch": ["P:1", "P:2", "R:0", "locktimeOnly:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["locktimeOnly"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["locktimeOnly"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "locktimeOnly:conflicting"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ]
+  },
+  {
+    "name": "replacement-allFinal",
+    "watch": ["P:1", "P:2", "allFinal:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["allFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["allFinal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:conflicting", "allFinal:selected-final"],
+          "walletActions": 0,
+          "current": ["allFinal:0"],
+          "spent": ["P:1->allFinal", "P:2->allFinal"]
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "replacement-zeroFinal",
+    "watch": ["P:1", "P:2", "zeroFinal:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["zeroFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["zeroFinal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:conflicting", "zeroFinal:selected-final"],
+          "walletActions": 0,
+          "current": ["zeroFinal:0"],
+          "spent": ["P:1->zeroFinal", "P:2->zeroFinal"]
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "replacement-oneFinal",
+    "watch": ["P:1", "P:2", "oneFinal:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "receive",
+        "names": ["oneFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["oneFinal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:conflicting", "oneFinal:selected-non-final"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "mature-prior-cannot-be-replaced",
+    "watch": ["P:1", "P:2", "N:0", "R:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:selected-final", "R:conflicting"],
+          "walletActions": 0,
+          "current": ["N:0"],
+          "spent": ["P:1->N", "P:2->N"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "final-choice-cannot-be-replaced",
+    "watch": ["zeroFinal:0", "allFinal:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["zeroFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["zeroFinal"]
+      },
+      {
+        "op": "receive",
+        "names": ["allFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["allFinal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["allFinal:conflicting", "zeroFinal:selected-final"],
+          "walletActions": 0,
+          "current": ["zeroFinal:0"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "nonfinal-disabled-is-retained",
+    "watch": ["P:1", "P:2", "N:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:unsupported"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      }
+    ],
+    "nonFinal": false
+  },
+  {
+    "name": "stale-verification-context-does-not-publish",
+    "watch": ["P:0", "A:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "view",
+        "id": "fork"
+      },
+      {
+        "op": "verify",
+        "names": ["A"],
+        "context": "base"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:pending"],
+          "walletActions": 0,
+          "current": [],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "verify",
+        "names": ["A"],
+        "context": "fork"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final"],
+          "walletActions": 0,
+          "current": ["A:0"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "withdrawal-reentry-never-revives-spent-output",
+    "watch": ["P:0", "A:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "a10",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "membership",
+        "source": "b",
+        "generation": 0,
+        "sequence": 2,
+        "id": "b2",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 11,
+        "id": "a11",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": false
+          }
+        ]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final"],
+          "walletActions": 0,
+          "current": ["A:0"],
+          "spent": ["P:0->A"],
+          "memberships": ["a/0/P:0/absent/11", "b/0/P:0/present/2"]
+        }
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "a10",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 12,
+        "id": "a12",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 11,
+        "id": "a11",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": false
+          }
+        ]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final"],
+          "walletActions": 0,
+          "current": ["A:0"],
+          "spent": ["P:0->A"],
+          "memberships": ["a/0/P:0/present/12", "b/0/P:0/present/2"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "membership-verification-preserves-source-order",
+    "watch": [],
+    "steps": [
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "s10",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ],
+        "verified": false
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 11,
+        "id": "s11",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": false
+          }
+        ]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "membershipVerified",
+        "source": "a",
+        "generation": 0,
+        "id": "s10"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": ["a/0/P:0/absent/11"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "generation-reset-fences-old-workers",
+    "watch": [],
+    "steps": [
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "old",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 1,
+        "sequence": 20,
+        "id": "snapshot",
+        "changes": [
+          {
+            "outpoint": "P:1",
+            "present": true
+          }
+        ],
+        "verified": false,
+        "complete": true
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": ["a/0/P:0/present/10"]
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "membershipVerified",
+        "source": "a",
+        "generation": 1,
+        "id": "snapshot"
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 30,
+        "id": "late",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": ["a/1/P:1/present/20"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "within-group-membership-array-order",
+    "watch": [],
+    "steps": [
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "group",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          },
+          {
+            "outpoint": "P:0",
+            "present": false
+          },
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": ["a/0/P:0/present/10"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "nonfinal-parent-has-no-usable-final-child",
+    "watch": ["P:1", "P:2", "N:0", "NC:0", "R:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["NC"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["NC"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:selected-non-final", "NC:dependent-conflict"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"]
+        }
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "NC:dependent-conflict", "R:selected-non-final"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"]
+        }
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "NC:dependent-conflict", "R:selected-final"],
+          "walletActions": 0,
+          "current": ["R:0"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "same-receive-uses-ancestry-before-txid",
+    "watch": ["P:3", "Q:0", "QC:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["Q", "QC"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["QC", "Q"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["Q:selected-final", "QC:selected-final"],
+          "walletActions": 0,
+          "current": ["QC:0"],
+          "orders": {
+            "Q": {
+              "readyAt": 1,
+              "depth": 0,
+              "firstRaw": 1,
+              "context": "base"
+            },
+            "QC": {
+              "readyAt": 1,
+              "depth": 1,
+              "firstRaw": 1,
+              "context": "base"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "pending-conflict-retains-stale-choice-other-component-progresses",
+    "watch": ["P:0", "A:0", "B:0", "Q:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["A"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["A"]
+      },
+      {
+        "op": "receive",
+        "names": ["B"],
+        "source": "host-a"
+      },
+      {
+        "op": "receive",
+        "names": ["Q"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["Q"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:pending", "B:pending", "Q:selected-final"],
+          "walletActions": 0,
+          "stale": ["A:selected-final"],
+          "current": ["Q:0"]
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "verify",
+        "names": ["B"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["A:selected-final", "B:conflicting", "Q:selected-final"],
+          "walletActions": 0,
+          "stale": [],
+          "current": ["A:0", "Q:0"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "snapshot-groups-sharing-watermark-retain-page-order",
+    "watch": [],
+    "steps": [
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "page1",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": true
+          }
+        ],
+        "phase": "snapshot",
+        "verified": false
+      },
+      {
+        "op": "membership",
+        "source": "a",
+        "generation": 0,
+        "sequence": 10,
+        "id": "page2",
+        "changes": [
+          {
+            "outpoint": "P:0",
+            "present": false
+          }
+        ],
+        "phase": "snapshot",
+        "complete": true
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "membershipVerified",
+        "source": "a",
+        "generation": 0,
+        "id": "page1"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": [],
+          "walletActions": 0,
+          "memberships": ["a/0/P:0/absent/10"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "maturity-and-reorg-reassess-child",
+    "watch": ["P:1", "P:2", "N:0", "NC:0"],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["NC"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["NC"]
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:selected-final", "NC:selected-final"],
+          "walletActions": 0,
+          "current": ["NC:0"]
+        }
+      },
+      {
+        "op": "view",
+        "id": "fork"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:selected-non-final", "NC:dependent-conflict"],
+          "walletActions": 0,
+          "current": ["P:1", "P:2"],
+          "spent": []
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:selected-final", "NC:selected-final"],
+          "walletActions": 0,
+          "current": ["NC:0"]
+        }
+      }
+    ]
+  },
+  {
+    "name": "replacement-inherits-prior-input-reservation",
+    "watch": [],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["partial"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["partial"]
+      },
+      {
+        "op": "receive",
+        "names": ["R"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["R"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-non-final", "partial:conflicting"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "R:selected-final", "partial:conflicting"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "disabled-nonfinal-does-not-reserve-firstseen-priority",
+    "watch": [],
+    "steps": [
+      {
+        "op": "receive",
+        "names": ["N"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["N"]
+      },
+      {
+        "op": "receive",
+        "names": ["allFinal"],
+        "source": "host-a"
+      },
+      {
+        "op": "verify",
+        "names": ["allFinal"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:unsupported", "allFinal:selected-final"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "view",
+        "id": "mature"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["N:conflicting", "allFinal:selected-final"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ],
+    "nonFinal": false
+  },
+  {
+    "name": "brc197-expiry-retirement-final-only",
+    "nonFinal": false,
+    "watch": ["brc197Parent:1"],
+    "steps": [
+      {
+        "op": "view",
+        "id": "expiryBefore"
+      },
+      {
+        "op": "receive",
+        "names": ["brc197Retire"],
+        "source": "host-expiry"
+      },
+      {
+        "op": "verify",
+        "names": ["brc197Retire"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["brc197Retire:unsupported"],
+          "spent": [],
+          "current": ["brc197Parent:1"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "view",
+        "id": "expiryEligible"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["brc197Retire:selected-final"],
+          "spent": ["brc197Parent:1->brc197Retire"],
+          "current": [],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  },
+  {
+    "name": "brc197-expiry-retirement-provisional",
+    "nonFinal": true,
+    "watch": ["brc197Parent:1"],
+    "steps": [
+      {
+        "op": "view",
+        "id": "expiryBefore"
+      },
+      {
+        "op": "receive",
+        "names": ["brc197Retire"],
+        "source": "host-expiry"
+      },
+      {
+        "op": "verify",
+        "names": ["brc197Retire"]
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["brc197Retire:selected-non-final"],
+          "spent": [],
+          "current": ["brc197Parent:1"],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "view",
+        "id": "expiryEligible"
+      },
+      {
+        "op": "expect",
+        "value": {
+          "states": ["brc197Retire:selected-final"],
+          "spent": ["brc197Parent:1->brc197Retire"],
+          "current": [],
+          "walletActions": 0
+        }
+      },
+      {
+        "op": "restart"
+      }
+    ]
+  }
+]

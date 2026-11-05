@@ -113,6 +113,7 @@ export interface StorageIdbSchema {
     key: number
     value: TableProvenTx
     indexes: {
+      height: number
       txid: HexString
     }
   }

@@ -1,10 +1,18 @@
+import { validateInternalizeActionArgs } from '../utility/validateInternalizeActionArgs'
+import {
+  BRC197_INTERNALIZATION_PROFILE,
+  assertBrc197Recipient,
+  brc197ChildPublicKey,
+  ownBrc197InternalizeActionArgs,
+  type Brc197InternalizeActionArgs,
+  type Brc197InternalizationCapabilities
+} from '../sdk/Brc197Internalization'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
   type ValidListCertificatesArgs,
   type ValidListOutputsArgs,
   validateAbortActionArgs,
-  validateInternalizeActionArgs,
   validateRelinquishCertificateArgs,
   validateRelinquishOutputArgs
 } from '@bsv/sdk/wallet/validationHelpers'
@@ -508,14 +516,47 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
-    validateInternalizeActionArgs(args)
+    const vargs = validateInternalizeActionArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
-      return await writer.internalizeAction(auth, args)
+      return await writer.internalizeAction(auth, { ...args, tx: vargs.tx })
+    })
+  }
+
+  /** Capability of the actual authorized writer, not a remote BRC-100 assumption. */
+  async getBrc197InternalizationCapabilities(): Promise<Brc197InternalizationCapabilities> {
+    return await this.runAsWriter(async writer => {
+      if (typeof writer.internalizeBrc197Action !== 'function') {
+        throw new WERR_NOT_IMPLEMENTED(
+          'The active provider does not support local BRC-197 fixed-child internalization.'
+        )
+      }
+      const auth = await this.getAuth(true)
+      return {
+        profile: BRC197_INTERNALIZATION_PROFILE,
+        recipientIdentityKey: auth.identityKey,
+        childPublicKey: brc197ChildPublicKey(auth.identityKey)
+      }
+    })
+  }
+
+  async internalizeBrc197Action(args: Brc197InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
+    const owned = ownBrc197InternalizeActionArgs(args)
+    return await this.runAsWriter(async writer => {
+      const internalize = writer.internalizeBrc197Action
+      if (typeof internalize !== 'function') {
+        throw new WERR_NOT_IMPLEMENTED(
+          'The active provider does not support local BRC-197 fixed-child internalization.'
+        )
+      }
+      const auth = await this.getAuth(true)
+      assertBrc197Recipient(owned, auth.identityKey)
+      return await internalize.call(writer, auth, owned)
     })
   }
 
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
+    // Validate an existing reference, including historical types; acquisition remains strict.
     validateRelinquishCertificateArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)

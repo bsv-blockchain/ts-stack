@@ -149,23 +149,86 @@ export function validateDependabotExclusions(source) {
   return errors
 }
 
+// Trimmed lines nested under one top-level multi-ecosystem group.
+function multiEcosystemGroupLines(dependabot, group) {
+  const lines = dependabot.split(/^updates:/m)[0].split('\n')
+  const start = lines.indexOf(`  ${group}:`)
+  if (start < 0) return undefined
+  const end = lines.findIndex((line, index) => index > start && /^ {0,2}\S/.test(line))
+  return lines.slice(start + 1, end < 0 ? undefined : end).map(line => line.trim())
+}
+
+// The grouped schedule and the lockfile refresh that joins its pull request
+// must agree, or the refresh silently stops finding the pull request.
+export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
+  const errors = []
+  const group = routine.multiEcosystemGroup
+  const block = multiEcosystemGroupLines(dependabot, group)
+  if (block === undefined) {
+    errors.push(`Dependabot does not define multi-ecosystem group ${group}`)
+  } else {
+    for (const [key, value] of Object.entries(routine.schedule)) {
+      const accepted = new Set([`${key}: ${value}`, `${key}: '${value}'`, `${key}: "${value}"`])
+      if (!block.some(line => accepted.has(line))) {
+        errors.push(`Dependabot ${group} schedule must set ${key}: ${value}`)
+      }
+    }
+  }
+  for (const [, referenced] of dependabot.matchAll(/multi-ecosystem-group:\s*(\S+)/g)) {
+    if (referenced !== group)
+      errors.push(`Dependabot update references unknown group ${referenced}`)
+  }
+
+  const refresh = routine.lockfileRefresh
+  for (const fragment of [
+    refresh.command,
+    refresh.commitSubject,
+    `dependabot-${group.replaceAll('-', '_')}-`,
+    String.raw`the \"${group}\" group`,
+    'permissions: {}',
+    'persist-credentials: false'
+  ]) {
+    if (!refreshWorkflow.includes(fragment)) {
+      errors.push(`${refresh.workflow} must contain ${JSON.stringify(fragment)}`)
+    }
+  }
+  if (/pull_request_target/.test(refreshWorkflow)) {
+    errors.push(`${refresh.workflow} must not run on pull_request_target`)
+  }
+  return errors
+}
+
+// Security-update groups only take effect while the repository's automated
+// security-update pull requests are enabled; keep the config matching that.
+export function validateSecurityUpdateGroups(securityUpdates, dependabot) {
+  const groups = (dependabot.match(/applies-to:\s*security-updates/g) ?? []).length
+  if (securityUpdates.automatedPullRequests === false) {
+    return groups > 0
+      ? ['Dependabot security-update groups are inert while automated security PRs are disabled']
+      : []
+  }
+  return groups < 2
+    ? ['Dependabot must group immediate root and infrastructure npm security updates']
+    : []
+}
+
 function validateRoutinePolicy(policy, errors) {
   const dependabot = fs.readFileSync(
     path.join(ROOT, policy.routineUpdates.dependabotConfig),
     'utf8'
   )
-  errors.push(...validateDependabotExclusions(dependabot))
-  const group = policy.routineUpdates.multiEcosystemGroup
-  if (!dependabot.includes(`${group}:`)) errors.push(`Dependabot does not define ${group}`)
-  if (!/interval:\s*monthly/.test(dependabot)) {
-    errors.push('Dependabot routine maintenance must run monthly')
-  }
+  errors.push(
+    ...validateDependabotExclusions(dependabot),
+    ...validateRoutineSchedule(
+      policy.routineUpdates,
+      dependabot,
+      fs.readFileSync(path.join(ROOT, policy.routineUpdates.lockfileRefresh.workflow), 'utf8')
+    )
+  )
   if (!/open-pull-requests-limit:\s*1/.test(dependabot)) {
     errors.push('Dependabot routine version PR concurrency must be one')
   }
-  if ((dependabot.match(/applies-to:\s*security-updates/g) ?? []).length < 2) {
-    errors.push('Dependabot must group immediate root and infrastructure npm security updates')
-  }
+  errors.push(...validateSecurityUpdateGroups(policy.routineUpdates.securityUpdates, dependabot))
   if ((dependabot.match(/dependency-name:\s*['"]?@bsv\/\*/g) ?? []).length < 2) {
     errors.push('Dependabot must leave first-party @bsv/* updates to release synchronization')
   }
@@ -365,24 +428,43 @@ function dependencyDeclarations() {
   return declarations
 }
 
-async function npmView(name, fields) {
-  const { stdout } = await execFileAsync('npm', ['view', `${name}@latest`, ...fields, '--json'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 60_000
-  })
+export function isRegistryNotFound(error) {
+  if (error?.code !== 1 || error.killed || error.signal || typeof error.stdout !== 'string')
+    return false
+  try {
+    return JSON.parse(error?.stdout)?.error?.code === 'E404'
+  } catch {
+    return false
+  }
+}
+
+async function npmView(name, fields, allowUnpublished = false) {
+  let stdout
+  try {
+    ;({ stdout } = await execFileAsync(
+      'npm',
+      ['view', `${name}@latest`, ...fields, '--json', '--registry', 'https://registry.npmjs.org'],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+        maxBuffer: 4 * 1024 * 1024,
+        timeout: 60_000
+      }
+    ))
+  } catch (error) {
+    if (allowUnpublished && isRegistryNotFound(error)) return { registryNotFound: true }
+    throw error
+  }
   return JSON.parse(stdout)
 }
 
 async function mapWithConcurrency(items, limit, operation) {
   const results = Array.from({ length: items.length })
-  let next = 0
+  // Share a lazy queue: each worker claims one index, then awaits its result
+  // before claiming another. The concurrency limit never starts all work at once.
+  const queue = items.entries()
   async function worker() {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await operation(items[index])
-    }
+    for await (const [index, item] of queue) results[index] = await operation(item)
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, worker))
   return results
@@ -465,12 +547,18 @@ export async function createDirectLatestInventory(now = new Date()) {
 function publishedBaselines(notes) {
   const result = new Map()
   for (const entry of notes.entries ?? []) {
-    result.set(entry.name, entry.publishedVersion ?? entry.published ?? entry.baselineVersion)
+    result.set(
+      entry.name,
+      entry.publishedVersion !== undefined
+        ? entry.publishedVersion
+        : (entry.published ?? entry.baselineVersion)
+    )
   }
   return result
 }
 
 function publishedStatus(source, latest, baseline) {
+  if (baseline === null) return 'diverged'
   if (source === latest) return 'current'
   if (baseline === latest) return 'first-party-release-held'
   return 'diverged'
@@ -484,16 +572,24 @@ export async function verifyPublishedPackages() {
   const baselines = publishedBaselines(notes)
   const packages = await mapWithConcurrency(projects, 8, async project => {
     const manifest = readJson(path.join(ROOT, project.path, 'package.json'))
-    const metadata = await npmView(project.name, [
-      'name',
-      'version',
-      'dist.integrity',
-      'dist.attestations',
-      'gitHead'
-    ])
+    const baseline = baselines.get(project.name)
+    const metadata = await npmView(
+      project.name,
+      ['name', 'version', 'dist.integrity', 'dist.attestations', 'gitHead'],
+      baseline === '0.0.0'
+    )
+    if (metadata.registryNotFound === true) {
+      return {
+        name: project.name,
+        sourceVersion: manifest.version,
+        publishedLatest: null,
+        recordedPublishedBaseline: baseline,
+        status: 'first-party-initial-release-held',
+        registryNotFound: true
+      }
+    }
     const latest = metadata.version
     const source = manifest.version
-    const baseline = baselines.get(project.name)
     return {
       name: project.name,
       sourceVersion: source,
@@ -510,6 +606,7 @@ export async function verifyPublishedPackages() {
   })
   const errors = []
   for (const item of packages) {
+    if (item.status === 'first-party-initial-release-held') continue
     if (item.status === 'diverged') {
       errors.push(
         `${item.name} source ${item.sourceVersion}, npm latest ${item.publishedLatest}, and recorded baseline ${item.recordedPublishedBaseline} diverge`
@@ -526,7 +623,9 @@ export async function verifyPublishedPackages() {
     generatedAt: new Date().toISOString(),
     packages,
     heldCandidates: packages
-      .filter(item => item.status === 'first-party-release-held')
+      .filter(item =>
+        ['first-party-release-held', 'first-party-initial-release-held'].includes(item.status)
+      )
       .map(item => `${item.name}@${item.sourceVersion}`),
     errors
   }
@@ -625,7 +724,10 @@ export function publishedInstallContexts(
   report,
   expectedNames = readJson(PROJECTS_PATH)
     .projects.filter(project => project.release === 'npm-oidc')
-    .map(project => project.name)
+    .map(project => project.name),
+  initialReleaseNames = readJson(RELEASE_NOTES_PATH)
+    .entries.filter(entry => entry.publishedVersion === '0.0.0')
+    .map(entry => entry.name)
 ) {
   if (
     report?.schemaVersion !== 1 ||
@@ -637,40 +739,65 @@ export function publishedInstallContexts(
     throw new Error('Published install requires a complete successful verification report')
   }
   const expected = new Set(expectedNames)
+  const initialReleases = new Set(initialReleaseNames)
   const seen = new Set()
   const exactVersion =
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
   const packages = [...report.packages].sort((left, right) =>
     compareText(left?.name ?? '', right?.name ?? '')
   )
-  return packages.map((item, index) => {
-    if (
-      typeof item?.name !== 'string' ||
-      !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(item.name) ||
-      item.name.length > 214 ||
-      !expected.has(item.name) ||
-      seen.has(item.name) ||
-      typeof item.publishedLatest !== 'string' ||
-      item.publishedLatest.length > 100 ||
-      !exactVersion.test(item.publishedLatest) ||
-      !isNonEmptyString(item.integrity) ||
-      item.provenance !== true ||
-      !['current', 'first-party-release-held'].includes(item.status)
-    ) {
-      throw new Error('Published install report contains an invalid or duplicate package')
-    }
-    seen.add(item.name)
-    return {
-      name: item.name,
-      version: item.publishedLatest,
-      directory: `${String(index).padStart(2, '0')}-${item.name.replace(/^@/, '').replace('/', '-')}`,
-      manifest: {
-        name: 'ts-stack-published-verification',
-        private: true,
-        dependencies: { [item.name]: item.publishedLatest }
+  return packages
+    .map((item, index) => {
+      if (
+        typeof item?.name !== 'string' ||
+        !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(item.name) ||
+        item.name.length > 214 ||
+        !expected.has(item.name) ||
+        seen.has(item.name)
+      ) {
+        throw new Error('Published install report contains an invalid or duplicate package')
       }
-    }
-  })
+      seen.add(item.name)
+      if (item.status === 'first-party-initial-release-held') {
+        if (
+          !initialReleases.has(item.name) ||
+          item.recordedPublishedBaseline !== '0.0.0' ||
+          item.registryNotFound !== true ||
+          item.publishedLatest !== null ||
+          typeof item.sourceVersion !== 'string' ||
+          !exactVersion.test(item.sourceVersion) ||
+          item.sourceVersion === '0.0.0' ||
+          item.integrity !== undefined ||
+          item.provenance !== undefined
+        ) {
+          throw new Error(
+            'Initial publication hold requires an explicit zero baseline and registry absence'
+          )
+        }
+        return null
+      }
+      if (
+        typeof item.publishedLatest !== 'string' ||
+        item.publishedLatest.length > 100 ||
+        !exactVersion.test(item.publishedLatest) ||
+        !isNonEmptyString(item.integrity) ||
+        item.provenance !== true ||
+        !['current', 'first-party-release-held'].includes(item.status)
+      ) {
+        throw new Error('Published install report contains an invalid or duplicate package')
+      }
+      return {
+        name: item.name,
+        version: item.publishedLatest,
+        directory: `${String(index).padStart(2, '0')}-${item.name.replace(/^@/, '').replace('/', '-')}`,
+        manifest: {
+          name: 'ts-stack-published-verification',
+          private: true,
+          dependencies: { [item.name]: item.publishedLatest }
+        }
+      }
+    })
+    .filter(item => item !== null)
 }
 
 async function preparePublishedInstall(args) {

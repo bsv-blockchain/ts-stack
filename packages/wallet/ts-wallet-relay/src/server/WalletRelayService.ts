@@ -39,6 +39,7 @@ import {
   normalizeRelayUrl,
   parseRpcMessage,
   requireBoundedString,
+  requireOptionalBoolean,
   requirePlainRecord,
   requirePublicKey,
   requireSessionId,
@@ -73,14 +74,16 @@ export interface WalletRelayServiceOptions {
    */
   wallet: WalletLike
   /**
-   * WebSocket base URL of this server. Production URLs require wss://;
-   * ws:// is accepted only for loopback development.
+   * WebSocket base URL of this server. Requires wss:// except on loopback
+   * (or private-network IP addresses with `allowLocalNetworkHttp`).
    * Defaults to the `RELAY_URL` environment variable, then `ws://localhost:3000`.
    */
   relayUrl?: string
   /**
    * Default http(s):// URL of the desktop frontend — embedded in the QR pairing
    * URI when `createSession()` is called without a per-session origin override.
+   * Requires https:// except on loopback (or private-network IP addresses with
+   * `allowLocalNetworkHttp`).
    * Defaults to the `ORIGIN` environment variable, then `http://localhost:5173`.
    *
    * For multi-app deployments (one relay shared by N webapps) leave this unset
@@ -102,6 +105,16 @@ export interface WalletRelayServiceOptions {
    * an allowlist.
    */
   allowedOrigins?: AllowedOrigins
+  /**
+   * Accept plain `http://` origins (constructor and `createSession({ origin })`)
+   * and a `ws://` relayUrl on private-network IP addresses (10.0.0.0/8,
+   * 172.16.0.0/12, 192.168.0.0/16, fc00::/7) for same-LAN development. Loopback
+   * is always accepted. The phone and desktop must opt in too
+   * (`WalletPairingSession`, `parsePairingUri`, `WalletRelayClient`). Such
+   * origins cannot be authenticated, so never enable it in production. There is
+   * deliberately no environment-variable fallback. Default: false.
+   */
+  allowLocalNetworkHttp?: boolean
   /** Called when a mobile completes pairing and the session transitions to 'connected'. */
   onSessionConnected?: (sessionId: string) => void
   /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
@@ -187,7 +200,7 @@ const MAX_DECLARED_MOBILE_METHODS = 100
  *
  * Express auto-registered routes:
  *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET    /api/session/:id    — return { sessionId, status, relay }
+ *   GET    /api/session/:id    — return { sessionId, status, relay, backendIdentityKey }
  *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
@@ -211,6 +224,9 @@ export class WalletRelayService {
   private readonly wallet: WalletLike
   private readonly relayUrl: string
   private readonly origin: string
+  private readonly allowLocalNetworkHttp: boolean
+  /** Transport policy for every server-side URL check; errors name the option. */
+  private readonly transport: { allowLocalNetworkHttp: boolean; developerHint: boolean }
   private readonly schema: string
   private readonly signQrCodes: boolean
   private readonly mobileAuthTimeoutMs: number
@@ -220,11 +236,20 @@ export class WalletRelayService {
 
   constructor(private readonly opts: WalletRelayServiceOptions) {
     this.wallet = opts.wallet
+    this.allowLocalNetworkHttp = requireOptionalBoolean(
+      opts.allowLocalNetworkHttp,
+      'allowLocalNetworkHttp'
+    )
+    this.transport = { allowLocalNetworkHttp: this.allowLocalNetworkHttp, developerHint: true }
     this.relayUrl = normalizeRelayUrl(
-      opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
+      opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000',
+      'relay URL',
+      this.transport
     )
     this.origin = normalizeHttpOrigin(
-      opts.origin ?? process.env['ORIGIN'] ?? 'http://localhost:5173'
+      opts.origin ?? process.env['ORIGIN'] ?? 'http://localhost:5173',
+      'origin',
+      this.transport
     )
     this.schema = opts.schema ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
     if (!/^[a-z][a-z0-9+.-]{0,31}$/iu.test(this.schema)) {
@@ -265,7 +290,9 @@ export class WalletRelayService {
       noServer: opts.noServer,
       heartbeatIntervalMs: opts.heartbeatIntervalMs,
       maxMissedHeartbeats: opts.maxMissedHeartbeats,
-      maxTopics: opts.maxSessions
+      maxTopics: opts.maxSessions,
+      // Desktop-role socket traffic reaches a phone only after its pairing_approved decrypts.
+      holdDesktopTrafficUntilAccepted: true
     })
 
     if (opts.onSocketClosed) this.relay.onSocketClose(opts.onSocketClosed)
@@ -304,9 +331,9 @@ export class WalletRelayService {
       this.mobileAuthTimers.set(topic, timer)
     })
 
-    this.relay.onIncoming((topic, envelope, role) => {
+    this.relay.onIncoming((topic, envelope, role, connectionId) => {
       if (role === 'mobile') {
-        void this.handleMobileMessage(topic, envelope).catch(() => {
+        void this.handleMobileMessage(topic, envelope, connectionId).catch(() => {
           this.relay.disconnectMobile(topic)
         })
       }
@@ -349,7 +376,7 @@ export class WalletRelayService {
     desktopToken: string
   }> {
     this.ensureRunning()
-    const origin = normalizeHttpOrigin(options?.origin ?? this.origin)
+    const origin = normalizeHttpOrigin(options?.origin ?? this.origin, 'origin', this.transport)
 
     // Validate caller-claimed origin against the allowlist (when set).
     if (options?.origin !== undefined && this.isOriginAllowed && !this.isOriginAllowed(origin)) {
@@ -365,6 +392,7 @@ export class WalletRelayService {
         { identityKey: true }
       )
       const backendIdentityKey = publicKeyResult.publicKey
+      this.sessions.setBackendIdentityKey(session.id, backendIdentityKey)
 
       // Pre-compute expiry so the same value is used in both the signature and the URI.
       const expiry = Math.floor((Date.now() + 120_000) / 1000)
@@ -393,7 +421,8 @@ export class WalletRelayService {
         origin,
         expiry,
         sig,
-        schema: this.schema
+        schema: this.schema,
+        allowLocalNetworkHttp: this.allowLocalNetworkHttp
       })
       const qrDataUrl = await this.whileRunning(this.sessions.generateQRCode(uri))
       return {
@@ -409,10 +438,20 @@ export class WalletRelayService {
     }
   }
 
-  /** Return session status and relay URL, or null if not found. */
-  getSession(id: string): { sessionId: string; status: string; relay: string } | null {
+  /**
+   * Return session status, relay URL and the backend identity key embedded in the
+   * session's QR, or null if not found. Serve this unchanged from `GET /api/session/:id`:
+   * the phone requires `backendIdentityKey` to equal the key in the QR it scanned.
+   */
+  getSession(
+    id: string
+  ): { sessionId: string; status: string; relay: string; backendIdentityKey?: string } | null {
     const s = this.sessions.getSession(id)
-    return s ? { sessionId: s.id, status: s.status, relay: this.relayUrl } : null
+    if (!s) return null
+    const info: { sessionId: string; status: string; relay: string; backendIdentityKey?: string } =
+      { sessionId: s.id, status: s.status, relay: this.relayUrl }
+    if (s.backendIdentityKey !== undefined) info.backendIdentityKey = s.backendIdentityKey
+    return info
   }
 
   /**
@@ -731,7 +770,11 @@ export class WalletRelayService {
 
   // ── Inbound message handling ──────────────────────────────────────────────────
 
-  private async handleMobileMessage(topic: string, envelope: WireEnvelope): Promise<void> {
+  private async handleMobileMessage(
+    topic: string,
+    envelope: WireEnvelope,
+    connectionId: number
+  ): Promise<void> {
     const session = this.sessions.getSession(topic)
     if (!session) return
 
@@ -742,18 +785,25 @@ export class WalletRelayService {
         this.relay.disconnectMobile(topic)
         return
       }
-      await this.handlePairingApproved(topic, envelope)
+      await this.handlePairingApproved(topic, envelope, connectionId)
       return
     }
 
     if (!session.mobileIdentityKey) return
+    await this.handleMobileResponse(topic, session.mobileIdentityKey, envelope)
+  }
 
-    // RPC response from mobile
+  /** Decrypts an RPC response from a paired mobile and settles its pending request. */
+  private async handleMobileResponse(
+    topic: string,
+    mobileIdentityKey: string,
+    envelope: WireEnvelope
+  ): Promise<void> {
     let plaintext: string
     try {
       plaintext = await decryptEnvelope(
         this.wallet,
-        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
+        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       )
     } catch {
@@ -766,49 +816,52 @@ export class WalletRelayService {
     } catch {
       return
     }
-    if (this.handler.isResponse(msg)) {
-      const pending = this.pending.get(msg.id)
-      if (!pending) return
-      if (pending.sessionId !== topic || msg.seq !== pending.seq) {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet response was not bound to its request'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
-      try {
-        if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
-          normalizeBRC100WalletByteFields(msg.result)
-          const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
-            ? validateWalletResult(
-                pending.method as (typeof WALLET_METHOD_NAMES)[number],
-                msg.result,
-                pending.params
-              )
-            : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
-          msg = { ...msg, result: ownedResult }
-        }
-      } catch {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet returned an invalid result'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
+    if (!this.handler.isResponse(msg)) return
+    const pending = this.pending.get(msg.id)
+    if (!pending) return
+    if (pending.sessionId !== topic || msg.seq !== pending.seq) {
       clearTimeout(pending.timer)
       this.pending.delete(msg.id)
-      pending.resolve(msg)
+      pending.reject(new Error('Wallet response was not bound to its request'))
+      this.relay.disconnectMobile(topic)
+      return
     }
+    try {
+      if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
+        normalizeBRC100WalletByteFields(msg.result)
+        const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
+          ? validateWalletResult(
+              pending.method as (typeof WALLET_METHOD_NAMES)[number],
+              msg.result,
+              pending.params
+            )
+          : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
+        msg = { ...msg, result: ownedResult }
+      }
+    } catch {
+      clearTimeout(pending.timer)
+      this.pending.delete(msg.id)
+      pending.reject(new Error('Wallet returned an invalid result'))
+      this.relay.disconnectMobile(topic)
+      return
+    }
+    clearTimeout(pending.timer)
+    this.pending.delete(msg.id)
+    pending.resolve(msg)
   }
 
-  private async handlePairingApproved(topic: string, envelope: WireEnvelope): Promise<void> {
+  private async handlePairingApproved(
+    topic: string,
+    envelope: WireEnvelope,
+    connectionId: number
+  ): Promise<void> {
     const mobileIdentityKey = requirePublicKey(
       envelope.mobileIdentityKey,
       'pairing mobile identity key'
     )
 
     // Decrypt and verify inner payload — failure means the mobile can't prove ECDH ownership
-    let plaintext: string
+    let plaintext: string | null = null
     try {
       plaintext = await decryptEnvelope(
         this.wallet,
@@ -816,6 +869,11 @@ export class WalletRelayService {
         envelope.ciphertext
       )
     } catch {
+      // Handled below, once this socket is known to still hold the topic.
+    }
+    // A socket that closed while its proof decrypted must not act on the topic's next socket.
+    if (!this.relay.isCurrentMobile(topic, connectionId)) return
+    if (plaintext === null) {
       this.relay.disconnectMobile(topic)
       return
     }
@@ -857,6 +915,16 @@ export class WalletRelayService {
       }
     }
 
+    // Encrypt pairing_ack before changing any state, so no await separates the socket
+    // check below from the state it guards.
+    const ack = this.handler.createProtocolMessage('pairing_ack', { topic })
+    const ciphertext = await encryptEnvelope(
+      this.wallet,
+      { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
+      stringifyBRC100(ack)
+    )
+    if (!this.relay.isCurrentMobile(topic, connectionId)) return
+
     // Auth succeeded — cancel the proof timer
     const timer = this.mobileAuthTimers.get(topic)
     if (timer) {
@@ -869,12 +937,8 @@ export class WalletRelayService {
     this.opts.onSessionConnected?.(topic)
 
     // Send pairing_ack to confirm the session is live
-    const ack = this.handler.createProtocolMessage('pairing_ack', { topic })
-    const ciphertext = await encryptEnvelope(
-      this.wallet,
-      { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
-      stringifyBRC100(ack)
-    )
     this.relay.sendToMobile(topic, { topic, ciphertext })
+    // Only now may desktop-role socket traffic reach this mobile socket.
+    this.relay.acceptMobile(topic, connectionId)
   }
 }

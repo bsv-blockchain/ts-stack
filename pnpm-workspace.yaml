@@ -34,7 +34,7 @@ overrides:
   # readableEnded. Yamux 8.0.1 allows @libp2p/utils ^7.0.0 but the lock selected
   # 7.3.0, whose AbstractStream does not declare that field. 7.4.1 does.
   '@chainsafe/libp2p-yamux>@libp2p/utils': 7.4.1
-  brace-expansion@<5.0.11: 5.0.11
+  brace-expansion@<5.0.12: 5.0.12
   # Socket.IO retains engine.io releases vulnerable to the protocol-revision
   # mismatch DoS. Select the first patched release; authsocket consumes the
   # same public API.
@@ -42,10 +42,6 @@ overrides:
   # Vite's PostCSS graph permits nanoid 3 releases older than the security
   # fix. Select the first patched 3.x release without changing its public API.
   nanoid@<3.3.18: 3.3.18
-  # remark-mdx-frontmatter 5.2.0 still constrains TOML to vulnerable 3.x even
-  # though it only consumes the compatible parse() API. webpack-cli already
-  # accepts TOML 4; keep both paths on the first release fixing the advisories.
-  toml@<4.2.0: 4.2.0
   # Express/body-parser, Superagent, and Stryker's typed-rest-client can retain
   # vulnerable qs releases. Select the first release fixing the bracket/comma
   # array-limit and attacker-controlled isBuffer advisories across every path.
@@ -58,8 +54,15 @@ overrides:
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.
   lodash-es@<4.18.0: 4.18.1
-  # Preserve Metro's existing Picomatch matcher while removing the unused braces closure.
+  # Metro-file-map only uses micromatch.some, which delegates to Picomatch.
+  # The paired patch retains that matcher and removes the affected unused closure.
   'metro-file-map@0.87.1>micromatch': '-'
+  # VeriFast's private browser harness uses CDP exclusively. Remove the unused
+  # BiDi adapter and its vulnerable Zod 3 closure; retain provenance checks.
+  'puppeteer-core@25.11.0>chromium-bidi': '-'
+  # Stryker's protocol permits older Zod 4 releases. Enforce the compatible
+  # patched floor without refreshing unrelated mutation-tooling dependencies.
+  'zod@>=4.0.0 <4.6.6': 4.6.7
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
@@ -67,7 +70,8 @@ trustPolicy: no-downgrade
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
 
-# Temporary exact-version repair; retire patch, extension and removal together.
+# Temporary exact-version build-tool repair; ownership/removal criteria live in
+# governance/dependency-release-policy.json and the override exception registry.
 packageExtensions:
   'metro-file-map@0.87.1':
     dependencies:

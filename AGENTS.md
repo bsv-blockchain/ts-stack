@@ -146,10 +146,16 @@ required.
 
 - Specifications, conformance vectors, public declarations, documented
   behavior, and established cross-implementation behavior are contracts.
-- Prefer additive and backward-compatible changes. Do not rename or remove
-  exports, narrow accepted input, change defaults, alter wire encodings,
-  serialization, persisted schemas, error identities, runtime targets, or
-  browser/mobile behavior without an explicitly approved migration.
+- Backward compatibility is a project-wide invariant. No change may break an
+  established compatibility contract, including any BRC-100 application-wallet
+  boundary, even in a new major version. Maintainer approval, migration notes,
+  or a coordinated first-party upgrade do not waive this rule. Follow the
+  [compatibility contract](./docs/about/compatibility.md).
+- Preserve old WalletClients and independently deployed wallets in both
+  directions. Keep public types, accepted inputs, defaults, results, errors,
+  serialization, wire encodings, and capability advertisements compatible.
+  Extensions must be additive, explicitly negotiated where needed, and retain
+  legacy behavior when the peer has no new capability.
 - A generic cleanup, analyzer suggestion, dependency upgrade, or refactor is
   never sufficient reason for a breaking change.
 - When behavior is portable across BSV implementations, update or add shared
@@ -202,57 +208,52 @@ signatures, validation, rate limits, and request bounds provide security.
 
 ## Validation
 
-Use local feedback to reduce unnecessary hosted iterations. During editing,
-run the smallest relevant regression/negative tests and changed-file lint and
-format checks. Reuse a valid frozen installation and build outputs while their
-inputs remain unchanged. Batch related fixes, self-review the complete diff,
-and run the required local checks before the next push. Avoid pushing repeatedly
-to discover failures that local checks can already expose.
+Keep feedback proportional to the change. During editing, run focused regression
+and negative tests plus changed-file lint/format checks. Before pushing a coherent
+batch, validate the affected packages and dependent contracts; reuse a frozen
+install and build outputs whose inputs have not changed. Do not repeatedly run
+the entire workspace for a small package or documentation edit.
 
-`node scripts/ci-local-feedback.mjs --base <intended-PR-base>` prints an advisory
-plan including committed, staged, unstaged and untracked authored changes.
-The commands validate working-tree bytes; align the index and working tree before
-treating their results as evidence for the next push. It
-uses the current dependency/mutation registries to distinguish direct coverage,
-dependent regressions and build prerequisites. Review changed invariants and
-trust boundaries too; no path selector proves completeness. Keep full campaigns
-for shared controls and the affected critical boundaries required by policy.
-The short edit loop does not require every workspace suite after each keystroke.
+`node scripts/ci-local-feedback.mjs --base origin/main` prints an advisory plan.
+Review changed invariants and trust boundaries; a path selector cannot prove test
+completeness. Package changes need their relevant tests, types and artifact or
+platform contracts. Workflow/result-gate-only edits run routing and control tests
+without selecting every product package or image; actual shared compiler,
+dependency and runtime inputs still expand the affected graph. Shared CI/governance/toolchain changes run `pnpm health:check`,
+`pnpm lint`, `pnpm format:check` and `pnpm typecheck` once for the completed batch. Exact-head required CI, security analysis,
+coverage, deterministic/property/native/conformance and artifact checks still apply.
 
-Measure local versus hosted wall time, setup and worker contention on comparable
-source before deciding where to run a campaign. A developer machine may be
-faster; shared machines and nested worker pools may also slow peers. Prefer one
-measured bounded campaign and preserve source/config/seed receipts. Local
-evidence never replaces reproducible complete exact-head remote qualification.
+### Mutation campaigns are background findings only
 
-Use Node and pnpm versions from the root `package.json`. Run the strictest
-relevant local checks before spending hosted CI resources. At minimum, every
-completed change batch must pass these checks before pushing:
+Mutation campaigns must never be required before editing, committing, pushing,
+reviewing, merging, publishing or deploying. This applies to every project tier,
+critical boundary and shared-control change. Do not dispatch or wait for a campaign
+as part of ordinary implementation or release work. A future explicit audit runs
+only as an isolated background task with a named target/partition and a compute
+budget; no automatic rerun or broad campaign is implied by a code change.
 
-```sh
-pnpm health:check
-pnpm lint
-pnpm format:check
-pnpm typecheck
-```
-
-Run build and tests for every affected package and dependent behavior. Add the
-applicable conformance, coverage, packed-consumer, browser, mobile, property,
-mutation, documentation, security-audit, infrastructure, container, or
-performance checks described in [`CONTRIBUTING.md`](./CONTRIBUTING.md). A local
-shortcut may speed iteration but cannot replace the remote merge gate.
+Preserve raw outcomes and source/configuration/seed identity. Survivors, uncovered
+sites, runner limits and incomplete campaigns raise findings for triage; scores,
+receipts, campaign status and finding presence cannot enter merge/release admission.
+An interrupted property or runner deadline is not an assertion counterexample.
+A reproduced product/security defect receives an owned issue and focused regression
+and follows the normal defect/security policy. Its actual failing contract test
+remains relevant to the affected change; the mutation campaign itself stays advisory.
+Report suspected vulnerabilities privately under `.github/SECURITY.md`.
 
 ## Pull requests and completion
 
 - Fill in the root pull request template with commands and concrete evidence;
   do not check a box that has not been proved.
+- Background mutation audits and their findings are excluded from PR readiness,
+  even when absent, incomplete, canceled or failed.
 - Open unfinished work as a draft. After each push, monitor the exact head
-  until every applicable check reaches a terminal successful state. An
+  until every applicable required foreground check reaches a terminal successful state. An
   expected scope-based skip is acceptable only when the repository merge gate
   validates it; a missing, cancelled, stale, or unexpectedly skipped check is
   not success.
 - A PR is not ready for handoff, review, merge, or a claim of completion while
-  CI is pending or failing, review threads are open, or Sonar/CodeQL has a new
+  required foreground CI is pending or failing, review threads are open, or Sonar/CodeQL has a new
   finding. Continue working through failures; do not leave them for another
   contributor without an explicit handoff request.
 - “Quality gate passed” means the complete repository gate passed for the

@@ -2,15 +2,173 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.8.14'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
 ---
 
 # CI Performance Governance
+
+## Current feedback policy
+
+Ordinary contribution, review, merge, publication and deployment never require a
+mutation campaign, score, receipt or resolved mutation finding. Follow
+[the contribution guidance](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md#local-validation) for affected
+package checks and reusable exact-input builds. Root CI controls run their owning
+routing and execution tests; actual shared execution/compiler/dependency changes
+retain their relevant consumer checks. A workflow-only edit does not select every
+package or image.
+
+The `Background mutation findings` workflow is a separate manual, main-only audit
+of one explicit canonical target/partition, with a 30-minute audit job and a
+separate five-minute reporter. Its findings are advisory. No schedule, PR label,
+CI dispatch input or publisher calls a campaign. The mutation measurements and
+partition notes below are historical research, not contribution or release
+requirements. This policy supersedes the retired qualification procedures.
+
+The existing `CI` manual dispatch has an optional
+`application-performance-diagnostics` input, disabled by default. It measures the
+unchanged native alias-disclosure and coordinator properties and current private purchase HTTP
+composition on an isolated hosted Linux runner
+in the existing package-artifact job, before complete artifact verification.
+Its additional work does not consume either ordinary application coverage
+job's original time budget. A maintainer can also
+select it on an ordinary PR run with the explicit
+`ci:application-performance-diagnostics` label before the next source push. The
+label alone does not trigger the workflow. Remove it after the bounded
+measurement. This diagnostic does not start mutation testing or change
+ordinary merge requirements. Use
+`gh workflow run ci.yml --ref <branch> -f application-performance-diagnostics=true`
+for an explicitly requested measurement. Ordinary unlabelled pull-request runs, complete
+test discovery, coverage shards and foreground merge gates remain unchanged.
+
+The repository-only diagnostic retains the original minimum 300 runs, seed
+3242026, replay-free profile, 150-second interruption-as-failure budget and
+180-second case deadline. It first checks the built-in SQLite driver, binds the
+complete tracked source, built SDK/wallet/application bytes and Node binary, and
+runs one serial property with coverage and CPU profiling. The diagnostic uses a
+fixed 10,000-microsecond sampling interval, recorded in its identity, to reduce
+profile size within the unchanged 64 MiB file bound. Oversized profiles are
+refused before their contents are read. This is a sampling choice for diagnosis;
+it changes no application property or qualification control. Every child has a
+finite deadline within an immutable 900-second calendar and Boolean fault, case-timeout and output triage. Cancellation
+and every exit drain the complete process group through bounded TERM/KILL.
+Timing extraction requires unchanged inputs, all guards clear and an absent
+group; otherwise only Boolean metadata is retained. A timing-file or summary
+refusal records its bounded phase and reason. Only a safe, fully drained
+measurement with unchanged source may continue into complete artifact validation
+when timing is unavailable; ordinary coverage remains independently required. A fault, case/output bound, child/calendar deadline,
+cancellation or source guard failure stops that diagnostic job. Raw logs, CPU profiles and
+application values never enter the uploaded report. Each file is opened once; its
+descriptor supplies both the size check and bounded read, without following
+symlinks.
+
+The separate `--native-http` selection measures all four original current-profile
+HTTP integration cases in the `private-esm` project with coverage. Their
+120-second case limits and the buyer's 30-second work guard are unchanged. This
+diagnostic has a 600-second child bound within its own 900-second calendar and
+uses the same log/profile bounds, source guards and complete process drainage.
+It freezes the additional built Overlay, Overlay Express and LCH inputs and the
+exact cached MongoDB 8.2.6 executable before starting the fixture. A separate
+hosted preparation step obtains that fixed executable when the cache is cold,
+without starting a database or importing application code. It binds the tracked
+source, Node executable and complete installed pnpm store, supervises only the
+fixed downloader with a 120-second child bound within a 180-second preparation
+calendar, and independently retains Boolean triage and whole-group drainage.
+Preparation records no raw output and supplies no qualification. Cancellation,
+a fault, deadline, source change or unsuccessful child refuses preparation.
+The measurement still rejects missing or ambiguous binaries; runtime downloads are disabled and
+version checking remains enabled. The complete ordinary suite still qualifies
+the integration. The three fixed selectors have distinct report directories and
+identities; none accepts arbitrary paths or test-name filters.
+
+The additive `--coordinator` selection binds the original alias-coordinator
+property, with the same minimum300, seed3242026, interruption-as-failure150s,
+case180s, child210s and calendar900s controls as the disclosure diagnostic.
+Both property reports include only a scalar outcome and completed-case count
+when a single exact failure summary supplies it. An ordinary passing exit has
+no inferred count. Ambiguous or unrelated failures supply no count. Extraction
+requires all supervisor guards clear, independently drained execution, fresh
+source guards and a descriptor-bounded log read with independent Boolean
+retriage. Native HTTP reports retain null property execution metadata. No counterexample
+body, application values or raw output is published. Comparing these counts
+with measured duration helps distinguish cost per completed case from a
+different workload; it does not qualify a property or support a speed claim by
+itself. The existing artifact-job timeout and all qualification gates remain
+unchanged.
+
+The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
+contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and
+inclusive function timing. Per-call-stack timings are retained alongside complete
+function aggregates keyed by name, source URL and measured line. Recursive
+occurrences receive each inclusive sample only once. Measured positions can refer
+to instrumented/transformed code rather than original source lines. Profiling
+overhead is included. V8 encodes observation timestamps as relative deltas;
+observations can arrive out of order. Following
+[Chromium's paired-sample ordering](https://chromium.googlesource.com/devtools/devtools-frontend/+/9a696c4e723caa3c7e1f78886da353f1f06a79b0/front_end/core/sdk/CPUProfileDataModel.ts),
+the summary reconstructs finite timestamps relative to capture start, rejects
+before-start observations, sorts each timestamp together with its original
+sample, and derives nonnegative chronological durations. It retains every
+observation and reports the number of negative deltas and reordered positions;
+it neither clamps timestamps nor discards samples. Frame, file, sample, node,
+depth, source and deadline checks remain required. A valid measurement
+can describe a property-budget interruption; it never qualifies the property,
+coverage, mutation campaign or checkpoint. The complete ordinary coverage run
+must still pass independently. No performance improvement is claimed
+until comparable measurements and full unchanged qualification support it.
+
+The same hosted diagnostic also measures synchronous calls to the actual built-in
+SQLite database and statement methods, HKDF, hash creation/update/digest and
+cipher creation. A Linux-only preload delegates each call with its original
+receiver, arguments, result and thrown value, retaining only fixed method names,
+call counts and nanosecond totals from `process.hrtime.bigint`. No keys, SQL,
+application records or operation results enter this report. Counters have fixed
+method, count and total bounds; a failing or backward clock refuses the entire
+timing report without changing the wrapped operation. The supervisor admits the
+descriptor-bounded counter file only after its original execution, source and
+complete drainage guards pass. Missing or invalid counters supply no timings.
+
+These counters are synchronous inclusive durations with measurement overhead.
+Nested totals cannot be added as exclusive CPU time. Statement iterator creation
+does not measure later iteration, and asynchronous work is excluded. Counter
+admission is independent of CPU samples: negative deltas or reordered CPU samples
+remain excluded from performance conclusions, even when bounded scalar counters
+are usable. The preload is diagnostic only; complete ordinary uninstrumented
+coverage retains its unchanged tests, counts, seeds, replay settings, deadlines
+and thresholds. Mutation audits remain separate background findings.
+
+The unchanged diagnostic child already generates Jest/Istanbul coverage. After a
+safe, fully drained measurement and fresh source guards, the driver reads only
+its existing `coverage/coverage-final.json` within the original 64 MiB bound.
+It disables inherited extra V8 coverage instrumentation. The uploaded
+`function-entries.json` retains only fixed SDK JSON/schema and eight fixed
+private ledger, codec, coordinator and disclosure modules that appear in the
+original Jest coverage inventory. External modules that Jest does not instrument
+supply no counters. Each row retains the original function counter, numeric
+function ID, bounded name and checked original declaration starts; branch counters are never
+added to function entries. Source-map gaps in body or declaration end columns supply no invented
+positions or ranges: only declaration starts are retained and checked directly
+from the original report.
+Invalid or empty reports supply no counts. Raw
+coverage, source maps, source content, arguments and application values are deleted
+with the temporary directory and never uploaded. If a project does not write a
+JSON coverage report, its function-counter extraction records a fixed refusal.
+
+Counter refusal does not block independent native monotonic or CPU extraction
+from an otherwise safe, fully drained measurement. A separate synchronous counter-extraction helper retains all original source,
+calendar and Boolean admission guards between independent extractions. Function
+ID inventories use explicit lexical comparators and numeric ID validation; the
+final frequency ordering is performed before constructing the returned report.
+These counters may be admitted when an entire CPU trace is excluded for negative
+or reordered timestamps. They show execution frequency within the measured
+workload, not completed operations, exclusive timings or performance qualification.
+The original coverage instrumentation and diagnostic profiling have overhead;
+no comparative runtime claim follows from these measurements. Original tests,
+counts, seeds, replay settings, child/case/calendar deadlines, resource limits
+and complete ordinary qualification remain unchanged.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,
@@ -29,36 +187,201 @@ suites; their reverse-dependency closure owns non-instrumented regression,
 compatibility, and browser checks; and the forward closure supplies every build
 prerequisite. This preserves behavioral coverage of possible consumers without
 paying to regenerate unchanged packages' coverage reports.
-A lockfile-only change selects the importers whose lock snapshots actually
-changed instead of treating the root lockfile as a global invalidation. Root
-compiler, workspace and shared CI execution controls select the complete graph deliberately.
+A lockfile change selects every package importer whose installed graph reaches
+a changed or republished package, directly or not, in either lockfile, instead
+of treating the root lockfile as a global invalidation. An indirect upgrade
+therefore tests the packages that install it even when no importer entry
+changed. Changes to the root importer's own dependencies or to lockfile settings
+select the complete graph; root tools reached only indirectly run in the lint,
+build and artifact jobs on every pull request. A `pnpm-workspace.yaml` change
+confined to resolution settings (overrides, patches, package extensions,
+catalogs, release age) defers to that lockfile analysis, and a project registry
+change confined to project entries selects only the changed or added projects.
+Root compiler, other workspace settings and shared CI execution controls select
+the complete graph deliberately.
 
-Mutation selection follows each target's exact implementation, property,
-regression, configuration, and policy inputs. Package-wide mutation suites
-expand only where their configuration really covers the whole package. Image
-jobs follow changed build contexts. Changes to the shared CI workflow validate
-all infrastructure build lanes; unrelated documentation workflow changes do not.
-Shared image/runtime contract inputs fan out to the registered consumers.
+Background audit planning can identify targets from implementation, property,
+regression, configuration and policy inputs without executing them. Image jobs
+follow changed build contexts. Workflow-only changes validate the owning routing
+and control contracts; actual shared image/runtime inputs still select their
+registered consumers.
+
+Background recovery-plan inventory tooling retains its complete module and seven
+original construction ranges in three parts, separated at the existing
+failure-handler boundary. Its static replay checks the canonical source union
+without running a campaign. The earlier inventory contained 131 mutants, each
+exactly once across the parts. These inventory facts are not a mutation outcome
+or a merge/publication requirement.
+
+Revenue-purchase verification separates history extension from transaction binding
+at complete private-method boundaries. Original evidence association, validation
+order, mandatory outputs, full Script/history verification and all tests remain
+required. The new complete source inventory is independently replayed; preceding
+source scores cannot qualify the refactor. Original execution deadlines and global
+score requirements remain unchanged.
 
 The main CI workflow builds the selected graph once and shares immutable
 outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
-package-composition reports without rebuilding the workspace. The cheap
-repository-health, scope, and dependency-review gates complete before
-dependency installation. Exact-head Sonar analysis runs concurrently with the
-shared build and remains mandatory in the final merge gate. Expensive PR mutation waits for both a
-successful shared build and successful exact-head Sonar analysis. Main and
-manual full campaigns allow only the intentional skip of the PR-only analyzer
-gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
-normal mutation launch; suppressed selected mutation is not qualified evidence.
+package-composition reports without rebuilding the workspace. The shared
+build starts immediately, beside the scope job and the repository-health
+contract, and builds every workspace package (unchanged ones restore from the
+package build cache); test lanes, lint and policy start only after the repository-health,
+scope and dependency-review gates pass. Lint and policy run beside the test
+lanes and gate `build-and-test` and the merge gate. The scope job also plans the
+test-lane matrices, since that needs only Node and jq. Exact-head Sonar analysis runs concurrently with the
+shared build and remains mandatory in the final merge gate. CI never dispatches
+or waits for mutation work.
 Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
-result. Matrix siblings finish after a failure so acceptance
+result. They are sharded by measured per-package check time (the
+`package-artifacts` lane), pack the restored shared build instead of rebuilding each package,
+resolve all of a package's public entrypoints in one process per module system
+(the SDK has 459), and reuse an npm download cache that npm verifies against
+each tarball's integrity hash. Matrix siblings finish after a failure so acceptance
 evidence includes every selected shard. Within a regression or coverage shard,
 packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+The application output-knowledge coverage suite uses six duration-balanced serial Jest shards
+within the existing coverage matrix. Each retains the original complete discovery,
+serial native worker, property cases and per-test deadlines. Its ordinary local
+`test:coverage` command remains a single complete run with the original global
+thresholds. CI requires all six shards, then independently discovers the complete
+suite again and checks a disjoint, exact execution union. Failed, missing, pending,
+todo or skipped tests and mismatched source, run, attempt or configuration fail
+qualification. The aggregate merges the complete Istanbul maps and applies all four
+original global thresholds before contributing LCOV to the required patch gate.
+Individual shard reports cannot qualify package coverage. The coverage jobs retain
+their 35-minute deadlines; the aggregate and final merge gates remain required.
+The alias coordinator, disclosure and buyer-alias native history properties each
+run in a fresh serial process before their shard's remaining suites. This prevents
+earlier suites' retained worker state from sharing these properties' execution
+context. The buyer-alias property retains its 300-case minimum, seed, replay
+setting, assertions and 150-second interruption limit. Every batch instruments the
+complete source inventory, and all same-attempt batch receipts must reconcile
+before the original global and patch coverage gates can pass.
+Aggregation compares recomputed Istanbul maps in their complete serialized JSON
+form with the uploaded reports, retaining every file, counter, location and source
+map. Library class instances and their persisted JSON are equivalent at this
+boundary. Rejected report comparisons produce bounded errors instead of printing
+entire test or coverage maps. Test-union, identity and coverage requirements remain
+unchanged.
+The three reporting libraries are direct, exact-version development dependencies
+already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
+
+## Application coverage placement
+
+The four path-hash application coverage jobs in normal CI run
+[41966872885](https://github.com/bsv-blockchain/ts-stack/actions/runs/41966872885)
+all passed, but lasted 10m58s, 10m44s, 9m38s and 21m17s. The last shard held
+1,154 seconds of timed test work while the others held 456–541 seconds.
+`output-knowledge-coverage` records the 67 per-file durations of five seconds or
+more from those complete logs, rounded up; unmeasured files retain the existing
+two-second default. The existing SDK/wallet duration planner assigns the full
+current discovery longest-first to six least-loaded shards. All 256 current
+files remain selected exactly once. The estimates are 507–509 seconds per
+shard, not a new elapsed-time result; the owning PR's ordinary coverage jobs
+and complete aggregate supply the measured result.
+
+Collection and aggregation independently recompute the canonical placement.
+The source/run/attempt/configuration identity now also binds the planner and
+its duration data. Each shard retains all instrumented source files, the three
+existing fresh serial native-history batches, one-worker/1GB ordinary execution,
+all original property inputs and deadlines, and the unchanged 35-minute job
+bound. The aggregate retains every raw same-attempt batch, exact successful test
+union, complete Istanbul map reconstruction and all four original global metrics.
+Missing, duplicate, differently assigned, changed-source or unsuccessful evidence
+fails. Native isolation and thresholds are independent of the scheduling estimates.
+
+Coverage runner/validation changes select the complete application coverage lane
+in normal PR CI. Duration metadata selects it only when its own lane changes;
+unrelated duration lanes stay scoped. A change to the shared sequencer retains
+its complete workspace consumer checks. No synthetic package edit, extra
+benchmark workflow, threshold reduction or mutation campaign is needed.
+
+## Planned coverage shards
+
+The `coverage-other` lane runs each shard's packages serially, so a shard lasts
+as long as the sum of its packages and the lane lasts as long as its slowest
+shard. It previously used one shard for one package and two otherwise,
+assigning packages round-robin by name. On one long-running branch the first
+shard ran 855–1,503 seconds while the second finished in 117–211.
+
+`scripts/ci-shard-plan.mjs` now plans the matrix from
+`governance/ci-lane-durations.json`. The shard count is the larger of the
+estimated total divided by the per-shard target and the package count divided
+by six, capped at six shards. Packages are assigned longest first to the
+least-loaded shard that has not reached its even share of packages, so one
+package that becomes slow in a pull request shares its shard with only a few
+others. Planning decides only which shard runs a package; every selected
+package still runs exactly once and serially.
+
+Each shard prints `coverage-other-duration <package> <seconds>s` and a summary
+table. Refresh the lane durations from those hosted values; the initial
+values come from a hosted full-scope run on 2026-10-21. Against round-robin on
+the same runners, the slowest shard fell from 410 to 161 seconds while total
+shard time rose from 608 to 774 seconds.
+
+## Duration-balanced test-file shards
+
+The wallet-toolbox and SDK coverage lanes shard by test file with
+`scripts/jest-duration-sequencer.cjs` instead of Jest's path-hash sharding. The
+sequencer assigns files longest first to the least-loaded shard from the
+governed per-file seconds in `governance/ci-lane-durations.json`; every file
+still runs in exactly one shard. The SDK shards disable Jest's per-run threshold
+check because each sees part of the coverage; `Coverage / SDK thresholds` merges
+their Istanbul maps with the library Jest uses and enforces the SDK's configured
+global thresholds, so the result matches one unsharded run. The packed SDK
+browser and UMD contract checks run beside the coverage shards.
+
+The affected-application regression lane runs the output-knowledge suite as six
+Jest shards with the same sequencer and the `output-knowledge-tests` lane, so a
+library pull request that only depends on the application no longer waits on
+whichever path-hash shard drew the slowest property files. On PR runs from
+2026-10-28 the four path-hash shards took 280–600 seconds of Jest time each,
+except shard four, which drew the three slowest files and took 1,054–1,257
+seconds. Planned from the median per-file times, each of six shards carries
+about 475 seconds. Current discovery after merging main finds 256 files, each
+exactly once across six shards of 42–44 files. The historical medians estimate
+474–476 seconds per shard; this is planning evidence, not a new runtime benchmark.
+Earlier hosted proof [run 41072431187](https://github.com/bsv-blockchain/ts-stack/actions/runs/41072431187)
+executed all 254 then-current suites once, with 411–490 seconds of Jest per shard
+and 10.3-minute overall CI compared with 21.2–23.9-minute earlier library PRs.
+Every current file still runs serially within its shard, with property cases,
+seeds and deadlines unchanged. Direct application coverage keeps its independent
+separate execution/aggregation contract. Its six-shard coverage plan is described
+below; the earlier regression result is separate evidence.
+
+The shared build restores each package's outputs from a cache keyed on the git
+blob ids of the package's own files, of every workspace package it depends on,
+and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
+packages whose inputs changed are built. Typecheck runs in the lint and policy
+job after the build, beside the test lanes.
+
+The affected-dependents lane plans its shards the same way from measured
+per-package test seconds (the `dependent-tests` lane). The wallet-toolbox
+storage shards start their pinned Postgres container in the background after
+checkout and wait for it to report healthy before Jest starts.
+
+The wallet-toolbox synced-header test restores a cached mainnet header store,
+keyed on the chaintracks storage code that writes it, instead of downloading
+about 75 MB from the header CDN into a fresh store on every run.
+
+## Coverage for packages with several Jest projects
+
+`@bsv/overlay` and `@bsv/overlay-express` run their tests as two Jest projects
+each (CommonJS and ES modules) that compile the same source files differently.
+A single `jest --coverage` run merges each file's raw coverage before applying
+source maps and maps the result with one project's map, so the other project's
+counts land on the wrong source lines and the patch-coverage gate reports
+covered changes as missed. Their `test:coverage` scripts therefore run
+`scripts/jest-project-coverage.mjs`, which reads the projects from the
+package's Jest config, runs each one alone with JSON coverage, merges the
+source-coordinate maps by location, and writes the usual
+`coverage/lcov.info`. Every test still runs once.
 
 ## Execution ledger across outcomes and attempts
 
@@ -94,28 +417,18 @@ node scripts/ci-performance.mjs --collect \
   --execution-ledger-output ci-execution-ledger.json
 ```
 
-## Explicit mutation diagnostics
+## Background mutation findings
 
-For a PR, apply the `ci:mutation-diagnostics` label before the next ordinary CI
-trigger (opening, reopening or pushing the PR). Adding or removing the label
-alone does not start a campaign; normal qualification resumes on the next run
-without the label. This opt-in permits collecting mutation results after a
-failed or unavailable analyzer prerequisite. It does not waive required Sonar,
-CodeQL, coverage, audit or merge gates, and it does not qualify a failed PR.
+The retired `ci:mutation-diagnostics` label and CI `mutation-diagnostics` input
+have no execution route. CI and publishers do not consume mutation outcomes.
+Only a separately requested, budgeted background audit can select a canonical
+part through `Background mutation findings`. An absent, failed, canceled or
+incomplete audit, or an open finding, cannot block any contribution or release.
+Preserve raw outcomes and reproduce suspected product defects with focused
+regressions; report sensitive findings privately under the security policy.
+This document authorizes no audit dispatch.
 
-For a manual full-tree campaign, select the boolean `mutation-diagnostics`
-workflow input explicitly (default `false`). The normal manual run already
-permits the intentional PR-only Sonar skip; the diagnostic input is only an
-eligibility override if that analyzer prerequisite has another result. A manual
-campaign is not a replacement for the exact-head PR analyzer and merge gate.
-
-Both diagnostic routes still require the successful audited shared build, a
-nonempty selected target set and an uncancelled workflow. They preserve every
-selected source, test, threshold, worker and timeout. Mutation reports remain
-retained on failure. A successful diagnostic mutation result never turns a
-failed prerequisite into successful qualification. Existing mutation siblings
-finish to collect evidence after a mutation failure; this opt-in changes the
-preliminary analyzer eligibility, not matrix failure handling.
+## Refreshing ordinary CI timing evidence
 
 To refresh the evidence without changing the baseline:
 
@@ -163,9 +476,11 @@ coverage, payload sizes, test counts and timeout budgets remain governed.
 ## Complete release acceptance
 
 Dispatch `CI` manually on the reviewed main commit to select the entire governed
-workspace, all infrastructure build lanes and mutation targets. This deliberately
-uses the workflow's all-scope path instead of comparing only the latest commit.
-Source merges still validate their affected scope automatically.
+workspace and all infrastructure build lanes. This explicitly requested full
+foreground check uses the workflow's all-scope path instead of comparing only
+the latest commit; it executes no mutation targets. Source merges validate their
+affected scope automatically. A full dispatch is not an additional prerequisite
+for every ordinary contribution.
 
 Every execution lane uses an explicit successful-preparation condition that
 survives intentionally skipped PR-only gates on a main push and honors explicit
@@ -211,60 +526,27 @@ Sonar waiting (79 seconds), package checks (71 seconds), and Codecov processing
 (29 seconds) were also on that PR's serial path. Required Sonar analysis and
 package checks now overlap execution; the duplicate external reporting wait is
 outside the merge gate. Verify the new run timings before claiming a measured
-speedup. Shared CI changes still select the complete governed execution graph.
+speedup. Shared execution/compiler changes select their consumer graph; workflow-only
+routing changes do not select every package or image.
 
-## Mutation runs as a full campaign, not a PR gate
+## Historical mutation research
 
-Mutation testing no longer executes on ordinary pull requests or pushes.
-`scripts/ci-mutation-scope.mjs` selects no targets for a compared range and
-reports the complete registry as deferred (`high`) or outside (`critical`);
-both mean **not executed, not passed**. The merge gate still verifies that this
-is a complete disjoint canonical partition and that the executed matrix equals
-the `required` list, so an unexpectedly selected or missing job fails closed.
-The scope job needs no workspace install for this: it only reads the registry
-and policy with the pinned Node.js runtime.
+The following inventory, partition and timing notes describe earlier experiments
+and retired qualification workflows. They preserve observations and limitations;
+they do not describe current CI, scheduling, publication permission or required
+work. No campaign can authorize or withhold a merge or release. Do not restart an
+old campaign to qualify an ordinary change. A future explicit background audit
+may reuse inventory tools, preserving source/configuration/seed identity and raw
+outcomes, and may raise findings only.
 
-The complete governed registry runs in three places: a manual `CI`
-`workflow_dispatch` on the reviewed commit (the all-scope path), the weekly
-scheduled or manually dispatched `Mutation quality` workflow (full campaign or
-one exact diagnostic target on any ref), and the release final qualification
-below. Run one of these before publication or when a change to a governed
-boundary needs assertion-strength evidence; `pnpm test:mutation --target <id>`
-remains available locally. The `ci:mutation-diagnostics` label and the
-`mutation-diagnostics` dispatch input keep their analyzer-eligibility meaning
-for those full campaigns.
+Historically, the compared-range selector required the registry on 49 of 60
+merged pull requests; release-notes and health-baseline metadata alone triggered
+27 runs. Documentation and small package changes waited 25–40 minutes behind
+mutation jobs while other lanes finished in under five. These observations
+explain the background-only policy; they are not an acceptable developer
+feedback budget or proof of the latency of the current workflow.
 
-This is a deliberate trade: before this change the compared-range selector
-required the whole registry on 49 of the previous 60 merged pull requests
-(release-notes and health-baseline metadata alone triggered 27 of them), so a
-documentation-only or single-package fix waited 25–40 minutes behind 33–37
-mutation jobs on six runners while every other lane finished in under five.
-Mutation results describe each target's own assertions against its own source;
-a dependency change is covered by the dependents' regular and compatibility
-test lanes, which still run on the affected graph. Record the measured
-`CI performance trend` after adoption before claiming an exact speedup.
-
-Complete final qualification runs every canonical target at the exact source
-candidate before npm, general OCI or Marketplace publication. Per-target raw
-reports and receipts bind source SHA, run, attempt, pinned runtime, configuration,
-lock and target union. The final verifier repeats static instrumentation with the
-pinned Stryker engine and checks complete mutant tuple multisets, source bytes,
-execution configuration and every existing score/no-coverage/invalid gate.
-Zero-mutant files may omit report entries; missing mutant-bearing files cannot.
-Static replay checks inventory, not assertion quality or runtime freshness. Fresh
-report-directory removal, successful matrix jobs and same-attempt receipts supply
-execution provenance. `Ignored` is accepted only when the same source directive
-produces the same reason during replay. Timeout remains part of the existing
-detected score; it is not an assertion-killed result.
-
-A manual single-target campaign is explicitly diagnostic and issues no full
-qualification SHA. Partial, stale, cancelled, failed or missing-target campaigns
-cannot authorize publication. Full reruns must rerun every job: receipts from an
-older attempt do not fill gaps. Weekly qualification remains useful trend evidence
-and cannot qualify a different release source. Qualification is exhaustive over
-the **governed registry**, not every production line in the repository.
-
-### What the current scores measure
+### What the historical scores measure
 
 Changing a minimum score does not make Stryker execute fewer mutants: this
 repository evaluates the governed score after the report completes. Mutation
@@ -290,27 +572,26 @@ defect yield or an optimal percentage threshold by itself.
 ### SDKAuth execution partitions
 
 The existing `sdk-auth-http` target remains one canonical policy/property
-registration. Its source specifications are grouped by file into core validation
-and Peer, AuthFetch client, and SimplifiedFetchTransport. Every range of a file
-stays in one part; a new canonical helper defaults to core, and unsupported
-wildcard/unknown partition inputs fail. Each part retains the complete original
-Jest test selection, four workers and governed property inputs. The current pinned
-inventory replays to 95 + 137 + 91 = 323 mutants, exactly matching the unpartitioned
-canonical inventory.
+registration. Its source specifications are grouped by file into Peer, AuthFetch
+client, SimplifiedFetchTransport, lookup protocol/transport and finite HTTP parts.
+AuthMessageValidation is cut at the upstream snapshot and policy line markers.
+New canonical helpers default to core; unsupported wildcard/unknown partition
+inputs fail. Every part retains the complete original Jest test selection, four
+workers and governed property inputs. The historical main-derived inventory had
+323 mutants; this branch's expanded SDK sources previously replayed to 757. Those
+historical counts cannot qualify the merged source. The pinned inventory replay
+checks every merged partition against its unpartitioned canonical inventory.
 
 A part's score is diagnostic. It still requires complete actual source/config/
 mutant evidence and zero uncovered/invalid outcomes. Only the combined original
 canonical denominator and score can pass the target's required gate. Missing,
 duplicate, overlapping, changed, stale or differently seeded parts fail. Completion
-ordering and part-local mutant IDs cannot change the canonical result. The full
-qualification workflow retains raw reports and independently reconstructs the
-aggregate before it can issue the publication SHA.
+ordering and part-local mutant IDs cannot change the canonical result. The former qualification workflow reconstructed the aggregate; it is retired
+and no workflow now issues a mutation-qualified publication SHA.
 
-PR matrix execution still waits for the prerequisite/analysis policy from #705;
-diagnostics cannot bypass failed final gates. Six matrix jobs remain the global
-parallelism limit, with four Stryker workers in each part. The required PR
-aggregate receives only contents-read permission to check out its verifier; no
-write permission, security setting or branch-protection change is introduced.
+The earlier PR matrix used the prerequisite/analysis policy from #705 and a
+six-job global parallelism limit. That matrix and its required PR aggregate are
+retired. Current background audits execute only one explicitly selected part.
 
 Archived SDKAuth jobs have a 19–37 minute tail. Three smaller parallel jobs can
 reduce that tail, but they repeat the complete dry run three times and add
@@ -341,3 +622,201 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+### Root-record execution partitions
+
+`root-eviction-records` remains one canonical registration and one combined
+90%/zero-uncovered/zero-invalid gate. Its complete source files are assigned to
+request handling and serving records. Future canonical helpers join the request
+part; no new source can disappear from the union. Both parts retain every original
+root test, property input, fixture, runner setting and four-worker limit. The
+pinned instrumenter reproduces exactly 218 request plus 257 serving mutants,
+matching all 475 canonical tuples and their complete configuration. This is
+static inventory evidence, not executed qualification or measured savings.
+
+The previous unpartitioned run passed all 288 dry-run tests, then exceeded its
+90-minute bound after six worker out-of-memory restarts. It was stopped without a
+final report. That attempt remains incomplete, with no inferred passing score.
+Fresh complete part reports must satisfy the canonical aggregate, including its
+independent raw-part reconstruction. PR artifact staging selects
+both exact matrix artifact names; missing parts cannot pass the final gate. The existing 90-minute job
+bound and every mutant/test deadline remain unchanged. Dry-run duplication,
+worker memory and the slower part's wall time must be measured before claiming
+an improvement.
+
+The separate `root-eviction-codec` target receives the same bounded 90-minute job
+allowance after its full 182-site run took 50m05s. That run achieved 97.80% with
+zero uncovered/invalid outcomes and unchanged dependency bytes. This is an
+execution allowance, not a reduced test set, score gate or worker constraint.
+All earlier target allowances and the 45-minute default are retained.
+
+### Recovery-store execution partitions
+
+`wallet-recovery-store` remains one canonical target. Its original store-method
+interval is scheduled at complete method and helper boundaries; installation
+and operation-transition source intervals retain their separate original
+registrations. All nine parts run the complete original tests and property
+selection with unchanged inputs, operators, four workers and deadlines. Future
+canonical companion sources remain in the fallback part. Ordinary CI downloads
+every selected partitioned target's evidence before the mandatory canonical
+aggregate, including recovery-plan, recovery-store, private-publication
+admission and private-purchase HTTP parts. An installed
+workflow control checks this wiring against the entire current target registry.
+
+On source `9aff4d95b666103f2d3f1a209102b5f5b09fc02e`, full campaign
+`37223480110`, attempt one, passed all 237 initial store tests in 123 seconds,
+then reached the existing 90-minute job limit without a final report. That job
+is unqualified. Independent pinned-engine replay observes all 229 original
+mutants exactly once across nine nonempty parts, with inventories
+44/9/14/16/20/10/93/13/10. The complete registry remains 141 targets, now
+scheduled as 388 execution rows in batches of 256 and 132. Source and test
+unions, global 90% score and zero-uncovered/invalid/unexecuted requirements
+remain unchanged. This inventory proof establishes completeness; a fresh full
+campaign on the published source must establish execution and final qualification.
+
+### Diagnostic assertion metadata
+
+The optional fixed-selector application diagnostic records assertion status independently
+of its process exit. A single selected suite can pass its assertions while the unchanged
+package-wide coverage threshold makes Jest exit nonzero. That result must not be described
+as an assertion failure, a complete coverage pass or full functional qualification.
+
+After the existing source, fault, case-timeout, calendar and complete process-drain guards,
+the diagnostic reads a bounded private Jest JSON result through a no-follow descriptor.
+It verifies the exact fixed selector, one complete suite, every expected assertion and
+matching passed/failed totals; skipped, pending, todo, runtime-error and inconsistent
+results refuse the metadata. Only scalar outcomes and the original process exit enter
+the artifact. Failure messages, assertion titles and private/counterexample values remain
+in the temporary directory and are removed with it. No completed property-case count is
+inferred. The original tests, minimum 300 cases, seed 3242026, empty replay, 150-second
+interruption, 180-second case timeout, worker settings and full coverage gates
+remain unchanged. Mutation audits remain background-only. CPU clocks and native monotonic clocks
+remain separate; valid timing metadata does not establish successful assertions or a
+speedup.
+
+### Line-split execution partitions
+
+Full qualification wall time is bounded by its slowest target. Before line
+splitting, `brc52-envelope` took 22–32 minutes in every release campaign: all 358
+mutants of one file share almost the complete 291-test selection, so a file
+partition cannot divide it. A line plan in `scripts/mutation-partitions.mjs`
+cuts a file at explicit declaration markers instead. Each marker must start
+exactly one source line, in order, so an edit that moves, removes or duplicates
+one fails closed. The segments are contiguous from line 1 to the last line, and
+every original specification is intersected with each segment, so overlapping
+canonical ranges keep their original union.
+
+The canonical registry, inventory, tests, workers, property inputs and score
+gate are unchanged. The combined report merges a split file's mutants only when
+every part carries the identical source, orders them by partition, and must
+then equal the canonical whole-target inventory exactly; a dropped or
+double-tested mutant fails. `scripts/ci-integration/sdk-auth-partitions.test.mjs`
+replays every partitioned target against the pinned instrumenter on each PR.
+
+Current pinned inventories:
+
+| Target             | Parts                                                  | Mutants |
+| ------------------ | ------------------------------------------------------ | ------- |
+| `brc52-envelope`   | 64 + 64 + 64 + 50 + 70 + 46 (lines)                    | 358     |
+| `brc52-status`     | 201 + 164 (lines)                                      | 365     |
+| `brc52-disclosure` | 192 + 134 (lines)                                      | 326     |
+| `air-gap-codec`    | decoder 94 + 105 (lines), encoder 75, coding/base64 80 | 354     |
+| `webrtpay-frames`  | 110 + 119 (lines)                                      | 229     |
+| `mandala-encoding` | mandala 93, strict CBOR 352, BSV-21 336                | 781     |
+| `webrtpay-codes`   | codes 273, SDP 532                                     | 805     |
+
+Each extra part repeats the target's dry run and job setup, so total compute
+rises while the campaign tail falls. In that upstream campaign the matrix grew from 41 to 56 jobs under
+the unchanged 20-job limit. The merged registry has 154 targets and 543 execution
+rows in batches of 256, 256 and 31; this scheduling change does not qualify a
+full campaign on the merged source.
+
+### Automatic file partitions
+
+Hand-written plans cannot keep up with new targets: `color-permission`, added
+with 1,072 mutants on 2026-10-20, ran alone for more than 25 minutes in the next
+full campaign while every planned part had finished within 6m15s.
+
+A target without an explicit plan now splits automatically when it is slow.
+Mutant count does not predict time, because tests dominate (676 `auth`
+mutants take under two minutes; 358 `brc52-envelope` mutants took fifteen), so
+the estimate is the target's measured seconds in
+`governance/mutation-testing/durations.json`. A target never measured uses a
+deliberately pessimistic one second per code line. A file whose share of the
+estimate exceeds one 180-second part is cut inside at top-level declaration
+lines (`function`, `class`, `const`, `export …` at column zero), or at member
+declarations of a top-level class (methods, constructor and accessors at the
+two-space Prettier indent), that are unique line prefixes, balanced by code
+lines; a mutant cannot span two top-level statements or two class members, and
+a two-space line inside a function, method, string, template, or comment is
+never a cut. Whole files and file segments are then grouped heaviest first into
+the estimate over 180 seconds parts. Explicit plans, including hand-placed line
+cuts, keep priority. Today `color-permission` splits automatically into twelve
+parts and `reorg-stream` into two. The merged application registry also
+applies automatic plans to unplanned targets; the exhaustiveness replay covers
+every target that executes in parts, so an automatic cut that dropped or duplicated a mutant
+fails CI.
+
+In release run
+[39845676503](https://github.com/bsv-blockchain/ts-stack/actions/runs/39845676503)
+the slowest `color-permission` part held the whole `strictJson.ts` `Parser`
+class and ran 7m37s. With class member cuts and a 240-second part the slowest
+part was the head of `identifiers.ts` at 6m48s
+([39917134050](https://github.com/bsv-blockchain/ts-stack/actions/runs/39917134050)).
+The part target is now 180 seconds: estimated from that run's per-part times,
+the slowest of twelve parts takes about 4m40s, below the hand-planned
+`webrtpay-codes/sdp` (5m17s). An extra part costs only its own setup now that
+every part starts at once.
+
+### Stop-on-kill Jest environment
+
+StrykerJS treats a mutant as killed by its first failing test and bails for its
+other runners; the Vitest runner sets `bail: 1`. The Jest runner instead forces
+`bail: false`, because Jest's own bail exits the process, so every later test
+covering an already-killed mutant still ran. In the 2026-10-19 `brc52-envelope`
+release report, 330 of 358 mutants were killed, yet each mutant ran 139.6 tests
+on average.
+
+`governance/mutation-testing/stop-on-kill-environment.cjs` extends the package's
+Node environment. While Stryker has an active mutant and one of its tests has
+failed, it marks each remaining test as skipped at `test_start`, which
+jest-circus dispatches before reading the skip mode. It does nothing without an
+active mutant, so the initial coverage run and plain `jest` runs execute every
+test, and a surviving mutant still runs every covering test. Every governed Jest
+target uses it, including each child project in multi-project overlay runners.
+
+Verdicts cannot change: a mutant with a failing test is Killed regardless of
+later tests. A local same-machine run of `brc52-envelope/envelope-2` produced
+identical verdicts for all 64 mutants (61 Killed, 3 Survived) while tests run
+per mutant fell from 138.8 to 19.2 and wall time from 117 to 50 seconds.
+
+### Longest-first campaign scheduling
+
+GitHub starts matrix jobs in listed order up to the concurrency limit. With the
+registry order, long parts could start last and run alone at the end. The
+`matrix` command now lists parts longest first from
+`governance/mutation-testing/durations.json` (measured hosted job seconds), the
+longest-processing-time-first heuristic for parallel machine scheduling. Order
+changes only when a part starts, never which parts run; an unmeasured part sorts
+first. Refresh the durations after a campaign whose part timings changed.
+
+Fork benchmark, same runners, about six concurrent jobs, every gate passing:
+
+| Campaign                  | Wall   | Longest part                | Total part time |
+| ------------------------- | ------ | --------------------------- | --------------- |
+| Unchanged main            | 26m36s | 23m44s `brc52-envelope`     | 167m39s         |
+| Partitions only           | 35m17s | 14m51s `sdk-auth-http/core` | 164m49s         |
+| Partitions + stop-on-kill | 17m01s | 6m10s `sdk-auth-http/core`  | 105m48s         |
+
+Partitions alone were slower there because long parts queued behind short ones,
+which longest-first ordering addresses.
+
+At the time of these historical runs, the campaign had about 70 parts and the
+former workflow allowed 100 parallel parts. Its aggregate jobs also ran
+concurrently. That workflow and the six-part PR diagnostic matrix are retired;
+the current workflow runs one selected background part.
+
+| Campaign (org runners)                              | Parts | Global gates | Full campaign |
+| --------------------------------------------------- | ----- | ------------ | ------------- |
+| Release run 39845676503 (20 parts, 2 gates at once) | 7m42s | 3m30s        | 13m24s        |
+| Dispatch 39917134050 (all parts at once, 2 gates)   | 6m48s | 2m54s        | 11m48s        |

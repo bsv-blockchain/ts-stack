@@ -7,6 +7,7 @@ import type {
 import { Writer } from '../primitives/utils.js'
 import LookupResolver, { type LookupNetworkPreset } from './LookupResolver.js'
 import { decodeAndVerifyOverlayAdvertisement } from './OverlayAdminTokenTemplate.js'
+import { isOverlayTopicName } from './OverlayNames.js'
 import { createPublicNetworkFetch } from '../storage/PublicHTTPSFetch.js'
 import { utf8ByteLength } from '../primitives/UTF8.js'
 
@@ -166,11 +167,7 @@ function canonicalTopics(value: unknown, label: string, allowEmpty = false): str
   for (let index = 0; index < value.length; index++) {
     const descriptor = Object.getOwnPropertyDescriptor(value, index)
     const topic = descriptor != null && 'value' in descriptor ? descriptor.value : undefined
-    if (
-      typeof topic !== 'string' ||
-      !/^(?=.{1,50}$)tm_[a-z]+(?:_[a-z]+)*$/.test(topic) ||
-      seen.has(topic)
-    ) {
+    if (typeof topic !== 'string' || !isOverlayTopicName(topic) || seen.has(topic)) {
       throw new TypeError(`${label} must contain unique canonical tm_ topic names.`)
     }
     seen.add(topic)

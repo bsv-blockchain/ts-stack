@@ -46,7 +46,13 @@ export function resolveDraft(d: ConfigDraft): ProjectConfig {
   return resolveConfig(draftToConfigInput(d))
 }
 
-export function seedDraft(existing: ProjectManifest | null, flags: ConfigDraft): ConfigDraft {
+/** A draft after seeding: `mode` and `capabilities` are always set. */
+export type SeededDraft = Omit<ConfigDraft, 'mode' | 'capabilities'> & {
+  mode: 'new' | 'add'
+  capabilities: string[]
+}
+
+export function seedDraft(existing: ProjectManifest | null, flags: ConfigDraft): SeededDraft {
   const mode = flags.mode ?? (existing == null ? 'new' : 'add')
   if (mode === 'add' && existing != null) {
     return {

@@ -2,6 +2,7 @@ import { knex as makeKnex, Knex } from 'knex'
 import { _tu } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageKnex } from '../StorageKnex'
 import { managedChangeOutputFields } from '../methods/managedChange'
+import { markKnownInputsSpent, type XValidCreateActionInput } from '../methods/createAction'
 
 const env = _tu.getEnvFlags('test')
 const describePostgres = env.runPostgres ? describe : describe.skip
@@ -74,6 +75,52 @@ describePostgres('StorageKnex on Postgres', () => {
     })
   })
 
+  /** Waits until a statement on the test database is blocked on a lock. */
+  async function waitForLockWait(locker: Knex, what: string): Promise<void> {
+    for (let i = 0; ; i++) {
+      const waiting = await locker('pg_stat_activity')
+        .where({ datname: database, wait_event_type: 'Lock' })
+        .count({ count: '*' })
+      if (Number(waiting[0].count) > 0) return
+      if (i > 200) throw new Error(`${what} did not wait for the row lock`)
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  }
+
+  test('a second action spending a known input sees the first one spend it', async () => {
+    const storage = await openStorage()
+    const user = await _tu.insertTestUser(storage)
+    const basket = await _tu.insertTestOutputBasket(storage, user)
+    const { tx: source } = await _tu.insertTestTransaction(storage, user, false, { status: 'completed' })
+    const { tx: first } = await _tu.insertTestTransaction(storage, user)
+    const { tx: second } = await _tu.insertTestTransaction(storage, user)
+    const output = await _tu.insertTestOutput(storage, source, 0, 1000, basket, false, {
+      txid: source.txid,
+      change: false,
+      spendable: true,
+      spentBy: undefined
+    })
+    const input = { vin: 0, inputDescription: 'Known input' } as XValidCreateActionInput
+
+    // The first action has marked the input spent and not yet committed.
+    const locker = plainKnex()
+    const lock = await locker.transaction()
+    try {
+      await lock('outputs')
+        .where({ outputId: output.outputId })
+        .update({ spendable: false, spentBy: first.transactionId })
+      const spending = markKnownInputsSpent(storage, [{ i: input, o: { ...output } }], second.transactionId)
+      await waitForLockWait(locker, 'markKnownInputsSpent')
+      await lock.commit()
+
+      await expect(spending).resolves.toBe(first.txid)
+      const [stored] = await storage.findOutputs({ partial: { outputId: output.outputId } })
+      expect(stored.spentBy).toBe(first.transactionId)
+    } finally {
+      if (!lock.isCompleted()) await lock.rollback()
+    }
+  })
+
   test('allocateChangeInput skips an output reserved while it waited for the row lock', async () => {
     const storage = await openStorage()
     const user = await _tu.insertTestUser(storage)
@@ -96,15 +143,7 @@ describePostgres('StorageKnex on Postgres', () => {
         false,
         spending.transactionId
       )
-      // Wait until the allocation is blocked on the row lock.
-      for (let i = 0; ; i++) {
-        const waiting = await locker('pg_stat_activity')
-          .where({ datname: database, wait_event_type: 'Lock' })
-          .count({ count: '*' })
-        if (Number(waiting[0].count) > 0) break
-        if (i > 200) throw new Error('allocateChangeInput did not wait for the row lock')
-        await new Promise(resolve => setTimeout(resolve, 10))
-      }
+      await waitForLockWait(locker, 'allocateChangeInput')
       const now = new Date()
       const later = new Date(now.getTime() + 60_000)
       const [{ actionBatchId }] = await lock('action_batches')

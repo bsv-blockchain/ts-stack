@@ -1,23 +1,27 @@
-import { configSchema, type ConfigSchema } from '../config/schema.js'
-import { listCapabilities } from '../registry.js'
-import { remainingCapabilityIds, type ProjectManifest } from '../config/project-manifest.js'
-export function serializeSchema(existing: ProjectManifest | null): ConfigSchema {
-  const allIds = listCapabilities().map(c => c.id)
-  const defaultIds = new Set(
-    listCapabilities()
-      .filter(c => c.defaultSelected === true)
-      .map(c => c.id)
-  )
-  const offerable =
-    existing === null
-      ? allIds.filter(id => !defaultIds.has(id))
-      : remainingCapabilityIds(existing, allIds)
+import {
+  configSchema,
+  type ConfigField,
+  type ConfigSection,
+  type FieldOption
+} from '../config/schema.js'
+import type { ProjectManifest } from '../config/project-manifest.js'
+import { ALL_CAPABILITIES_INCLUDED, optionsFor } from '../prompts.js'
+
+/** A field as sent to the page; `modeOptions` are the options offered in each mode. */
+export type PageField = ConfigField & { modeOptions?: Record<'new' | 'add', FieldOption[]> }
+export type PageSchema = Array<Omit<ConfigSection, 'fields'> & { fields: PageField[] }>
+
+/** The config schema with capabilities narrowed per mode, as the terminal offers them. */
+export function serializeSchema(existing: ProjectManifest | null): PageSchema {
   return configSchema.map(section => ({
     ...section,
     fields: section.fields.map(field => {
       if (field.key !== 'capabilities') return { ...field }
-      const options = (field.options ?? []).filter(o => offerable.includes(o.value))
-      return { ...field, options }
+      const modeOptions = {
+        new: optionsFor(field, existing, 'new'),
+        add: optionsFor(field, existing, 'add')
+      }
+      return { ...field, options: modeOptions[existing === null ? 'new' : 'add'], modeOptions }
     })
   }))
 }
@@ -120,12 +124,119 @@ body { background: #0b0e13; color: #cdd4de; font: 14px/1.5 system-ui, -apple-sys
 const LOGO_SVG =
   '<svg id="logo-svg" width="450" height="450" viewBox="0 0 450 450" xmlns="http://www.w3.org/2000/svg"><line x1="405" y1="225" x2="352.27922061357856" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="224.99999999999997" y1="45" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><circle cx="405" cy="225" r="8" fill="#2196F3"></circle><circle cx="352.27922061357856" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="225" cy="405" r="8" fill="#2196F3"></circle><circle cx="97.72077938642146" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="45" cy="225.00000000000003" r="8" fill="#2196F3"></circle><circle cx="97.72077938642141" cy="97.72077938642146" r="8" fill="#2196F3"></circle><circle cx="224.99999999999997" cy="45" r="8" fill="#2196F3"></circle><circle cx="352.2792206135785" cy="97.72077938642141" r="8" fill="#2196F3"></circle></svg>'
 
+/**
+ * Client-side source of the page's draft helpers (mirrors `isFieldVisible`).
+ * `initialDraft(schema, seed)`: schema fields only, from the seed or field defaults.
+ * `visibleDraft(schema, draft, hidden)`: the visible schema fields, in schema order; a hidden
+ * field takes `hidden[key]` (the server's seed for the mode) for later `when` checks, never the
+ * stale page value, as in the terminal where hidden fields only ever hold seed values.
+ * `payloadOf(schema, draft, modeSeeds, seed)`: what the page renders and submits.
+ * `modeDrafts(schema, seed, modeSeeds)`: one draft per mode, each from that mode's seed, so a
+ * field starts from the flags and seed of the mode it is shown in, as in the terminal.
+ * `fieldOptions(field, mode)`: the options offered for a field in a mode.
+ */
+export const PAGE_DRAFT_SRC = `function whenMatches(when, draft) {
+  if (!when) return true;
+  return Object.keys(when).every(function (k) {
+    return Array.isArray(when[k]) ? when[k].indexOf(String(draft[k])) !== -1 : draft[k] === when[k];
+  });
+}
+function initialDraft(schema, seed) {
+  var draft = {};
+  schema.forEach(function (s) {
+    (s.fields || []).forEach(function (f) {
+      if (seed[f.key] !== undefined) draft[f.key] = seed[f.key];
+      else if (f.type === 'multiselect') draft[f.key] = Array.isArray(f.default) ? f.default.slice() : [];
+      else if (f.default !== undefined) draft[f.key] = f.default;
+    });
+  });
+  return draft;
+}
+function visibleDraft(schema, draft, hidden) {
+  var view = {}, out = {};
+  hidden = hidden || {};
+  schema.forEach(function (s) {
+    (s.fields || []).forEach(function (f) {
+      var on = whenMatches(f.when, view);
+      var v = on ? draft[f.key] : hidden[f.key];
+      if (v !== undefined) view[f.key] = v;
+      if (on) out[f.key] = v;
+    });
+  });
+  return out;
+}
+function payloadOf(schema, draft, modeSeeds, seed) {
+  return visibleDraft(schema, draft, modeSeeds[draft.mode] || seed);
+}
+function modeDrafts(schema, seed, modeSeeds) {
+  var drafts = {};
+  ['new', 'add'].forEach(function (m) {
+    drafts[m] = initialDraft(schema, modeSeeds[m] || seed);
+    drafts[m].mode = m;
+  });
+  return drafts;
+}
+function fieldOptions(f, mode) {
+  return (f.modeOptions && f.modeOptions[mode]) || f.options || [];
+}`
+
+/**
+ * Client-side source of the copyable command: `buildCommand(d, dir)` and its coloured
+ * `buildTokens(d, dir)`; `dir` is the target directory, omitted when it is `.`.
+ */
+export const PAGE_COMMAND_SRC = `function buildCommand(d, dir) {
+  var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
+  if (dir && dir !== '.') p.push('--dir', JSON.stringify(dir));
+  if (d.name) p.push('--name', JSON.stringify(d.name));
+  if ((d.mode || 'new') === 'new') {
+    if (d.starter) p.push('--starter', d.starter);
+    if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
+    if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
+    if (d.backend && d.backend !== 'none') p.push('--backend', d.backend);
+    if (d.bsvDir) p.push('--bsv-dir', d.bsvDir);
+    if (d.network) p.push('--network', d.network);
+  }
+  if (d.packageManager) p.push('--package-manager', d.packageManager);
+  if (d.install === false) p.push('--skip-install');
+  /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
+  if (d.glue === false) p.push('--no-glue');
+  if (d.capabilities && d.capabilities.length) p.push('--capabilities', d.capabilities.join(','));
+  p.push('--yes');
+  return p.join(' ');
+}
+function buildTokens(d, dir) {
+  var FLAG = '#7fd6a0', VAL = '#c8d0da', STR = '#e0b25a';
+  var t = [{ t: 'npx create-bsv-app', c: VAL }];
+  function flag(f, v, col) { t.push({ t: ' ' + f + ' ', c: FLAG }); if (v !== undefined) t.push({ t: v, c: col || VAL }); }
+  flag('--mode', d.mode || 'new');
+  if (dir && dir !== '.') flag('--dir', '"' + dir + '"', STR);
+  if (d.name) flag('--name', '"' + d.name + '"', STR);
+  if ((d.mode || 'new') === 'new') {
+    if (d.starter) flag('--starter', d.starter);
+    if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
+    if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);
+    if (d.backend && d.backend !== 'none') flag('--backend', d.backend);
+    if (d.bsvDir) flag('--bsv-dir', d.bsvDir);
+    if (d.network) flag('--network', d.network);
+  }
+  if (d.packageManager) flag('--package-manager', d.packageManager);
+  if (d.install === false) flag('--skip-install');
+  /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
+  if (d.glue === false) flag('--no-glue');
+  if (d.capabilities && d.capabilities.length) flag('--capabilities', d.capabilities.join(','));
+  flag('--yes');
+  return t;
+}`
+
 const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static page (no dependencies).
- * Reads window.__SCHEMA__ / __SEED__ / __INCLUDED__ and POSTs the draft to /generate.
+ * Reads window.__SCHEMA__ / __SEED__ / __MODE_SEEDS__ / __FLAGS__ / __TARGET_DIR__ / __INCLUDED__ and POSTs the visible fields to /generate.
  * Optional globals: __ACCENT__ (hex), __CMD_LABEL__ (string), __DEMO__ (bool, skips server). */
 (function () {
   var SCHEMA = window.__SCHEMA__ || [];
   var SEED = window.__SEED__ || {};
+  var MODE_SEEDS = window.__MODE_SEEDS__ || {};
+  var FLAGS = window.__FLAGS__ || {};
+  var TARGET_DIR = window.__TARGET_DIR__ || '.';
   var INCLUDED = window.__INCLUDED__ || [{ label: '@bsv/sdk' }, { label: 'AGENTS.md' }];
   var SESSION_TOKEN = window.__SESSION_TOKEN__ || '';
   var ACCENT = window.__ACCENT__ || '#2196F3';
@@ -136,7 +247,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   /* RECONCILIATION 2: active uses s.id, falls back to first visible section id */
   function visibleSections() {
     return SCHEMA.filter(function (s) {
-      return (s.fields || []).some(function (f) { return whenOk(f.when); });
+      return (s.fields || []).some(shown);
     });
   }
 
@@ -147,19 +258,18 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     copied: false,
     generating: false,
     error: '',
+    planError: '',
     ov: null,
     plan: []
   };
 
-  var draft = {};
-  for (var si = 0; si < SCHEMA.length; si++) {
-    var fs = SCHEMA[si].fields || [];
-    for (var fi = 0; fi < fs.length; fi++) {
-      var f = fs[fi];
-      if (SEED[f.key] !== undefined) draft[f.key] = SEED[f.key];
-      else if (f.type === 'multiselect') draft[f.key] = Array.isArray(f.default) ? f.default.slice() : [];
-      else if (f.default !== undefined) draft[f.key] = f.default;
-    }
+  /* schema fields only; the server re-applies CLI flags and the existing manifest */
+  var drafts = modeDrafts(SCHEMA, SEED, MODE_SEEDS);
+  var draft = drafts[SEED.mode] || drafts.new;
+  /* switching mode switches to that mode's draft */
+  function setField(key, value) {
+    if (key === 'mode' && drafts[value]) draft = drafts[value];
+    else draft[key] = value;
   }
 
   function el(tag, attrs, kids) {
@@ -181,67 +291,28 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     return n;
   }
 
-  function whenOk(when) {
-    if (!when) return true;
-    return Object.keys(when).every(function (k) {
-      return Array.isArray(when[k]) ? when[k].indexOf(String(draft[k])) !== -1 : draft[k] === when[k];
-    });
-  }
+  ${PAGE_DRAFT_SRC}
+
+  /* only fields visible under the current draft are rendered, previewed or submitted */
+  function payload() { return payloadOf(SCHEMA, draft, MODE_SEEDS, SEED); }
+  function shown(f) { return f.key in payload(); }
+  /* the command reflects CLI flags the same way the server merges them */
+  function commandDraft() { return Object.assign({}, FLAGS, payload()); }
 
   /* ---- command ---- */
-  function buildCommand(d) {
-    var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
-    if ((d.mode || 'new') === 'new') {
-      if (d.name) p.push('--name', JSON.stringify(d.name));
-      if (d.starter) p.push('--starter', d.starter);
-      if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
-      if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
-      if (d.backend && d.backend !== 'none') p.push('--backend', d.backend);
-      if (d.bsvDir) p.push('--bsv-dir', d.bsvDir);
-      if (d.packageManager) p.push('--package-manager', d.packageManager);
-      if (d.network) p.push('--network', d.network);
-      if (d.install === false) p.push('--skip-install');
-      /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false in new mode */
-      if ((d.mode || 'new') === 'new' && d.glue === false) p.push('--no-glue');
-    }
-    if (d.capabilities && d.capabilities.length) p.push('--capabilities', d.capabilities.join(','));
-    p.push('--yes');
-    return p.join(' ');
-  }
-
-  function buildTokens(d) {
-    var FLAG = '#7fd6a0', VAL = '#c8d0da', STR = '#e0b25a';
-    var t = [{ t: 'npx create-bsv-app', c: VAL }];
-    function flag(f, v, col) { t.push({ t: ' ' + f + ' ', c: FLAG }); if (v !== undefined) t.push({ t: v, c: col || VAL }); }
-    flag('--mode', d.mode || 'new');
-    if ((d.mode || 'new') === 'new') {
-      if (d.name) flag('--name', '"' + d.name + '"', STR);
-      if (d.starter) flag('--starter', d.starter);
-      if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
-      if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);
-      if (d.backend && d.backend !== 'none') flag('--backend', d.backend);
-      if (d.bsvDir) flag('--bsv-dir', d.bsvDir);
-      if (d.packageManager) flag('--package-manager', d.packageManager);
-      if (d.network) flag('--network', d.network);
-      if (d.install === false) flag('--skip-install');
-      /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false in new mode */
-      if ((d.mode || 'new') === 'new' && d.glue === false) flag('--no-glue');
-    }
-    if (d.capabilities && d.capabilities.length) flag('--capabilities', d.capabilities.join(','));
-    flag('--yes');
-    return t;
-  }
+  ${PAGE_COMMAND_SRC}
 
   /* RECONCILIATION 3: real impact via /plan — computeFiles() deleted */
   var planTimer = null;
   function fetchPlan() {
+    state.error = ''; /* every draft edit re-plans: a past Generate error no longer applies */
     if (window.__DEMO__) { state.plan = []; return; }
     clearTimeout(planTimer);
     planTimer = setTimeout(function () {
-      fetch('/plan', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(draft) })
+      fetch('/plan', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(payload()) })
         .then(function (r) { return r.json(); })
-        .then(function (d) { state.plan = (d && d.files) || []; renderRail(); })
-        .catch(function () { state.plan = []; renderRail(); });
+        .then(function (d) { state.plan = (d && d.files) || []; state.planError = (d && d.error) || ''; renderRail(); })
+        .catch(function () { state.plan = []; state.planError = ''; renderRail(); });
     }, 150);
   }
 
@@ -288,7 +359,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
       var seg = el('div', { class: 'seg' });
       (f.options || []).forEach(function (o) {
         var b = el('button', { class: 'seg-btn' + (draft[f.key] === o.value ? ' on' : ''), text: o.label });
-        b.onclick = function () { draft[f.key] = o.value; renderForm(); renderRail(); fetchPlan(); };
+        b.onclick = function () { setField(f.key, o.value); renderForm(); renderRail(); fetchPlan(); };
         seg.appendChild(b);
       });
       return seg;
@@ -301,7 +372,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
         s.appendChild(opt);
       });
       if (draft[f.key] === undefined && f.options && f.options.length) draft[f.key] = f.options[0].value;
-      s.onchange = function () { draft[f.key] = s.value; renderForm(); renderRail(); fetchPlan(); };
+      s.onchange = function () { setField(f.key, s.value); renderForm(); renderRail(); fetchPlan(); };
       return s;
     }
     if (f.type === 'toggle') {
@@ -314,7 +385,9 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     }
     // multiselect
     var box = el('div');
-    (f.options || []).forEach(function (o) {
+    var opts = fieldOptions(f, draft.mode);
+    if (!opts.length) box.appendChild(el('div', { class: 'sec-desc', text: ${JSON.stringify(ALL_CAPABILITIES_INCLUDED)} }));
+    opts.forEach(function (o) {
       var on = (draft[f.key] || []).indexOf(o.value) !== -1;
       var txt = el('span', {}, [el('span', { class: 'ot', text: o.label })]);
       if (o.hint) txt.appendChild(el('span', { class: 'oh', text: o.hint }));
@@ -381,7 +454,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     wrap.appendChild(el('div', { class: 'sec-title', text: sec.title }));
     /* RECONCILIATION 1: section description via s.desc */
     wrap.appendChild(el('div', { class: 'sec-desc', text: sec.desc || '' }));
-    sec.fields.filter(function (f) { return whenOk(f.when); }).forEach(function (f) {
+    sec.fields.filter(shown).forEach(function (f) {
       var field = el('div', { class: 'field' }, [el('label', { class: 'field-label', text: f.label })]);
       field.appendChild(fieldControl(f));
       wrap.appendChild(field);
@@ -394,7 +467,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     rail.appendChild(el('div', { class: 'label', text: CMD_LABEL }));
 
     var term = el('div', { class: 'term' }, [el('span', { class: 'prompt', text: '$ ' })]);
-    buildTokens(draft).forEach(function (tk) { var s = el('span', { text: tk.t }); s.style.color = tk.c; term.appendChild(s); });
+    buildTokens(commandDraft(), TARGET_DIR).forEach(function (tk) { var s = el('span', { text: tk.t }); s.style.color = tk.c; term.appendChild(s); });
     rail.appendChild(term);
 
     if (INCLUDED.length) {
@@ -451,7 +524,8 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     rail.appendChild(impact);
 
     var actions = el('div', { class: 'actions' });
-    if (state.error) actions.appendChild(el('div', { class: 'err', text: state.error }));
+    var err = state.error || state.planError;
+    if (err) actions.appendChild(el('div', { class: 'err', text: err }));
     var copy = el('button', { class: 'btn', text: state.copied ? 'Copied!' : 'Copy command' });
     copy.onclick = copyCmd;
     var gen = el('button', { class: 'btn-primary', text: state.generating ? 'Generating\u2026' : 'Generate' });
@@ -461,7 +535,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   }
 
   function copyCmd() {
-    try { navigator.clipboard && navigator.clipboard.writeText(buildCommand(draft)); } catch (e) {}
+    try { navigator.clipboard && navigator.clipboard.writeText(buildCommand(commandDraft(), TARGET_DIR)); } catch (e) {}
     state.copied = true; renderRail();
     clearTimeout(copyCmd._t);
     copyCmd._t = setTimeout(function () { state.copied = false; renderRail(); }, 1500);
@@ -474,7 +548,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
       return;
     }
     state.generating = true; renderRail();
-    fetch('/generate', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(draft) })
+    fetch('/generate', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(payload()) })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (res) {
         state.generating = false;
@@ -516,6 +590,12 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
 export function buildPage(opts: {
   schema: unknown
   seed: unknown
+  /** Per-mode seeds: the values hidden fields hold on the server. */
+  modeSeeds?: { new: unknown; add: unknown }
+  /** CLI flags given alongside `--ui`, merged under the payload for the command preview. */
+  flags?: unknown
+  /** Target directory, as given on the CLI, for the command preview. */
+  targetDir?: string
   included?: Array<{ label: string }>
   accent?: string
   commandLabel?: string
@@ -535,6 +615,15 @@ export function buildPage(opts: {
     ';\n' +
     'window.__SEED__ = ' +
     scriptJson(opts.seed) +
+    ';\n' +
+    'window.__MODE_SEEDS__ = ' +
+    scriptJson(opts.modeSeeds ?? {}) +
+    ';\n' +
+    'window.__FLAGS__ = ' +
+    scriptJson(opts.flags ?? {}) +
+    ';\n' +
+    'window.__TARGET_DIR__ = ' +
+    scriptJson(opts.targetDir ?? '.') +
     ';\n' +
     'window.__INCLUDED__ = ' +
     scriptJson(opts.included ?? []) +
