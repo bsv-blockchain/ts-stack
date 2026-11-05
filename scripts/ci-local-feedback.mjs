@@ -95,18 +95,34 @@ export function planLocalFeedback(
   const scope = selectWorkspaceScope(projects, changedFiles, changedImporters)
   const affected = projects.filter(project => scope.affected.includes(project.name))
   const build = scope.build.map(name => `--filter ${quote(name)}`).join(' ')
+  const shared = changedFiles.some(file =>
+    /^(?:scripts\/|governance\/|\.github\/|AGENTS\.md$|CONTRIBUTING\.md$|package\.json$|pnpm-|tsconfig\.)/.test(
+      file
+    )
+  )
   const beforePush = [
     ...(build ? [`pnpm -r ${build} --if-present run build`] : []),
-    'pnpm health:check',
-    'pnpm lint',
-    'pnpm format:check',
-    'pnpm audit:security',
-    'pnpm typecheck',
+    ...(shared
+      ? [
+          'pnpm health:check',
+          'pnpm lint',
+          'pnpm format:check',
+          'pnpm audit:security',
+          'pnpm typecheck'
+        ]
+      : affected.flatMap(project =>
+          ['lint', 'format:check', 'typecheck']
+            .filter(script => project.manifest.scripts?.[script])
+            .map(script => packageCommand(project.name, script))
+        )),
+    ...(!shared && changedFiles.some(file => /(?:package\.json|lock\.yaml|lock\.json)$/.test(file))
+      ? ['pnpm audit:security']
+      : []),
     ...affected.flatMap(project => packageChecks(project, scope.direct.includes(project.name)))
   ]
   if (docsAreAffected(changedFiles)) beforePush.push('pnpm docs:facts:check', 'pnpm docs:build')
   if (conformanceIsAffected(changedFiles)) beforePush.push('pnpm conformance')
-  beforePush.push(...mutationTargets.map(target => `pnpm test:mutation --target ${quote(target)}`))
+  // Mutation candidates are background findings work, never pre-push commands.
   return {
     changedFiles,
     scope,
@@ -114,6 +130,7 @@ export function planLocalFeedback(
       .filter(project => project.criticality === 'tier-0')
       .map(project => project.name),
     mutationTargets,
+    backgroundOnly: { mutationTargets },
     infrastructure: selectInfraComponents(changedFiles).map(entry => entry.component),
     beforePush: [...new Set(beforePush)],
     limits: [

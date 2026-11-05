@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-01",
-  "reviewBy": "2026-10-31",
+  "lastReviewed": "2026-11-04",
+  "reviewBy": "2026-12-04",
   "owner": "ts-stack-maintainers",
   "tool": {
     "package": "@stryker-mutator/core",
-    "version": "9.6.1",
+    "version": "10.1.1",
     "config": "governance/mutation-testing/stryker.config.mjs",
     "targets": "governance/mutation-testing/targets.mjs",
     "runner": "scripts/mutation-testing.mjs",
@@ -14,7 +14,8 @@
     "scheduledWorkflow": ".github/workflows/mutation-tests.yml",
     "reportRetentionDays": 30,
     "propertyRuns": 300,
-    "propertySeed": 3242026
+    "propertySeed": 3242026,
+    "admission": "background-only"
   },
   "targets": [
     {

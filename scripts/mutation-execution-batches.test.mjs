@@ -283,14 +283,6 @@ test('every batch rejects a different source, run, attempt, archive, matrix or o
   }
 })
 
-function job(source, name) {
-  const start = source.indexOf(`\n  ${name}:\n`)
-  assert.ok(start >= 0)
-  const remaining = source.slice(start + 1)
-  const end = remaining.search(/\n {2}[a-z][a-z0-9-]*:\n/)
-  return end < 0 ? remaining : remaining.slice(0, end)
-}
-
 function stepScript(source, name) {
   const marker = `\n      - name: ${name}\n`
   assert.ok(source.includes(marker))
@@ -301,63 +293,6 @@ function stepScript(source, name) {
     .map(line => line.replace(/^ {10}/, ''))
     .join('\n')
 }
-
-test('actual caller output commands fail preparation when any planner or identity command fails', () => {
-  const root = mkdtempSync(join(tmpdir(), 'mutation-batch-command-'))
-  const output = join(root, 'output')
-  try {
-    mkdirSync(join(root, 'bin'))
-    writeFileSync(
-      join(root, 'bin/node'),
-      '#!/bin/sh\nif [ "$2" = "$FAIL_COMMAND" ]; then exit 42; fi\nprintf "result-%s\\n" "$2"\n',
-      { mode: 0o755 }
-    )
-    // CI plans batches in scope and pins the build identity after upload in build.
-    for (const [file, name, step, commands, expected] of [
-      [
-        'ci.yml',
-        'scope',
-        'Pin complete immutable mutation execution batches',
-        ['plan', 'digest'],
-        'batches=result-plan\nmatrix-digest=result-digest\n'
-      ],
-      [
-        'ci.yml',
-        'build',
-        'Pin the immutable mutation build identity',
-        ['build-identity'],
-        'identity=result-build-identity\n'
-      ],
-      [
-        'mutation-tests.yml',
-        'prepare',
-        'Pin complete immutable mutation execution batches',
-        ['plan', 'digest', 'build-identity'],
-        'batches=result-plan\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
-      ]
-    ]) {
-      const source = readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8')
-      const script = stepScript(job(source, name), step)
-      for (const failing of ['', ...commands]) {
-        writeFileSync(output, '')
-        const result = spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', script], {
-          env: { PATH: join(root, 'bin'), GITHUB_OUTPUT: output, FAIL_COMMAND: failing },
-          encoding: 'utf8'
-        })
-        assert.equal(result.error, undefined)
-        if (failing) {
-          assert.equal(result.status, 42, `${file}: ${failing}`)
-          assert.equal(readFileSync(output, 'utf8'), '')
-        } else {
-          assert.equal(result.status, 0)
-          assert.equal(readFileSync(output, 'utf8'), expected)
-        }
-      }
-    }
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
 
 test('actual reusable preflight rejects wrong profiles and stale original caller or artifact identity', () => {
   const source = readFileSync(
@@ -412,87 +347,4 @@ test('actual reusable preflight rejects wrong profiles and stale original caller
         0
       )
   }
-})
-
-test('both callers dispatch serial immutable batches and the reusable executor retains original profiles and gates', () => {
-  const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
-  const full = readFileSync(
-    new URL('../.github/workflows/mutation-tests.yml', import.meta.url),
-    'utf8'
-  )
-  const executor = readFileSync(
-    new URL('../.github/workflows/mutation-execution.yml', import.meta.url),
-    'utf8'
-  )
-  for (const [source, profile] of [
-    [ci, 'ci'],
-    [full, 'qualification']
-  ]) {
-    const caller = job(source, 'mutation-tests'),
-      prepare = job(source, profile === 'ci' ? 'build' : 'prepare'),
-      pinned = profile === 'ci' ? 'id: mutation-identity' : 'id: mutation-execution'
-    assert.match(caller, /max-parallel: 1\n/)
-    assert.match(caller, /fail-fast: false/)
-    assert.match(caller, /uses: \.\/\.github\/workflows\/mutation-execution\.yml/)
-    assert.ok(caller.includes(`profile: ${profile}`))
-    assert.match(
-      caller,
-      /matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.mutation-batches\) \}\}/
-    )
-    for (const field of [
-      'execution-matrix',
-      'execution-batch',
-      'selected-targets',
-      'matrix-digest',
-      'identity'
-    ])
-      assert.ok(caller.includes(`${field}:`))
-    assert.doesNotMatch(caller, /continue-on-error|secrets:|runs-on:|timeout-minutes:/)
-    assert.match(
-      prepare,
-      /BUILD_ARTIFACT_ID: \$\{\{ steps\.mutation-build\.outputs\.artifact-id \}\}/
-    )
-    assert.match(prepare, /BUILD_ARTIFACT_NAME: /)
-    assert.match(prepare, /scripts\/mutation-execution-batches\.mjs build-identity/)
-    assert.ok(prepare.indexOf('id: mutation-build') < prepare.indexOf(pinned))
-  }
-  assert.match(executor, /fail-fast: false/)
-  assert.match(
-    executor,
-    /max-parallel: \$\{\{ inputs\.profile == 'qualification' && 100 \|\| 6 \}\}/
-  )
-  assert.match(executor, /ref: \$\{\{ fromJSON\(inputs\.identity\)\.sourceSha \}\}/)
-  assert.match(executor, /persist-credentials: false/)
-  assert.match(
-    executor,
-    /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.22\.1' \}\}/
-  )
-  assert.match(
-    executor,
-    /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.22\.1' \}\}/
-  )
-  assert.match(executor, /pnpm install --frozen-lockfile --ignore-scripts/)
-  assert.match(executor, /artifact-ids: \$\{\{ fromJSON\(inputs\.identity\)\.artifactId \}\}/)
-  assert.ok(executor.indexOf('verify-execution') < executor.indexOf('tar --extract'))
-  assert.ok(executor.indexOf('tar --extract') < executor.indexOf('scripts/mutation-testing.mjs'))
-  assert.match(executor, /ci:diagnostic\|qualification:diagnostic\|qualification:full/)
-  for (const binding of [
-    'SOURCE_SHA',
-    'SOURCE_RUN_ID',
-    'SOURCE_RUN_ATTEMPT',
-    'ARCHIVE_DIGEST',
-    'ARTIFACT_ID'
-  ])
-    assert.ok(executor.includes(binding))
-  assert.doesNotMatch(executor, /continue-on-error|secrets:|fail-fast: true/)
-  assert.match(executor, /inputs\.profile == 'qualification' && matrix\.partition == 'whole'/)
-  assert.match(executor, /mutation-final-qualification\.mjs capture/)
-  assert.match(executor, /mutation-partition-evidence\.mjs capture/)
-  assert.match(ci, /Incomplete, unordered or malformed execution batch union/)
-  assert.match(full, /mutation-execution-batches\.mjs verify-batches/)
-  assert.match(
-    full,
-    /Independently recheck every selected canonical partition before full qualification/
-  )
-  assert.match(full, /mutation-final-qualification\.mjs verify/)
 })

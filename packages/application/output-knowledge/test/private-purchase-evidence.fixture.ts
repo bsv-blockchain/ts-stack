@@ -6,9 +6,8 @@ import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
  * These unit fixtures do not install a chain or establish purchase/domain validity.
  * The coordinator separately requires both incoming and combined verification.
  */
-export function purchaseEvidenceFixture(maximumUpdates = 4) {
-  const base = purchaseStoreFixture(),
-    original = base.custody.original,
+export function purchaseEvidenceFixture(maximumUpdates = 4, base = purchaseStoreFixture()) {
+  const original = base.custody.original,
     funding = new Transaction(
       1,
       [

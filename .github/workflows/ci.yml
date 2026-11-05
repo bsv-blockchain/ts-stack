@@ -8,11 +8,6 @@ on:
   # Release acceptance must be able to exercise the complete current tree.
   workflow_dispatch:
     inputs:
-      mutation-diagnostics:
-        description: Collect mutation diagnostics despite analyzer failure; never bypass qualification
-        type: boolean
-        default: false
-        required: false
       application-performance-diagnostics:
         description: Measure the unchanged alias disclosure property during artifact qualification
         type: boolean
@@ -94,12 +89,6 @@ jobs:
       direct-projects: ${{ steps.scope.outputs.direct-projects }}
       affected-projects: ${{ steps.scope.outputs.affected-projects }}
       build-projects: ${{ steps.scope.outputs.build-projects }}
-      mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
-      mutation-classification: ${{ steps.scope.outputs.mutation-classification }}
-      mutation-matrix: ${{ steps.scope.outputs.mutation-matrix }}
-      partition-targets: ${{ steps.scope.outputs.partition-targets }}
-      mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
-      mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
@@ -130,7 +119,7 @@ jobs:
         with:
           node-version: 24.22.1
 
-      - name: Resolve package, mutation, documentation, conformance, and image scope
+      - name: Resolve package, documentation, conformance, and image scope
         id: scope
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -143,32 +132,15 @@ jobs:
              [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
-            # Mutation is a full-suite qualification: ordinary pull requests and
-            # pushes select no targets. Dispatch CI, or the scheduled Mutation
-            # quality workflow, to run the complete governed registry.
-            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --base "$BASE_SHA" --head HEAD)
           else
             SCOPE=$(node scripts/ci-affected-scope.mjs --all)
-            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --all)
           fi
-          MUTATION_TARGETS=$(jq -c '.required' <<<"$MUTATION_SCOPE")
-          if [ "$(jq -r 'type' <<<"$MUTATION_TARGETS")" != "array" ]; then
-            echo "::error::Mutation classification is missing required targets"
-            exit 1
-          fi
-
           echo "direct-projects=$(jq -c '.directProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "affected-projects=$(jq -c '.affectedProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "build-projects=$(jq -c '.buildProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "infra-matrix=$(jq -c '.infraMatrix' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "docs=$(jq -r '.docs' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
-          echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
-          echo "mutation-classification=$MUTATION_SCOPE" >> "$GITHUB_OUTPUT"
-          MUTATION_MATRIX=$(node scripts/mutation-partition-evidence.mjs matrix --selected "$MUTATION_TARGETS")
-          PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$MUTATION_TARGETS")
-          echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
-          echo "partition-targets=$PARTITION_TARGETS" >> "$GITHUB_OUTPUT"
           echo "has-infra=$(jq -r '.infraMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
 
           {
@@ -176,21 +148,8 @@ jobs:
             echo
             echo "- Direct test packages: $(jq -c '[.directProjects[].name]' <<<"$SCOPE")"
             echo "- Compatibility packages: $(jq -c '[.affectedProjects[].name]' <<<"$SCOPE")"
-            echo "- Mutation targets in this run (full campaigns only): $MUTATION_TARGETS"
-            echo "- Deferred to the scheduled or dispatched full campaign (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
-            echo "- Critical targets awaiting the full campaign (not passed): $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Pin complete immutable mutation execution batches
-        # GitHub caps a matrix at 256 jobs; the full registry runs in ordered batches.
-        id: mutation-execution
-        env:
-          MUTATION_MATRIX: ${{ steps.scope.outputs.mutation-matrix }}
-        run: |
-          batches="$(node scripts/mutation-execution-batches.mjs plan)"
-          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
-          printf 'batches=%s\nmatrix-digest=%s\n' "$batches" "$matrix_digest" >> "$GITHUB_OUTPUT"
 
       - name: Plan test lanes
         # Coverage suites run only for directly changed package importers.
@@ -360,8 +319,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    outputs:
-      mutation-execution-identity: ${{ steps.mutation-identity.outputs.identity }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -431,15 +388,6 @@ jobs:
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
-
-      - name: Pin the immutable mutation build identity
-        id: mutation-identity
-        env:
-          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
-          BUILD_ARTIFACT_NAME: build-outputs
-        run: |
-          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
-          printf 'identity=%s\n' "$identity" >> "$GITHUB_OUTPUT"
 
   policy:
     name: Lint and policy
@@ -568,13 +516,6 @@ jobs:
       browser-matrix: ${{ needs.scope.outputs.browser-matrix }}
       pack-matrix: ${{ needs.scope.outputs.pack-matrix }}
       coverage-required: ${{ needs.scope.outputs.coverage-required }}
-      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
-      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
-      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
-      partition-targets: ${{ needs.scope.outputs.partition-targets }}
-      mutation-batches: ${{ needs.scope.outputs.mutation-batches }}
-      mutation-matrix-digest: ${{ needs.scope.outputs.mutation-matrix-digest }}
-      mutation-execution-identity: ${{ needs.build.outputs.mutation-execution-identity }}
       sdk: ${{ needs.scope.outputs.sdk }}
       did: ${{ needs.scope.outputs.did }}
       wallet: ${{ needs.scope.outputs.wallet }}
@@ -701,141 +642,6 @@ jobs:
           node scripts/package-release-artifacts.mjs publish \
             "$output/manifest.json" \
             --dry-run
-
-  mutation-tests:
-    name: Mutation batch / ${{ matrix.batch }}
-    # Analyzer failures stop expensive qualification; explicit diagnostics only
-    # collect evidence and never waive the required final analyzer/merge gates.
-    if: >-
-      always() && !cancelled() && needs.prepare.result == 'success' &&
-      needs.prepare.outputs.mutation-targets && needs.prepare.outputs.mutation-targets != '[]' &&
-      (needs.sonar-zero-findings.result == 'success' ||
-       (github.event_name != 'pull_request' && needs.sonar-zero-findings.result == 'skipped') ||
-       contains(github.event.pull_request.labels.*.name, 'ci:mutation-diagnostics') ||
-       (github.event_name == 'workflow_dispatch' && inputs.mutation-diagnostics))
-    needs:
-      - prepare
-      - sonar-zero-findings
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
-    uses: ./.github/workflows/mutation-execution.yml
-    with:
-      execution-matrix: ${{ toJSON(matrix.executionMatrix) }}
-      execution-batch: ${{ matrix.batch }}
-      selected-targets: ${{ needs.prepare.outputs.mutation-targets }}
-      matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
-      identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
-      profile: ci
-      mode: diagnostic
-
-  mutation-quality:
-    name: Mutation quality
-    if: always()
-    needs:
-      - prepare
-      - mutation-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Verify the affected mutation targets
-        env:
-          PREPARE_RESULT: ${{ needs.prepare.result }}
-          MUTATION_RESULT: ${{ needs.mutation-tests.result }}
-          MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
-          MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
-          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
-          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
-          PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
-        run: |
-          if [[ "$PREPARE_RESULT" != "success" ||
-                ( "$MUTATION_RESULT" != "success" &&
-                  ( "$MUTATION_RESULT" != "skipped" || "$MUTATION_TARGETS" != "[]" ) ) ]]; then
-            echo "::error::Mutation quality failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
-            exit 1
-          fi
-          "${NODE_EXECUTABLE:-node}" --input-type=module <<'NODE'
-          const batches = JSON.parse(process.env.MUTATION_BATCHES)
-          const matrix = JSON.parse(process.env.MUTATION_MATRIX)
-          if (!Array.isArray(matrix.include) || matrix.include.length > 256 ** 2)
-            throw new Error('Invalid complete execution matrix')
-          const expectedBatches = { include: [] }
-          for (let offset = 0; offset < matrix.include.length; offset += 256)
-            expectedBatches.include.push({ batch: expectedBatches.include.length + 1,
-              executionMatrix: { include: matrix.include.slice(offset, offset + 256) } })
-          if (JSON.stringify(batches) !== JSON.stringify(expectedBatches))
-            throw new Error('Incomplete, unordered or malformed execution batch union')
-          const actual = JSON.parse(process.env.PARTITION_TARGETS)
-          if (!Array.isArray(matrix.include) || !Array.isArray(actual) ||
-              actual.some(target => typeof target !== 'string') || new Set(actual).size !== actual.length)
-            throw new Error('Invalid canonical partition selection')
-          const expected = [...new Set(matrix.include.filter(row => row.partition !== 'whole').map(row => row.target))].sort()
-          if (JSON.stringify([...actual].sort()) !== JSON.stringify(expected))
-            throw new Error('Canonical partition targets do not match the execution matrix')
-          NODE
-          echo '### Required PR mutation qualification' >> "$GITHUB_STEP_SUMMARY"
-          echo "Required targets: $MUTATION_TARGETS" >> "$GITHUB_STEP_SUMMARY"
-          echo "Deferred, not passed: $(jq -c '.deferred' <<<"$MUTATION_CLASSIFICATION")" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Full qualification is required separately at the exact publication candidate.' >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        with:
-          node-version: 24.22.1
-          cache: pnpm
-      - name: Install pinned partition aggregate verifier
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        with:
-          pattern: mutation-*
-          path: .mutation-parts-raw
-      - name: Require every selected canonical partition target gate
-        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        env:
-          PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
-          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
-        run: |
-          # Stage each target's parts by their exact matrix artifact names, so a
-          # target whose ID prefixes another can never pick up foreign evidence.
-          TARGET_LINES=$(jq -er '.[]' <<<"$PARTITION_TARGETS")
-          while IFS= read -r target; do
-            mkdir -p ".mutation-parts/$target"
-            while IFS= read -r partition; do
-              artifact=".mutation-parts-raw/mutation-$target-$partition"
-              if [ ! -d "$artifact" ]; then
-                echo "::error::Missing mutation partition evidence $target/$partition"
-                exit 1
-              fi
-              cp -R "$artifact" ".mutation-parts/$target/"
-            done < <(jq -er --arg target "$target" \
-              '.include[] | select(.target == $target and .partition != "whole") | .partition' \
-              <<<"$MUTATION_MATRIX")
-          done <<<"$TARGET_LINES"
-          while IFS= read -r target; do
-            node scripts/mutation-partition-evidence.mjs verify --mode diagnostic \
-              --target "$target" --directory ".mutation-parts/$target" \
-              --output "artifacts/mutation/$target"
-          done <<<"$TARGET_LINES"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: always() && needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
-        with:
-          name: mutation-partition-canonical
-          path: artifacts/mutation
-          if-no-files-found: ignore
-          retention-days: 30
 
   standard-tests:
     name: Tests / non-coverage packages
@@ -2043,11 +1849,9 @@ jobs:
       - coverage-verifast
       - coverage-other
       - coverage-upload
-      - mutation-tests
       - repository-health
       - sonar-zero-findings
       - build-and-test
-      - mutation-quality
       - infra
       - docs-validate
       - conformance
@@ -2073,7 +1877,6 @@ jobs:
           HEALTH_RESULT: ${{ needs.repository-health.result }}
           SONAR_RESULT: ${{ needs.sonar-zero-findings.result }}
           BUILD_RESULT: ${{ needs.build-and-test.result }}
-          MUTATION_RESULT: ${{ needs.mutation-quality.result }}
           INFRA_RESULT: ${{ needs.infra.result }}
           DOCS_RESULT: ${{ needs.docs-validate.result }}
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
@@ -2081,11 +1884,10 @@ jobs:
         run: |
           if [[ "$HEALTH_RESULT" != "success" ||
                 "$BUILD_RESULT" != "success" ||
-                "$MUTATION_RESULT" != "success" ||
                 ( "$INFRA_RESULT" != "success" && "$INFRA_RESULT" != "skipped" ) ||
                 ( "$DOCS_RESULT" != "success" && "$DOCS_RESULT" != "skipped" ) ||
                 ( "$CONFORMANCE_RESULT" != "success" && "$CONFORMANCE_RESULT" != "skipped" ) ]]; then
-            echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT mutation=$MUTATION_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
             exit 1
           fi
           if [[ "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ]]; then

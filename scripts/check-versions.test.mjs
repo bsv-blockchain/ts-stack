@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { acceptsPeerVersion } from './check-versions.mjs'
+import { acceptsPeerVersion, checkCoverageSemantics } from './check-versions.mjs'
+import { fileURLToPath } from 'node:url'
 import { syncVersions } from './sync-versions.mjs'
 
 const cases = [
@@ -142,4 +143,55 @@ test('dry-run keeps workspace and standalone fixture bytes unchanged', t => {
   syncVersions({ root, packageList, dryRun: true })
   for (const [name, path] of Object.entries(files))
     assert.equal(readFileSync(path, 'utf8'), before[name])
+})
+
+test('coverage semantics follows the actual owned wrapper arguments for both overlay packages', t => {
+  t.mock.method(console, 'log', () => {})
+  for (const name of ['overlay', 'overlay-express']) {
+    const directory = fileURLToPath(new URL(`../packages/overlays/${name}/`, import.meta.url))
+    const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
+    assert.equal(checkCoverageSemantics(manifest, directory), 0)
+  }
+})
+
+test('coverage semantics rejects unknown wrappers, lookalike paths and added shell commands', t => {
+  t.mock.method(console, 'log', () => {})
+  const directory = fileURLToPath(new URL('../packages/overlays/overlay/', import.meta.url))
+  for (const coverage of [
+    'node node_modules/jest/bin/jest.js --coverage',
+    'node ../../../scripts/unknown-coverage.mjs',
+    'node ../../scripts/jest-project-coverage.mjs',
+    'echo node ../../../scripts/jest-project-coverage.mjs',
+    'node ../../../scripts/jest-project-coverage.mjs --extra',
+    'node ../../../scripts/jest-project-coverage.mjs && echo ready'
+  ])
+    assert.equal(
+      checkCoverageSemantics(
+        {
+          name: 'fixture',
+          scripts: { test: 'node --experimental-vm-modules jest', 'test:coverage': coverage }
+        },
+        directory
+      ),
+      1,
+      coverage
+    )
+})
+
+test('owned coverage wrapper retains missing-passWithNoTests and direct lcov checks', t => {
+  t.mock.method(console, 'log', () => {})
+  const directory = fileURLToPath(new URL('../packages/overlays/overlay/', import.meta.url))
+  const pkg = {
+    name: 'fixture',
+    scripts: {
+      test: 'jest --passWithNoTests',
+      'test:coverage': 'node ../../../scripts/jest-project-coverage.mjs'
+    }
+  }
+  assert.equal(checkCoverageSemantics(pkg, directory), 1)
+  pkg.scripts.test = 'jest'
+  pkg.scripts['test:coverage'] = 'jest --coverage --coverageReporters=json'
+  assert.equal(checkCoverageSemantics(pkg, directory), 1)
+  pkg.scripts['test:coverage'] += ' --coverageReporters=lcov'
+  assert.equal(checkCoverageSemantics(pkg, directory), 0)
 })
