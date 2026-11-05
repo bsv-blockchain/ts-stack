@@ -270,7 +270,7 @@ test('root storage keeps the entire companion module in its nonempty first datab
   for (const part of next) assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
 })
 
-test('new ranged targets retain future sources once and require complete root aggregation', () => {
+test('new ranged targets retain future sources once and complete canonical inventory', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   for (const id of semanticTargets.slice(-6)) {
     const canonical = targets[id],
@@ -284,24 +284,6 @@ test('new ranged targets retain future sources once and require complete root ag
     for (const part of parts)
       assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
   }
-  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
-    aggregate = workflow.slice(workflow.indexOf('\n  mutation-quality:')),
-    verify = aggregate.indexOf('name: Require every selected canonical partition target gate')
-  assert.ok(verify > 0)
-  const downloads = aggregate
-    .split(/\n {6}- /)
-    .filter(
-      step =>
-        step.startsWith('uses: actions/download-artifact@') &&
-        step.includes('pattern: mutation-*\n')
-    )
-  assert.equal(downloads.length, 1)
-  assert.ok(downloads[0].includes("if: needs.prepare.outputs.partition-targets != '[]'"))
-  assert.ok(downloads[0].includes('path: .mutation-parts-raw'))
-  assert.ok(aggregate.indexOf(downloads[0]) < verify)
-  assert.match(aggregate.slice(verify), /MUTATION_MATRIX:/)
-  assert.match(aggregate.slice(verify), /select\(\.target == \$target and \.partition != "whole"\)/)
-  assert.match(aggregate.slice(verify), /\.mutation-parts-raw\/mutation-\$target-\$partition/)
   for (const id of ['root-eviction-journal', 'root-eviction-storage'])
     assert.ok(partitionedMutationTargets(Object.keys(targets), targets).includes(id), id)
 })

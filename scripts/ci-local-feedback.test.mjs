@@ -37,10 +37,10 @@ test('local plan separates direct coverage from dependent regression and preserv
   assert.ok(plan.beforePush.includes("pnpm --filter 'b' run test"))
   assert.ok(!plan.beforePush.includes("pnpm --filter 'b' run test:coverage"))
   assert.ok(plan.beforePush.includes("pnpm --filter 'a' run test:property"))
-  assert.ok(plan.beforePush.includes("pnpm test:mutation --target 'critical-a'"))
-  for (const script of ['health:check', 'lint', 'format:check', 'audit:security', 'typecheck']) {
-    assert.ok(plan.beforePush.includes(`pnpm ${script}`))
-  }
+  assert.ok(plan.beforePush.every(command => !command.includes('test:mutation')))
+  assert.deepEqual(plan.backgroundOnly.mutationTargets, ['critical-a'])
+  assert.ok(!plan.beforePush.includes('pnpm typecheck'))
+  assert.ok(!plan.beforePush.includes('pnpm test'))
 })
 
 test('build prerequisites do not become duplicate regression or coverage obligations', () => {

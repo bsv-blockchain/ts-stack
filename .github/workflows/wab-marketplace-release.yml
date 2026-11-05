@@ -77,18 +77,9 @@ jobs:
             exit 1
           fi
 
-  full-mutation:
-    name: Qualify exact source before Marketplace publication
-    needs: source
-    permissions:
-      contents: read
-    uses: ./.github/workflows/mutation-tests.yml
-    with:
-      stop-after-first-failure: true
-
   publish:
-    needs: [source, full-mutation]
-    if: needs.source.result == 'success' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
+    needs: source
+    if: needs.source.result == 'success'
     name: Publish WAB to Marketplace
     runs-on: ubuntu-latest
     permissions:

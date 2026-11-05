@@ -18,8 +18,6 @@ const DEPENDENCY_FIELDS = [
 const PROJECT_REGISTRY_PATH = 'governance/repository-health/projects.json'
 
 const FULL_PACKAGE_CONTROL_PATHS = new Set([
-  '.github/workflows/ci.yml',
-  'scripts/ci-result-gate.mjs',
   'package.json',
   'pnpm-workspace.yaml',
   'tsconfig.base.json',
@@ -61,7 +59,6 @@ export const RUNTIME_COMPONENTS = [
 ]
 
 const FULL_INFRA_CONTROL_PATHS = new Set([
-  '.github/workflows/ci.yml',
   'governance/Dockerfile.container-bases',
   'governance/container-images.json'
 ])

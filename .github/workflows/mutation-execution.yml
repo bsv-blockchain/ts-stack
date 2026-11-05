@@ -41,6 +41,8 @@ permissions: {}
 
 jobs:
   execution:
+    # Retired admission executor, retained for historical tooling only. No active caller.
+    if: false
     name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
     # Native fixtures retain their original MongoDB binary; use its supported kernel.
     # See docs/reference/container-supply-chain.md (SERVER-121912/131779).
