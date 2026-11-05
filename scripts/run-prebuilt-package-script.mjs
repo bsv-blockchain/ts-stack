@@ -27,10 +27,19 @@ export function parseJestShard(value) {
   return `${match[1]}/${match[2]}`
 }
 
+// The sequencer path is also appended to the shell command, so accept only an
+// absolute path to a CommonJS module made of plain path characters.
+export function parseJestSequencer(value) {
+  if (!/^\/[\w./-]+\.cjs$/.test(value ?? '') || value.split('/').includes('..'))
+    throw new Error(`--jest-sequencer must be an absolute .cjs path: ${value}`)
+  return value
+}
+
 export function parseArguments(arguments_) {
   let scriptName = ''
   let ifPresent = false
   let jestShard
+  let jestSequencer
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]
     if (argument === '--if-present') {
@@ -42,12 +51,19 @@ export function parseArguments(arguments_) {
       index += 1
       continue
     }
+    if (argument === '--jest-sequencer') {
+      jestSequencer = parseJestSequencer(arguments_[index + 1])
+      index += 1
+      continue
+    }
     if (argument !== '--script') throw new Error(`Unknown argument: ${argument}`)
     scriptName = arguments_[index + 1] ?? ''
     index += 1
   }
   if (scriptName === '') throw new Error('--script is required')
-  return { scriptName, ifPresent, jestShard }
+  if (jestSequencer !== undefined && jestShard === undefined)
+    throw new Error('--jest-sequencer requires --jest-shard')
+  return { scriptName, ifPresent, jestShard, jestSequencer }
 }
 
 export async function resolvePackageScript(
@@ -66,6 +82,12 @@ export async function resolvePackageScript(
     name: manifest.name ?? packageDirectory,
     command: stripLeadingBuildCommand(script)
   }
+}
+
+export function jestCommand(command, jestShard, jestSequencer) {
+  if (jestShard === undefined) return command
+  const sharded = `${command} --shard=${jestShard}`
+  return jestSequencer === undefined ? sharded : `${sharded} --testSequencer=${jestSequencer}`
 }
 
 async function runCommand(command, packageDirectory) {
@@ -95,12 +117,11 @@ async function main(arguments_) {
       'PREBUILT_PACKAGE_OUTPUTS=1 is required; use the package script directly outside audited CI'
     )
   }
-  const { scriptName, ifPresent, jestShard } = parseArguments(arguments_)
+  const { scriptName, ifPresent, jestShard, jestSequencer } = parseArguments(arguments_)
   const packageDirectory = process.cwd()
   const resolved = await resolvePackageScript(packageDirectory, scriptName, { ifPresent })
   if (resolved === undefined) return
-  const command =
-    jestShard === undefined ? resolved.command : `${resolved.command} --shard=${jestShard}`
+  const command = jestCommand(resolved.command, jestShard, jestSequencer)
   console.log(`Running prebuilt ${resolved.name} ${scriptName}: ${command}`)
   await runCommand(command, packageDirectory)
 }

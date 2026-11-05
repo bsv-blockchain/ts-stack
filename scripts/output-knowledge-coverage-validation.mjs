@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const packageDirectory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
-export const APPLICATION_COVERAGE_SHARDS = 4
+export const APPLICATION_COVERAGE_SHARDS = 6
+export const APPLICATION_COVERAGE_LANE = 'output-knowledge-coverage'
+const require = createRequire(import.meta.url)
+const { planShard } = require('./jest-duration-sequencer.cjs')
 const shardCount = APPLICATION_COVERAGE_SHARDS
 
 // Preserve ECMAScript's UTF-16 code-unit order across runner locales.
@@ -175,4 +179,22 @@ export function mergeCoverageBatchResults(batches, identity, selected) {
   }
   assertCompleteResults(result, selected)
   return result
+}
+
+// Reuse the SDK/wallet duration planner. Estimates choose placement only;
+// unmeasured files retain its default cost and every discovered file is kept.
+export function applicationCoverageShard(tests, seconds, shard) {
+  applicationCoverageBatches(tests)
+  assert.ok(
+    seconds !== null && typeof seconds === 'object' && !Array.isArray(seconds),
+    'missing application coverage durations'
+  )
+  assert.ok(Number.isSafeInteger(shard) && shard >= 1 && shard <= shardCount)
+  const discovery = tests.map(file => ({
+    path: path.join(packageDirectory, file),
+    context: { config: { rootDir: packageDirectory } }
+  }))
+  return planShard(discovery, seconds, shard, shardCount)
+    .map(test => path.relative(packageDirectory, test.path).split(path.sep).join('/'))
+    .toSorted(compareCoveragePaths)
 }

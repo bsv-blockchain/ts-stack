@@ -1,5 +1,5 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
-import { mkdtempSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -204,6 +204,34 @@ async function setup(movable = false, advertisedBytes = 4194304) {
     }
   }
 }
+
+it('uses WAL, full synchronization and the bounded busy timeout on its actual SQLite connection', async () => {
+  const connections = new Set<DatabaseSync>(),
+    exec = DatabaseSync.prototype.exec
+  jest.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSync,
+    sql: string
+  ) {
+    connections.add(this)
+    return exec.call(this, sql)
+  })
+  const f = await setup()
+  const database = [...connections].find(db =>
+    db
+      .prepare('PRAGMA database_list')
+      .all()
+      .some(
+        row =>
+          typeof row.file === 'string' &&
+          row.file !== '' &&
+          realpathSync(row.file) === realpathSync(f.path)
+      )
+  )
+  expect(database).toBeDefined()
+  expect(database!.prepare('PRAGMA journal_mode').get()).toMatchObject({ journal_mode: 'wal' })
+  expect(database!.prepare('PRAGMA synchronous').get()).toMatchObject({ synchronous: 2 })
+  expect(database!.prepare('PRAGMA busy_timeout').get()).toMatchObject({ timeout: 1000 })
+})
 
 it('publishes through its backwards-compatible journal facet and exposes no generic index writer', async () => {
   const f = await setup()
@@ -604,17 +632,28 @@ it('requires file-backed storage, a synchronous clock and matching installed pol
   const f = await setup()
   for (const path of [':memory:', 'file:private.db', 3])
     expect(() => SQLiteProposalChannelStore.create({ ...f.options, path: path as string })).toThrow(
-      /file and synchronous clock/
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Proposal channel storage requires a file and synchronous clock'
+      })
     )
   for (const now of [undefined, async () => '10'])
     expect(() =>
       SQLiteProposalChannelStore.create({ ...f.options, now: now as unknown as () => string })
-    ).toThrow(/file and synchronous clock/)
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Proposal channel storage requires a file and synchronous clock'
+      })
+    )
   const policies = new ProposalPolicyRegistry([
     { policy: new AuthorDocumentPolicy(), parameters: { maxTextBytes: 64 } }
   ])
   expect(() => SQLiteProposalChannelStore.create({ ...f.options, policies })).toThrow(
-    /policies differ/
+    expect.objectContaining({
+      code: 'context-changed',
+      message: 'Proposal channel policies differ from journal lifecycle'
+    })
   )
   expect(() =>
     SQLiteProposalChannelStore.create({ ...f.options, path: f.path + '/unavailable.db' })
@@ -629,12 +668,17 @@ it('rejects blocked or duplicated visibility fences and preserves compatible jou
     access: recipient,
     guards: []
   })
-  await expect(f.store.authorizeLookup(f.policy, auth)).rejects.toThrow(/duplicates/)
+  await expect(f.store.authorizeLookup(f.policy, auth)).rejects.toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Host authorization duplicates the proposal visibility guard'
+    })
+  )
   const guard = auth.guards[0]
   await f.store.sessions.blockGuard(guard.id, guard.revision, 'ab'.repeat(32))
   await expect(
     f.store.authorizeLookup(f.policy, { principal: recipient, access: recipient, guards: [] })
-  ).rejects.toMatchObject({ code: 'unauthorized' })
+  ).rejects.toMatchObject({ code: 'unauthorized', message: 'Proposal visibility is being changed' })
   const wrong = structuredClone(f.first)
   wrong.expectedToken = 'ff'.repeat(32)
   expect(await f.store.journal.commit(wrong)).toMatchObject({ status: 'conflict' })
@@ -646,7 +690,9 @@ it('refuses startup when the journal reader cannot provide promised history', as
   await f.store.journal.commit(f.first)
   await f.store.close()
   jest.spyOn(ProposalJournalState.prototype, 'read').mockReturnValue([])
-  expect(() => f.reopen()).toThrow(/history is incomplete/)
+  expect(() => f.reopen()).toThrow(
+    expect.objectContaining({ code: 'unavailable', message: 'Proposal feed history is incomplete' })
+  )
 })
 
 it.each(['count', 'absent', 'different'] as const)(
@@ -680,7 +726,15 @@ it.each(['count', 'absent', 'different'] as const)(
           }
         }
       })
-    expect(() => f.reopen()).toThrow(fault === 'count' ? /unrelated keys/ : /row differs/)
+    expect(() => f.reopen()).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message:
+          fault === 'count'
+            ? 'Proposal feed index contains unrelated keys'
+            : 'Proposal feed current row differs from journal state'
+      })
+    )
   }
 )
 
@@ -721,7 +775,10 @@ it('validates the private feed profile independently of generic session validati
     const value = structuredClone(opening)
     change(value)
     expect(() => domain.transaction(() => privacy.opening(value))).toThrow(
-      /exact authenticated query/
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Private proposal feed requires its exact authenticated query profile'
+      })
     )
   }
   for (const change of [
@@ -740,11 +797,21 @@ it('validates the private feed profile independently of generic session validati
   ]) {
     const value = structuredClone(opening)
     change(value)
-    expect(() => domain.transaction(() => privacy.opening(value))).toThrow(/complete groups/)
+    expect(() => domain.transaction(() => privacy.opening(value))).toThrow(
+      expect.objectContaining({
+        code: 'unsupported',
+        message: 'Proposal lookup contract cannot carry its sealed complete groups'
+      })
+    )
   }
   const wrongGuard = structuredClone(opening)
   wrongGuard.guards.find(guard => guard.failure === 'reset-required')!.failure = 'unauthorized'
-  expect(() => domain.transaction(() => privacy.opening(wrongGuard))).toThrow(/visibility guard/)
+  expect(() => domain.transaction(() => privacy.opening(wrongGuard))).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Proposal lookup opening omitted its durable visibility guard'
+    })
+  )
   const unknown = structuredClone(f.first.next)
   unknown.proposal.body.policy.digest = 'ff'.repeat(32)
   expect(() => domain.transaction(() => privacy.publish(undefined, unknown))).toThrow(
