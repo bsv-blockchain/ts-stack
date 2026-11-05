@@ -179,6 +179,13 @@
       "migration": "No BRC100 call, wire or wallet-data migration. maxPaymentHeaderBytes is now ignored, including existing explicit values: move transport policy to the HTTP server, CDN, proxy or WAF and remove the deprecated option. Validate the complete HTTP route for supported payment proofs. Published 2.1.8 is verified against protected release 36052862859 and its immutable source artifacts. SDK consumers may retain ^2.1.6 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative. Consumers may keep their current SDK or install @bsv/sdk 4.0.1; no migration is required for this package. SDK4 consumers must use @bsv/sdk >=4.0.1 <5; SDK2/3 consumers retain their existing ranges. No application-wallet wire or data migration is required."
     },
     {
+      "name": "@bsv/rabin-permission-module",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the BRC-206 p rabin wallet module. encrypt carries a modulus or a canonical Rabin signature for the 2048, 3072, and 4096 bit widths. Keys are derived with BRC-42 and HKDF-SHA256. Signatures verify under R\u00fanar's (signature^2 + padding) mod n equation. decrypt is rejected.",
+      "migration": "No existing consumer migration is required; this is the first release. Wallet hosts register the module under the rabin scheme with a BRC-42 key deriver and an authorization callback for security levels 1 and 2 and for privileged requests."
+    },
+    {
       "name": "@bsv/sdk",
       "publishedVersion": "4.0.1",
       "releaseType": "none",
