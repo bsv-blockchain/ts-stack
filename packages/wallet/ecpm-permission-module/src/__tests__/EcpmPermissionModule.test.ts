@@ -1,6 +1,7 @@
 import {
   BigNumber,
   CachedKeyDeriver,
+  KeyDeriver,
   Curve,
   Point,
   PrivateKey,
@@ -620,7 +621,7 @@ describe('EcpmPermissionModule', () => {
       () =>
         new EcpmPermissionModule({
           keyDeriver: new CachedKeyDeriver(new PrivateKey(101)),
-          authorizationTTL: 0
+          authorizationTTL: -1
         })
     ).toThrow(/authorizationTTL/)
     expect(
@@ -706,5 +707,67 @@ describe('EcpmPermissionModule', () => {
     await expect(
       execute(pendingModule, authorizedArgs, 'getPublicKey', 'pending-overflow.example')
     ).rejects.toThrow('authorization queue is full')
+  })
+})
+
+describe('external authorization lifecycle', () => {
+  it('checks the trusted host on every call, including seekPermission=false', async () => {
+    const keyDeriver = new KeyDeriver(new PrivateKey(17))
+    let allowed = true
+    const authorize = jest.fn(
+      async (request: { seekPermission?: boolean }) => allowed && request.seekPermission === false
+    )
+    const module = new EcpmPermissionModule({ keyDeriver, authorizationTTL: 0, authorize })
+    const point = new PrivateKey(31).toPublicKey().toString()
+    const request = {
+      method: 'getPublicKey',
+      originator: 'poker.example',
+      args: {
+        protocolID: [2, `p ecpm apply ${point} poker cards`],
+        keyID: 'one',
+        counterparty: 'self',
+        seekPermission: false
+      }
+    }
+    await module.handleRequest(request, async () => ({}))
+    allowed = false
+    await expect(module.handleRequest(request, async () => ({}))).rejects.toThrow(/denied/)
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+  it('does not join a pending consent when a no-prompt probe arrives', async () => {
+    let answer!: (value: boolean) => void
+    const authorize = jest.fn((request: { seekPermission?: boolean }) =>
+      request.seekPermission === false
+        ? Promise.resolve(false)
+        : new Promise<boolean>(resolve => {
+            answer = resolve
+          })
+    )
+    const module = new EcpmPermissionModule({
+      keyDeriver: new KeyDeriver(new PrivateKey(17)),
+      authorizationTTL: 0,
+      authorize
+    })
+    const point = new PrivateKey(31).toPublicKey().toString()
+    const request = {
+      method: 'getPublicKey',
+      originator: 'poker.example',
+      args: {
+        protocolID: [2, `p ecpm apply ${point} poker cards`],
+        keyID: 'one',
+        counterparty: 'self'
+      }
+    }
+    const pending = module.handleRequest(request, async () => ({}))
+    await Promise.resolve()
+    await expect(
+      module.handleRequest(
+        { ...request, args: { ...request.args, seekPermission: false } },
+        async () => ({})
+      )
+    ).rejects.toThrow(/denied/)
+    expect(authorize).toHaveBeenCalledTimes(2)
+    answer(true)
+    await pending
   })
 })

@@ -68,10 +68,10 @@ export class EcpmPermissionModule implements PermissionsModule {
     if (
       typeof authorizationTTL !== 'number' ||
       !Number.isSafeInteger(authorizationTTL) ||
-      authorizationTTL <= 0 ||
+      authorizationTTL < 0 ||
       authorizationTTL > MAX_AUTHORIZATION_TTL
     ) {
-      throw new RangeError('ECPM: authorizationTTL must be between 1 ms and 24 hours')
+      throw new RangeError('ECPM: authorizationTTL must be between 0 ms and 24 hours')
     }
     const privilegedKeyDeriver = ownedOptions.privilegedKeyDeriver
     if (privilegedKeyDeriver !== undefined && typeof privilegedKeyDeriver !== 'function') {
@@ -248,7 +248,8 @@ export class EcpmPermissionModule implements PermissionsModule {
       privileged: parsed.privileged,
       privilegedReason: parsed.privilegedReason,
       operation: parsed.operation,
-      point: parsed.point
+      point: parsed.point,
+      seekPermission: parsed.args.seekPermission
     }
     if (authorization.securityLevel === 0 && !authorization.privileged) return
 
@@ -269,11 +270,19 @@ export class EcpmPermissionModule implements PermissionsModule {
     if (expiry != null && expiry > now) return
     this.#grants.delete(scope)
 
-    if (parsed.args.seekPermission === false) {
+    if (parsed.args.seekPermission === false && this.#authorizationTTL !== 0) {
       throw new Error('ECPM: permission is required and seekPermission is false')
     }
     if (this.#authorize == null) {
       throw new Error('ECPM: no authorization handler is configured')
+    }
+
+    // A no-prompt probe must not join a pending user decision. The host checks
+    // already-granted state independently when it owns the lifecycle.
+    if (parsed.args.seekPermission === false) {
+      if ((await this.#authorize(authorization)) !== true)
+        throw new Error('ECPM: user denied permission')
+      return
     }
 
     let pending = this.#pendingGrants.get(scope)
@@ -295,7 +304,7 @@ export class EcpmPermissionModule implements PermissionsModule {
     if (this.#grants.size >= MAX_CACHED_GRANTS) {
       this.#grants.delete(this.#grants.keys().next().value!)
     }
-    this.#grants.set(scope, Date.now() + this.#authorizationTTL)
+    if (this.#authorizationTTL !== 0) this.#grants.set(scope, Date.now() + this.#authorizationTTL)
   }
 
   async #selectKeyDeriver(parsed: ParsedEcpmRequest): Promise<EcpmKeyDeriver> {
