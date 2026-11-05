@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.13'
+version: '1.8.14'
 last_updated: '2026-11-04'
 last_verified: '2026-11-04'
 review_cadence_days: 30
@@ -245,11 +245,11 @@ pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
 
-The application output-knowledge coverage suite uses four isolated serial Jest shards
+The application output-knowledge coverage suite uses six duration-balanced serial Jest shards
 within the existing coverage matrix. Each retains the original complete discovery,
 serial native worker, property cases and per-test deadlines. Its ordinary local
 `test:coverage` command remains a single complete run with the original global
-thresholds. CI requires all four shards, then independently discovers the complete
+thresholds. CI requires all six shards, then independently discovers the complete
 suite again and checks a disjoint, exact execution union. Failed, missing, pending,
 todo or skipped tests and mismatched source, run, attempt or configuration fail
 qualification. The aggregate merges the complete Istanbul maps and applies all four
@@ -271,6 +271,36 @@ entire test or coverage maps. Test-union, identity and coverage requirements rem
 unchanged.
 The three reporting libraries are direct, exact-version development dependencies
 already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
+
+## Application coverage placement
+
+The four path-hash application coverage jobs in normal CI run
+[41966872885](https://github.com/bsv-blockchain/ts-stack/actions/runs/41966872885)
+all passed, but lasted 10m58s, 10m44s, 9m38s and 21m17s. The last shard held
+1,154 seconds of timed test work while the others held 456–541 seconds.
+`output-knowledge-coverage` records the 67 per-file durations of five seconds or
+more from those complete logs, rounded up; unmeasured files retain the existing
+two-second default. The existing SDK/wallet duration planner assigns the full
+current discovery longest-first to six least-loaded shards. All 256 current
+files remain selected exactly once. The estimates are 507–509 seconds per
+shard, not a new elapsed-time result; the owning PR's ordinary coverage jobs
+and complete aggregate supply the measured result.
+
+Collection and aggregation independently recompute the canonical placement.
+The source/run/attempt/configuration identity now also binds the planner and
+its duration data. Each shard retains all instrumented source files, the three
+existing fresh serial native-history batches, one-worker/1GB ordinary execution,
+all original property inputs and deadlines, and the unchanged 35-minute job
+bound. The aggregate retains every raw same-attempt batch, exact successful test
+union, complete Istanbul map reconstruction and all four original global metrics.
+Missing, duplicate, differently assigned, changed-source or unsuccessful evidence
+fails. Native isolation and thresholds are independent of the scheduling estimates.
+
+Coverage runner/validation changes select the complete application coverage lane
+in normal PR CI. Duration metadata selects it only when its own lane changes;
+unrelated duration lanes stay scoped. A change to the shared sequencer retains
+its complete workspace consumer checks. No synthetic package edit, extra
+benchmark workflow, threshold reduction or mutation campaign is needed.
 
 ## Planned coverage shards
 
@@ -322,8 +352,8 @@ executed all 254 then-current suites once, with 411–490 seconds of Jest per sh
 and 10.3-minute overall CI compared with 21.2–23.9-minute earlier library PRs.
 Every current file still runs serially within its shard, with property cases,
 seeds and deadlines unchanged. Direct application coverage keeps its independent
-four-shard execution/aggregation contract; this regression change does not claim
-to shorten that separate lane.
+separate execution/aggregation contract. Its six-shard coverage plan is described
+below; the earlier regression result is separate evidence.
 
 The shared build restores each package's outputs from a cache keyed on the git
 blob ids of the package's own files, of every workspace package it depends on,
