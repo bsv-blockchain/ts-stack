@@ -3,10 +3,10 @@ id: pkg-wallet-helper
 title: '@bsv/wallet-helper'
 kind: package
 domain: helpers
-version: '0.1.11'
+version: '0.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-11-05'
+last_verified: '2026-11-05'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-helper'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper'
@@ -19,6 +19,9 @@ tags: [helpers, wallet, transaction-builder]
 This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
+
+The 0.2.0 source candidate adds output tags and transaction labels to
+`TransactionBuilder`. No API migration is required.
 
 > Fluent transaction builder and wallet-compatible script templates for BSV — construct multi-output transactions (P2PKH, ordinals, custom) with method chaining, BRC-29 key derivation, and no private key exposure.
 
@@ -62,6 +65,7 @@ console.log(`Sent: ${result.txid}`)
 - **Explicit change destinations** — Override where wallet change is sent when you need that control
 - **Input spending** — Consume P2PKH, ordinal, and custom UTXOs
 - **BRC-29 derivation** — Self-controlled wallet derivation for outputs this wallet will later unlock
+- **Baskets, tags and labels** — File outputs and label transactions so the wallet can find them again
 - **Script validation** — Identify and classify script types
 
 ## Common patterns
@@ -90,6 +94,22 @@ await new TransactionBuilder(wallet, 'Self-controlled output')
   .basket('my-basket')
   .customInstructions('app-data')
   .build()
+```
+
+### Find outputs and transactions again
+
+Tag outputs to look them up within a basket, and label transactions to list and filter them later.
+
+```typescript
+await new TransactionBuilder(wallet, 'Mint token')
+  .labels(['mint'])
+  .addP2PKHOutput({ satoshis: 1, description: 'Token' })
+  .basket('tokens')
+  .tags(['token', 'gold'])
+  .build()
+
+const { outputs } = await wallet.listOutputs({ basket: 'tokens', tags: ['gold'] })
+const { actions } = await wallet.listActions({ labels: ['mint'] })
 ```
 
 ### Spend UTXOs and send to recipient
@@ -125,6 +145,8 @@ const ordResult = await new TransactionBuilder(wallet, 'Mint ordinal')
 - **BRC-29 Derivation** — Automatic self-derivation; omit `address`, `publicKey`, and `walletParams` only for outputs this wallet should control
 - **Wallet-Compatible** — Never exposes private keys; uses wallet's `createAction` / `signAction`
 - **Basket** — Logical grouping of outputs for wallet organization
+- **Tags** — Per-output names for `listOutputs({ basket, tags })` lookups
+- **Labels** — Per-transaction names for `listActions({ labels })` filtering
 - **CustomInstructions** — JSON metadata per output; wallet-derived outputs can include derivation info
 - **BEEF** — Broadcast-Everything-BEEF transaction format for secure input proofs
 - **MAP Metadata** — Magic Attribute Protocol for ordinal inscriptions
