@@ -112,6 +112,57 @@ function heldWorkPause(entered: ReturnType<typeof deferred>, release: ReturnType
 }
 
 describe('runtime orchestration and publication ports', () => {
+  it('publishes an idle-context checkpoint before starting redundant worker passes', async () => {
+    const published = deferred(),
+      repeated = deferred(),
+      release = deferred()
+    let passes = 0
+    const journal = new MemoryJournal('test')
+    const store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      limits: { deadlineMs: 1000 },
+      worker: {
+        pendingBytes: async () => 0,
+        advance: async () => {
+          passes++
+          if (passes >= 2) {
+            repeated.resolve()
+            await release.promise
+          }
+        }
+      },
+      projector: {
+        policyDigest: 'ff'.repeat(32),
+        project: async input => {
+          published.resolve()
+          return projection(input)
+        }
+      }
+    })
+    let flushing: Promise<unknown> | undefined
+    try {
+      await runtime.setContext(context())
+      flushing = runtime.flush().then(
+        () => undefined,
+        error => error
+      )
+      expect(
+        await Promise.race([
+          published.promise.then(() => 'published'),
+          repeated.promise.then(() => 'redundant-pass'),
+          flushing.then(() => 'finished-without-publication')
+        ])
+      ).toBe('published')
+      expect(await flushing).toBeUndefined()
+      expect((await runtime.readProjection())?.contextId).toBe(context().id)
+    } finally {
+      release.resolve()
+      await runtime.close()
+      await flushing
+    }
+  })
+
   it('does not return a retained projection after its publication gate changes during an asynchronous read', async () => {
     const fixture = await open(noWork, {
       policyDigest: 'ff'.repeat(32),
@@ -1669,6 +1720,141 @@ describe('stable runtime error identities', () => {
 })
 
 describe('runtime lifecycle release and recovery', () => {
+  it('rejects every new public operation after close before touching its downstream ports', async () => {
+    const f = await open(),
+      controller = new AbortController(),
+      source: Source = { id: 'closed-source', async *open() {} },
+      closed = { code: 'cancelled', message: 'Output runtime is closed' }
+    await f.runtime.close()
+    const revision = jest.spyOn(f.store, 'revision'),
+      read = jest.spyOn(f.store, 'read')
+    let attached: ReturnType<OutputKnowledge['attach']> | undefined
+    try {
+      expect(() => f.runtime.events(controller.signal)).toThrow(expect.objectContaining(closed))
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+      expect(() => {
+        attached = f.runtime.attach(source, request())
+      }).toThrow(expect.objectContaining(closed))
+      await expect(f.runtime.setContext(context())).rejects.toMatchObject(closed)
+      await expect(f.runtime.flush()).rejects.toMatchObject(closed)
+      await expect(f.runtime.readProjection()).rejects.toMatchObject(closed)
+      expect(revision).not.toHaveBeenCalled()
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      controller.abort()
+      attached?.close()
+      await attached?.done.catch(() => {})
+      revision.mockRestore()
+      read.mockRestore()
+      await f.runtime.close()
+    }
+  })
+
+  it.each([
+    new Error('Synthetic storage driver failure'),
+    new OutputProtocolError('unavailable', 'Synthetic storage unavailable'),
+    new OutputProtocolError('conflict', 'Synthetic storage conflict')
+  ])(
+    'propagates a non-expiry store-read failure without a second recovery pass: %p',
+    async failure => {
+      let passes = 0
+      const f = await open({
+          ...noWork,
+          async advance() {
+            passes++
+          }
+        }),
+        before = passes,
+        events = f.runtime.events()[Symbol.asyncIterator](),
+        read = jest.spyOn(f.store, 'read').mockRejectedValueOnce(failure)
+      let observed: unknown
+      const waiting = events.next().then(
+        value => {
+          observed = value
+        },
+        error => {
+          observed = error
+        }
+      )
+      try {
+        await expect(f.runtime.flush()).rejects.toBe(failure)
+        expect(passes).toBe(before + 1)
+        expect(observed).toMatchObject({
+          done: false,
+          value: {
+            kind: 'error',
+            message: expect.stringMatching(/^Output runtime (unavailable|conflict)$/)
+          }
+        })
+      } finally {
+        read.mockRestore()
+        await events.return?.()
+        await waiting
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it('refuses a projection whose final native store read settles after runtime close', async () => {
+    const f = await open(noWork, {
+        policyDigest: 'ff'.repeat(32),
+        project: async input => projection(input)
+      }),
+      entered = deferred(),
+      release = deferred(),
+      original = f.store.read.bind(f.store)
+    let reads = 0
+    const read = jest.spyOn(f.store, 'read').mockImplementation(async (...args) => {
+      const result = await original(...args)
+      if (++reads === 2) {
+        entered.resolve()
+        await release.promise
+      }
+      return result
+    })
+    const flushing = f.runtime.flush().then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await entered.promise
+      await f.runtime.close()
+      release.resolve()
+      expect(await flushing).toMatchObject({
+        code: 'cancelled',
+        message: 'Output runtime is closed'
+      })
+    } finally {
+      release.resolve()
+      await flushing
+      read.mockRestore()
+      await f.runtime.close()
+    }
+  })
+
+  it('replaces its future expiry timer on a new checkpoint and releases it completely on close', async () => {
+    jest.useFakeTimers()
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition }),
+      runtime = new OutputKnowledge({
+        store,
+        now: () => 1000,
+        worker: { ...noWork, nextInvalidation: () => '10' }
+      })
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      expect(jest.getTimerCount()).toBe(1)
+      await runtime.setContext({ ...context(), id: 'next-future-checkpoint' })
+      await runtime.flush()
+      expect(jest.getTimerCount()).toBe(1)
+      await runtime.close()
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      await runtime.close()
+      jest.useRealTimers()
+    }
+  })
+
   it('detaches completed operation signals before later runtime cancellation', async () => {
     const signals: AbortSignal[] = []
     const f = await open({

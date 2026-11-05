@@ -16,15 +16,18 @@ export function retained(plan: PrivatePurchaseAliasWrite) {
   if (plan.status !== 'ready') throw new Error('Expected retained native proposal')
   return plan
 }
-export function purchaseAliasesFixture(maximumWrites = 64, journalEvents?: number) {
-  const e = purchaseEvidenceFixture(),
-    limits = {
-      maximumCandidateBytes: 8192,
-      maximumUnconfirmed: 1,
-      maximumPending: 2,
-      maximumWrites,
-      maximumBatchBytes: 2 * 1048576
-    }
+export function purchaseAliasesFixture(
+  maximumWrites = 64,
+  journalEvents?: number,
+  e = purchaseEvidenceFixture()
+) {
+  const limits = {
+    maximumCandidateBytes: 8192,
+    maximumUnconfirmed: 1,
+    maximumPending: 2,
+    maximumWrites,
+    maximumBatchBytes: 2 * 1048576
+  }
   const construct = (domain = e.base.owner.domain) =>
     new SQLitePrivatePurchaseAliases(
       domain,
