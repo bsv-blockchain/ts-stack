@@ -872,6 +872,120 @@ describe('TransactionTemplate', () => {
     })
   })
 
+  describe('tags and labels', () => {
+    test('adds tags to THIS output only', async () => {
+      const privateKey = new PrivateKey(140)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const preview = (await new TransactionBuilder(wallet, 'Mint')
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .basket('tokens')
+        .tags(['token', 'mint'])
+        .tags(['mint', 'gold'])
+        .addP2PKHOutput({ publicKey, satoshis: 2 })
+        .preview()) as any
+
+      expect(preview.outputs[0].tags).toEqual(['token', 'mint', 'gold'])
+      expect(preview.outputs[0].basket).toBe('tokens')
+      expect(preview.outputs[1].tags).toBeUndefined()
+    })
+
+    test('adds labels to the transaction from any builder', async () => {
+      const privateKey = new PrivateKey(141)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const preview = (await new TransactionBuilder(wallet, 'Treasury')
+        .labels(['treasury'])
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .labels(['funds-received', 'treasury'])
+        .preview()) as any
+
+      expect(preview.labels).toEqual(['treasury', 'funds-received'])
+    })
+
+    test('labels can be chained from an InputBuilder', async () => {
+      const privateKey = new PrivateKey(142)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const sourceTransaction = new Transaction()
+      sourceTransaction.addOutput({
+        lockingScript: await new P2PKH().lock({ publicKey }),
+        satoshis: 10
+      })
+
+      const builder = new TransactionBuilder(wallet)
+      const returned = builder
+        .addCustomInput({
+          sourceTransaction,
+          sourceOutputIndex: 0,
+          unlockingScriptTemplate: { sign: jest.fn(), estimateLength: jest.fn() } as any
+        })
+        .labels(['submission'])
+
+      expect(returned).toBe(builder)
+    })
+
+    test('omits labels when none are set', async () => {
+      const privateKey = new PrivateKey(143)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const preview = (await new TransactionBuilder(wallet)
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .preview()) as any
+
+      expect(preview).not.toHaveProperty('labels')
+    })
+
+    test('passes labels and tags to wallet.createAction', async () => {
+      const privateKey = new PrivateKey(144)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const createAction = jest.fn(async () => ({ txid: 'txid', tx: [] }))
+      ;(wallet as any).createAction = createAction
+
+      await new TransactionBuilder(wallet, 'Mint')
+        .labels(['mint'])
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .tags(['token'])
+        .build()
+
+      const args = (createAction.mock.calls[0] as any[])[0]
+      expect(args.labels).toEqual(['mint'])
+      expect(args.outputs[0].tags).toEqual(['token'])
+    })
+
+    test.each([
+      [undefined, 'tags requires a non-empty array of strings'],
+      [[], 'tags requires a non-empty array of strings'],
+      ['token', 'tags requires a non-empty array of strings'],
+      [[''], 'tags[0] must be a non-empty string'],
+      [['token', 1], 'tags[1] must be a non-empty string']
+    ])('rejects invalid tags %p', async (value, message) => {
+      const privateKey = new PrivateKey(145)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const output = new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis: 1 })
+
+      expect(() => output.tags(value as any)).toThrow(message)
+    })
+
+    test.each([
+      [undefined, 'labels requires a non-empty array of strings'],
+      [[], 'labels requires a non-empty array of strings'],
+      ['mint', 'labels requires a non-empty array of strings'],
+      [[''], 'labels[0] must be a non-empty string'],
+      [['mint', null], 'labels[1] must be a non-empty string']
+    ])('rejects invalid labels %p', async (value, message) => {
+      const privateKey = new PrivateKey(146)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+
+      expect(() => new TransactionBuilder(wallet).labels(value as any)).toThrow(message)
+    })
+  })
+
   describe('preview mode', () => {
     test('rejects truthy non-boolean preview flags', async () => {
       const privateKey = new PrivateKey(109)
