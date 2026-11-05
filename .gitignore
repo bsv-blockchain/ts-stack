@@ -12,6 +12,7 @@ coverage/
 .operator-build/
 operator-artifacts/
 artifacts/mutation/
+artifacts/mutation-pilot/
 *.log
 .DS_Store
 .venv/

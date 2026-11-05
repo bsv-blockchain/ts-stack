@@ -948,6 +948,7 @@ test('durable buyer qualifies every complete owner and retains native one-action
   ])
   assert.deepEqual(buyer.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-lookup-buyer.test.ts',
+    '<rootDir>/test/private-lookup-buyer.property.test.ts',
     '<rootDir>/test/private-buyer-payment.test.ts',
     '<rootDir>/test/private-purchase-buyer*.test.ts',
     '<rootDir>/test/private-purchase-wallet-native*.test.ts'

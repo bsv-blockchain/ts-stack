@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Diagnostic exact target ID; blank qualifies every canonical target
+        description: Diagnostic target ID or efficiency-pilot; blank qualifies all targets
         required: false
         type: string
 
@@ -68,7 +68,9 @@ jobs:
         run: |
           GOVERNED_TARGETS=$(node scripts/mutation-testing.mjs --list)
           PACKAGES=""
-          if [ -n "$REQUESTED_TARGET" ]; then
+          if [ "$REQUESTED_TARGET" = "efficiency-pilot" ]; then
+            TARGETS='["private-purchase-native-clock","private-purchase-disclosure","private-lookup-buyer"]'
+          elif [ -n "$REQUESTED_TARGET" ]; then
             if ! grep -Fxq "$REQUESTED_TARGET" <<<"$GOVERNED_TARGETS"; then
               echo "::error::Unknown mutation target: $REQUESTED_TARGET"
               exit 1
@@ -89,7 +91,9 @@ jobs:
           PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$TARGETS")
           echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
           echo "partition-targets=$PARTITION_TARGETS" >> "$GITHUB_OUTPUT"
-          if [ -n "$REQUESTED_TARGET" ]; then
+          if [ "$REQUESTED_TARGET" = "efficiency-pilot" ]; then
+            echo "mode=pilot" >> "$GITHUB_OUTPUT"
+          elif [ -n "$REQUESTED_TARGET" ]; then
             echo "mode=diagnostic" >> "$GITHUB_OUTPUT"
           else
             echo "mode=full" >> "$GITHUB_OUTPUT"
@@ -136,6 +140,7 @@ jobs:
 
   mutation-tests:
     name: Mutation batch / ${{ matrix.batch }}
+    if: needs.prepare.outputs.mode != 'pilot'
     needs: prepare
     permissions:
       contents: read
@@ -199,7 +204,7 @@ jobs:
 
   mutation-quality:
     name: Mutation campaign / ${{ needs.prepare.outputs.mode }}
-    if: always()
+    if: always() && needs.prepare.outputs.mode != 'pilot'
     needs:
       - prepare
       - mutation-tests
@@ -273,3 +278,60 @@ jobs:
           fi
           node scripts/mutation-final-qualification.mjs verify \
             --mode "$CAMPAIGN_MODE" --directory .mutation-receipts "${scope[@]}"
+
+  efficiency-pilot:
+    name: Paired diagnostic pilot / ${{ matrix.case }}
+    if: needs.prepare.outputs.mode == 'pilot'
+    needs: prepare
+    runs-on: ubuntu-22.04
+    # Four hours per case, three jobs maximum; no 606-part campaign or receipt.
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - case: native-clock
+            target: private-purchase-native-clock
+          - case: disclosure
+            target: private-purchase-disclosure
+          - case: lookup-buyer
+            target: private-lookup-buyer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: mutation-build-outputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ci-artifacts
+      - name: Restore exact-run build outputs
+        run: |
+          tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+          rm .ci-artifacts/build-outputs.tar.gz
+      - name: Baseline then candidate on the same runner
+        env:
+          PILOT_CASE: ${{ matrix.case }}
+          PILOT_TARGET: ${{ matrix.target }}
+        run: |
+          run="pilot-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          node scripts/mutation-pilot.mjs run "$PILOT_CASE" baseline "$run"
+          node scripts/mutation-pilot.mjs run "$PILOT_CASE" candidate "$run"
+          node scripts/mutation-pilot.mjs compare "artifacts/mutation-pilot/$run/$PILOT_TARGET"
+      - name: Preserve raw diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-pilot-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}
+          path: artifacts/mutation-pilot
+          if-no-files-found: warn
+          retention-days: 30
