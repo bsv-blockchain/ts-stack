@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
   comparePilotReports,
+  initialRunEvidence,
   requirePilotParts,
   requireDeclaredProperty
 } from './mutation-pilot.mjs'
@@ -15,6 +16,23 @@ const require = createRequire(import.meta.url)
 const Sequencer = require('../governance/mutation-testing/fast-failure-sequencer.cjs')
 const rootDir = '/repo/package'
 const entry = name => ({ path: `${rootDir}/test/${name}`, context: { config: { rootDir } } })
+
+test('initial runner counts remain distinct from serialized definitions and require a successful run', () => {
+  const line =
+    'Initial test run succeeded. Ran 134 tests in 9 minutes and 48 seconds (net 580437 ms, overhead 7739 ms).'
+  assert.deepEqual(initialRunEvidence(line), {
+    tests: 134,
+    netMilliseconds: 580437,
+    overheadMilliseconds: 7739
+  })
+  for (const invalid of [
+    '',
+    'Initial test run failed',
+    line + '\n' + line,
+    line.replace('134', '0')
+  ])
+    assert.throws(() => initialRunEvidence(invalid), /exactly one successful initial test run/)
+})
 
 test('focused files precede properties without dropping or modifying any selected file', () => {
   const original = [

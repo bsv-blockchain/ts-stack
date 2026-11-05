@@ -432,7 +432,13 @@ test('both callers dispatch serial immutable batches and the reusable executor r
       prepare = job(source, profile === 'ci' ? 'build' : 'prepare'),
       pinned = profile === 'ci' ? 'id: mutation-identity' : 'id: mutation-execution'
     assert.match(caller, /max-parallel: 1\n/)
-    assert.match(caller, /fail-fast: false/)
+    assert.ok(
+      caller.includes(
+        profile === 'ci'
+          ? 'fail-fast: false'
+          : "fail-fast: ${{ inputs.stop-after-first-failure == true && needs.prepare.outputs.mode == 'full' }}"
+      )
+    )
     assert.match(caller, /uses: \.\/\.github\/workflows\/mutation-execution\.yml/)
     assert.ok(caller.includes(`profile: ${profile}`))
     assert.match(
@@ -456,7 +462,11 @@ test('both callers dispatch serial immutable batches and the reusable executor r
     assert.match(prepare, /scripts\/mutation-execution-batches\.mjs build-identity/)
     assert.ok(prepare.indexOf('id: mutation-build') < prepare.indexOf(pinned))
   }
-  assert.match(executor, /fail-fast: false/)
+  assert.ok(
+    executor.includes(
+      "fail-fast: ${{ inputs.stop-after-first-failure == true && inputs.profile == 'qualification' && inputs.mode == 'full' }}"
+    )
+  )
   assert.match(
     executor,
     /max-parallel: \$\{\{ inputs\.profile == 'qualification' && 100 \|\| 6 \}\}/

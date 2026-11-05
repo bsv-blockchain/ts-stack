@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ''
+      stop-after-first-failure:
+        description: Stop a full release campaign after any required execution fails; diagnostics collect all
+        required: false
+        type: boolean
+        default: false
     outputs:
       qualified-sha:
         description: Exact source qualified by every selected canonical target; absent for diagnostics
@@ -145,7 +150,8 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      # A failed release cannot qualify; cancel outstanding batches, retaining diagnostics.
+      fail-fast: ${{ inputs.stop-after-first-failure == true && needs.prepare.outputs.mode == 'full' }}
       max-parallel: 1
       matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
     uses: ./.github/workflows/mutation-execution.yml
@@ -156,11 +162,13 @@ jobs:
       matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
       identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
       profile: qualification
+      stop-after-first-failure: ${{ inputs.stop-after-first-failure == true }}
       mode: ${{ needs.prepare.outputs.mode }}
 
   partition-aggregate:
     name: Canonical global gate / ${{ matrix.target }}
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.mutation-tests.result == 'success' && needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
+    # A failed peer target does not suppress complete target diagnostics; the final gate stays strict.
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.mode != 'pilot' && needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
     needs: [prepare, mutation-tests]
     strategy:
       fail-fast: false

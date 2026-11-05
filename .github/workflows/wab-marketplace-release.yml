@@ -83,6 +83,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/mutation-tests.yml
+    with:
+      stop-after-first-failure: true
 
   publish:
     needs: [source, full-mutation]

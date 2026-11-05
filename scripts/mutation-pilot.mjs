@@ -160,10 +160,10 @@ export function comparePilotReports(baseline, candidate) {
       const reason = mutant.statusReason ?? ''
       if (mutant.status !== 'Killed') return []
       let kind
-      if (/^(?:Error: )?Property interrupted after [0-9]+ tests/m.test(reason))
+      if (/^(?:Error: )?Property interrupted after \d+ tests/m.test(reason))
         kind = 'property-exploration-limit'
       else if (
-        /^Error:(?: thrown:)? ["']?Exceeded timeout of [0-9]+ ms for a (?:test|hook)/m.test(reason)
+        /^Error:(?: thrown:)? ["']?Exceeded timeout of \d+ ms for a (?:test|hook)/m.test(reason)
       )
         kind = 'jest-deadline'
       if (!kind) return []
@@ -205,6 +205,20 @@ export function requireDeclaredProperty(report, relative, source) {
     'Declared property absent from actual runner report'
   )
   assert.equal(observed.source, source, 'Declared property source differs from the observed tests')
+}
+
+export function initialRunEvidence(log) {
+  const matches = [
+    ...log.matchAll(
+      /Initial test run succeeded\. Ran ([1-9]\d*) tests in [^\r\n]+ \(net (\d+) ms, overhead (\d+) ms\)\./g
+    )
+  ]
+  assert.equal(matches.length, 1, 'Expected exactly one successful initial test run')
+  return {
+    tests: Number(matches[0][1]),
+    netMilliseconds: Number(matches[0][2]),
+    overheadMilliseconds: Number(matches[0][3])
+  }
 }
 
 function requireTargetProperty(report, target) {
@@ -473,9 +487,25 @@ export function comparePilotRun(directory) {
     assert.equal(hash(beforeBytes), before.reportDigest)
     assert.equal(hash(afterBytes), after.reportDigest)
     assert.equal(before.canonicalInventoryDigest, after.canonicalInventoryDigest)
+    const initialRuns = Object.fromEntries(
+      ['baseline', 'candidate'].map(arm => [
+        arm,
+        initialRunEvidence(
+          fs.readFileSync(path.join(directory, arm, before.part, 'execution.log'), 'utf8')
+        )
+      ])
+    )
+    assert.equal(
+      initialRuns.baseline.tests,
+      initialRuns.candidate.tests,
+      'Initial test count changed'
+    )
     return {
       part: before.part,
       ...comparePilotReports(JSON.parse(beforeBytes), JSON.parse(afterBytes)),
+      // Jest parameterizations can share a serialized test definition ID.
+      // Retain the actual initial-run count separately from selectedTests.
+      initialRuns,
       baselineSeconds: before.elapsedSeconds,
       candidateSeconds: after.elapsedSeconds,
       speedup: before.elapsedSeconds / after.elapsedSeconds

@@ -59,8 +59,11 @@ test('every publisher requires complete exact-source qualification before publis
     assert.deepEqual(
       campaign.with,
       file === 'release.yaml'
-        ? { packages: '${{ needs.plan.outputs.mutation-packages }}' }
-        : undefined
+        ? {
+            packages: '${{ needs.plan.outputs.mutation-packages }}',
+            'stop-after-first-failure': true
+          }
+        : { 'stop-after-first-failure': true }
     )
     assert.ok(publisher.needs.includes(gate))
     assert.ok(publisher.permissions['id-token'] === 'write')
@@ -178,7 +181,10 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
   const workflow = parse(
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
   )
-  assert.deepEqual(Object.keys(workflow.on.workflow_call.inputs), ['packages'])
+  assert.deepEqual(Object.keys(workflow.on.workflow_call.inputs), [
+    'packages',
+    'stop-after-first-failure'
+  ])
   assert.equal(workflow.on.workflow_call.inputs.packages.default, '')
   assert.match(
     workflow.on.workflow_call.outputs['qualified-sha'].value,
@@ -270,7 +276,10 @@ test('partition jobs cannot replace each original canonical global gate or the f
     executor.strategy['max-parallel'],
     "${{ inputs.profile == 'qualification' && 100 || 6 }}"
   )
-  assert.equal(executor.strategy['fail-fast'], false)
+  assert.equal(
+    executor.strategy['fail-fast'],
+    "${{ inputs.stop-after-first-failure == true && inputs.profile == 'qualification' && inputs.mode == 'full' }}"
+  )
   assert.equal(executor.strategy.matrix, '${{ fromJSON(inputs.execution-matrix) }}')
   const ratchet = executor.steps.find(step => step.name?.includes('mutation-quality ratchet'))
   assert.match(ratchet.run, /--partition/)
@@ -279,7 +288,12 @@ test('partition jobs cannot replace each original canonical global gate or the f
   for (const workflow of [ci, full]) {
     const caller = workflow.jobs['mutation-tests']
     assert.equal(caller.strategy['max-parallel'], 1)
-    assert.equal(caller.strategy['fail-fast'], false)
+    assert.equal(
+      caller.strategy['fail-fast'],
+      workflow === ci
+        ? false
+        : "${{ inputs.stop-after-first-failure == true && needs.prepare.outputs.mode == 'full' }}"
+    )
     assert.match(caller.strategy.matrix, /mutation-batches/)
     assert.match(workflow.jobs.prepare.outputs['mutation-matrix'], /mutation-matrix/)
     assert.equal(caller.with['execution-matrix'], '${{ toJSON(matrix.executionMatrix) }}')
@@ -346,6 +360,8 @@ test('partition jobs cannot replace each original canonical global gate or the f
   )
   assert.deepEqual(full.jobs['partition-aggregate'].needs, ['prepare', 'mutation-tests'])
   assert.match(full.jobs['partition-aggregate'].strategy.matrix.target, /partition-targets/)
+  assert.match(full.jobs['partition-aggregate'].if, /needs.prepare.outputs.mode != 'pilot'/)
+  assert.doesNotMatch(full.jobs['partition-aggregate'].if, /needs.mutation-tests.result/)
   const download = ci.jobs['mutation-quality'].steps.find(
     step => step.with?.pattern === 'mutation-*'
   )
@@ -635,4 +651,52 @@ test('the bounded pilot cannot execute or issue complete qualification', async (
   assert(archives[0].with.path.endsWith('/baseline'))
   assert(pilot.steps.indexOf(archives[0]) < pilot.steps.indexOf(candidate))
   assert.notEqual(archives[0].with.name, archives[1].with.name)
+})
+
+test('release failure stopping cannot waive an execution or canonical aggregate failure', async () => {
+  const { parse } = await import('yaml')
+  const full = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
+  )
+  const callee = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-execution.yml'), 'utf8')
+  )
+  for (const workflow of [full, callee])
+    assert.deepEqual(workflow.on.workflow_call.inputs['stop-after-first-failure'], {
+      description:
+        workflow === full
+          ? 'Stop a full release campaign after any required execution fails; diagnostics collect all'
+          : 'Cancel remaining release executions after failure; has no effect on diagnostics',
+      required: false,
+      type: 'boolean',
+      default: false
+    })
+  assert.equal(
+    full.jobs['mutation-tests'].with['stop-after-first-failure'],
+    '${{ inputs.stop-after-first-failure == true }}'
+  )
+  // An audit, diagnostic target or PR retains collect-all behavior. Neither
+  // failure nor cancellation can pass the actual shell publication gate, even
+  // when every independently completed target aggregate is successful.
+  const script = full.jobs['mutation-quality'].steps.find(
+    step => step.name === 'Verify the campaign'
+  ).run
+  for (const prepare of ['success', 'failure', 'cancelled', 'skipped', ''])
+    for (const mutation of ['success', 'failure', 'cancelled', 'skipped', '']) {
+      const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+        env: {
+          PATH: process.env.PATH,
+          PREPARE_RESULT: prepare,
+          MUTATION_RESULT: mutation,
+          PARTITION_RESULT: 'success',
+          PARTITION_TARGETS: '["private-lookup-buyer"]'
+        }
+      })
+      assert.equal(run.status === 0, prepare === 'success' && mutation === 'success')
+    }
+  const upload = callee.jobs.execution.steps.find(
+    step => step.name === 'Preserve the machine-readable mutation report'
+  )
+  assert.equal(upload.if, 'always()')
+  assert.equal(full.jobs['partition-aggregate'].steps.at(-1).if, 'always()')
 })

@@ -27,6 +27,11 @@ on:
         description: Digest of the complete ordered flat execution matrix
         required: true
         type: string
+      stop-after-first-failure:
+        description: Cancel remaining release executions after failure; has no effect on diagnostics
+        required: false
+        type: boolean
+        default: false
       execution-batch:
         description: Original one-based ordered batch number
         required: true
@@ -47,7 +52,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: ${{ inputs.stop-after-first-failure == true && inputs.profile == 'qualification' && inputs.mode == 'full' }}
       max-parallel: ${{ inputs.profile == 'qualification' && 100 || 6 }}
       matrix: ${{ fromJSON(inputs.execution-matrix) }}
     steps:

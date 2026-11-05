@@ -287,8 +287,9 @@ See [npm Package Supply Chain](./npm-package-supply-chain.md),
 The publication candidate must complete the reusable `mutation-tests.yml`
 campaign at its exact `github.sha`. In `release.yaml` a seconds-long `plan` job
 resolves the release mode and package filter once; preparation and the campaign
-then start in parallel from that same output, and the campaign runs its targets
-concurrently, so the slowest single target bounds its wall time. The npm publisher waits for the
+then start in parallel from that same output. The campaign runs up to 100
+executions concurrently within each serial batch of at most 256 executions;
+later batches still wait for the preceding batch. The npm publisher waits for the
 up-front approval, preparation, and full qualification. The OCI publisher
 waits for discovery and full qualification, which a `release.yaml` call
 satisfies with that same-run campaign;
@@ -324,6 +325,27 @@ verifier reconstructs the scheduling order from the checked-out measurements;
 it must not compare a scheduled digest with target-order rows or accept a
 digest mismatch. Scheduling changes start order only, never the required union
 of canonical targets, partitions, source ranges or mutation gates.
+
+The npm, OCI and Marketplace release callers set `stop-after-first-failure`.
+For full qualification only, both the execution matrix and its outer batch
+matrix cancel outstanding work after a required execution fails. Cancellation
+is asynchronous: already running jobs may take time to stop. Existing
+`always()` report uploads preserve available diagnostics; canceled or missing
+reports never become passing evidence. The campaign must still succeed in full
+before issuing a qualified SHA. No publisher permission or gate changes.
+
+The input defaults to false. Scheduled campaigns, manually dispatched full
+audits, individual diagnostic targets and PR diagnostics retain collect-all
+behavior. Per-target canonical aggregates may report independently after an
+unrelated target fails, but they still require their own exhaustive raw union
+and score. The final campaign rejects any execution failure or cancellation,
+even when another target's aggregate succeeded. Pilot mode cannot run these
+aggregates or issue qualification.
+
+The [three-case efficiency pilot](../../governance/mutation-testing/PILOT-2026-11-04.md)
+measures ordering separately from failure stopping. It grants no evidence reuse
+or incremental-state exemption; neither a historical report nor a diagnostic
+pilot can qualify publication.
 
 Declaration/import-only execution companions run with related nonempty parts.
 Their complete original source ranges remain in the plan and the pinned-engine
@@ -399,7 +421,6 @@ the public `publishedVersion` with `releaseType: none`. Run `pnpm docs:packages`
 review the generated package facts and merge the validated reconciliation PR.
 Do not advance a baseline for a held, failed or partially published candidate.
 Later metadata commits do not change the pinned image source or its provenance.
-
 
 ### November4 PR1093 operator exception retired
 

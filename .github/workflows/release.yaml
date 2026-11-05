@@ -223,6 +223,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/mutation-tests.yml
     with:
+      stop-after-first-failure: true
       packages: ${{ needs.plan.outputs.mutation-packages }}
 
   # This job receives the protected npm-production environment. It runs no
