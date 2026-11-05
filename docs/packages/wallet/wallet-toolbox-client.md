@@ -20,6 +20,8 @@ when their on-chain tokens cannot be funded. Grants expire with the manager
 or their approved expiry; no session grant is persisted. Grant methods still
 report `WERR_INSUFFICIENT_FUNDS`, while grouped and counterparty waiters resume.
 Spending still requires its token. Other mint errors retain the existing behavior.
+`revokeAllForOriginator` clears matching session grants with its existing type filters,
+without needing coins or an on-chain token.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and

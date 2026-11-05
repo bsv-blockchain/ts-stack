@@ -14,7 +14,8 @@ attention to changes that materially alter behavior or extend functionality.
   throws the funding error, since no token was written; the next session asks
   again and, once funded, mints the token as before. Spending authorizations
   are never kept without their token, and every other mint failure still
-  re-opens the prompt.
+  re-opens the prompt. `revokeAllForOriginator` also clears matching session
+  grants, respecting its permission-type filters, without a token transaction.
 
 ## wallet-toolbox 2.15.3 (source candidate)
 

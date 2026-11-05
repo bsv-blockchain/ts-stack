@@ -149,4 +149,141 @@ describe('WalletPermissionsManager grants in an unfunded wallet', () => {
     )
     expect((manager as any).sessionGrants.size).toBe(0)
   })
+  it('revokes an unfunded session grant for the originator without a token transaction', async () => {
+    const first = ensureProto()
+    await tick()
+    await expect(manager.grantPermission({ requestID: requestIDs[0] })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
+    await first
+    await expect(manager.revokeAllForOriginator(ORIGIN)).resolves.toEqual([])
+    await expect(
+      manager.ensureProtocolPermission({ ...PROTO, privileged: false, usageType: 'signing', seekPermission: false })
+    ).rejects.toThrow(/No protocol permission/)
+    expect(mints()).toBe(1)
+  })
+
+  it('does not carry an unfunded grant into a new manager', async () => {
+    const first = ensureProto()
+    await tick()
+    await expect(manager.grantPermission({ requestID: requestIDs[0] })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
+    await first
+    const restarted = new WalletPermissionsManager(underlying, 'admin.test.com')
+    ;(restarted as any).findProtocolToken = jest.fn().mockResolvedValue(undefined)
+    await expect(
+      restarted.ensureProtocolPermission({ ...PROTO, privileged: false, usageType: 'signing', seekPermission: false })
+    ).rejects.toThrow(/No protocol permission/)
+  })
+
+  it.each([
+    { originator: 'other.example.com' },
+    { protocolID: [1, 'otherproto'] as [number, string] },
+    { privileged: true }
+  ])('does not broaden the approved protocol grant: %j', async changed => {
+    const first = ensureProto()
+    await tick()
+    await expect(manager.grantPermission({ requestID: requestIDs[0] })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
+    await first
+    await expect(
+      manager.ensureProtocolPermission({
+        ...PROTO,
+        privileged: false,
+        ...changed,
+        usageType: 'signing',
+        seekPermission: false
+      })
+    ).rejects.toThrow(/No protocol permission/)
+  })
+
+  it('does not turn an unfunded grouped spending authorization into standing permission', async () => {
+    const granted = {
+      protocolPermissions: [{ protocolID: [1, 'testproto'] as [number, string], description: 'sign' }],
+      spendingAuthorization: { amount: 1000, description: 'spend' }
+    }
+    jest.spyOn(manager as any, 'fetchManifestGroupPermissions').mockResolvedValue(granted)
+    const auth = manager.waitForAuthentication({}, ORIGIN)
+    await tick()
+    await expect(manager.grantGroupedPermission({ requestID: groupRequestIDs[0], granted })).rejects.toThrow(
+      WERR_INSUFFICIENT_FUNDS
+    )
+    await expect(auth).resolves.toEqual({ authenticated: true })
+    await expect(ensureProto()).resolves.toBe(true)
+    await expect(
+      manager.ensureSpendingAuthorization({ originator: ORIGIN, satoshis: 1, seekPermission: false })
+    ).rejects.toThrow(/No spending authorization/)
+  })
+
+  it('resumes an unfunded counterparty grant only for the approved counterparty', async () => {
+    const counterparty = '02' + '11'.repeat(32)
+    const protocols = [{ protocolName: 'peerproto', description: 'sign' }]
+    const requestID = 'pact-test'
+    let resolve!: (value: boolean) => void
+    let reject!: (error: unknown) => void
+    const waiting = new Promise<boolean>((yes, no) => {
+      resolve = yes
+      reject = no
+    })
+    ;(manager as any).activeRequests.set(requestID, {
+      request: { originator: ORIGIN, counterparty, permissions: { protocols } },
+      pending: [{ resolve, reject }]
+    })
+    await expect(manager.grantCounterpartyPermission({ requestID, granted: { protocols } })).rejects.toThrow(
+      WERR_INSUFFICIENT_FUNDS
+    )
+    await expect(waiting).resolves.toBe(true)
+    const check = {
+      originator: ORIGIN,
+      privileged: false,
+      protocolID: [2, 'peerproto'] as [number, string],
+      counterparty,
+      seekPermission: false,
+      usageType: 'signing' as const
+    }
+    await expect(manager.ensureProtocolPermission(check)).resolves.toBe(true)
+    await expect(manager.ensureProtocolPermission({ ...check, counterparty: '03' + '22'.repeat(32) })).rejects.toThrow(
+      /No protocol permission/
+    )
+  })
+
+  it('honors selective revocation and normalized originators for session grants', async () => {
+    const granted = {
+      protocolPermissions: [{ protocolID: [1, 'testproto'] as [number, string], description: 'sign' }],
+      basketAccess: [{ basket: 'todo tokens', description: 'store' }]
+    }
+    jest.spyOn(manager as any, 'fetchManifestGroupPermissions').mockResolvedValue(granted)
+    const auth = manager.waitForAuthentication({}, ORIGIN)
+    await tick()
+    await expect(manager.grantGroupedPermission({ requestID: groupRequestIDs[0], granted })).rejects.toThrow(
+      WERR_INSUFFICIENT_FUNDS
+    )
+    await auth
+    const basket = { originator: ORIGIN, basket: 'todo tokens', seekPermission: false, usageType: 'listing' as const }
+    await manager.revokeAllForOriginator(ORIGIN.toUpperCase(), { protocol: false })
+    await expect(ensureProto()).resolves.toBe(true)
+    await expect(manager.ensureBasketAccess(basket)).rejects.toThrow(/No basket permission/)
+    await manager.revokeAllForOriginator('other.example.com')
+    await expect(ensureProto()).resolves.toBe(true)
+  })
+
+  it('keeps certificate disclosure limited to the approved fields', async () => {
+    ;(manager as any).findCertificateToken = jest.fn().mockResolvedValue(undefined)
+    const ids: string[] = []
+    manager.bindCallback('onCertificateAccessRequested', request => {
+      ids.push(request.requestID)
+    })
+    const args = {
+      originator: ORIGIN,
+      privileged: false,
+      verifier: '02' + '11'.repeat(32),
+      certType: 'test certificate',
+      fields: ['name'],
+      usageType: 'disclosure' as const
+    }
+    const first = manager.ensureCertificateAccess(args)
+    await tick()
+    await expect(manager.grantPermission({ requestID: ids[0] })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
+    await expect(first).resolves.toBe(true)
+    await expect(manager.ensureCertificateAccess({ ...args, seekPermission: false })).resolves.toBe(true)
+    await expect(
+      manager.ensureCertificateAccess({ ...args, fields: ['name', 'email'], seekPermission: false })
+    ).rejects.toThrow(/No certificate permission/)
+  })
 })

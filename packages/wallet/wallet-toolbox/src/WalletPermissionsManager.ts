@@ -821,12 +821,13 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly recentGrants: Map<string, number> = new Map()
   /**
    * Grants the user approved whose token the wallet could not fund
-   * (WERR_INSUFFICIENT_FUNDS), keyed by permission cache key, valued by expiry.
+   * (WERR_INSUFFICIENT_FUNDS), keyed by permission cache key with expiry and revocation scope.
    * Kept for the life of this manager so an empty wallet does not ask again for
    * a decision already made; nothing is persisted, so the next session asks
    * again and, once funded, mints the token as usual. Never holds spending.
    */
-  private readonly sessionGrants: Map<string, number> = new Map()
+  private readonly sessionGrants: Map<string, { expiry: number; originator: string; type: PermissionRequest['type'] }> =
+    new Map()
 
   /** Originator binding for partial actions issued through this manager. */
   private readonly pendingActionOriginators: Map<string, string> = new Map()
@@ -4358,6 +4359,11 @@ export class WalletPermissionsManager implements WalletInterface {
       ...opts
     }
 
+    // Session grants have no UTXO to spend; revoke them locally even in an empty wallet.
+    for (const [key, grant] of this.sessionGrants) {
+      if (grant.originator === preparedOriginator.normalized && include[grant.type]) this.sessionGrants.delete(key)
+    }
+
     const [protocolTokens, basketTokens, certificateTokens, spendingTokens] = await Promise.all([
       include.protocol ? this.listProtocolPermissions({ originator }) : Promise.resolve([]),
       include.basket ? this.listBasketAccess({ originator }) : Promise.resolve([]),
@@ -5998,14 +6004,18 @@ export class WalletPermissionsManager implements WalletInterface {
     if (request.type === 'spending') return
     const key = this.buildRequestKey(request)
     if (!key) return
-    this.sessionGrants.set(key, expiry)
+    this.sessionGrants.set(key, {
+      expiry,
+      originator: this.normalizeOriginator(request.originator),
+      type: request.type
+    })
   }
 
   /** Returns true if the user granted `key` in this session but its token could not be funded. */
   private isSessionGranted(key: string): boolean {
-    const expiry = this.sessionGrants.get(key)
-    if (expiry === undefined) return false
-    if (this.isTokenExpired(expiry)) {
+    const grant = this.sessionGrants.get(key)
+    if (grant === undefined) return false
+    if (this.isTokenExpired(grant.expiry)) {
       this.sessionGrants.delete(key)
       return false
     }
