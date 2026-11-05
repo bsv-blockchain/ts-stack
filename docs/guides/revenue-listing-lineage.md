@@ -141,9 +141,10 @@ exact bounds, owned context and authorized genesis layouts. Earlier full-source
 campaigns passed their then-pinned mutation engine and the unchanged 90% gate;
 those records do not qualify a successor source or engine. The fresh Stryker
 10.1.1 traversal run in [release41943500964](https://github.com/bsv-blockchain/ts-stack/actions/runs/41943500964/job/126970611410)
-detects72 of82 sites (71 assertion kills and one hit-limit termination), below
-90%, with ten survivors and zero uncovered or invalid sites. Publication is
-blocked pending correction and complete fresh qualification.
+reports72 of82 detected sites (71 raw Killed outcomes, including one Jest test
+reaching its five second deadline, plus one hit-limit termination), below90%,
+with ten survivors and zero uncovered or invalid sites. The failed evidence is
+retained; complete fresh publication qualification remains required.
 
 The graph regression also checks bounded native work on the frozen, signed
 merge DAG. It independently counts reachable outpoints and requires shared
