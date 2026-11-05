@@ -2,15 +2,32 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.12'
-last_updated: '2026-10-21'
-last_verified: '2026-10-21'
+version: '1.8.13'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
 ---
 
 # CI Performance Governance
+
+## Current feedback policy
+
+Ordinary contribution, review, merge, publication and deployment never require a
+mutation campaign, score, receipt or resolved mutation finding. Follow
+[the contribution guidance](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md#local-validation) for affected
+package checks and reusable exact-input builds. Root CI controls run their owning
+routing and execution tests; actual shared execution/compiler/dependency changes
+retain their relevant consumer checks. A workflow-only edit does not select every
+package or image.
+
+The `Background mutation findings` workflow is a separate manual, main-only audit
+of one explicit canonical target/partition, with a 30-minute audit job and a
+separate five-minute reporter. Its findings are advisory. No schedule, PR label,
+CI dispatch input or publisher calls a campaign. The mutation measurements and
+partition notes below are historical research, not contribution or release
+requirements. This policy supersedes the retired qualification procedures.
 
 The existing `CI` manual dispatch has an optional
 `application-performance-diagnostics` input, disabled by default. It measures the
@@ -22,12 +39,11 @@ job's original time budget. A maintainer can also
 select it on an ordinary PR run with the explicit
 `ci:application-performance-diagnostics` label before the next source push. The
 label alone does not trigger the workflow. Remove it after the bounded
-measurement. This preserves the ordinary PR mutation policy; complete manual
-mutation qualification is still required once the functional baseline passes. Use
+measurement. This diagnostic does not start mutation testing or change
+ordinary merge requirements. Use
 `gh workflow run ci.yml --ref <branch> -f application-performance-diagnostics=true`
 for an explicitly requested measurement. Ordinary unlabelled pull-request runs, complete
-test discovery, both coverage shards, merge gates and mutation qualification
-remain unchanged.
+test discovery, coverage shards and foreground merge gates remain unchanged.
 
 The repository-only diagnostic retains the original minimum 300 runs, seed
 3242026, replay-free profile, 150-second interruption-as-failure budget and
@@ -121,8 +137,8 @@ does not measure later iteration, and asynchronous work is excluded. Counter
 admission is independent of CPU samples: negative deltas or reordered CPU samples
 remain excluded from performance conclusions, even when bounded scalar counters
 are usable. The preload is diagnostic only; complete ordinary uninstrumented
-coverage and mutation qualification remain mandatory with their unchanged tests,
-counts, seeds, replay settings, deadlines and thresholds.
+coverage retains its unchanged tests, counts, seeds, replay settings, deadlines
+and thresholds. Mutation audits remain separate background findings.
 
 The unchanged diagnostic child already generates Jest/Istanbul coverage. After a
 safe, fully drained measurement and fresh source guards, the driver reads only
@@ -184,21 +200,18 @@ change confined to project entries selects only the changed or added projects.
 Root compiler, other workspace settings and shared CI execution controls select
 the complete graph deliberately.
 
-Mutation selection follows each target's exact implementation, property,
-regression, configuration, and policy inputs. Package-wide mutation suites
-expand only where their configuration really covers the whole package. Image
-jobs follow changed build contexts. Changes to the shared CI workflow validate
-all infrastructure build lanes; unrelated documentation workflow changes do not.
-Shared image/runtime contract inputs fan out to the registered consumers.
+Background audit planning can identify targets from implementation, property,
+regression, configuration and policy inputs without executing them. Image jobs
+follow changed build contexts. Workflow-only changes validate the owning routing
+and control contracts; actual shared image/runtime inputs still select their
+registered consumers.
 
-Recovery-plan mutation execution retains its complete module and seven original
-construction ranges in three parts, separated at the existing failure-handler
-function boundary. Every part keeps the original complete test selection and
-qualification controls. The pinned engine independently proves that all 131
-canonical mutants occur exactly once across the parts; even the call-only range
-without an executable mutant remains in the source union. Complete qualification
-requires their combined original global gate. Neither smaller scheduling parts
-nor a successful initial test run substitute for the finished campaign.
+Background recovery-plan inventory tooling retains its complete module and seven
+original construction ranges in three parts, separated at the existing
+failure-handler boundary. Its static replay checks the canonical source union
+without running a campaign. The earlier inventory contained 131 mutants, each
+exactly once across the parts. These inventory facts are not a mutation outcome
+or a merge/publication requirement.
 
 Revenue-purchase verification separates history extension from transaction binding
 at complete private-method boundaries. Original evidence association, validation
@@ -218,11 +231,8 @@ package build cache); test lanes, lint and policy start only after the repositor
 scope and dependency-review gates pass. Lint and policy run beside the test
 lanes and gate `build-and-test` and the merge gate. The scope job also plans the
 test-lane matrices, since that needs only Node and jq. Exact-head Sonar analysis runs concurrently with the
-shared build and remains mandatory in the final merge gate. Expensive PR mutation waits for both a
-successful shared build and successful exact-head Sonar analysis. Main and
-manual full campaigns allow only the intentional skip of the PR-only analyzer
-gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
-normal mutation launch; suppressed selected mutation is not qualified evidence.
+shared build and remains mandatory in the final merge gate. CI never dispatches
+or waits for mutation work.
 Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
 result. They are sharded by measured per-package check time (the
 `package-artifacts` lane), pack the restored shared build instead of rebuilding each package,
@@ -297,6 +307,24 @@ their Istanbul maps with the library Jest uses and enforces the SDK's configured
 global thresholds, so the result matches one unsharded run. The packed SDK
 browser and UMD contract checks run beside the coverage shards.
 
+The affected-application regression lane runs the output-knowledge suite as six
+Jest shards with the same sequencer and the `output-knowledge-tests` lane, so a
+library pull request that only depends on the application no longer waits on
+whichever path-hash shard drew the slowest property files. On PR runs from
+2026-10-28 the four path-hash shards took 280–600 seconds of Jest time each,
+except shard four, which drew the three slowest files and took 1,054–1,257
+seconds. Planned from the median per-file times, each of six shards carries
+about 475 seconds. Current discovery after merging main finds 256 files, each
+exactly once across six shards of 42–44 files. The historical medians estimate
+474–476 seconds per shard; this is planning evidence, not a new runtime benchmark.
+Earlier hosted proof [run 41072431187](https://github.com/bsv-blockchain/ts-stack/actions/runs/41072431187)
+executed all 254 then-current suites once, with 411–490 seconds of Jest per shard
+and 10.3-minute overall CI compared with 21.2–23.9-minute earlier library PRs.
+Every current file still runs serially within its shard, with property cases,
+seeds and deadlines unchanged. Direct application coverage keeps its independent
+four-shard execution/aggregation contract; this regression change does not claim
+to shorten that separate lane.
+
 The shared build restores each package's outputs from a cache keyed on the git
 blob ids of the package's own files, of every workspace package it depends on,
 and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
@@ -359,28 +387,18 @@ node scripts/ci-performance.mjs --collect \
   --execution-ledger-output ci-execution-ledger.json
 ```
 
-## Explicit mutation diagnostics
+## Background mutation findings
 
-For a PR, apply the `ci:mutation-diagnostics` label before the next ordinary CI
-trigger (opening, reopening or pushing the PR). Adding or removing the label
-alone does not start a campaign; normal qualification resumes on the next run
-without the label. This opt-in permits collecting mutation results after a
-failed or unavailable analyzer prerequisite. It does not waive required Sonar,
-CodeQL, coverage, audit or merge gates, and it does not qualify a failed PR.
+The retired `ci:mutation-diagnostics` label and CI `mutation-diagnostics` input
+have no execution route. CI and publishers do not consume mutation outcomes.
+Only a separately requested, budgeted background audit can select a canonical
+part through `Background mutation findings`. An absent, failed, canceled or
+incomplete audit, or an open finding, cannot block any contribution or release.
+Preserve raw outcomes and reproduce suspected product defects with focused
+regressions; report sensitive findings privately under the security policy.
+This document authorizes no audit dispatch.
 
-For a manual full-tree campaign, select the boolean `mutation-diagnostics`
-workflow input explicitly (default `false`). The normal manual run already
-permits the intentional PR-only Sonar skip; the diagnostic input is only an
-eligibility override if that analyzer prerequisite has another result. A manual
-campaign is not a replacement for the exact-head PR analyzer and merge gate.
-
-Both diagnostic routes still require the successful audited shared build, a
-nonempty selected target set and an uncancelled workflow. They preserve every
-selected source, test, threshold, worker and timeout. Mutation reports remain
-retained on failure. A successful diagnostic mutation result never turns a
-failed prerequisite into successful qualification. Existing mutation siblings
-finish to collect evidence after a mutation failure; this opt-in changes the
-preliminary analyzer eligibility, not matrix failure handling.
+## Refreshing ordinary CI timing evidence
 
 To refresh the evidence without changing the baseline:
 
@@ -428,9 +446,11 @@ coverage, payload sizes, test counts and timeout budgets remain governed.
 ## Complete release acceptance
 
 Dispatch `CI` manually on the reviewed main commit to select the entire governed
-workspace, all infrastructure build lanes and mutation targets. This deliberately
-uses the workflow's all-scope path instead of comparing only the latest commit.
-Source merges still validate their affected scope automatically.
+workspace and all infrastructure build lanes. This explicitly requested full
+foreground check uses the workflow's all-scope path instead of comparing only
+the latest commit; it executes no mutation targets. Source merges validate their
+affected scope automatically. A full dispatch is not an additional prerequisite
+for every ordinary contribution.
 
 Every execution lane uses an explicit successful-preparation condition that
 survives intentionally skipped PR-only gates on a main push and honors explicit
@@ -476,60 +496,27 @@ Sonar waiting (79 seconds), package checks (71 seconds), and Codecov processing
 (29 seconds) were also on that PR's serial path. Required Sonar analysis and
 package checks now overlap execution; the duplicate external reporting wait is
 outside the merge gate. Verify the new run timings before claiming a measured
-speedup. Shared CI changes still select the complete governed execution graph.
+speedup. Shared execution/compiler changes select their consumer graph; workflow-only
+routing changes do not select every package or image.
 
-## Mutation runs as a full campaign, not a PR gate
+## Historical mutation research
 
-Mutation testing no longer executes on ordinary pull requests or pushes.
-`scripts/ci-mutation-scope.mjs` selects no targets for a compared range and
-reports the complete registry as deferred (`high`) or outside (`critical`);
-both mean **not executed, not passed**. The merge gate still verifies that this
-is a complete disjoint canonical partition and that the executed matrix equals
-the `required` list, so an unexpectedly selected or missing job fails closed.
-The scope job needs no workspace install for this: it only reads the registry
-and policy with the pinned Node.js runtime.
+The following inventory, partition and timing notes describe earlier experiments
+and retired qualification workflows. They preserve observations and limitations;
+they do not describe current CI, scheduling, publication permission or required
+work. No campaign can authorize or withhold a merge or release. Do not restart an
+old campaign to qualify an ordinary change. A future explicit background audit
+may reuse inventory tools, preserving source/configuration/seed identity and raw
+outcomes, and may raise findings only.
 
-The complete governed registry runs in three places: a manual `CI`
-`workflow_dispatch` on the reviewed commit (the all-scope path), the weekly
-scheduled or manually dispatched `Mutation quality` workflow (full campaign or
-one exact diagnostic target on any ref), and the release final qualification
-below. Run one of these before publication or when a change to a governed
-boundary needs assertion-strength evidence; `pnpm test:mutation --target <id>`
-remains available locally. The `ci:mutation-diagnostics` label and the
-`mutation-diagnostics` dispatch input keep their analyzer-eligibility meaning
-for those full campaigns.
+Historically, the compared-range selector required the registry on 49 of 60
+merged pull requests; release-notes and health-baseline metadata alone triggered
+27 runs. Documentation and small package changes waited 25–40 minutes behind
+mutation jobs while other lanes finished in under five. These observations
+explain the background-only policy; they are not an acceptable developer
+feedback budget or proof of the latency of the current workflow.
 
-This is a deliberate trade: before this change the compared-range selector
-required the whole registry on 49 of the previous 60 merged pull requests
-(release-notes and health-baseline metadata alone triggered 27 of them), so a
-documentation-only or single-package fix waited 25–40 minutes behind 33–37
-mutation jobs on six runners while every other lane finished in under five.
-Mutation results describe each target's own assertions against its own source;
-a dependency change is covered by the dependents' regular and compatibility
-test lanes, which still run on the affected graph. Record the measured
-`CI performance trend` after adoption before claiming an exact speedup.
-
-Complete final qualification runs every canonical target at the exact source
-candidate before npm, general OCI or Marketplace publication. Per-target raw
-reports and receipts bind source SHA, run, attempt, pinned runtime, configuration,
-lock and target union. The final verifier repeats static instrumentation with the
-pinned Stryker engine and checks complete mutant tuple multisets, source bytes,
-execution configuration and every existing score/no-coverage/invalid gate.
-Zero-mutant files may omit report entries; missing mutant-bearing files cannot.
-Static replay checks inventory, not assertion quality or runtime freshness. Fresh
-report-directory removal, successful matrix jobs and same-attempt receipts supply
-execution provenance. `Ignored` is accepted only when the same source directive
-produces the same reason during replay. Timeout remains part of the existing
-detected score; it is not an assertion-killed result.
-
-A manual single-target campaign is explicitly diagnostic and issues no full
-qualification SHA. Partial, stale, cancelled, failed or missing-target campaigns
-cannot authorize publication. Full reruns must rerun every job: receipts from an
-older attempt do not fill gaps. Weekly qualification remains useful trend evidence
-and cannot qualify a different release source. Qualification is exhaustive over
-the **governed registry**, not every production line in the repository.
-
-### What the current scores measure
+### What the historical scores measure
 
 Changing a minimum score does not make Stryker execute fewer mutants: this
 repository evaluates the governed score after the report completes. Mutation
@@ -569,15 +556,12 @@ A part's score is diagnostic. It still requires complete actual source/config/
 mutant evidence and zero uncovered/invalid outcomes. Only the combined original
 canonical denominator and score can pass the target's required gate. Missing,
 duplicate, overlapping, changed, stale or differently seeded parts fail. Completion
-ordering and part-local mutant IDs cannot change the canonical result. The full
-qualification workflow retains raw reports and independently reconstructs the
-aggregate before it can issue the publication SHA.
+ordering and part-local mutant IDs cannot change the canonical result. The former qualification workflow reconstructed the aggregate; it is retired
+and no workflow now issues a mutation-qualified publication SHA.
 
-PR matrix execution still waits for the prerequisite/analysis policy from #705;
-diagnostics cannot bypass failed final gates. Six matrix jobs remain the global
-parallelism limit, with four Stryker workers in each part. The required PR
-aggregate receives only contents-read permission to check out its verifier; no
-write permission, security setting or branch-protection change is introduced.
+The earlier PR matrix used the prerequisite/analysis policy from #705 and a
+six-job global parallelism limit. That matrix and its required PR aggregate are
+retired. Current background audits execute only one explicitly selected part.
 
 Archived SDKAuth jobs have a 19–37 minute tail. Three smaller parallel jobs can
 reduce that tail, but they repeat the complete dry run three times and add
@@ -675,8 +659,8 @@ results refuse the metadata. Only scalar outcomes and the original process exit 
 the artifact. Failure messages, assertion titles and private/counterexample values remain
 in the temporary directory and are removed with it. No completed property-case count is
 inferred. The original tests, minimum 300 cases, seed 3242026, empty replay, 150-second
-interruption, 180-second case timeout, worker settings, full coverage gates and mutation
-qualification remain mandatory and unchanged. CPU clocks and native monotonic clocks
+interruption, 180-second case timeout, worker settings and full coverage gates
+remain unchanged. Mutation audits remain background-only. CPU clocks and native monotonic clocks
 remain separate; valid timing metadata does not establish successful assertions or a
 speedup.
 
@@ -797,12 +781,10 @@ Fork benchmark, same runners, about six concurrent jobs, every gate passing:
 Partitions alone were slower there because long parts queued behind short ones,
 which longest-first ordering addresses.
 
-The full campaign has since grown to about 70 parts. `mutation-tests.yml` now
-allows 100 parallel parts, so the whole campaign starts at once and its longest
-part bounds wall time; total runner time is unchanged. The canonical global
-gates that merge each partitioned target's parts ran two at a time and added
-about three minutes after the last part; they now all start together. The PR
-diagnostic campaign in `ci.yml` keeps its 6-part limit.
+At the time of these historical runs, the campaign had about 70 parts and the
+former workflow allowed 100 parallel parts. Its aggregate jobs also ran
+concurrently. That workflow and the six-part PR diagnostic matrix are retired;
+the current workflow runs one selected background part.
 
 | Campaign (org runners)                              | Parts | Global gates | Full campaign |
 | --------------------------------------------------- | ----- | ------------ | ------------- |
