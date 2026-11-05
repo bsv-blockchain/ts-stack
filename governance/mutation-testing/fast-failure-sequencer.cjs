@@ -14,7 +14,9 @@ function order(tests) {
   return [...tests].sort((left, right) => {
     const a = key(left)
     const b = key(right)
-    return a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)
+    if (a[0] !== b[0]) return a[0] - b[0]
+    if (a[1] === b[1]) return 0
+    return a[1] < b[1] ? -1 : 1
   })
 }
 
@@ -27,7 +29,9 @@ class FastFailureSequencer {
     return tests
   }
 
-  cacheResults() {}
+  cacheResults() {
+    // This deterministic ordering has no duration cache to persist.
+  }
 }
 
 module.exports = FastFailureSequencer

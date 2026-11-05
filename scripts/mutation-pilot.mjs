@@ -20,7 +20,11 @@ export const PILOT_CASES = {
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 const git = (...args) => execFileSync('/usr/bin/git', args, { cwd: ROOT, encoding: 'utf8' }).trim()
-const ordered = values => [...values].sort()
+const compare = (left, right) => {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+const ordered = values => [...values].sort(compare)
 const mutantKey = (file, mutant) =>
   JSON.stringify([
     file,
@@ -103,7 +107,10 @@ function detectionRegressions(key, mutant, result) {
     ].includes(result.status),
     'Unknown mutant status'
   )
-  if (result.status === 'Survived' && !(result.testsCompleted > 0))
+  if (
+    result.status === 'Survived' &&
+    (!Number.isSafeInteger(result.testsCompleted) || result.testsCompleted <= 0)
+  )
     regressions.push({ key, before: mutant.status, after: 'unexecuted' })
   if (result.status === 'NoCoverage' && mutant.status !== 'NoCoverage')
     regressions.push({ key, before: mutant.status, after: 'new-uncovered' })
@@ -143,7 +150,7 @@ export function comparePilotReports(baseline, candidate) {
         assert(identities.has(id), 'Unknown covered test')
         return identities.get(id)
       })
-      .sort()
+      .sort(compare)
   const regressions = []
   for (const { key, mutant } of original) {
     const result = next.get(key)
@@ -185,6 +192,87 @@ function identity() {
   }
 }
 
+// Yielding promises preserves one Stryker child at a time on each measured runner.
+async function* serialResults(values, operation) {
+  for (const value of values) yield operation(value)
+}
+
+async function executePart({
+  directory,
+  part,
+  variant,
+  run,
+  target,
+  targetId,
+  partitions,
+  policy
+}) {
+  const destination = path.join(directory, part)
+  fs.mkdirSync(destination)
+  const start = performance.now()
+  const log = fs.openSync(path.join(destination, 'execution.log'), 'wx')
+  const env = {
+    ...process.env,
+    FAST_CHECK_NUM_RUNS: String(policy.tool.propertyRuns),
+    FAST_CHECK_SEED: String(policy.tool.propertySeed),
+    FAST_CHECK_PATH: '',
+    TS_STACK_MUTATION_TARGET: targetId,
+    TS_STACK_MUTATION_PARTITION: part,
+    TS_STACK_MUTATION_PILOT_VARIANT: variant,
+    TS_STACK_MUTATION_PILOT_RUN: run
+  }
+  delete env.NODE_OPTIONS
+  const code = await new Promise((resolve, reject) => {
+    const child = spawn(
+      path.join(ROOT, 'node_modules/.bin/stryker'),
+      ['run', path.join(ROOT, 'governance/mutation-testing/pilot.config.mjs')],
+      { cwd: path.join(ROOT, target.packageDirectory), env, stdio: ['ignore', log, log] }
+    )
+    // Bound local runs as well as the workflow job. Preserve logs on timeout.
+    const deadline = setTimeout(() => child.kill('SIGKILL'), 180 * 60 * 1000)
+    const stop = () => child.kill('SIGKILL')
+    process.once('SIGTERM', stop)
+    process.once('SIGINT', stop)
+    const cleanup = () => {
+      clearTimeout(deadline)
+      process.removeListener('SIGTERM', stop)
+      process.removeListener('SIGINT', stop)
+    }
+    child.once('error', error => {
+      cleanup()
+      reject(error)
+    })
+    child.once('exit', code => {
+      cleanup()
+      resolve(code)
+    })
+  }).finally(() => fs.closeSync(log))
+  assert.equal(code, 0, `Pilot process failed: ${variant}/${part}; retain execution.log`)
+  const elapsedSeconds = (performance.now() - start) / 1000
+  const bytes = fs.readFileSync(path.join(destination, 'mutation.json'))
+  const report = JSON.parse(bytes)
+  const evidence = await targetEvidence(
+    ROOT,
+    partitions.find(value => value.id === part).target,
+    targetId,
+    part
+  )
+  const inventory = ordered(evidence.mutants.map(mutant => mutantKey(mutant.fileName, mutant)))
+  assert.deepEqual(
+    ordered(entries(report).map(row => row.key)),
+    inventory,
+    'Noncanonical pilot inventory'
+  )
+  const metrics = calculateMutationMetrics(entries(report).map(row => row.mutant))
+  return {
+    part,
+    elapsedSeconds,
+    reportDigest: hash(bytes),
+    canonicalInventoryDigest: hash(JSON.stringify(inventory)),
+    metrics
+  }
+}
+
 async function execute(caseName, variant, run) {
   const selected = PILOT_CASES[caseName]
   assert(selected, 'Unknown pilot case')
@@ -192,9 +280,9 @@ async function execute(caseName, variant, run) {
   assert.match(run, /^[a-z0-9-]{8,80}$/)
   const target = buildMutationTargets(ROOT)[selected.target]
   const partitions = partitionMutationTarget(selected.target, target)
-  const available = partitions.map(part => part.id)
+  const available = new Set(partitions.map(part => part.id))
   assert(
-    selected.parts.every(part => available.includes(part)),
+    selected.parts.every(part => available.has(part)),
     'Pilot partition moved'
   )
   const directory = path.join(ROOT, 'artifacts/mutation-pilot', run, selected.target, variant)
@@ -203,72 +291,20 @@ async function execute(caseName, variant, run) {
   const source = identity()
   const policy = read(path.join(ROOT, 'governance/mutation-testing/policy.json'))
   const parts = []
-  for (const part of selected.parts) {
-    const destination = path.join(directory, part)
-    fs.mkdirSync(destination)
-    const start = performance.now()
-    const log = fs.openSync(path.join(destination, 'execution.log'), 'wx')
-    const env = {
-      ...process.env,
-      FAST_CHECK_NUM_RUNS: String(policy.tool.propertyRuns),
-      FAST_CHECK_SEED: String(policy.tool.propertySeed),
-      FAST_CHECK_PATH: '',
-      TS_STACK_MUTATION_TARGET: selected.target,
-      TS_STACK_MUTATION_PARTITION: part,
-      TS_STACK_MUTATION_PILOT_VARIANT: variant,
-      TS_STACK_MUTATION_PILOT_RUN: run
-    }
-    delete env.NODE_OPTIONS
-    const code = await new Promise((resolve, reject) => {
-      const child = spawn(
-        path.join(ROOT, 'node_modules/.bin/stryker'),
-        ['run', path.join(ROOT, 'governance/mutation-testing/pilot.config.mjs')],
-        { cwd: path.join(ROOT, target.packageDirectory), env, stdio: ['ignore', log, log] }
-      )
-      // Bound local runs as well as the workflow job. Preserve logs on timeout.
-      const deadline = setTimeout(() => child.kill('SIGKILL'), 180 * 60 * 1000)
-      const stop = () => child.kill('SIGKILL')
-      process.once('SIGTERM', stop)
-      process.once('SIGINT', stop)
-      const cleanup = () => {
-        clearTimeout(deadline)
-        process.removeListener('SIGTERM', stop)
-        process.removeListener('SIGINT', stop)
-      }
-      child.once('error', error => {
-        cleanup()
-        reject(error)
-      })
-      child.once('exit', code => {
-        cleanup()
-        resolve(code)
-      })
-    }).finally(() => fs.closeSync(log))
-    assert.equal(code, 0, `Pilot process failed: ${variant}/${part}; retain execution.log`)
-    const elapsedSeconds = (performance.now() - start) / 1000
-    const bytes = fs.readFileSync(path.join(destination, 'mutation.json'))
-    const report = JSON.parse(bytes)
-    const evidence = await targetEvidence(
-      ROOT,
-      partitions.find(value => value.id === part).target,
-      selected.target,
-      part
-    )
-    const inventory = ordered(evidence.mutants.map(mutant => mutantKey(mutant.fileName, mutant)))
-    assert.deepEqual(
-      ordered(entries(report).map(row => row.key)),
-      inventory,
-      'Noncanonical pilot inventory'
-    )
-    const metrics = calculateMutationMetrics(entries(report).map(row => row.mutant))
-    parts.push({
+  for await (const result of serialResults(selected.parts, part =>
+    executePart({
+      directory,
       part,
-      elapsedSeconds,
-      reportDigest: hash(bytes),
-      canonicalInventoryDigest: hash(JSON.stringify(inventory)),
-      metrics
+      variant,
+      run,
+      target,
+      targetId: selected.target,
+      partitions,
+      policy
     })
-  }
+  ))
+    parts.push(result)
+
   assert(isDeepStrictEqual(identity(), source), 'Source or runtime changed during pilot')
   const metrics = calculateMutationMetrics(
     parts.flatMap(part =>
@@ -361,8 +397,11 @@ async function main(args) {
   throw new Error('Use plan, run CASE baseline|candidate RUN, or compare DIRECTORY')
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  main(process.argv.slice(2)).catch(error => {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await main(process.argv.slice(2))
+  } catch (error) {
     console.error(error.message)
     process.exitCode = 1
-  })
+  }
+}

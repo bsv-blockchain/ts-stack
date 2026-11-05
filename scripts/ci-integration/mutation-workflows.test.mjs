@@ -474,11 +474,12 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
   const full = parse(
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
   )
-  const fullRuntimes = Object.values(full.jobs).flatMap(job =>
-    (job.steps ?? [])
+  const fullRuntimes = ['prepare', 'partition-aggregate', 'mutation-quality'].flatMap(name => {
+    const job = full.jobs[name]
+    return (job.steps ?? [])
       .filter(step => step.uses?.startsWith('actions/setup-node@'))
       .map(step => step.with['node-version'])
-  )
+  })
   assert.deepEqual(fullRuntimes, ['24.22.1', '24.22.1', '24.22.1'])
   const executor = await mutationExecutor(full)
   const setup = executor.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
@@ -584,4 +585,39 @@ test('long complete-job allowances apply only to twenty-four qualification targe
     assert.ok(Object.hasOwn(configured, id), id)
     assert.equal(originalNinetyMinuteTargets.includes(id), false, id)
   }
+})
+
+test('the bounded pilot cannot execute or issue complete qualification', async () => {
+  const { parse } = await import('yaml')
+  const full = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
+  )
+  const pilot = full.jobs['efficiency-pilot']
+  assert.equal(pilot.if, "needs.prepare.outputs.mode == 'pilot'")
+  assert.deepEqual(pilot.permissions, { contents: 'read' })
+  assert.equal(pilot['runs-on'], 'ubuntu-22.04')
+  assert.equal(pilot['timeout-minutes'], 240)
+  assert.equal(pilot.strategy['max-parallel'], 3)
+  assert.deepEqual(
+    pilot.strategy.matrix.include.map(row => row.case),
+    ['native-clock', 'disclosure', 'lookup-buyer']
+  )
+  assert.equal(
+    pilot.steps.find(step => step.uses?.startsWith('actions/setup-node@')).with['node-version'],
+    '24.22.1'
+  )
+  assert.equal(pilot.outputs, undefined)
+  assert.equal(full.jobs['mutation-tests'].if, "needs.prepare.outputs.mode != 'pilot'")
+  assert.equal(
+    full.jobs['mutation-quality'].if,
+    "always() && needs.prepare.outputs.mode != 'pilot'"
+  )
+  const run = pilot.steps.find(
+    step => step.name === 'Baseline then candidate on the same runner'
+  ).run
+  assert.match(run, /node scripts\/mutation-pilot.mjs run "\$PILOT_CASE" baseline "\$run"/)
+  assert.match(run, /node scripts\/mutation-pilot.mjs run "\$PILOT_CASE" candidate "\$run"/)
+  assert.doesNotMatch(run, /mutation-final-qualification|continue-on-error/)
+  const archive = pilot.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))
+  assert.equal(archive.if, 'always()')
 })
