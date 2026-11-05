@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPOSITORY_ROOT } from '../repository-health.mjs'
 const workflow = async file => {
@@ -58,7 +58,7 @@ test('one explicit background part is bounded, isolated and never grants publica
   assert(
     value.jobs.findings.steps.some(step => step.run === 'node scripts/mutation-findings.mjs report')
   )
-  assert.equal((await workflow('mutation-execution.yml')).jobs.execution.if, false)
+  assert.equal(existsSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-execution.yml')), false)
 })
 
 test('publisher source, human approval and immutable artifact guards remain present', async () => {
