@@ -277,6 +277,14 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### LocalKVStore removal stops on an inconsistent empty page
+
+- `LocalKVStore.remove` throws when `listOutputs` returns an empty page while
+  reporting a positive `totalOutputs`, naming that total, the page (offset 0),
+  and the key. It no longer repeats the same request. `set` and lookup keep
+  their existing behavior. No migration is required for a wallet that returns
+  a consistent page.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

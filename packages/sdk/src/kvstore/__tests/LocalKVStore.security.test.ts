@@ -105,3 +105,68 @@ describe('LocalKVStore authenticated output boundary', () => {
     await expect(store.set(key, 'replacement')).rejects.toThrow(/duplicate/i)
   })
 })
+
+describe('LocalKVStore.remove empty page', () => {
+  function pageWallet(totalOutputs: number): {
+    wallet: WalletInterface
+    listOutputs: jest.Mock
+  } {
+    let calls = 0
+    const listOutputs = jest.fn(async () => {
+      calls += 1
+      if (calls > 2) throw new Error('listOutputs was repeated after an empty page')
+      return { totalOutputs, outputs: [] }
+    })
+    return { wallet: { listOutputs } as unknown as WalletInterface, listOutputs }
+  }
+
+  it('rejects an empty page under a positive totalOutputs instead of looping', async () => {
+    const { wallet, listOutputs } = pageWallet(7)
+    const store = new LocalKVStore(wallet, context, false)
+
+    await expect(store.remove(key)).rejects.toThrow(
+      'Wallet returned an empty page (offset 0) for key "security-key" while reporting 7 total outputs'
+    )
+    expect(listOutputs).toHaveBeenCalledTimes(1)
+    expect(listOutputs).toHaveBeenCalledWith(
+      {
+        basket: context,
+        tags: [key],
+        tagQueryMode: 'all',
+        include: 'entire transactions',
+        limit: 10000
+      },
+      undefined
+    )
+  })
+
+  it('returns no transactions when the key is absent', async () => {
+    const listOutputs = jest.fn(async () => ({ totalOutputs: 0, outputs: [] }))
+    const store = new LocalKVStore({ listOutputs } as unknown as WalletInterface, context, false)
+
+    await expect(store.remove(key)).resolves.toEqual([])
+    expect(listOutputs).toHaveBeenCalledTimes(1)
+  })
+
+  it('still returns the default from get when the page is empty under a positive total', async () => {
+    const { wallet, listOutputs } = pageWallet(7)
+    const store = new LocalKVStore(wallet, context, false)
+
+    await expect(store.get(key, 'fallback')).resolves.toBe('fallback')
+    expect(listOutputs).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not apply the empty-page refusal to set', async () => {
+    const { wallet, listOutputs } = pageWallet(7)
+    const continued = wallet as WalletInterface & {
+      getPublicKey: () => Promise<never>
+    }
+    continued.getPublicKey = async () => {
+      throw new Error('set continued past the empty page')
+    }
+    const store = new LocalKVStore(continued, context, false)
+
+    await expect(store.set(key, 'replacement')).rejects.toThrow('set continued past the empty page')
+    expect(listOutputs).toHaveBeenCalledTimes(1)
+  })
+})
