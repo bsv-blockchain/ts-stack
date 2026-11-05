@@ -918,7 +918,8 @@ export function buildMutationTargets(repositoryRoot) {
     'root-eviction-service': rootEvictionTarget(
       repositoryRoot,
       'root-eviction-service.property.test.ts',
-      ['RootEvictionService']
+      ['RootEvictionService'],
+      { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-maintenance': rootEvictionTarget(
       repositoryRoot,
@@ -1445,7 +1446,9 @@ export function buildMutationTargets(repositoryRoot) {
     'output-lookup-index': lookupProviderTarget(
       'lookup-sqlite-index.test.ts',
       ['SQLiteLookupIndex', 'SQLiteLookupIndexStore'],
-      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch']
+      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch'],
+      [],
+      { maxTestRunnerReuse: 8 }
     ),
     'output-lookup-index-records': lookupProviderTarget(
       'lookup-retention.test.ts',
@@ -1522,7 +1525,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/live-lookup-indexeddb.test.ts',
           '<rootDir>/test/live-lookup-http.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'output-knowledge-live-boundaries': {
@@ -3807,6 +3810,10 @@ export function buildMutationTargets(repositoryRoot) {
     config.roots = [...native.roots]
     config.moduleNameMapper = { ...native.moduleNameMapper, ...config.moduleNameMapper }
   }
+  // These native scheduler suites retain multiple SQLite/Engine compositions.
+  // Recycle their worker heaps after bounded reuse without changing coverage,
+  // concurrency, individual deadlines or any mutation source.
+  targets['root-eviction-scheduler'].runnerOptions.maxTestRunnerReuse = 8
   // Relocated LCH tests import the independent application owner by its original
   // source path. Resolve that dependency without redirecting instrumented LCH code.
   for (const id of [

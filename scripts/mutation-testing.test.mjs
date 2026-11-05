@@ -337,7 +337,9 @@ test('live lookup mutation campaigns preserve complete source and test coverage'
       'src/sources/LookupSourceWork.ts'
     ].sort()
   )
-  assert.deepEqual(orchestration.runnerOptions, boundaries.runnerOptions)
+  const { maxTestRunnerReuse, ...orchestrationOptions } = orchestration.runnerOptions
+  assert.equal(maxTestRunnerReuse, 8)
+  assert.deepEqual(orchestrationOptions, boundaries.runnerOptions)
   const selected = selectAffectedMutationTargets(configured, [
     'packages/application/output-knowledge/test/live-lookup-http.test.ts'
   ])
@@ -617,7 +619,9 @@ test('measured root targets recycle workers while retaining complete canonical s
     'root-eviction-journal',
     'root-eviction-records',
     'root-eviction-codec',
-    'root-eviction-storage'
+    'root-eviction-storage',
+    'root-eviction-scheduler',
+    'root-eviction-service'
   ])
   for (const [id, target] of Object.entries(targets)) {
     if (id.startsWith('root-eviction-')) {
@@ -625,10 +629,21 @@ test('measured root targets recycle workers while retaining complete canonical s
       if (recycled.has(id))
         assert.deepEqual(
           target.runnerOptions.jest.config.testMatch,
-          selected.runnerOptions.jest.config.testMatch
+          id === 'root-eviction-scheduler'
+            ? [
+                '<rootDir>/test/root-eviction-scheduler*.test.ts',
+                ...selected.runnerOptions.jest.config.testMatch
+              ]
+            : selected.runnerOptions.jest.config.testMatch
         )
     }
   }
+  assert.deepEqual(targets['root-eviction-scheduler'].mutate, [
+    'src/root-eviction/RootEvictionScheduler.ts'
+  ])
+  assert.deepEqual(targets['root-eviction-service'].mutate, [
+    'src/root-eviction/RootEvictionService.ts'
+  ])
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
 })
 
@@ -753,10 +768,14 @@ test('acquisition foundations retain five complete modules and native recovery/f
 
 test('proposal and lookup bounded recycling changes only the selected runner entries', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  for (const id of ['proposal-journal-send', 'overlay-proposal-http', 'output-lookup-sessions'])
+  for (const id of [
+    'proposal-journal-send',
+    'overlay-proposal-http',
+    'output-lookup-sessions',
+    'output-lookup-index'
+  ])
     assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, 8)
   for (const id of [
-    'output-lookup-index',
     'output-lookup-index-records',
     'output-lookup-session-records',
     'output-lookup-session-payloads'
