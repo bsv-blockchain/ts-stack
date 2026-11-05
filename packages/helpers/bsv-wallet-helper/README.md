@@ -52,7 +52,8 @@ console.log('Transaction preview:', preview)
 - **Automatic BRC-29 derivation** - omit addressOrParams to use secure random key derivation
 - **Automatic change outputs** with fee calculation
 - Per-output OP_RETURN metadata
-- Per-output basket and customInstructions fields
+- Per-output basket, customInstructions and tags fields
+- Transaction labels for `listActions` lookups
 - Transaction-level options (randomizeOutputs, trustSelf, etc.)
 - Preview mode to inspect before execution
 - Input support for spending UTXOs
