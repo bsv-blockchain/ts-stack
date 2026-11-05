@@ -307,12 +307,17 @@ describe('bounded provider batch construction', () => {
         '1',
         abort.signal
       )
-    ).rejects.toMatchObject({ code: 'cancelled' })
+    ).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Lookup response construction cancelled'
+    })
   })
 
   it.each([0, 1025, NaN, 1.5])('rejects unbounded scan work %s', async maximum => {
     const { index } = await fixture()
-    expect(() => new LookupBatchBuilder(index, maximum)).toThrow('scan budget')
+    expect(() => new LookupBatchBuilder(index, maximum)).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid lookup response scan budget' })
+    )
   })
 })
 
@@ -560,7 +565,10 @@ describe('live reader work and current clock boundaries', () => {
         () => '1000'
       )
       await expect(reader.capture('1000', new AbortController().signal)).rejects.toMatchObject({
-        code: captured.complete ? 'reset-required' : 'limited'
+        code: captured.complete ? 'reset-required' : 'limited',
+        message: captured.complete
+          ? 'Lookup index did not capture its evaluation time'
+          : 'Lookup timer work remains before a complete watermark'
       })
       await expect(
         reader.read(

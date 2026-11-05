@@ -3,6 +3,7 @@ import { schedulerFixture } from './root-eviction-scheduler-fixture.js'
 import { rootAwaitStart, rootDeferred } from './root-eviction-service-fixture.js'
 import { requester } from './root-eviction-fixture.js'
 import { RootEvictionScheduler } from '../src/root-eviction/RootEvictionScheduler.js'
+import { BoundedOutputWork } from '../src/internal/BoundedOutputWork.js'
 
 afterEach(() => {
   jest.useRealTimers()
@@ -209,6 +210,46 @@ it('cancels in-progress evaluation before its final commit', async () => {
     expect(await f.store.projections(64)).toEqual([])
   } finally {
     release.resolve()
+    await f.cleanup()
+  }
+})
+
+it('physically drains a native job cancelled after admission but before evaluation begins', async () => {
+  const f = await schedulerFixture()
+  let stopping: Promise<void> | undefined
+  try {
+    await f.retain()
+    const worker = f.worker()
+    const run = BoundedOutputWork.prototype.run
+    // Pass through the real admission owner, then stop in its deferred-start
+    // window. The real SQLite journal, maintenance and cancellation run intact.
+    const admission = jest
+      .spyOn(BoundedOutputWork.prototype, 'run')
+      .mockImplementationOnce(function (this: BoundedOutputWork, ...args) {
+        const pending = run.apply(this, args)
+        stopping = worker.stop()
+        return pending
+      })
+    const report = await worker.runOnce()
+    expect(admission).toHaveBeenCalledTimes(1)
+    expect(report).toMatchObject({ scanned: 1, expiredTargets: 0, started: 1 })
+    expect(report.failures).toEqual([
+      {
+        digest: expect.any(String),
+        phase: 'evaluation',
+        error: expect.objectContaining({ code: 'cancelled' })
+      }
+    ])
+    expect(f.evaluate).not.toHaveBeenCalled()
+    expect(stopping).toBeDefined()
+    await stopping
+    expect(
+      (await f.store.result(requester, 'scheduler_request_one', '150')).outcomes[0].actionStatus
+    ).toBe('pending')
+    expect(await f.store.projections(64)).toEqual([])
+    expect(await f.store.head()).toBeDefined()
+  } finally {
+    await stopping
     await f.cleanup()
   }
 })
