@@ -16,7 +16,7 @@ tags: [reference, ci, performance, github-actions]
 
 Ordinary contribution, review, merge, publication and deployment never require a
 mutation campaign, score, receipt or resolved mutation finding. Follow
-[the contribution guidance](../../CONTRIBUTING.md#local-validation) for affected
+[the contribution guidance](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md#local-validation) for affected
 package checks and reusable exact-input builds. Root CI controls run their owning
 routing and execution tests; actual shared execution/compiler/dependency changes
 retain their relevant consumer checks. A workflow-only edit does not select every
