@@ -302,7 +302,11 @@ artifact and publication checks remain in force.
 Every canonical mutation target must have a successful fresh report and matching
 source/run/attempt/configuration/lock-bound receipt. The verifier reconstructs
 canonical source ranges and mutant inventory with pinned Stryker 10.1.1 and rechecks
-all existing target gates. A partial manual target is diagnostic only. Earlier
+all existing target gates. Reported kills caused by interrupted property exploration or a Jest test/hook
+deadline are counted separately as `runnerLimitedKills` and fail execution and
+independent raw-report qualification, including per-part checks. Raw Stryker
+counts/scores and explicit Stryker Timeout semantics are preserved. A high raw
+score does not waive incomplete evidence. A partial manual target is diagnostic only. Earlier
 weekly passes, previous attempts and reports from another source cannot satisfy
 the gate; rerun the complete workflow when a full attempt needs replacement.
 
@@ -342,7 +346,7 @@ and score. The final campaign rejects any execution failure or cancellation,
 even when another target's aggregate succeeded. Pilot mode cannot run these
 aggregates or issue qualification.
 
-The [three-case efficiency pilot](../../governance/mutation-testing/PILOT-2026-11-04.md)
+The [three-case efficiency pilot](https://github.com/bsv-blockchain/ts-stack/blob/main/governance/mutation-testing/PILOT-2026-11-04.md)
 measures ordering separately from failure stopping. It grants no evidence reuse
 or incremental-state exemption; neither a historical report nor a diagnostic
 pilot can qualify publication.

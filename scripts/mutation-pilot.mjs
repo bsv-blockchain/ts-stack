@@ -7,7 +7,11 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
-import { calculateMutationMetrics, evaluateMutationReport } from './mutation-testing.mjs'
+import {
+  calculateMutationMetrics,
+  evaluateMutationReport,
+  mutationRunnerLimit
+} from './mutation-testing.mjs'
 import { partitionMutationTarget } from './mutation-partitions.mjs'
 import { targetEvidence } from './mutation-final-qualification.mjs'
 
@@ -157,17 +161,17 @@ export function comparePilotReports(baseline, candidate) {
   const regressions = []
   const limits = (rows, arm) =>
     rows.flatMap(({ key, mutant }) => {
-      const reason = mutant.statusReason ?? ''
-      if (mutant.status !== 'Killed') return []
-      let kind
-      if (/^(?:Error: )?Property interrupted after \d+ tests/m.test(reason))
-        kind = 'property-exploration-limit'
-      else if (
-        /^Error:(?: thrown:)? ["']?Exceeded timeout of \d+ ms for a (?:test|hook)/m.test(reason)
-      )
-        kind = 'jest-deadline'
+      const kind = mutationRunnerLimit(mutant)
       if (!kind) return []
-      return [{ key, arm, kind, reportedStatus: mutant.status, reason: reason.split('\n')[0] }]
+      return [
+        {
+          key,
+          arm,
+          kind,
+          reportedStatus: mutant.status,
+          reason: mutant.statusReason.split('\n')[0]
+        }
+      ]
     })
   const harnessLimitedKills = [
     ...limits(original, 'baseline'),
