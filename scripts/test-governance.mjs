@@ -548,13 +548,13 @@ function validateMutationWorkflows(root, tool, errors) {
   if (typeof file !== 'string' || !fs.existsSync(path.join(root, file))) return
   const source = fs.readFileSync(path.join(root, file), 'utf8')
   if (
-    !/^  workflow_dispatch:/m.test(source) ||
-    /^  (?:workflow_call|push|pull_request|schedule):/m.test(source)
+    !/^ {2}workflow_dispatch:/m.test(source) ||
+    /^ {2}(?:workflow_call|push|pull_request|schedule):/m.test(source)
   )
     errors.push('background mutation workflow must have only an explicit dispatch entry point')
   if (!workflowRunsMutation(workflowJob(source, 'audit')))
     errors.push('background mutation workflow lacks an executable audit')
-  if (!/^    timeout-minutes: 30$/m.test(workflowJob(source, 'audit')))
+  if (!/^ {4}timeout-minutes: 30$/m.test(workflowJob(source, 'audit')))
     errors.push('background mutation audit must have its 30 minute budget')
   if (!source.includes('node scripts/mutation-findings.mjs report'))
     errors.push('background mutation workflow must raise advisory findings')

@@ -5,8 +5,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
-import { selectedMutationPartition } from './mutation-partitions.mjs'
+import { partitionMutationTarget } from './mutation-partitions.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
+
+export function validateMutationAuditSelection(target, partition) {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)[target]
+  assert(configured, 'Select one exact governed target')
+  assert(
+    partitionMutationTarget(target, configured).some(part => part.id === partition),
+    'Select one canonical partition; whole is allowed only for an unpartitioned target'
+  )
+}
 
 export function mutationFinding(environment) {
   const target = environment.MUTATION_AUDIT_TARGET
@@ -31,7 +40,7 @@ export function mutationFinding(environment) {
 
 export function publishMutationFinding(
   environment,
-  runGh = args => execFileSync('gh', args, { encoding: 'utf8' })
+  runGh = args => execFileSync('/usr/bin/gh', args, { encoding: 'utf8' })
 ) {
   const finding = mutationFinding(environment)
   if (environment.GITHUB_STEP_SUMMARY)
@@ -73,10 +82,10 @@ export function publishMutationFinding(
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === 'validate') {
-    const target = process.env.MUTATION_AUDIT_TARGET
-    const configured = buildMutationTargets(REPOSITORY_ROOT)[target]
-    assert(configured, 'Select one exact governed target')
-    selectedMutationPartition(target, configured, process.env.MUTATION_AUDIT_PARTITION)
+    validateMutationAuditSelection(
+      process.env.MUTATION_AUDIT_TARGET,
+      process.env.MUTATION_AUDIT_PARTITION
+    )
   } else {
     assert.equal(process.argv[2], 'report')
     publishMutationFinding(process.env)

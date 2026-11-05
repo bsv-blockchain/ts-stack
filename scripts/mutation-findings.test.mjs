@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { mutationFinding, publishMutationFinding } from './mutation-findings.mjs'
+import {
+  mutationFinding,
+  publishMutationFinding,
+  validateMutationAuditSelection
+} from './mutation-findings.mjs'
 const environment = {
   MUTATION_AUDIT_TARGET: 'p2p-messages',
   MUTATION_AUDIT_PARTITION: 'whole',
@@ -53,4 +57,20 @@ test('findings create or update the exact matching open issue and clean their bo
     assert.equal(calls[1][1], existing ? 'comment' : 'create')
     assert.equal(existsSync(bodyFile), false)
   }
+})
+
+test('background selection rejects whole-target and legacy aliases for partitioned work', () => {
+  assert.doesNotThrow(() => validateMutationAuditSelection('private-lookup-buyer', 'payment'))
+  assert.throws(
+    () => validateMutationAuditSelection('private-lookup-buyer', 'whole'),
+    /one canonical partition/
+  )
+  assert.throws(
+    () => validateMutationAuditSelection('private-lookup-buyer', undefined),
+    /one canonical partition/
+  )
+  assert.throws(
+    () => validateMutationAuditSelection('unknown-target', 'whole'),
+    /exact governed target/
+  )
 })
