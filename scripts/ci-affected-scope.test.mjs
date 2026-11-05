@@ -160,10 +160,13 @@ test('docs and conformance work are selected from their actual inputs', () => {
 })
 
 test('shared CI execution and result gates select the complete governed workspace', () => {
-  for (const file of ['.github/workflows/ci.yml', 'scripts/ci-result-gate.mjs']) {
-    assert.equal(selectWorkspaceScope(projects, [file]).direct.length, 4)
-  }
-  assert.equal(selectInfraComponents(['.github/workflows/ci.yml']).length, 9)
+  for (const file of ['.github/workflows/ci.yml', 'scripts/ci-result-gate.mjs'])
+    assert.deepEqual(selectWorkspaceScope(projects, [file]), {
+      direct: [],
+      affected: [],
+      build: []
+    })
+  assert.deepEqual(selectInfraComponents(['.github/workflows/ci.yml']), [])
 })
 
 test('required mutation targets add their built dependencies without widening package tests', () => {
