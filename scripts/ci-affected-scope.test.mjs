@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
+  applicationCoverageDurationsChanged,
   changedLockfileImporters,
   conformanceIsAffected,
   dependencyClosure,
@@ -372,4 +373,51 @@ test('project registry entry changes select only those projects', () => {
     true
   )
   assert.equal(projectRegistryChanges('', base).full, true)
+})
+
+test('application coverage controls select their complete owning package instead of every project', () => {
+  const application = {
+    name: '@bsv/output-knowledge',
+    path: 'packages/application/output-knowledge',
+    manifest: { name: '@bsv/output-knowledge' }
+  }
+  const governed = [...projects, application]
+  for (const file of [
+    'scripts/output-knowledge-coverage.mjs',
+    'scripts/output-knowledge-coverage-validation.mjs'
+  ])
+    assert.deepEqual(selectWorkspaceScope(governed, [file]).direct, [application.name])
+  assert.deepEqual(
+    selectWorkspaceScope(governed, ['scripts/output-knowledge-coverage.test.mjs']).direct,
+    []
+  )
+  assert.equal(
+    selectWorkspaceScope(governed, ['scripts/jest-duration-sequencer.cjs']).direct.length,
+    governed.length - 1
+  )
+})
+
+test('only changes to actual application coverage durations select application coverage', () => {
+  const base = {
+    lanes: {
+      'output-knowledge-coverage': { seconds: { 'test/a.test.ts': 10 } },
+      'output-knowledge-tests': { seconds: { 'test/a.test.ts': 5 } }
+    }
+  }
+  const unchanged = structuredClone(base)
+  unchanged.lanes['output-knowledge-tests'].seconds['test/a.test.ts'] = 50
+  unchanged.lanes['output-knowledge-coverage'].source = 'corrected provenance text'
+  assert.equal(
+    applicationCoverageDurationsChanged(JSON.stringify(base), JSON.stringify(unchanged)),
+    false
+  )
+  const changed = structuredClone(base)
+  changed.lanes['output-knowledge-coverage'].seconds['test/a.test.ts'] = 20
+  assert.equal(
+    applicationCoverageDurationsChanged(JSON.stringify(base), JSON.stringify(changed)),
+    true
+  )
+  assert.equal(applicationCoverageDurationsChanged('{}', JSON.stringify(base)), true)
+  assert.equal(applicationCoverageDurationsChanged(JSON.stringify(base), '{}'), true)
+  assert.equal(applicationCoverageDurationsChanged('{', JSON.stringify(base)), true)
 })
