@@ -54,10 +54,13 @@ function entries(report) {
 function testIdentities(report) {
   const result = new Map()
   for (const [file, value] of Object.entries(report.testFiles ?? {}))
-    for (const test of value.tests) {
+    for (const [ordinal, test] of value.tests.entries()) {
       assert.equal(typeof test.id, 'string', 'Missing test identity')
       assert(!result.has(test.id), 'Repeated test identity')
-      result.set(test.id, JSON.stringify([file, hash(value.source), test.name, test.location]))
+      result.set(
+        test.id,
+        JSON.stringify([file, ordinal, hash(value.source), test.name, test.location])
+      )
     }
   return result
 }
@@ -210,6 +213,7 @@ async function executePart({
   const destination = path.join(directory, part)
   fs.mkdirSync(destination)
   const start = performance.now()
+  console.log(`Starting ${variant} ${targetId}/${part}`)
   const log = fs.openSync(path.join(destination, 'execution.log'), 'wx')
   const env = {
     ...process.env,
@@ -226,11 +230,32 @@ async function executePart({
     const child = spawn(
       path.join(ROOT, 'node_modules/.bin/stryker'),
       ['run', path.join(ROOT, 'governance/mutation-testing/pilot.config.mjs')],
-      { cwd: path.join(ROOT, target.packageDirectory), env, stdio: ['ignore', log, log] }
+      {
+        cwd: path.join(ROOT, target.packageDirectory),
+        env,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
     )
+    for (const [input, output] of [
+      [child.stdout, process.stdout],
+      [child.stderr, process.stderr]
+    ])
+      input?.on('data', bytes => {
+        fs.writeSync(log, bytes)
+        output.write(bytes)
+      })
     // Bound local runs as well as the workflow job. Preserve logs on timeout.
-    const deadline = setTimeout(() => child.kill('SIGKILL'), 180 * 60 * 1000)
-    const stop = () => child.kill('SIGKILL')
+    const stop = () => {
+      if (child.pid === undefined) return
+      try {
+        // The detached POSIX group belongs only to this measured Stryker child.
+        process.kill(-child.pid, 'SIGKILL')
+      } catch (error) {
+        if (error.code !== 'ESRCH') child.kill('SIGKILL')
+      }
+    }
+    const deadline = setTimeout(stop, 180 * 60 * 1000)
     process.once('SIGTERM', stop)
     process.once('SIGINT', stop)
     const cleanup = () => {
@@ -242,7 +267,7 @@ async function executePart({
       cleanup()
       reject(error)
     })
-    child.once('exit', code => {
+    child.once('close', code => {
       cleanup()
       resolve(code)
     })
@@ -274,6 +299,10 @@ async function executePart({
 }
 
 async function execute(caseName, variant, run) {
+  assert(
+    ['linux', 'darwin'].includes(process.platform),
+    'Pilot requires a POSIX measurement runner'
+  )
   const selected = PILOT_CASES[caseName]
   assert(selected, 'Unknown pilot case')
   assert(['baseline', 'candidate'].includes(variant), 'Unknown pilot variant')

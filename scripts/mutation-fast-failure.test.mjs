@@ -130,3 +130,19 @@ test('pilot rejects omitted sites, changed code/tests, relaxed settings and an a
     assert.throws(() => comparePilotReports(report(), candidate))
   }
 })
+
+test('coverage identities survive ID renumbering and distinguish duplicate test definitions', () => {
+  const baseline = report()
+  const candidate = report('Killed', true)
+  candidate.testFiles['test/full.test.ts'].tests[0].id = '99'
+  candidate.files['src/owner.ts'].mutants[0].coveredBy = ['99']
+  assert.equal(comparePilotReports(baseline, candidate).noWeaker, true)
+  for (const value of [baseline, candidate]) {
+    const file = value.testFiles['test/full.test.ts']
+    file.tests.push({ ...structuredClone(file.tests[0]), id: 'different-case' })
+  }
+  // Same name/location can describe distinct test.each cases. Swapping the
+  // covering case must not be mistaken for a harmless global ID renumbering.
+  candidate.files['src/owner.ts'].mutants[0].coveredBy = ['different-case']
+  assert.throws(() => comparePilotReports(baseline, candidate), /coverage changed/)
+})

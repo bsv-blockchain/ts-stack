@@ -612,12 +612,27 @@ test('the bounded pilot cannot execute or issue complete qualification', async (
     full.jobs['mutation-quality'].if,
     "always() && needs.prepare.outputs.mode != 'pilot'"
   )
-  const run = pilot.steps.find(
-    step => step.name === 'Baseline then candidate on the same runner'
-  ).run
-  assert.match(run, /node scripts\/mutation-pilot.mjs run "\$PILOT_CASE" baseline "\$run"/)
-  assert.match(run, /node scripts\/mutation-pilot.mjs run "\$PILOT_CASE" candidate "\$run"/)
-  assert.doesNotMatch(run, /mutation-final-qualification|continue-on-error/)
-  const archive = pilot.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))
-  assert.equal(archive.if, 'always()')
+  const baseline = pilot.steps.find(step => step.name === 'Baseline on the measured runner')
+  const candidate = pilot.steps.find(step => step.name === 'Candidate on the same measured runner')
+  const compare = pilot.steps.find(step => step.name === 'Compare complete paired raw reports')
+  assert(pilot.steps.indexOf(baseline) < pilot.steps.indexOf(candidate))
+  assert(pilot.steps.indexOf(candidate) < pilot.steps.indexOf(compare))
+  assert.match(
+    baseline.run,
+    /run "\$PILOT_CASE" baseline "pilot-\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT"/
+  )
+  assert.match(
+    candidate.run,
+    /run "\$PILOT_CASE" candidate "pilot-\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT"/
+  )
+  assert.doesNotMatch(
+    pilot.steps.map(step => step.run ?? '').join('\n'),
+    /mutation-final-qualification|continue-on-error/
+  )
+  const archives = pilot.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
+  assert.equal(archives.length, 2)
+  assert(archives.every(step => step.if === 'always()'))
+  assert(archives[0].with.path.endsWith('/baseline'))
+  assert(pilot.steps.indexOf(archives[0]) < pilot.steps.indexOf(candidate))
+  assert.notEqual(archives[0].with.name, archives[1].with.name)
 })

@@ -29,7 +29,7 @@ const report = resolve(
 // original selection, operators, seed, deadlines, worker limits and source.
 export default {
   ...config,
-  reporters: ['json'],
+  reporters: ['progress-append-only', 'json'],
   jsonReporter: { fileName: report },
   ...(process.env.TS_STACK_MUTATION_PILOT_VARIANT === 'candidate'
     ? {

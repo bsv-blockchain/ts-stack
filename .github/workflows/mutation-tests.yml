@@ -318,15 +318,26 @@ jobs:
         run: |
           tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
           rm .ci-artifacts/build-outputs.tar.gz
-      - name: Baseline then candidate on the same runner
+      - name: Baseline on the measured runner
         env:
           PILOT_CASE: ${{ matrix.case }}
+        run: node scripts/mutation-pilot.mjs run "$PILOT_CASE" baseline "pilot-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Expose the baseline before starting the candidate
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-pilot-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}-baseline
+          path: artifacts/mutation-pilot/pilot-${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.target }}/baseline
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Candidate on the same measured runner
+        env:
+          PILOT_CASE: ${{ matrix.case }}
+        run: node scripts/mutation-pilot.mjs run "$PILOT_CASE" candidate "pilot-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Compare complete paired raw reports
+        env:
           PILOT_TARGET: ${{ matrix.target }}
-        run: |
-          run="pilot-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          node scripts/mutation-pilot.mjs run "$PILOT_CASE" baseline "$run"
-          node scripts/mutation-pilot.mjs run "$PILOT_CASE" candidate "$run"
-          node scripts/mutation-pilot.mjs compare "artifacts/mutation-pilot/$run/$PILOT_TARGET"
+        run: node scripts/mutation-pilot.mjs compare "artifacts/mutation-pilot/pilot-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/$PILOT_TARGET"
       - name: Preserve raw diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
