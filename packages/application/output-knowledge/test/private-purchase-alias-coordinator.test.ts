@@ -1,6 +1,77 @@
 import { expect, it } from '@jest/globals'
 import { canonicalOutputJSON } from '@bsv/sdk'
 import { purchaseAliasCoordinatorFixture } from './private-purchase-alias-coordinator.fixture.js'
+import { purchaseContractFixture } from './private-purchase-contract.fixture.js'
+import { purchaseProgressFixture } from './private-purchase-progress.fixture.js'
+import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
+import { purchaseEvidenceFixture } from './private-purchase-evidence.fixture.js'
+import { purchaseAliasesFixture } from './private-purchase-aliases.fixture.js'
+import { purchaseAliasOwnerFixture } from './private-purchase-alias-owner.fixture.js'
+
+it('promotes a freshly mined admitted alias before first release and reopens its exact immutable result', async () => {
+  const policy = { kind: 'mined' as const, confirmations: 1 },
+    contract = purchaseContractFixture({ releasePolicy: policy })
+  contract.body.services[0].profiles[0].parameters.releasePolicies = [policy]
+  const progress = purchaseProgressFixture(contract),
+    store = purchaseStoreFixture({}, undefined, undefined, progress),
+    evidence = purchaseEvidenceFixture(4, store),
+    aliases = purchaseAliasesFixture(64, undefined, evidence),
+    owner = purchaseAliasOwnerFixture(8, 2 * 1048576, undefined, aliases),
+    f = purchaseAliasCoordinatorFixture(
+      {
+        release: {
+          async assess(custody, saved, candidate) {
+            await Promise.resolve()
+            return {
+              evidence: {
+                chain: custody.original.request.listing.chain,
+                txid: candidate.txid,
+                policy,
+                acceptedAt: saved.admission!.acceptedAt,
+                blockEvidence: {
+                  blockHash: 'b3'.repeat(32),
+                  height: '1',
+                  tipHash: 'b3'.repeat(32),
+                  tipHeight: '1',
+                  beef: candidate.beef,
+                  contextId: 'controlled-alias-currentness',
+                  chainPolicyDigest: 'b2'.repeat(32)
+                }
+              },
+              checkCurrent() {}
+            }
+          }
+        }
+      },
+      false,
+      owner
+    )
+  try {
+    await f.prepare()
+    const candidate = aliases.variant(74)
+    await f.submit(candidate)
+    expect(f.load().progress.status).toBe('admitted-delivery-pending')
+    expect(f.load().aliases.state.selected).toBeNull()
+    expect(f.base.counts.issue).toBe(0)
+    f.setMined(true)
+    await f.recover()
+    const saved = f.load()
+    expect(saved.progress.status).toBe('delivered')
+    expect(saved.aliases.state.selected).toMatchObject({
+      txid: candidate.txid,
+      admission: 'admitted'
+    })
+    expect(f.base.counts.issue).toBe(1)
+    expect(f.base.counts.potatoes).toBe(1)
+    await f.reopen()
+    await f.recover()
+    expect(f.load().progress).toEqual(saved.progress)
+    expect(f.base.counts.issue).toBe(1)
+    expect(f.base.counts.potatoes).toBe(1)
+  } finally {
+    await f.dispose()
+  }
+})
 
 it('composes preparation, exact per-alias admission and one immutable private release across restart and later selection', async () => {
   const f = purchaseAliasCoordinatorFixture()

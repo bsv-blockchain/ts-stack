@@ -25,10 +25,10 @@ afterEach(() => {
 export function purchaseStoreFixture(
   overrides: Partial<PrivatePurchaseStoreLimits> = {},
   clockProfile?: 'native-observation-v1',
-  candidateProfile?: 'full-purchase-commitment-v1'
+  candidateProfile?: 'full-purchase-commitment-v1',
+  f = purchaseProgressFixture()
 ) {
-  const f = purchaseProgressFixture(),
-    purchaseCommitment = candidateProfile ? 'a4'.repeat(32) : undefined,
+  const purchaseCommitment = candidateProfile ? 'a4'.repeat(32) : undefined,
     directory = mkdtempSync(join(tmpdir(), 'private-purchase-store-')),
     path = join(directory, 'private.db'),
     index = createSecretKey(Buffer.alloc(32, 83)),

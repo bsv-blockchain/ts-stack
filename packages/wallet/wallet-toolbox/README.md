@@ -6,6 +6,20 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Diagnosing foreground BEEF verification failures
+
+Foreground Storage processing retains its signed transaction before proof
+verification and submission. An error response therefore does not prove that
+no transaction exists or that a replacement spend is safe. Reconcile the
+existing action before creating another payment. With a WalletLogger enabled,
+failed verification now records the last root's height, expected root and
+accepted/declined/pending result, or the structural stage when no root was
+checked. Provider exceptions remain exceptions rather than invalid-proof
+verdicts; public error identities and all verification checks are preserved.
+This diagnostic distinction does not identify a historical missing-header or
+wrong-root cause when that provider response was never retained. Publication
+of these source changes and upgrading remote Storage are separate operations.
+
 ## Remote storage timeouts
 
 `StorageClient` accepts optional `authFetchOptions` in its existing third
@@ -85,6 +99,18 @@ public API or wire migration is required. Browser IndexedDB does not use the
 SQL receipt claim. Source versions are candidates until published through the
 protected release workflow; upgrading an app alone does not upgrade its remote
 storage server.
+
+The 2.15.3 source candidate restores legacy AtomicBEEF normalization before the
+strict argument framing check. An exactly decoded envelope may contain unrelated
+branches from an older sender; internalization retains only its declared payment
+and required dependencies, then reruns the unchanged SDK validator. Truncated or
+trailing data, an absent subject and missing dependencies remain rejected. Normal
+chain proof, Script, remittance ownership and receipt checks still run. SQL receipt
+admission and manager forwarding use canonical bytes without changing other caller
+arguments. No API, wire or schema migration is required. Upgrade the wallet host
+and remote Storage separately; a source candidate is not a deployed release.
+For a previously rejected receipt, reconcile the original TXID before retrying the
+original import. Do not create a replacement payment or rebroadcast a mined one.
 
 ## Reorg proof recovery
 

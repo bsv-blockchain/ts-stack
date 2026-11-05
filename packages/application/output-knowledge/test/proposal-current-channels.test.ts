@@ -1,5 +1,5 @@
 import { expect, it } from '@jest/globals'
-import { type OutputProposalState, type OutputSignedProposal } from '@bsv/sdk'
+import { verifyOutputPacket, type OutputProposalState, type OutputSignedProposal } from '@bsv/sdk'
 import { ProposalCurrentChannels } from '../src/proposals/ProposalCurrentChannels.js'
 import { author, recipient, outsider, createRegistry, signed } from './proposal-client-fixture.js'
 import { fixture, successor, parameters, query, source } from './proposal-current-fixture.js'
@@ -345,6 +345,33 @@ it('preserves identical repeated state without inventing a replacement', () => {
   })
 })
 
+it('accepts the first live pair after a durable empty snapshot at sequence zero', () => {
+  const f = fixture(),
+    proposal = signed()
+  f.append('live', f.pair(proposal), '0')
+  expect(f.result()).toMatchObject({
+    consistent: true,
+    channels: [{ proposal, history: 'genesis-linked', activeIntent: true }]
+  })
+})
+
+it('refuses a different valid signed envelope for the same retained proposal body', () => {
+  const f = fixture(),
+    first = signed(),
+    repeated = signed(first.body)
+  expect(repeated.body).toEqual(first.body)
+  expect(repeated.signature).not.toBe(first.signature)
+  expect(verifyOutputPacket('proposal', first, author)).toBe(true)
+  expect(verifyOutputPacket('proposal', repeated, author)).toBe(true)
+  f.append('snapshot', f.pair(first))
+  f.append('live', f.pair(repeated))
+  expect(f.result()).toMatchObject({
+    consistent: false,
+    inconsistency: { reason: 'An identical signed body changed its retained envelope' },
+    channels: [{ proposal: first, activeIntent: false }]
+  })
+})
+
 it('does not infer current membership from an unknown removal identifier', () => {
   const f = fixture(),
     first = signed(),
@@ -393,3 +420,176 @@ it('rejects inconsistent, duplicated and sparse retained group coordinates', () 
   f.view.heads[0].order!.observations = 3
   expect(() => f.result()).toThrow('incomplete')
 })
+
+it.each([
+  { group: -1 },
+  { group: 0.5 },
+  { observation: -1 },
+  { observation: 0.5 },
+  { observation: 1024 },
+  { observations: 0 },
+  { observations: 0.5 },
+  { observations: 1025 },
+  { observation: 2 },
+  { observation: 1, observations: 1 }
+])('refuses unusable retained coordinates before projecting any channel: %j', change => {
+  const f = fixture()
+  f.append('snapshot', f.pair())
+  Object.assign(f.view.heads[0].order!, change)
+  expect(() => f.result()).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Current-channel projection requires retained event order'
+    })
+  )
+})
+
+it.each([
+  { phase: 'live' },
+  { sequence: '1' },
+  { receipt: '2' },
+  { group: 1 },
+  { observations: 3 }
+])('refuses conflicting whole-group coordinates: %j', change => {
+  const f = fixture()
+  f.append('snapshot', f.pair())
+  Object.assign(f.view.states[0].order!, change)
+  expect(() => f.result()).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Conflicting retained group order' })
+  )
+})
+
+it('distinguishes a bounded incomplete group from an invalid coordinate or duplicate position', () => {
+  const f = fixture()
+  f.append('snapshot', f.pair())
+  for (const item of [...f.view.heads, ...f.view.states]) item.order!.observations = 1024
+  expect(() => f.result()).toThrow(
+    expect.objectContaining({ code: 'unavailable', message: 'Current-channel group is incomplete' })
+  )
+  for (const item of [...f.view.heads, ...f.view.states]) item.order!.observations = 2
+  f.view.heads[0].order!.observation = 1
+  expect(() => f.result()).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Duplicate retained observation position' })
+  )
+})
+
+it('accepts exactly64 independent selections and retains precise configuration refusal identities', () => {
+  const { epoch: _epoch, ...identity } = source,
+    selection = { source: identity, parameters, query },
+    selections = Array.from({ length: 64 }, (_, i) => ({
+      ...selection,
+      source: { ...identity, provider: `selected-provider-${i}` }
+    }))
+  expect(
+    new ProposalCurrentChannels(createRegistry(), recipient, selections).project({
+      evaluatedAt: '20',
+      sources: [],
+      heads: [],
+      states: [],
+      removals: []
+    })
+  ).toEqual({ evaluatedAt: '20', sources: [] })
+  for (const entries of [[], [...selections, selection]])
+    expect(() => new ProposalCurrentChannels(createRegistry(), recipient, entries)).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Install 1–64 current-channel selections'
+      })
+    )
+  expect(
+    () => new ProposalCurrentChannels(createRegistry(), recipient, [selection, selection])
+  ).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Duplicate current-channel selection' })
+  )
+})
+
+it.each([
+  {
+    before: { status: 'active', recordedAt: '10' },
+    after: { status: 'expired', recordedAt: '100' }
+  },
+  {
+    before: { status: 'active', recordedAt: '10' },
+    after: { status: 'finalizing', recordedAt: '10', operationId: 'job', txid: 'aa'.repeat(32) }
+  },
+  {
+    before: { status: 'finalizing', recordedAt: '20', operationId: 'job', txid: 'aa'.repeat(32) },
+    after: { status: 'finalized', recordedAt: '100', operationId: 'job', txid: 'aa'.repeat(32) }
+  },
+  {
+    before: { status: 'finalizing', recordedAt: '20', operationId: 'job', txid: 'aa'.repeat(32) },
+    after: {
+      status: 'finalization-failed',
+      recordedAt: '20',
+      operationId: 'job',
+      txid: 'aa'.repeat(32),
+      reason: 'Rejected',
+      globalOutcome: 'unknown'
+    }
+  }
+] as { before: OutputProposalState; after: OutputProposalState }[])(
+  'retains a valid provider lifecycle transition without changing the signed head: $before.status → $after.status',
+  ({ before, after }) => {
+    const f = fixture(),
+      proposal = signed()
+    f.append('snapshot', f.pair(proposal, before))
+    f.append('live', f.pair(proposal, after))
+    expect(f.result()).toMatchObject({
+      consistent: true,
+      channels: [{ proposal, state: after, activeIntent: false }]
+    })
+  }
+)
+
+it.each([
+  {
+    before: { status: 'active', recordedAt: '20' },
+    after: { status: 'active', recordedAt: '19' },
+    reason: 'Provider lifecycle clock moved backwards'
+  },
+  {
+    before: { status: 'active', recordedAt: '10' },
+    after: { status: 'active', recordedAt: '11' },
+    reason: 'Provider lifecycle transition is incompatible'
+  },
+  {
+    before: { status: 'expired', recordedAt: '100' },
+    after: { status: 'finalizing', recordedAt: '101', operationId: 'job', txid: 'aa'.repeat(32) },
+    reason: 'Provider lifecycle transition is incompatible'
+  },
+  {
+    before: { status: 'finalizing', recordedAt: '20', operationId: 'job', txid: 'aa'.repeat(32) },
+    after: { status: 'finalized', recordedAt: '21', operationId: 'job', txid: 'bb'.repeat(32) },
+    reason: 'Provider lifecycle transition is incompatible'
+  }
+] as { before: OutputProposalState; after: OutputProposalState; reason: string }[])(
+  'retains the preceding whole group when the provider lifecycle is inconsistent: $reason',
+  ({ before, after, reason }) => {
+    const f = fixture(),
+      proposal = signed()
+    f.append('snapshot', f.pair(proposal, before))
+    f.append('live', f.pair(proposal, after))
+    expect(f.result()).toMatchObject({
+      consistent: false,
+      inconsistency: { groupId: '99', reason },
+      channels: [{ proposal, state: before, activeIntent: false }]
+    })
+  }
+)
+
+it.each([
+  { status: 'active', recordedAt: '100' },
+  { status: 'expired', recordedAt: '99' },
+  { status: 'withdrawn', recordedAt: '10' }
+] as OutputProposalState[])(
+  'refuses a provider state inconsistent with the signed operation or expiry: $status',
+  state => {
+    const f = fixture()
+    f.append('snapshot', f.pair(signed(), state))
+    expect(f.result()).toMatchObject({
+      consistent: false,
+      inconsistency: { reason: 'Provider state differs from its signed head' },
+      channels: []
+    })
+  }
+)

@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.15.1'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.15.3'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -14,6 +14,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 ---
 
 # @bsv/wallet-toolbox
+
+The 2.15.3 source candidate restores ordinary import of exactly framed legacy
+AtomicBEEF with surplus unrelated branches. It retains the declared payment and
+its dependencies, reruns strict SDK argument validation, and preserves native
+proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
+remain rejected. No API, wire or schema migration is required. Upgrade the host
+and remote Storage separately; reconcile and retry the original import instead
+of creating or broadcasting a replacement payment. Source is not publication or
+deployment.
 
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 

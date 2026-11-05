@@ -1,6 +1,7 @@
-import { expect, it } from '@jest/globals'
+import { expect, it, jest } from '@jest/globals'
 import { Beef, Utils } from '@bsv/sdk'
 import { BEEF_V2 } from '@bsv/sdk/transaction/Beef'
+import { SDKEvidenceVerifier } from '../src/SDKEvidenceVerifier.js'
 import { RevenueListingProfileLineageVerifier } from '../src/revenue-listing/RevenueListingProfileLineageVerifier.js'
 import { RevenueListingProfilePurchaseVerifier } from '../src/revenue-listing/RevenueListingProfilePurchaseVerifier.js'
 import { parseRevenueListingProfileLineagePackage } from '../src/revenue-listing/ProfileLineagePackage.js'
@@ -23,6 +24,64 @@ import {
   extend,
   includeAt102
 } from './revenue-profile.fixture.js'
+
+it('refuses changed historical ancestry before invoking its MTP capability', async () => {
+  const historical = BigInt(includeAt102(purchased()).historicalMTP)
+  const payout = await construct(
+    purchaseTransaction(),
+    0,
+    { operation: 'payout', units: '99' },
+    10,
+    3,
+    {
+      lockTime: Number(historical - 1n),
+      listingSequence: 0xfffffffe,
+      fundingSequence: 0xffffffff
+    }
+  )
+  const included = includeAt102(extend(purchased(), payout))
+  let evidenceCompleted = false
+  const evidence = SDKEvidenceVerifier.prototype.verify
+  const observed = jest
+    .spyOn(SDKEvidenceVerifier.prototype, 'verify')
+    .mockImplementation(async function (
+      this: SDKEvidenceVerifier,
+      ...args: Parameters<typeof evidence>
+    ) {
+      const result = await evidence.apply(this, args)
+      evidenceCompleted = true
+      return result
+    })
+  const history = jest
+    .fn<(height: number, signal: AbortSignal) => Promise<string>>()
+    .mockResolvedValue(String(historical))
+  try {
+    const resolver = {
+      resolve: async (...args: Parameters<typeof included.chains.resolve>) => {
+        const ancestry = await included.chains.resolve(...args)
+        return evidenceCompleted
+          ? {
+              ...ancestry,
+              view: { ...ancestry.view, tipHash: '00'.repeat(32) },
+              medianTimePastBefore: history
+            }
+          : ancestry
+      }
+    }
+    expect(
+      (
+        await new RevenueListingProfileLineageVerifier(profile, resolver).verify(
+          included.packet,
+          included.context
+        )
+      ).status
+    ).toBe('context-changed')
+    expect(evidenceCompleted).toBe(true)
+    expect(history).not.toHaveBeenCalled()
+  } finally {
+    observed.mockRestore()
+  }
+}, 60000)
 
 it('owns the exact immutable descriptor and signed reserve-stage genesis', () => {
   expect(fixtureDigest).toBe('00b456faa8eac95124fbe6fde9ec5d70604fd503d7e486385662e6b1494f26ee')

@@ -94,6 +94,39 @@ afterEach(async () => {
 })
 
 describe('real retained provider through BRC-103/104 HTTP', () => {
+  it('passes cancellation to the native provider when the socket closes during authentication', async () => {
+    let finished!: () => void
+    const completed = new Promise<void>(resolve => {
+      finished = resolve
+    })
+    let providerSignal: AbortSignal | undefined, providerError: unknown
+    const f = await endpoint('brc103', {
+      authenticate: (req, res, next) => {
+        ;(req as express.Request & { auth: { identityKey: string } }).auth = {
+          identityKey: new PrivateKey(2).toPublicKey().toString()
+        }
+        res.destroy()
+        next()
+      }
+    })
+    const open = f.service.open.bind(f.service)
+    jest.spyOn(f.service, 'open').mockImplementation(async (...args) => {
+      providerSignal = args[2]
+      try {
+        return await open(...args)
+      } catch (error) {
+        providerError = error
+        throw error
+      } finally {
+        finished()
+      }
+    })
+    await expect(requestOpen(f)).rejects.toThrow()
+    await completed
+    expect(providerSignal?.aborted).toBe(true)
+    expect(providerError).toMatchObject({ code: 'cancelled' })
+  })
+
   it('requires a verified principal even when shared admin middleware allows anonymous fallback', async () => {
     const f = await endpoint()
     const response = await fetch(f.baseURL + '/overlay/v1/lookup/open', {

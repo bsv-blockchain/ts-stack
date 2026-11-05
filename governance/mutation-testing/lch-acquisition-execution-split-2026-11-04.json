@@ -1,0 +1,50 @@
+{
+  "owner": "ts-stack-maintainers",
+  "observedAt": "2026-11-04T08:08:11.614Z",
+  "hostedQualification": false,
+  "baseSourceSha": "0c9c7c220f9805f425af378e47900130e33f3437",
+  "failedJob": "https://github.com/bsv-blockchain/ts-stack/actions/runs/41762196746/job/126391437634",
+  "failedOuterMinutes": 180,
+  "initialTests": 161,
+  "initialSuiteSeconds": 263,
+  "originalMutate": ["src/overlayAcquisitionTerms.ts:1-171"],
+  "runtimeSourceSha256": "ced661cf187989f6f063db5a468c74a44f7ba0e3e0d795e19d1ac9972bd0ae97",
+  "engineTransition": {
+    "from": "9.6.1",
+    "to": "10.1.1",
+    "originalSites": 222,
+    "currentSites": 223,
+    "absentOriginalSites": 0
+  },
+  "parts": [
+    {
+      "id": "terms-1",
+      "mutate": ["src/overlayAcquisitionTerms.ts:1-64"],
+      "canonicalSites": 27
+    },
+    {
+      "id": "terms-2",
+      "mutate": ["src/overlayAcquisitionTerms.ts:65-96"],
+      "canonicalSites": 51
+    },
+    {
+      "id": "terms-3",
+      "mutate": ["src/overlayAcquisitionTerms.ts:97-171"],
+      "canonicalSites": 145
+    }
+  ],
+  "exactCanonicalUnion": true,
+  "missingSites": 0,
+  "extraSites": 0,
+  "duplicateSites": 0,
+  "allOriginalTestsAndLimitsRetained": true,
+  "canonicalTargets": 156,
+  "executions": 606,
+  "rejectedFourPartSplit": {
+    "missingSites": 1,
+    "operator": "BlockStatement",
+    "lines": [102, 170],
+    "accepted": false
+  },
+  "nativeExecutionAcceptancePending": true
+}

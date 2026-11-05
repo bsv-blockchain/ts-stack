@@ -190,3 +190,93 @@ it('rejects a replacement attempt when no fixed control response has been prepar
   )
   expect(f.enqueue).not.toHaveBeenCalled()
 })
+
+it('rejects an exact truncated prefix even when every supplied byte matches', () => {
+  const f = fixture()
+  f.candidate.body = f.candidate.body.slice(0, -1)
+  expect(f.run()).toMatchObject({ statusCode: 400 })
+  expect(f.enqueue).not.toHaveBeenCalled()
+})
+
+it.each(['identity', 'body', 'empty'] as const)(
+  'preserves the exact physical control refusal for %s',
+  mode => {
+    const f = fixture()
+    const messages = {
+      identity: 'Private publication response identity or selection changed',
+      body: 'Private publication response differs from its prepared body',
+      empty: 'Private publication owner did not enqueue'
+    }
+    const codes = { identity: 'unauthorized', body: 'invalid', empty: undefined }
+    if (mode === 'identity') f.caller.current = () => false
+    if (mode === 'body') f.candidate.body = f.candidate.body.slice(0, -1)
+    if (mode === 'empty') f.disclosure.enqueueControl = () => undefined
+    const error = new OutputProtocolError('not-found', 'synthetic detail'),
+      control = privatePublicationHTTPError(error)
+    guardPrivatePublicationResponse({} as Response, { ...f.options, initial: { error } })
+    const candidate = { ...f.candidate, statusCode: control.statusCode, body: control.body }
+    if (mode === 'body') candidate.body = candidate.body.slice(0, -1)
+    expect(() => installed(candidate, f.enqueue, f.signal.signal)).toThrow(
+      expect.objectContaining({
+        ...(codes[mode] ? { code: codes[mode] } : {}),
+        message: messages[mode]
+      })
+    )
+    expect(f.enqueue).not.toHaveBeenCalled()
+  }
+)
+
+it('retains every safe control header when replacing a truncated signed data response', () => {
+  const f = fixture()
+  f.candidate.body = f.candidate.body.slice(0, -1)
+  expect(f.run()).toMatchObject({
+    statusCode: 400,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+      'x-bsv-overlay-capability': f.caller.capability,
+      'x-bsv-overlay-profile': OUTPUT_PROFILES.publication
+    }
+  })
+  expect(f.enqueue).not.toHaveBeenCalled()
+})
+
+it('requires rejected asynchronous control owners to settle without leaking rejection or sending', async () => {
+  const f = fixture(),
+    error = new OutputProtocolError('not-found', 'synthetic detail')
+  const control = privatePublicationHTTPError(error)
+  f.disclosure.enqueueControl = () => Promise.reject(new Error('owned control rejection'))
+  guardPrivatePublicationResponse({} as Response, { ...f.options, initial: { error } })
+  expect(() =>
+    installed(
+      { ...f.candidate, statusCode: control.statusCode, body: control.body },
+      f.enqueue,
+      f.signal.signal
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Private publication enqueue owner must finish synchronously'
+    })
+  )
+  expect(f.enqueue).not.toHaveBeenCalled()
+  await Promise.resolve()
+})
+
+it('rejects a deferred owner callback after the synchronous scope closes', () => {
+  const f = fixture()
+  let later: (() => void) | undefined
+  f.prepared.enqueue = send => {
+    later = () => send(f.prepared.body, f.prepared.headers)
+  }
+  expect(f.run()).toMatchObject({ statusCode: 503 })
+  expect(later).toBeDefined()
+  expect(later).toThrow(
+    expect.objectContaining({
+      code: 'conflict',
+      message: 'Private publication enqueue is outside its single synchronous attempt'
+    })
+  )
+  expect(f.enqueue).not.toHaveBeenCalled()
+})

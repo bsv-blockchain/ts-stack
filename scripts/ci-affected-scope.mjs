@@ -16,10 +16,23 @@ const DEPENDENCY_FIELDS = [
 ]
 
 const PROJECT_REGISTRY_PATH = 'governance/repository-health/projects.json'
+const APPLICATION_PROJECT_PATH = 'packages/application/output-knowledge'
+const APPLICATION_COVERAGE_CONTROLS = new Set([
+  'scripts/output-knowledge-coverage.mjs',
+  'scripts/output-knowledge-coverage-validation.mjs'
+])
+const DURATION_PATH = 'governance/ci-lane-durations.json'
+
+export function applicationCoverageDurationsChanged(baseSource, headSource) {
+  try {
+    const lane = source => JSON.parse(source).lanes?.['output-knowledge-coverage']?.seconds
+    return JSON.stringify(lane(baseSource)) !== JSON.stringify(lane(headSource))
+  } catch {
+    return true
+  }
+}
 
 const FULL_PACKAGE_CONTROL_PATHS = new Set([
-  '.github/workflows/ci.yml',
-  'scripts/ci-result-gate.mjs',
   'package.json',
   'pnpm-workspace.yaml',
   'tsconfig.base.json',
@@ -27,6 +40,7 @@ const FULL_PACKAGE_CONTROL_PATHS = new Set([
   'scripts/check-browser-package.mjs',
   'scripts/check-package-artifact.mjs',
   'scripts/run-prebuilt-package-script.mjs',
+  'scripts/jest-duration-sequencer.cjs',
   'scripts/typescript-toolchain.mjs'
 ])
 
@@ -61,7 +75,6 @@ export const RUNTIME_COMPONENTS = [
 ]
 
 const FULL_INFRA_CONTROL_PATHS = new Set([
-  '.github/workflows/ci.yml',
   'governance/Dockerfile.container-bases',
   'governance/container-images.json'
 ])
@@ -457,7 +470,9 @@ export function selectWorkspaceScope(
           file =>
             projectOwnsFile(project, file) && !documentationOnlyProjectFile(project.path, file)
         ) ||
-        projectPaths.includes(project.path)
+        projectPaths.includes(project.path) ||
+        (project.path === APPLICATION_PROJECT_PATH &&
+          files.some(file => APPLICATION_COVERAGE_CONTROLS.has(file)))
       ) {
         direct.add(project.name)
       }
@@ -641,6 +656,15 @@ function main(arguments_) {
   ) {
     narrowed.push('pnpm-workspace.yaml')
   }
+  if (
+    !all &&
+    changedFiles.includes(DURATION_PATH) &&
+    applicationCoverageDurationsChanged(
+      baseText(base, DURATION_PATH),
+      readFileSync(path.join(REPOSITORY_ROOT, DURATION_PATH), 'utf8')
+    )
+  )
+    projectPaths.push(APPLICATION_PROJECT_PATH)
   const projects = loadProjects()
   const workspace = all
     ? selectWorkspaceScope(projects, ['tsconfig.base.json'])
