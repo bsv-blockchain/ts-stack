@@ -184,3 +184,8 @@ Earlier whole-campaign scheduling and qualification records are preserved in Git
 history and `governance/mutation-testing/REVIEW-*.md`. They are historical evidence,
 not current release or contribution requirements. Fast unit and installed-compiler
 control tests remain ordinary code tests; they do not execute mutation campaigns.
+
+The former reusable admission executor `mutation-execution.yml` is removed,
+including its unused checkout and interpolated matrix shell commands. Git history
+retains old executions; only the bounded standalone background audit remains.
+No publisher or CI caller can invoke the retired executor.

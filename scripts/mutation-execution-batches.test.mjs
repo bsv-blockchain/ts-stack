@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -36,7 +36,6 @@ test('real complete planner output verifies every immutable batch and binds the 
     'scripts/mutation-partitions.mjs',
     'scripts/mutation-partition-evidence.mjs',
     'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml',
     '.github/workflows/mutation-tests.yml',
     'package.json',
     'pnpm-lock.yaml',
@@ -280,71 +279,5 @@ test('every batch rejects a different source, run, attempt, archive, matrix or o
     assert.throws(() =>
       verifyMutationExecutionIdentity(request, { ...actual, matrixDigest: 'c'.repeat(64) })
     )
-  }
-})
-
-function stepScript(source, name) {
-  const marker = `\n      - name: ${name}\n`
-  assert.ok(source.includes(marker))
-  const selected = source.slice(source.indexOf(marker) + marker.length)
-  return /\n {8}run: \|\n([\s\S]*?)(?=\n {6}-|$)/
-    .exec(selected)[1]
-    .split('\n')
-    .map(line => line.replace(/^ {10}/, ''))
-    .join('\n')
-}
-
-test('actual reusable preflight rejects wrong profiles and stale original caller or artifact identity', () => {
-  const source = readFileSync(
-    new URL('../.github/workflows/mutation-execution.yml', import.meta.url),
-    'utf8'
-  )
-  const script = stepScript(source, 'Require the original caller evidence profile')
-  const original = {
-    GITHUB_SHA: 'a'.repeat(40),
-    GITHUB_RUN_ID: '100',
-    GITHUB_RUN_ATTEMPT: '2',
-    SOURCE_SHA: 'a'.repeat(40),
-    SOURCE_RUN_ID: '100',
-    SOURCE_RUN_ATTEMPT: '2',
-    NODE_VERSION: 'v24.18.0',
-    ARCHIVE_DIGEST: 'b'.repeat(64),
-    ARTIFACT_ID: '300'
-  }
-  const execute = env =>
-    spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', script], { env, encoding: 'utf8' })
-  for (const [profile, mode, artifact] of [
-    ['ci', 'diagnostic', 'build-outputs'],
-    ['qualification', 'diagnostic', 'mutation-build-outputs-100-2'],
-    ['qualification', 'full', 'mutation-build-outputs-100-2']
-  ]) {
-    const environment = {
-      ...original,
-      PROFILE: profile,
-      CAMPAIGN_MODE: mode,
-      ARTIFACT_NAME: artifact
-    }
-    assert.equal(execute(environment).status, 0)
-    for (const field of [
-      'SOURCE_SHA',
-      'SOURCE_RUN_ID',
-      'SOURCE_RUN_ATTEMPT',
-      'NODE_VERSION',
-      'ARCHIVE_DIGEST',
-      'ARTIFACT_ID',
-      'ARTIFACT_NAME'
-    ]) {
-      assert.notEqual(execute({ ...environment, [field]: 'different' }).status, 0, field)
-      assert.notEqual(execute({ ...environment, [field]: '' }).status, 0, field)
-    }
-    for (const [invalidProfile, invalidMode] of [
-      ['ci', 'full'],
-      ['other', 'full'],
-      ['qualification', 'other']
-    ])
-      assert.notEqual(
-        execute({ ...environment, PROFILE: invalidProfile, CAMPAIGN_MODE: invalidMode }).status,
-        0
-      )
   }
 })

@@ -47,7 +47,7 @@ test('current required, manual, live, resource, and conformance tests are govern
 
 test('mutation governance rejects admission campaigns and enforces bounded finding-only audits', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutation-workflow-governance-'))
-  const files = ['ci.yml', 'mutation-tests.yml', 'mutation-execution.yml']
+  const files = ['ci.yml', 'mutation-tests.yml']
   const original = Object.fromEntries(
     files.map(file => [
       file,

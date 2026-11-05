@@ -23,10 +23,7 @@ const targets = {
 
 test('each batch execution control selects every original canonical mutation target', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  for (const control of [
-    'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml'
-  ])
+  for (const control of ['scripts/mutation-execution-batches.mjs'])
     assert.deepEqual(
       selectAffectedMutationTargets(configured, [control]),
       Object.keys(configured),

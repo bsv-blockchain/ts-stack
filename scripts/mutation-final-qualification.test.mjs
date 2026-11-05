@@ -66,10 +66,7 @@ test('both batch controls bind the actual final configuration identity alongside
     'pnpm-workspace.yaml',
     'tsconfig.base.json'
   ]
-  const batchInputs = [
-    'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml'
-  ]
+  const batchInputs = ['scripts/mutation-execution-batches.mjs']
   const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
   const commit = () => {
     git(['add', '.'])
