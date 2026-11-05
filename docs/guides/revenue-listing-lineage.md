@@ -3,8 +3,8 @@ id: revenue-listing-lineage
 title: 'Verifying Revenue Listing Histories'
 kind: guide
 version: '1.1.0'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, sdk, scripts, revenue, evidence]
@@ -137,9 +137,20 @@ It uses public synthetic keys and a checked easy-work header chain, not
 production-chain inclusion. End-to-end cases cover full merge histories, partial
 BEEF union, missing evidence, a funded copy, covenant execution despite mining
 evidence, cancellation and expiry. Generated properties exercise representations,
-exact bounds, owned context and authorized genesis layouts. All three full-source mutation campaigns pass the unchanged 90% gate with zero
-uncovered or invalid mutants. The full runtime suite and exact packed/browser
-entry checks also pass; detailed evidence remains in the implementation tracker.
+exact bounds, owned context and authorized genesis layouts. Earlier full-source
+campaigns passed their then-pinned mutation engine and the unchanged 90% gate;
+those records do not qualify a successor source or engine. The fresh Stryker
+10.1.1 traversal run in [release41943500964](https://github.com/bsv-blockchain/ts-stack/actions/runs/41943500964/job/126970611410)
+detects72 of82 sites (71 assertion kills and one hit-limit termination), below
+90%, with ten survivors and zero uncovered or invalid sites. Publication is
+blocked pending correction and complete fresh qualification.
+
+The graph regression also checks bounded native work on the frozen, signed
+merge DAG. It independently counts reachable outpoints and requires shared
+ancestors to be decoded once and a shared split's spending ABI to be inspected
+once for its route and once for its input. Pass-through spies preserve actual
+codec results; no timing threshold or replacement transaction is used. Every
+original unit/property suite, canonical mutant and score requirement remains.
 
 Combine the result with the [transaction constructor](./revenue-listing-spends.md)
 only after the remaining domain and currentness checks. BRC-100 funding,
