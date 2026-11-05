@@ -305,7 +305,10 @@ describe('saved lookup source transitions', () => {
       })
     )
     expect(() => codec.advance(pending, { status: 'unavailable', reason: 'offline' })).toThrow(
-      'cannot be established'
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Lookup receipt cannot be established'
+      })
     )
     expect(() => codec.capture(pending, packet, '1001')).toThrow(
       expect.objectContaining({
@@ -389,6 +392,17 @@ describe('saved lookup source transitions', () => {
     expect(repeated.pending).toEqual(pending.pending)
     expect(codec.advance(repeated, saved).minimumReceived).toBe('9')
     expect(codec.advance(repeated, saved).job).toBe('3')
+  })
+
+  it('rejects a malformed retained job even when its committed predecessor is intact', async () => {
+    const { codec, packet } = fixture()
+    const captured = codec.capture(codec.initial('0'), packet, '1000')
+    const committed = codec.advance(captured, await receipt(captured.pending!))
+    expect(codec.parse(committed)).toEqual(committed)
+    for (const job of ['01', '-1', '1.5', '18446744073709551616'])
+      expect(() => codec.parse({ ...committed, job })).toThrow(
+        expect.objectContaining({ code: 'invalid' })
+      )
   })
 
   it('rejects rollback, changed originals and invalid job/predecessor pairs', async () => {

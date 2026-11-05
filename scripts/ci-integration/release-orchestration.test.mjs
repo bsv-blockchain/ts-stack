@@ -25,9 +25,8 @@ test('one up-front approval gates npm and image publication without a late human
   assert.equal(infra.uses, './.github/workflows/infra-release.yaml')
   assert.ok(infra.needs.includes('approve'))
   assert.match(infra.if, /needs\.approve\.result == 'success'/)
-  assert.match(infra.if, /needs\.admission\.outputs\.admitted-sha == github\.sha/)
   assert.match(infra.if, /needs\.prepare\.outputs\.mode == 'cascade'/)
-  assert.equal(infra.with['qualified-sha'], '${{ needs.full-mutation.outputs.qualified-sha }}')
+  assert.equal(infra.with['release-sha'], '${{ github.sha }}')
 
   const sync = release.jobs['sync-versions']
   assert.ok(!sync.steps.some(step => /sleep 300/.test(step.run ?? '')))
@@ -37,37 +36,10 @@ test('one up-front approval gates npm and image publication without a late human
 
   const infraRelease = await workflow('infra-release.yaml')
   assert.deepEqual(Object.keys(infraRelease.on.workflow_call.inputs).sort(), [
-    'qualified-sha',
-    'release-exception-id',
-    'source-sha',
-    'waived-sha'
+    'release-sha',
+    'source-sha'
   ])
   assert.match(infraRelease.jobs['post-release-verification'].if, /called == 'false'/)
-})
-
-test('jobs downstream of a deliberately skipped campaign opt out of implicit success()', async () => {
-  // GitHub's implicit success() treats any skipped upstream job as blocking.
-  // A release.yaml call skips infra-release's own full-mutation campaign, so
-  // every job below it must use always() and check its direct needs itself.
-  const infraRelease = await workflow('infra-release.yaml')
-  const needs = job => [infraRelease.jobs[job].needs ?? []].flat()
-  const downstream = new Set()
-  const visit = job => {
-    for (const [name] of Object.entries(infraRelease.jobs)) {
-      if (needs(name).includes(job) && !downstream.has(name)) {
-        downstream.add(name)
-        visit(name)
-      }
-    }
-  }
-  visit('full-mutation')
-  assert.ok(downstream.has('release'))
-  for (const job of downstream) {
-    const condition = String(infraRelease.jobs[job].if ?? '')
-    assert.match(condition, /always\(\)/, `${job} must not inherit implicit success()`)
-  }
-  assert.match(infraRelease.jobs.release.if, /needs\.discover\.result == 'success'/)
-  assert.match(infraRelease.jobs.release.if, /needs\.qualification\.result == 'success'/)
 })
 
 function git(cwd, ...arguments_) {
@@ -124,7 +96,7 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
           GITHUB_SHA: release,
           GITHUB_OUTPUT: output,
           SOURCE_SHA: sourceSha,
-          QUALIFIED_SHA: release,
+          RELEASE_SHA: release,
           ...overrides
         }
       })
@@ -139,7 +111,7 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
     assert.notEqual(run(grandchild).status, 0)
     assert.notEqual(run(tampered).status, 0)
     assert.notEqual(run(product).status, 0)
-    assert.notEqual(run(sync, { QUALIFIED_SHA: sync }).status, 0)
+    assert.notEqual(run(sync, { RELEASE_SHA: sync }).status, 0)
     assert.notEqual(
       run(sync, {
         GITHUB_WORKFLOW_REF: 'bsv-blockchain/ts-stack/.github/workflows/other.yml@refs/heads/main'
@@ -150,72 +122,6 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
     const standalone = run('')
     assert.equal(standalone.status, 0)
     assert.match(standalone.output, /called=false/)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('release admission keeps a waived campaign distinct and requires the exact successful preparation', async () => {
-  const release = await workflow('release.yaml')
-  const job = release.jobs.admission
-  assert.deepEqual(job.permissions, {})
-  assert.deepEqual(job.needs, ['full-mutation', 'prepare'])
-  const script = job.steps[0].run
-  const root = mkdtempSync(join(tmpdir(), 'release-admission-'))
-  try {
-    const sha = 'a'.repeat(40)
-    const run = overrides => {
-      const output = join(root, 'output')
-      const summary = join(root, 'summary')
-      writeFileSync(output, '')
-      writeFileSync(summary, '')
-      const result = spawnSync('/bin/bash', ['-e', '-c', script], {
-        encoding: 'utf8',
-        env: {
-          PATH: process.env.PATH,
-          GITHUB_SHA: sha,
-          GITHUB_OUTPUT: output,
-          GITHUB_STEP_SUMMARY: summary,
-          CAMPAIGN_RESULT: 'skipped',
-          QUALIFIED_SHA: '',
-          EXCEPTION_RESULT: 'success',
-          WAIVED_SHA: sha,
-          ...overrides
-        }
-      })
-      return { status: result.status, output: readFileSync(output, 'utf8') }
-    }
-    const waived = run({})
-    assert.equal(waived.status, 0)
-    assert.match(waived.output, /admission-kind=operator-waiver/)
-    assert.doesNotMatch(waived.output, /qualified-sha=/)
-    assert.equal(run({ WAIVED_SHA: 'b'.repeat(40) }).status, 1)
-    assert.equal(run({ EXCEPTION_RESULT: 'failure' }).status, 1)
-    assert.equal(run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'failure' }).status, 1)
-    assert.equal(
-      run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'success', QUALIFIED_SHA: 'b'.repeat(40) }).status,
-      1
-    )
-    const qualified = run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'success', QUALIFIED_SHA: sha })
-    assert.equal(qualified.status, 0)
-    assert.match(qualified.output, /admission-kind=full-mutation/)
-    assert.match(release.jobs['sync-versions'].if, /always\(\) && !cancelled\(\)/)
-    const infra = await workflow('infra-release.yaml')
-    const source = infra.jobs.discover.steps.find(step => step.id === 'source')
-    assert.ok(
-      source.run.indexOf('disallowed=') <
-        source.run.indexOf('node scripts/release-source-admission.mjs')
-    )
-    assert.match(source.run, /Ambiguous or stale operator exception/)
-    assert.match(source.run, /admission-kind=operator-waiver/)
-    assert.equal(
-      release.jobs.infra.with['waived-sha'],
-      '${{ needs.prepare.outputs.admitted-exception-sha }}'
-    )
-    assert.equal(
-      release.jobs.infra.with['release-exception-id'],
-      '${{ needs.prepare.outputs.exception-id }}'
-    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

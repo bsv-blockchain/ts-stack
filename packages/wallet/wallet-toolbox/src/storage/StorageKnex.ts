@@ -1,8 +1,5 @@
-import {
-  type ValidListActionsArgs,
-  type ValidListOutputsArgs,
-  validateInternalizeActionArgs
-} from '@bsv/sdk/wallet/validationHelpers'
+import { validateInternalizeActionArgs } from '../utility/validateInternalizeActionArgs'
+import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { InternalizeActionArgs, ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
@@ -227,8 +224,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
-    validateInternalizeActionArgs(args)
-    return await this.withInternalizeReceipt(auth, args, claim => internalizeAction(this, auth, args, claim))
+    const vargs = validateInternalizeActionArgs(args)
+    const canonicalArgs = { ...args, tx: vargs.tx }
+    return await this.withInternalizeReceipt(auth, canonicalArgs, claim =>
+      internalizeAction(this, auth, canonicalArgs, claim)
+    )
   }
 
   override async internalizeBrc197Action(

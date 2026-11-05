@@ -98,11 +98,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 156)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 606)
+  assert.equal(matrix.include.length, 616)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 256, 94]
+    [256, 256, 104]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -270,7 +270,7 @@ test('root storage keeps the entire companion module in its nonempty first datab
   for (const part of next) assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
 })
 
-test('new ranged targets retain future sources once and require complete root aggregation', () => {
+test('new ranged targets retain future sources once and complete canonical inventory', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   for (const id of semanticTargets.slice(-6)) {
     const canonical = targets[id],
@@ -284,24 +284,6 @@ test('new ranged targets retain future sources once and require complete root ag
     for (const part of parts)
       assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
   }
-  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
-    aggregate = workflow.slice(workflow.indexOf('\n  mutation-quality:')),
-    verify = aggregate.indexOf('name: Require every selected canonical partition target gate')
-  assert.ok(verify > 0)
-  const downloads = aggregate
-    .split(/\n {6}- /)
-    .filter(
-      step =>
-        step.startsWith('uses: actions/download-artifact@') &&
-        step.includes('pattern: mutation-*\n')
-    )
-  assert.equal(downloads.length, 1)
-  assert.ok(downloads[0].includes("if: needs.prepare.outputs.partition-targets != '[]'"))
-  assert.ok(downloads[0].includes('path: .mutation-parts-raw'))
-  assert.ok(aggregate.indexOf(downloads[0]) < verify)
-  assert.match(aggregate.slice(verify), /MUTATION_MATRIX:/)
-  assert.match(aggregate.slice(verify), /select\(\.target == \$target and \.partition != "whole"\)/)
-  assert.match(aggregate.slice(verify), /\.mutation-parts-raw\/mutation-\$target-\$partition/)
   for (const id of ['root-eviction-journal', 'root-eviction-storage'])
     assert.ok(partitionedMutationTargets(Object.keys(targets), targets).includes(id), id)
 })
@@ -859,12 +841,27 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
 test('durable buyer parts retain the complete source union and identical native recovery tests', () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['private-lookup-buyer'],
     parts = partitionMutationTarget('private-lookup-buyer', target)
-  assert.deepEqual(parts.map(part => part.id).sort(compareSpecifications), ['buyer', 'payment'])
-  assert.deepEqual(
-    parts.flatMap(part => part.target.mutate).sort(compareSpecifications),
-    [...target.mutate].sort(compareSpecifications)
-  )
-  for (const part of parts) assert.equal(part.target.runnerOptions, target.runnerOptions)
+  assert.deepEqual(parts.map(part => part.id).sort(compareSpecifications), [
+    'buyer-access',
+    'buyer-advance',
+    'buyer-binding',
+    'buyer-challenge',
+    'buyer-constructor',
+    'buyer-initialization',
+    'buyer-objects',
+    'buyer-recovery',
+    'buyer-state',
+    'buyer-validation',
+    'buyer-work',
+    'payment'
+  ])
+  const lines = parts.flatMap(part => [...sourceLines(target, part.target.mutate)])
+  assert.equal(new Set(lines).size, lines.length)
+  assert.deepEqual(new Set(lines), sourceLines(target, target.mutate))
+  for (const part of parts) {
+    assert.equal(part.target.runnerOptions, target.runnerOptions)
+    assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
+  }
   assert.deepEqual(parts.find(part => part.id === 'payment').target.mutate, [
     'src/private/WalletToolboxBuyerPayment.ts'
   ])

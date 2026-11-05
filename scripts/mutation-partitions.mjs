@@ -7,7 +7,31 @@ const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '
 const plans = new Map([
   [
     'private-lookup-buyer',
-    { fallback: 'buyer', files: new Map([['src/private/WalletToolboxBuyerPayment.ts', 'payment']]) }
+    {
+      // The complete 573-site buyer row exceeds its 45-minute hosted limit.
+      // Keep native payment separate; declaration-anchored cuts preserve every
+      // original range, test and global score while bounding execution units.
+      fallback: 'buyer-binding',
+      files: new Map([['src/private/WalletToolboxBuyerPayment.ts', 'payment']]),
+      lines: new Map([
+        [
+          'src/private/PrivateLookupBuyer.ts',
+          [
+            ['buyer-binding', null],
+            ['buyer-constructor', '  private constructor('],
+            ['buyer-initialization', '  static async initialize('],
+            ['buyer-objects', '  private async initialized('],
+            ['buyer-access', '  private installed():'],
+            ['buyer-state', '  private async load():'],
+            ['buyer-challenge', '  private challenge('],
+            ['buyer-recovery', '  private async retain('],
+            ['buyer-advance', '  advance('],
+            ['buyer-validation', '  validate('],
+            ['buyer-work', '  private run<T>(']
+          ]
+        ]
+      ])
+    }
   ],
   [
     'protected-operation-objects',

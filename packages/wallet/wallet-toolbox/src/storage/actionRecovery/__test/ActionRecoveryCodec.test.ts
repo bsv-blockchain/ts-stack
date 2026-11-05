@@ -255,3 +255,21 @@ test('rejects noncanonical JSON and incomplete or unbound funding roots', () => 
   for (const fundingTxids of [['a'.repeat(64)], ['wrong'], [result.inputs[0].sourceTxid, result.inputs[0].sourceTxid]])
     expect(() => encodeActionRecoveryPlan({ result, fundingTxids })).toThrow()
 })
+
+test.each([
+  ['inputs', 'unlockingScriptLength', ACTION_RECOVERY_RECORD_BYTES + 1],
+  ['outputs', 'providedBy', 'other'],
+  ['outputs', 'lockingScript', '0']
+])('rejects an invalid retained %s descriptor field %s', (section, field, invalid) => {
+  const stored = JSON.parse(encodeActionRecoveryResult(fixture()))
+  stored[section][0][field] = invalid
+  expect(() => decodeActionRecoveryResult(actionRecoveryJSON(stored)))
+    .toThrow(new WERR_INVALID_OPERATION('Invalid or oversized action recovery record'))
+})
+
+test('rejects an iterable string in the retained change-output list', () => {
+  const stored = JSON.parse(encodeActionRecoveryResult(fixture()))
+  stored.noSendChangeOutputVouts = ''
+  expect(() => decodeActionRecoveryResult(actionRecoveryJSON(stored)))
+    .toThrow(new WERR_INVALID_OPERATION('Invalid or oversized action recovery record'))
+})
