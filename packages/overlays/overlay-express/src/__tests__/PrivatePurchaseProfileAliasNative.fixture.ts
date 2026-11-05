@@ -686,7 +686,10 @@ export async function privatePurchaseProfileAliasNativeFixture(
         allowUnauthenticated: true,
         transportLimits: { requestTimeoutMs: 5000 }
       }),
-      requestTimeoutMs: 20000
+      // The purchase client waits 30s, which is also this route's maximum.
+      // Destroying the response at 20s becomes "other side closed" when
+      // admission is slow under parallel CI load. Match the client deadline.
+      requestTimeoutMs: 30000
     })
   )
   await new Promise<void>((resolve, reject) => {
