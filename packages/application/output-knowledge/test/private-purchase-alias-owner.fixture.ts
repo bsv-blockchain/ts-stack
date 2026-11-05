@@ -23,10 +23,10 @@ import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js
 export function purchaseAliasOwnerFixture(
   maximumSelections = 8,
   maximumBatchBytes = 2 * 1048576,
-  journalEvents?: number
+  journalEvents?: number,
+  f = purchaseAliasesFixture(64, journalEvents)
 ) {
-  const f = purchaseAliasesFixture(64, journalEvents),
-    base = f.e.base,
+  const base = f.e.base,
     limits = { ...base.limits, maximumBatchBytes },
     store = new SQLitePrivatePurchaseAliasStore(
       base.owner.domain,

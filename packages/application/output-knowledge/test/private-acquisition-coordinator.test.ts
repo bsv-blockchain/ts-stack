@@ -2,6 +2,81 @@ import { expect, it } from '@jest/globals'
 import { OutputProtocolError, PrivateKey, type OutputPaidLookupAcquired } from '@bsv/sdk'
 import { acquisitionCoordinatorFixture } from './private-acquisition-coordinator.fixture.js'
 
+it.each(['unresolved', 'invalid', 'limited', 'context-changed', 'cancelled'] as const)(
+  'preserves listing verification %s as a refusal before quote or wallet work',
+  async status => {
+    const f = await acquisitionCoordinatorFixture({
+      listing: {
+        verify: async (candidate, context) => ({
+          status,
+          contextId: context.id,
+          variantId: candidate.variantId,
+          reason: 'Controlled negative listing assessment',
+          dependencies: []
+        })
+      }
+    })
+    await expect(f.quote()).rejects.toMatchObject({
+      code: status === 'unresolved' ? 'unavailable' : status,
+      message: `Acquisition listing verification ${status}`
+    })
+    expect(f.current()).toBeUndefined()
+    expect(f.counts.validate).toBe(0)
+    expect(f.getCredits()).toBe(0)
+  }
+)
+
+it('observes a rejected promise from a synchronous caller wrapper without starting work', async () => {
+  const f = await acquisitionCoordinatorFixture()
+  const current = (() =>
+    Promise.reject(
+      new Error('Controlled authentication rejection')
+    )) as unknown as typeof f.caller.current
+  await expect(
+    f.coordinator.acquire(f.request, undefined, { ...f.caller, current })
+  ).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Acquisition caller changed'
+  })
+  expect(f.counts.prepare).toBe(0)
+  expect(f.current()).toBeUndefined()
+  await Promise.resolve()
+})
+
+it('reloads after an independent native writer commits the same accepted wallet receipt', async () => {
+  let observed = 0
+  const f = await acquisitionCoordinatorFixture({
+    wallet: {
+      async status(state) {
+        observed++
+        const receipt = f.f.f.f.receipt(state),
+          peer = f.f.open(),
+          saved = peer.store.load(f.f.id, f.caller.buyer, f.f.clock, f.f.guard)!
+        peer.store.advance(
+          f.f.id,
+          f.caller.buyer,
+          saved.row.revision,
+          { type: 'wallet-accepted', receipt },
+          f.f.clock,
+          f.f.guard
+        )
+        return { state: 'accepted', receipt }
+      },
+      async internalize() {
+        throw new Error('Observed accepted receipt must not be charged again')
+      }
+    }
+  })
+  await f.quote()
+  await f.pay()
+  expect(observed).toBe(1)
+  expect(f.projected()).toMatchObject({ status: 'delivered', result: { context: 'AQID' } })
+  expect(f.counts.issue).toBe(1)
+  await f.recover()
+  expect(observed).toBe(1)
+  expect(f.counts.issue).toBe(1)
+})
+
 it('freezes before payment, reserves before the wallet and commits one recoverable delivery', async () => {
   const f = await acquisitionCoordinatorFixture()
   expect(await f.quote()).toBe(f.f.id)
