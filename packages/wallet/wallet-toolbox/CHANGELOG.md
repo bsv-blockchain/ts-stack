@@ -1,5 +1,10 @@
 # 2.16.0 unpublished integration candidate
 
+Includes the reviewed PR1492 strict-framing compatibility correction for ordinary
+legacy AtomicBEEF imports. Canonical bytes reach existing receipt and authorized
+writer admission without changing PR569 archive, journal or handoff contracts.
+Public 2.15.3 publication and this private staging image remain separate.
+
 Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
 
 ## Held #569 implementation candidate — unreleased
@@ -381,7 +386,6 @@ require their operational authorization after complete artifact validation.
   reference validator on both manager and provider. Upgrade the remote storage
   SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
   and new signing/acquisition remain strict at 32 bytes.
-
 
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the

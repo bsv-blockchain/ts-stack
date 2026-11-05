@@ -1,7 +1,8 @@
+import { validateInternalizeActionArgs } from '../../utility/validateInternalizeActionArgs'
 import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import type { StorageActiveWrite } from '../StorageActiveWrite'
 import type { InternalizeReceiptClaim } from './InternalizeReceiptClaim'
-import { type ValidInternalizeActionArgs, validateInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { type ValidInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
   Transaction as BsvTransaction,
   WalletPayment,

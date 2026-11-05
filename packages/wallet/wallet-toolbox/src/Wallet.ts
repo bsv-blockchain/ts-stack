@@ -1,3 +1,4 @@
+import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
 import { promiseFromSync } from './utility/promiseFromSync'
 export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
 import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
@@ -20,7 +21,6 @@ import {
   validateCreateActionArgs,
   validateDiscoverByAttributesArgs,
   validateDiscoverByIdentityKeyArgs,
-  validateInternalizeActionArgs,
   validateListActionsArgs,
   validateListCertificatesArgs,
   validateListOutputsArgs as validateSDKListOutputsArgs,

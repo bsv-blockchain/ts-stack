@@ -1,3 +1,4 @@
+import { validateInternalizeActionArgs } from '../utility/validateInternalizeActionArgs'
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync, mapAwaitFromSync } from '../utility/promiseFromSync'
 import type { StoragePreparedWalletWriter, StorageWriterAdmission } from './StorageActiveWrite'
 import { runPrimaryHandoffProgram, type PrimaryHandoffParticipant } from './PrimaryHandoffProgram'
@@ -75,7 +76,6 @@ import {
   type ValidListCertificatesArgs,
   type ValidListOutputsArgs,
   validateAbortActionArgs,
-  validateInternalizeActionArgs,
   validateRelinquishCertificateArgs,
   validateRelinquishOutputArgs
 } from '@bsv/sdk/wallet/validationHelpers'
@@ -1047,8 +1047,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
     return awaitFromSync(() => {
-      validateInternalizeActionArgs(args)
-      return this.runAsAuthorizedWriter((writer, auth) => writer.internalizeAction(auth, args))
+      const vargs = validateInternalizeActionArgs(args)
+      return this.runAsAuthorizedWriter((writer, auth) => writer.internalizeAction(auth, { ...args, tx: vargs.tx }))
     })
   }
 

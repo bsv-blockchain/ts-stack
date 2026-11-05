@@ -1,5 +1,15 @@
 # BSV Wallet Toolbox
 
+## November 4 staging intake integration
+
+This unpublished PR569 integration includes the reviewed PR1492 ordinary
+AtomicBEEF intake correction. Strict framing failures alone may use the existing
+subject-closure canonicalizer, followed by unchanged SDK validation. Original
+transaction bytes, caller intent, proof/ownership checks and PR569 writer
+admission remain enforced. Archive, journal and handoff behavior, schema and
+resource limits are unchanged. This integration is separate from protected
+publication of the public 2.15.3 patch.
+
 The #544 candidate now assembles bounded synchronization and portable archive components with durable SQL primary handoff, authenticated full/mobile control, real final-copy activation checks, forward recovery, cancellation, ordinary/monitor writer fences and retained field-protocol continuation. Supported wallet preparation and HTTP waits release manager ownership; actual financial commits rejoin their original provider/profile/generation admission. [Durable primary handoff](docs/primary-handoff.md), [primary write fences](docs/primary-write-fences.md) and the [delivery guide](docs/delivery-544.md) describe the current contracts and compatibility boundaries. The implementation is unpublished and its complete system/backend/native/platform/performance/security/quality qualification remains pending. Earlier candidate progress notes below are historical; they do not replace these current guides or establish readiness.
 
 Ordinary manager pulls may select authenticated field artifacts with `syncFromReaderResumable(identityKey, reader, { journalFields: true })`. The actual local receiver preserves full financial policies, ID remapping, short writer admission, durable ACK recovery and fresh unchanged-copy/target-postimage checks. Complete rows stay within the original allocation ceiling; this is not arbitrary-size ordinary SQL support. Existing callers keep row/legacy negotiation. See [field routing](docs/journal-artifact-transport.md) for migration, supported limits and unfinished full-program work.

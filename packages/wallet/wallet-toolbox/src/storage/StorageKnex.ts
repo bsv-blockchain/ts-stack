@@ -1,3 +1,4 @@
+import { validateInternalizeActionArgs } from '../utility/validateInternalizeActionArgs'
 import { SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION } from './schema/snapshotArchivePacketLabels'
 import { isSnapshotArchiveChain } from './snapshot/archive/SnapshotArchiveChain'
 import { PRIMARY_HANDOFF_MIGRATION, dropPrimaryHandoffForDataDeletion } from './schema/primaryHandoffMigration'
@@ -149,11 +150,7 @@ import {
   type RetainedReadSnapshotOptions
 } from './snapshot/RetainedReadSnapshot'
 import { recoveredProofUpdate } from './methods/validateSyncProof'
-import {
-  type ValidListActionsArgs,
-  type ValidListOutputsArgs,
-  validateInternalizeActionArgs
-} from '@bsv/sdk/wallet/validationHelpers'
+import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { InternalizeActionArgs, ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
@@ -436,9 +433,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
-    validateInternalizeActionArgs(args)
-    return await this.withInternalizeReceipt(auth, args, (claim, write) =>
-      internalizeAction(this, auth, args, claim, write)
+    const vargs = validateInternalizeActionArgs(args)
+    const canonicalArgs = { ...args, tx: vargs.tx }
+    return await this.withInternalizeReceipt(auth, canonicalArgs, (claim, write) =>
+      internalizeAction(this, auth, canonicalArgs, claim, write)
     )
   }
 
