@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.0.1'
+version: '4.0.2'
 npm: '@bsv/sdk'
 last_updated: '2026-10-23'
 last_verified: '2026-10-23'
@@ -14,6 +14,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 4.0.2 source candidate refuses a `createAction` input that omits
+`unlockingScript` and sets `unlockingScriptLength` to 0. BRC-100 and
+`CreateActionInput` type that field as `PositiveInteger` (minimum 1). An empty
+`unlockingScript` is still refused as a hexadecimal string, before the length
+check. Callers that already pass a script or a length of at least 1 are
+unchanged. This candidate is not publication.
 
 The 4.0.1 source candidate types `ListOutputsResult.totalOutputs` as a number
 again, `PositiveInteger64OrZero` (a finite nonnegative integer summary; below 2^64 on the binary wire). A BRC-112 balance query (`balance <basket>` or

@@ -197,6 +197,17 @@ Lockfile remediation does not publish a package or deploy a service. Protected
 publication and normal source-owned availability, provenance and rollback
 checks remain separate requirements for any later service rollout.
 
+## November 2 compatible audit remediation
+
+The November 2 advisory database update identified the locked `joi` 18.2.9 and
+`follow-redirects` 1.16.1 resolutions. The workspace lock now selects
+[joi 18.3.1](https://github.com/advisories/GHSA-4528-x5fx-h6hg) and
+[follow-redirects 1.16.2](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p)
+inside the existing `^18.2.9` and `^1.16.0` ranges. `@bsv/paymail` still
+declares `joi` as `^18.2.9`. `follow-redirects` remains a development-only
+dependency of `mongodb-memory-server-core`. No manifest, override, public API,
+or package version change is included. Both releases are older than 24 hours.
+
 ## Temporary CDP browser tooling repair
 
 VeriFast's private browser qualification uses Chrome DevTools Protocol (CDP).

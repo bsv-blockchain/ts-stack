@@ -5580,6 +5580,8 @@ Validate a CreateActionInput structure.
 
 Ensures either unlockingScript or unlockingScriptLength is provided and consistent,
 validates outpoint, description length, and sequence number.
+A supplied or derived unlockingScriptLength must be a positive integer (at least 1).
+An empty unlockingScript is refused as a hexadecimal string before that length check.
 
 ```ts
 export function validateCreateActionInput(i: CreateActionInput): ValidCreateActionInput
