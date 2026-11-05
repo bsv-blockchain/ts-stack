@@ -4,6 +4,18 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.3 (source candidate)
+
+- Restore ordinary internalization of exactly framed legacy AtomicBEEF with
+  surplus unrelated branches. Normalize the declared payment and its dependencies
+  using the existing strict decoder, then rerun the unchanged SDK argument
+  validator. Proof, Script, ownership and durable receipt checks remain required.
+  SQL receipt admission and remote writer forwarding receive canonical bytes;
+  other caller arguments remain unchanged. Malformed or incomplete envelopes
+  retain their original errors. No schema, API or wire migration; upgrade the
+  host and remote Storage separately. Reconcile and retry the original import
+  instead of making a replacement payment.
+
 ## wallet-toolbox 2.15.2 (source candidate)
 
 - Adds bounded foreground BEEF failure diagnostics identifying the last root
@@ -91,7 +103,6 @@ attention to changes that materially alter behavior or extend functionality.
   reference validator on both manager and provider. Upgrade the remote storage
   SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
   and new signing/acquisition remain strict at 32 bytes.
-
 
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
