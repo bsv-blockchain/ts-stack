@@ -12,6 +12,7 @@ import {
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
+import { sdk as toolbox } from '@bsv/wallet-toolbox-client'
 import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { createColorModule } from '../index.js'
@@ -736,6 +737,32 @@ describe('ColorPermissionModule boundaries', () => {
     expect(JSON.parse(page.outputs[0].customInstructions!)).toMatchObject({ assetId })
     expect(page.outputs[0].lockingScript).toBeUndefined()
     expect(Beef.fromBinary(page.BEEF!).findTxid(newest.split('.')[0])).toBeDefined()
+  })
+
+  it('asks the wallet for the whole token listing, never the default page of ten', async () => {
+    wallet.requireInputBEEF = false
+    const [held] = await holdTokens(wallet, provider, assetId, [300n])
+    const outpoint = `${held.id('hex')}.0`
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 300n)).tx.outputs[0]
+    wallet.listOutputsCalls.length = 0
+    // The inventory read, with a caller page of one.
+    await module.handleRequest(
+      { method: 'listOutputs', args: { basket: 'p color assets', limit: 1 }, originator: APP },
+      next
+    )
+    // The read that resolves an input the app names itself.
+    await createAction({
+      labels: plan(),
+      inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'Mine' }],
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ]
+    })
+    const listings = wallet.listOutputsCalls.filter(
+      call => call.basket === toolbox.specOpBasketPrefixOutputs
+    )
+    expect(listings.length).toBeGreaterThanOrEqual(2)
+    expect(listings.every(call => call.limit === 10_000)).toBe(true)
   })
 
   it('leaves outputs that require a processing profile out of inventory', async () => {
