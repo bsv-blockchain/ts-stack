@@ -350,10 +350,19 @@ it('rolls back all participants after a physical lookup append failure and then 
 
 it('rejects broken participant boundaries and timer requests ahead of actual time', async () => {
   const f = fixture()
-  await expect(f.writer.advanceTime('11', 1)).rejects.toMatchObject({ code: 'invalid' })
+  await expect(f.writer.advanceTime('11', 1)).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Proposal timer boundary is ahead of the actual clock'
+  })
   for (const n of [0, -1, 1025, 1.5])
-    await expect(f.writer.advanceTime('10', n)).rejects.toMatchObject({ code: 'invalid' })
-  await expect(f.writer.commit([])).rejects.toMatchObject({ code: 'invalid' })
+    await expect(f.writer.advanceTime('10', n)).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Invalid proposal timer work bound'
+    })
+  await expect(f.writer.commit([])).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Invalid proposal feed commit group bound'
+  })
   f.db.prepare('UPDATE proposal_feed_meta SET index_sequence=?').run('0000000000000001')
   await expect(commit(f)).rejects.toThrow(/atomic commit boundary/)
 })
@@ -619,7 +628,12 @@ it('rejects a participant that no longer returns its committed row before append
     '10'
   )
   unavailable = true
-  await expect(commit(f, replacement)).rejects.toThrow(/row differs/)
+  await expect(commit(f, replacement)).rejects.toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Proposal feed row differs from the committed journal head'
+    })
+  )
   unavailable = false
   expect((await f.journal.head()).revision).toBe('1')
   expect((await f.index.head()).sequence).toBe('1')
@@ -644,7 +658,12 @@ it('does not advance the expiry floor when the journal participant cannot supply
   await commit(f)
   f.now('100')
   unavailable = true
-  await expect(f.writer.advanceTime('100', 1)).rejects.toThrow(/lost its journal head/)
+  await expect(f.writer.advanceTime('100', 1)).rejects.toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Proposal timer lost its journal head'
+    })
+  )
   unavailable = false
   expect(await f.writer.head()).toMatchObject({ sequence: '1', processedThrough: '0' })
   expect(await f.writer.advanceTime('100', 1)).toMatchObject({ expired: 1, complete: true })

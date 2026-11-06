@@ -1,3 +1,4 @@
+import { validateInternalizeActionArgs } from '../utility/validateInternalizeActionArgs'
 import {
   BRC197_INTERNALIZATION_PROFILE,
   assertBrc197Recipient,
@@ -12,7 +13,6 @@ import {
   type ValidListCertificatesArgs,
   type ValidListOutputsArgs,
   validateAbortActionArgs,
-  validateInternalizeActionArgs,
   validateRelinquishCertificateArgs,
   validateRelinquishOutputArgs
 } from '@bsv/sdk/wallet/validationHelpers'
@@ -516,10 +516,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
-    validateInternalizeActionArgs(args)
+    const vargs = validateInternalizeActionArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
-      return await writer.internalizeAction(auth, args)
+      return await writer.internalizeAction(auth, { ...args, tx: vargs.tx })
     })
   }
 

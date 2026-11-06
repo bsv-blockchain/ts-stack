@@ -1,4 +1,4 @@
-import { expect, it } from '@jest/globals'
+import { expect, it, jest } from '@jest/globals'
 import { canonicalOutputJSON } from '@bsv/sdk'
 import {
   PrivatePublicationVerificationLeases,
@@ -197,7 +197,114 @@ it('refuses already cancelled work before invoking admission', async () => {
   expect(f.state.originalCalls).toBe(0)
 })
 it.each([0, 65, 1.5, Number.NaN])('bounds physical lease capacity %s', maximum => {
-  expect(() => new PrivatePublicationVerificationLeases(() => true, { maximum })).toThrow()
+  expect(() => new PrivatePublicationVerificationLeases(() => true, { maximum })).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Invalid private publication verification lease capacity'
+    })
+  )
+})
+
+it('accepts the inclusive maximum lease and byte capacities without reserving work', () => {
+  expect(
+    () =>
+      new PrivatePublicationVerificationLeases(() => true, {
+        maximum: 64,
+        maximumBytes: 64 * 1048576
+      })
+  ).not.toThrow()
+})
+
+it.each([null, false, 0, 'authority'])(
+  'requires a callable installed verification authority: %p',
+  authority => {
+    expect(
+      () => new PrivatePublicationVerificationLeases(authority as unknown as () => boolean)
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Private publication verification authority must be synchronous'
+      })
+    )
+  }
+)
+
+it.each([null, false, 0, 'current', async () => true])(
+  'refuses an invalid current guard before invoking authority or admission: %p',
+  async current => {
+    const f = fixture(1),
+      operation = jest.fn<() => Promise<void>>(async () => {})
+    await expect(
+      f.leases.run(
+        f.f.request,
+        f.f.prepared.fence.state.publisher,
+        f.f.record.verificationContext,
+        f.controller.signal,
+        current as unknown as () => boolean,
+        operation
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Private publication lease guard must be synchronous'
+    })
+    expect(operation).not.toHaveBeenCalled()
+    expect(f.state.originalCalls).toBe(0)
+    await expect(f.run(async () => 'unoccupied')).resolves.toBe('unoccupied')
+  }
+)
+
+it.each([undefined, null, false, 0, 'operation'])(
+  'refuses a non-callable admission operation without acquiring physical capacity: %p',
+  async operation => {
+    const f = fixture(1)
+    await expect(
+      f.leases.run(
+        f.f.request,
+        f.f.prepared.fence.state.publisher,
+        f.f.record.verificationContext,
+        f.controller.signal,
+        () => true,
+        operation as unknown as () => Promise<void>
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Private publication admission operation is required'
+    })
+    expect(f.state.originalCalls).toBe(0)
+    await expect(f.run(async () => 'unoccupied')).resolves.toBe('unoccupied')
+  }
+)
+
+it('bounds complete untrusted reference bytes before inspecting unknown fields', async () => {
+  const f = fixture()
+  await f.run(async reference => {
+    const oversized = { ...reference, unexpected: 'x'.repeat(16384) }
+    expect(() => f.leases.isCurrent(oversized)).toThrow(
+      expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+    )
+    expect(f.leases.isCurrent(reference)).toBe(true)
+  })
+})
+
+it('owns the installed supported-extension list while parsing each current request afresh', async () => {
+  const f = fixture(),
+    iri = 'urn:test:publication-lease:metadata',
+    extensions = [iri],
+    leases = new PrivatePublicationVerificationLeases(() => true, {
+      supportedExtensions: extensions
+    }),
+    request = { ...f.f.request, critical: [iri], extensions: { [iri]: true } }
+  extensions.splice(0)
+  await expect(
+    leases.run(
+      request,
+      f.f.prepared.fence.state.publisher,
+      f.f.record.verificationContext,
+      f.controller.signal,
+      () => true,
+      async reference => leases.isCurrent(reference)
+    )
+  ).resolves.toBe(true)
 })
 it('does not accept an asynchronous installed authority or per-call current guard', async () => {
   const f = fixture()
@@ -249,10 +356,15 @@ it('rechecks cancellation caused by a synchronous policy callback', async () => 
   ).rejects.toMatchObject({ code: 'context-changed' })
 })
 
-it.each([0, 64 * 1048576 + 1, 1.5, Number.NaN])(
+it.each([0, -1, 64 * 1048576 + 1, 1.5, Number.NaN])(
   'bounds retained verification bytes %s',
   maximumBytes => {
-    expect(() => new PrivatePublicationVerificationLeases(() => true, { maximumBytes })).toThrow()
+    expect(() => new PrivatePublicationVerificationLeases(() => true, { maximumBytes })).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Invalid private publication verification byte capacity'
+      })
+    )
   }
 )
 it('reserves exact request/context bytes and keeps the reservation until cancelled work settles', async () => {

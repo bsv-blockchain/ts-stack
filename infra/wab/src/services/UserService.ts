@@ -5,13 +5,14 @@
  * linking/unlinking auth methods, and retrieving faucet payments.
  */
 
-import { Setup } from '@bsv/wallet-toolbox'
+import { Setup, type Wallet } from '@bsv/wallet-toolbox'
 import type { Knex } from 'knex'
 import { db } from '../db/knex'
 import { insertedIdFromResult } from '../db/resultValidation'
 import { User, AuthMethodEntity, PaymentEntity } from '../types'
 import { Curve, Random, RPuzzle, Transaction, Utils } from '@bsv/sdk'
 import { log } from '../logger'
+import { faucetActionLabel, recoverFaucetPayment } from './AutomaticFaucetRecovery'
 import { readFaucetWalletConfig } from '../config/faucet'
 import {
   decryptPresentationKey,
@@ -264,6 +265,49 @@ export class FaucetAlreadyClaimedError extends Error {
   public constructor(message = 'This authentication identity already received a faucet payment.') {
     super(message)
     this.name = 'FaucetAlreadyClaimedError'
+  }
+}
+
+async function tryRecoverFaucet(
+  payment: PaymentEntity | undefined,
+  userId: number,
+  wallet?: Wallet
+): Promise<PaymentEntity | undefined> {
+  if (payment?.status === 'ready') return payment
+  if (payment?.status !== 'creating' || !/^[0-9a-f]{64}$/i.test(payment.k ?? '')) return undefined
+  try {
+    if (wallet == null) {
+      const config = readFaucetWalletConfig()
+      wallet = await Setup.createWalletClientNoEnv({
+        chain: config.chain,
+        rootKeyHex: config.rootKeyHex,
+        storageUrl: config.storageUrl
+      })
+    }
+    await recoverFaucetPayment(payment, wallet)
+    return await db<PaymentEntity>('payments')
+      .where({ id: payment.id, userId, status: 'ready' })
+      .first()
+  } catch {
+    log.warn(
+      { operation: 'service.user.faucet_recovery', paymentId: payment.id },
+      'Existing faucet payment remains pending'
+    )
+    return undefined
+  }
+}
+
+async function tryRecoverFaucetById(
+  paymentId: number,
+  userId: number,
+  wallet: Wallet | undefined
+): Promise<PaymentEntity | undefined> {
+  if (wallet == null) return undefined
+  try {
+    const pending = await db<PaymentEntity>('payments').where({ id: paymentId, userId }).first()
+    return await tryRecoverFaucet(pending, userId, wallet)
+  } catch {
+    return undefined
   }
 }
 
@@ -661,7 +705,7 @@ export class UserService {
         if (payment.status === 'ready') return { payment }
         // Return a sentinel so the marker repair commits before the pending
         // response is raised outside the transaction.
-        return { pending: true as const }
+        return { pending: payment }
       }
 
       if (!allowCreate || authMethods.some(method => Boolean(method.receivedFaucet))) {
@@ -692,11 +736,15 @@ export class UserService {
       if (paymentId === undefined) throw new Error('Failed to reserve faucet payment.')
 
       await markFaucetClaimedMethods(trx, userId, authMethods)
-      return { paymentId, walletConfig, lockingScript }
+      return { paymentId, walletConfig, lockingScript, recoverySecret }
     })
 
     if ('payment' in reservation && reservation.payment != null) return reservation.payment
-    if ('pending' in reservation) throw new FaucetPaymentPendingError()
+    if ('pending' in reservation) {
+      const recovered = await tryRecoverFaucet(reservation.pending, userId)
+      if (recovered != null) return recovered
+      throw new FaucetPaymentPendingError()
+    }
     if (!('paymentId' in reservation) || reservation.walletConfig == null) {
       throw new FaucetPaymentPendingError()
     }
@@ -705,14 +753,16 @@ export class UserService {
     // Persist the reservation before wallet/network work. Any crash or
     // ambiguous wallet failure leaves one visible creating row and must not
     // trigger a second irreversible faucet payment automatically.
+    let wallet: Awaited<ReturnType<typeof Setup.createWalletClientNoEnv>> | undefined
     try {
-      const wallet = await Setup.createWalletClientNoEnv({
+      wallet = await Setup.createWalletClientNoEnv({
         chain: walletConfig.chain,
         rootKeyHex: walletConfig.rootKeyHex,
         storageUrl: walletConfig.storageUrl
       })
       const result = await wallet.createAction({
         description: 'Here is your funds!',
+        labels: [faucetActionLabel(reservation.recoverySecret)],
         outputs: [
           {
             lockingScript: lockingScript.toHex(),
@@ -759,6 +809,9 @@ export class UserService {
         'Funding txid created'
       )
     } catch (error) {
+      // Recover even if the caller disconnected after Storage committed the transaction.
+      const recovered = await tryRecoverFaucetById(reservation.paymentId, userId, wallet)
+      if (recovered != null) return recovered
       log.error(
         { operation: 'service.user.faucet_funding', err: error, outcome: 'ambiguous' },
         'Faucet payment requires reconciliation'

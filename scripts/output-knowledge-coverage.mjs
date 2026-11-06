@@ -13,6 +13,8 @@ import reports from 'istanbul-reports'
 import config from '../packages/application/output-knowledge/jest.coverage.config.js'
 import {
   APPLICATION_COVERAGE_SHARDS,
+  APPLICATION_COVERAGE_LANE,
+  applicationCoverageShard,
   compareCoveragePaths,
   relativeTests,
   validateShardUnion,
@@ -68,6 +70,8 @@ function identity() {
     'packages/application/output-knowledge/jest.coverage.config.js',
     'scripts/output-knowledge-coverage.mjs',
     'scripts/output-knowledge-coverage-validation.mjs',
+    'scripts/jest-duration-sequencer.cjs',
+    'governance/ci-lane-durations.json',
     'package.json',
     'pnpm-lock.yaml'
   ]) {
@@ -100,17 +104,13 @@ function jest(arguments_, capture = false) {
   return capture ? JSON.parse(result.stdout) : undefined
 }
 
-function inventory(shard) {
-  return relativeTests(
-    jest(
-      [
-        '--listTests',
-        '--json',
-        ...(shard ? [`--shard=${shard}/${APPLICATION_COVERAGE_SHARDS}`] : [])
-      ],
-      true
-    )
-  )
+function inventory() {
+  return relativeTests(jest(['--listTests', '--json'], true))
+}
+
+function durationSeconds() {
+  return JSON.parse(readFileSync(path.join(root, 'governance/ci-lane-durations.json'), 'utf8'))
+    .lanes?.[APPLICATION_COVERAGE_LANE]?.seconds
 }
 
 function collect(shard, output) {
@@ -121,8 +121,9 @@ function collect(shard, output) {
     shard,
     total: APPLICATION_COVERAGE_SHARDS,
     allTests: inventory(),
-    selectedTests: inventory(shard)
+    selectedTests: []
   }
+  manifest.selectedTests = applicationCoverageShard(manifest.allTests, durationSeconds(), shard)
   manifest.batches = applicationCoverageBatches(manifest.selectedTests)
   writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest))
   const batches = []
@@ -160,11 +161,18 @@ function collect(shard, output) {
 }
 
 function aggregate(input, output) {
+  const expected = inventory()
+  const seconds = durationSeconds()
   const shards = Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) => index + 1).map(
     shard => {
       const directory = path.join(input, `shard-${shard}`)
       const read = file => JSON.parse(readFileSync(path.join(directory, file)))
       const manifest = read('manifest.json')
+      assert.deepEqual(
+        manifest.selectedTests,
+        applicationCoverageShard(expected, seconds, shard),
+        'changed canonical application coverage shard'
+      )
       const plan = applicationCoverageBatches(manifest.selectedTests)
       assert.deepEqual(manifest.batches, plan, 'changed execution plan')
       const batches = plan.map(batch => {
@@ -185,7 +193,6 @@ function aggregate(input, output) {
       return { manifest, results, coverage }
     }
   )
-  const expected = inventory()
   validateShardUnion(shards, identity(), expected)
   const map = mergeCoverage(shards)
   const summary = enforceGlobalCoverage(map, config.coverageThreshold)

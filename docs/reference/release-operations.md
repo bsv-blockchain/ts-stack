@@ -72,7 +72,7 @@ pnpm health:check
 pnpm docs:facts:check
 ```
 
-Also require the affected package coverage, property, mutation, browser,
+Also require the affected package coverage, property, browser,
 mobile, CLI, WASM, clean-consumer, and `pack:check` lanes selected by CI. The
 full release workflow repeats artifact-critical checks; local success is not a
 substitute.
@@ -107,8 +107,7 @@ Use one supported trigger:
 - protected manual dispatch from `main`.
 
 The run has exactly one human gate, the `release-approval` environment on the
-`approve` job. It starts at t=0 beside preparation and mutation
-qualification. Approve it immediately after dispatch. The rest of the run then
+`approve` job. It starts at t=0 beside preparation. Approve it immediately after dispatch. The rest of the run then
 proceeds unattended, and publication still happens only if every automated
 gate passes. `npm-production` keeps its branch policy and npm trusted-publisher
 binding but has no required reviewers, so there is no late approval prompt.
@@ -282,78 +281,33 @@ See [npm Package Supply Chain](./npm-package-supply-chain.md),
 [Container Supply Chain](./container-supply-chain.md), and
 [Versioning Policy](../about/versioning.md) for the underlying contracts.
 
-## Complete mutation qualification before publication
+<a id="complete-mutation-qualification-before-publication"></a>
 
-The publication candidate must complete the reusable `mutation-tests.yml`
-campaign at its exact `github.sha`. In `release.yaml` a seconds-long `plan` job
-resolves the release mode and package filter once; preparation and the campaign
-then start in parallel from that same output, and the campaign runs its targets
-concurrently, so the slowest single target bounds its wall time. The npm publisher waits for the
-up-front approval, preparation, and full qualification. The OCI publisher
-waits for discovery and full qualification, which a `release.yaml` call
-satisfies with that same-run campaign;
-the Marketplace publisher waits for credential-free source validation and full
-qualification. Each guard requires both a successful campaign and its nonempty
-`qualified-sha` equal to the candidate SHA before entering a job with publisher
-credentials. All existing source, audit, environment, scanning, provenance,
-artifact and publication checks remain in force.
+## Mutation audits are background findings only
 
-Every canonical mutation target must have a successful fresh report and matching
-source/run/attempt/configuration/lock-bound receipt. The verifier reconstructs
-canonical source ranges and mutant inventory with pinned Stryker 9.6.1 and rechecks
-all existing target gates. A partial manual target is diagnostic only. Earlier
-weekly passes, previous attempts and reports from another source cannot satisfy
-the gate; rerun the complete workflow when a full attempt needs replacement.
+No PR, npm release, OCI image, Marketplace publication or deployment starts or
+waits for a mutation campaign. Scores, receipts, campaign results and mutation
+finding status cannot grant or deny publication. No mutation waiver is needed.
 
-A single-package release (`packages/<path>/vX.Y.Z`, or a manual `single`
-dispatch whose filter is a `./packages/<path>` directory) publishes only that
-package's own bytes. Its workspace dependencies ship as npm version ranges that
-resolve to versions qualified by their own releases. The campaign is therefore
-scoped to every canonical target whose source lies in that package directory,
-with all the same exact-source, property-run and receipt checks. The final
-verifier requires exactly that target set and reports the scope as
-`qualified-packages`. A package directory with no governed target, a package
-name filter, and every cascade run the complete campaign. Infrastructure image
-publication accepts only a complete-campaign qualification. Defects in other
-packages are then found by their own releases or the weekly complete campaign.
+The independent Background mutation findings workflow has explicit main-only
+dispatch, one named target/partition, a 30-minute audit job budget and a separate
+five-minute metadata-only triage reporter. It retains available raw evidence and
+opens or updates an advisory issue after unsuccessful execution. A timeout is
+inconclusive evidence. No full-registry schedule is enabled. Future audit work
+must be explicitly budgeted and must never become a release dependency.
 
-Preparation and execution verification use the same duration-scheduled complete
-matrix. Every batch binds the digest of that full ordered matrix and its exact
-ordered slice, alongside source, run, attempt and build archive identity. The
-verifier reconstructs the scheduling order from the checked-out measurements;
-it must not compare a scheduled digest with target-order rows or accept a
-digest mismatch. Scheduling changes start order only, never the required union
-of canonical targets, partitions, source ranges or mutation gates.
+All existing source ancestry, human approval, deterministic/property/native,
+security, coverage, package consumer, immutable artifact, SBOM, signing,
+attestation and staging checks remain applicable. Infrastructure calls carry
+`release-sha` as source identity from successful release preparation; it is not
+a mutation qualification. The existing main ancestry and narrowly allowed direct
+infra-sync child checks still prevent product changes between preparation and
+image publication.
 
-Declaration/import-only execution companions run with related nonempty parts.
-Their complete original source ranges remain in the plan and the pinned-engine
-inventory must match the original whole target exactly. A standalone empty
-report remains invalid; neither a perfect percentage over zero sites nor a
-passing initial test run can qualify a canonical target.
-
-No mutation target is permanently removed by PR deferral. A failure at this final
-gate blocks publication and requires a source fix and newly qualified candidate;
-there is no label or manual input that converts failure into permission to publish.
-For a standalone general OCI run, a discovered empty publication set avoids a
-needless full campaign. `release.yaml` always runs its campaign because it also
-qualifies the infrastructure images published by the same run. Marketplace
-still verifies its existing-title condition within its credentialed
-read/publish lane after qualification.
-
-The npm and general OCI paths are consolidated for cascades: `release.yaml`
-calls `infra-release.yaml` with its qualified `github.sha` and image source.
-The called workflow accepts that call only from `release.yaml` and only for a
-caller-qualified `github.sha`. The image source must be that SHA or its direct
-infra-sync child limited to manifest, lock, and generated-facts paths. Product
-source therefore cannot change between qualification and image publication.
-Marketplace remains an independent `infra/v*` workflow with its own campaign.
-
-The full mutation preparation first validates current inventory-review dates and
-security advisories. An expired review or failed audit stops expensive campaign
-execution. Renewed inventory dates record source/disposition review; they do not
-qualify a runtime campaign. Target receipts also bind the fresh successful runner
-record, report digest, property run count, deterministic seed and empty replay
-path. An overridden partial replay cannot qualify publication.
+Triage actual product defects into owned issues and focused regression tests.
+Use the private security process for sensitive findings. Historical mutation
+reports and exceptions below remain evidence of prior policy; they do not impose
+admission requirements under this policy.
 
 ## Retired one-time experimental #674 release waiver
 
@@ -374,7 +328,7 @@ This was an operator waiver, not successful full mutation qualification. Failed
 and canceled campaign evidence remains failed. The historical record is
 `governance/release-exceptions/2026-10-27-674.json`. The temporary dispatch input
 and admission implementation are removed. Every later release requires the
-normal full mutation qualification; no future release can select this waiver.
+the historical full-mutation rule; the background-only policy above supersedes it.
 
 The image inventory used two source children. Six new images came from
 `1aa0983115ba39579ac09885e1977c05b765e42e` at caller `ada0681362455045ff3a0dd795fcf89e6f177d92`.
@@ -399,3 +353,16 @@ the public `publishedVersion` with `releaseType: none`. Run `pnpm docs:packages`
 review the generated package facts and merge the validated reconciliation PR.
 Do not advance a baseline for a held, failed or partially published candidate.
 Later metadata commits do not change the pinned image source or its provenance.
+
+### November4 PR1093 operator exception retired
+
+The temporary `2026-11-04-pr1093-main` mutation exception is retired following
+successful publication of Paymail2.5.0, Toolbox/Core/Client/Mobile2.15.2 and all
+eight current infrastructure image tags. Image continuation41881749332 passed
+the complete published-package and image baseline reconciliation. The record
+in `governance/release-exceptions/2026-11-04-pr1093.json` retains the exact
+source boundaries, failed attempts and operator-waiver identity; it does not
+claim a mutation campaign passed. Temporary workflow inputs and admission
+helpers are removed. Future publication requires normal complete exact-source
+mutation qualification under the then-current policy. The background-only policy above now applies. Staging native/availability acceptance and production
+promotion remain separate; production is held for operator validation.
