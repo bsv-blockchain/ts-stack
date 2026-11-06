@@ -334,10 +334,7 @@ between 2026-10-31 and 2026-11-06. Two packages were far above their
 October values: `@bsv/overlay-express` (10 to 312 seconds of tests, 13 to 526
 of coverage) and `@bsv/lch` (12 to 311, 16 to 364). The stale values let the
 planner place both in one dependents shard, which ran for 9–14 minutes. With
-the refreshed values and up to six dependents shards, the planned slowest
-dependents shard carries 323 seconds and the slowest coverage-other shard 544
-seconds. Each of those is now set by one package, since a package runs whole
-within its shard.
+the refreshed values and up to six dependents shards, the planned slowest dependents shard carries 401 seconds (`@bsv/wallet-toolbox`, 393 seconds, when it is a dependent) and the slowest coverage-other shard 544 seconds. Each of those is now set by one package, since a package runs whole within its shard.
 
 ## Duration-balanced test-file shards
 

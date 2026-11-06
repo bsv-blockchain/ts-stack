@@ -171,7 +171,7 @@
       }
     },
     "dependent-tests": {
-      "source": "Median per-package seconds (rounded up) from the dependent-tests duration lines of successful org CI affected-dependents jobs between 2026-10-31 and 2026-11-06. Not run in that window, so unchanged: @bsv/overlay-topics, @bsv/wallet-relay.",
+      "source": "Median per-package seconds (rounded up) from the dependent-tests duration lines of successful org CI affected-dependents jobs between 2026-10-31 and 2026-11-06. Not run in that window, so unchanged: @bsv/overlay-topics, @bsv/wallet-relay. @bsv/wallet-toolbox, a dependent only of pull requests that change its own dependencies, is from proof run https://github.com/bsv-blockchain/ts-stack/actions/runs/42182098611.",
       "plan": {
         "targetSeconds": 90,
         "maxPackagesPerShard": 8,
@@ -211,6 +211,7 @@
         "@bsv/verifast": 9,
         "@bsv/wallet-helper": 5,
         "@bsv/wallet-relay": 63,
+        "@bsv/wallet-toolbox": 393,
         "@bsv/wallet-toolbox-client": 4,
         "@bsv/wallet-toolbox-examples": 6,
         "@bsv/wallet-toolbox-mobile": 4,
