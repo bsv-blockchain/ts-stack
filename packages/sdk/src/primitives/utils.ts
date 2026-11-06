@@ -929,3 +929,5 @@ export function constantTimeEquals(a: Uint8Array | number[], b: Uint8Array | num
   }
   return diff === 0
 }
+
+// Proof only (do not merge): selects an SDK-only pull request scope.
