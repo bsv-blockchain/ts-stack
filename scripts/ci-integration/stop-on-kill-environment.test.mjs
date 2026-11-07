@@ -55,6 +55,10 @@ test('every governed Jest target runs under the stop-on-kill environment', () =>
   const targets = Object.entries(buildMutationTargets(root))
   const jest = targets.filter(([, target]) => target.testRunner === 'jest')
   assert.ok(jest.length > 0)
-  for (const [id, target] of jest)
-    assert.equal(target.runnerOptions.jest.config.testEnvironment, environmentPath, id)
+  for (const [id, target] of jest) {
+    const config = target.runnerOptions.jest.config
+    assert.equal(config.testEnvironment, environmentPath, id)
+    for (const project of config.projects ?? [])
+      assert.equal(project.testEnvironment, environmentPath, `${id}/${project.displayName}`)
+  }
 })

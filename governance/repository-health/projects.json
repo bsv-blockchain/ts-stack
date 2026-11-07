@@ -356,6 +356,16 @@
       "release": "none"
     },
     {
+      "path": "apps/output-knowledge-reference",
+      "name": "output-knowledge-reference-app",
+      "owner": "ts-stack-maintainers",
+      "area": "examples",
+      "profile": "examples",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "none"
+    },
+    {
       "path": "conformance/runner",
       "name": "@bsv/conformance-runner",
       "owner": "ts-stack-maintainers",
@@ -507,6 +517,17 @@
       "release": "npm-oidc"
     },
     {
+      "path": "packages/messaging/group-messaging",
+      "name": "@bsv/group-messaging",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "node-library",
+      "consumerProfiles": ["node-cjs", "node-esm"],
+      "criticality": "tier-2",
+      "runtimeTargets": ["node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/messaging/message-box-client",
       "name": "@bsv/message-box-client",
       "owner": "ts-stack-maintainers",
@@ -630,6 +651,17 @@
       "criticality": "tier-1",
       "runtimeTargets": ["node"],
       "release": "none"
+    },
+    {
+      "path": "packages/overlays/eqc",
+      "name": "@bsv/eqc",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
     },
     {
       "path": "packages/overlays/gasp-core",
@@ -817,6 +849,17 @@
       "consumerProfiles": ["react-native-metro"],
       "criticality": "tier-1",
       "runtimeTargets": ["react-native"],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/application/output-knowledge",
+      "name": "@bsv/output-knowledge",
+      "owner": "ts-stack-maintainers",
+      "area": "application",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     }
   ]

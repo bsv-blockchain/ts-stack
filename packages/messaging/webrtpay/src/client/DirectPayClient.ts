@@ -632,13 +632,18 @@ export class DirectPayClient {
     }
     // The payer sees the expiry the code carries, in whole seconds; keep to the same moment.
     const expiry = expiresAt === undefined ? undefined : Math.floor(expiresAt / 1000) * 1000
-    const expiryTimer =
-      expiry === undefined
-        ? undefined
-        : setTimeout(
-            () => link.close(new WebRTPayError('timeout', 'Offer code expired')),
-            Math.max(0, expiry - Date.now())
-          )
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined
+    if (expiry !== undefined) {
+      const expire = () => {
+        const remaining = expiry - Date.now()
+        if (remaining > 0) {
+          expiryTimer = setTimeout(expire, Math.min(remaining, MAX_TIMER_MS))
+          return
+        }
+        link.close(new WebRTPayError('timeout', 'Offer code expired'))
+      }
+      expiryTimer = setTimeout(expire, Math.max(0, Math.min(expiry - Date.now(), MAX_TIMER_MS)))
+    }
     link.onClose(() => clearTimeout(expiryTimer))
 
     let answered = false

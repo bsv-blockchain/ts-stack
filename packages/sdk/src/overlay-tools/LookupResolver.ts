@@ -675,6 +675,12 @@ export interface LookupResolverConfig {
    * advertisement state and must be selected accordingly.
    */
   slapTrackers?: string[]
+  /**
+   * Per-tracker discovery timeout in milliseconds. Defaults to 5000.
+   * Must be a positive integer no greater than 60000. The query's independent
+   * deadlineMs still bounds the whole attempt, including discovery.
+   */
+  trackerTimeoutMs?: number
   /** Map of lookup service names to arrays of hosts to use in place of resolving via SLAP. */
   hostOverrides?: Record<string, string[]>
   /** Map of lookup service names to arrays of hosts to use in addition to resolving via SLAP. */
@@ -1235,6 +1241,7 @@ interface LookupDiscoveryPlan {
 export default class LookupResolver {
   private readonly facilitator: OverlayLookupFacilitator
   private readonly slapTrackers: string[]
+  private readonly trackerTimeoutMs: number
   private readonly hostOverrides: Record<string, string[]>
   private readonly additionalHosts: Record<string, string[]>
   private readonly networkPreset: LookupNetworkPreset
@@ -1263,6 +1270,15 @@ export default class LookupResolver {
 
   constructor(config: LookupResolverConfig = {}) {
     this.limits = lookupLimits(config.limits)
+    const { trackerTimeoutMs = MAX_TRACKER_WAIT_TIME } = config
+    if (
+      !Number.isSafeInteger(trackerTimeoutMs) ||
+      trackerTimeoutMs <= 0 ||
+      trackerTimeoutMs > MAX_LOOKUP_TIMEOUT_MS
+    ) {
+      throw new RangeError('trackerTimeoutMs must be an integer between 1 and 60000')
+    }
+    this.trackerTimeoutMs = trackerTimeoutMs
     const networkPreset = config.networkPreset ?? 'mainnet'
     if (!['mainnet', 'testnet', 'teratestnet', 'local'].includes(networkPreset)) {
       throw new TypeError('Lookup network preset is invalid.')
@@ -1974,7 +1990,7 @@ export default class LookupResolver {
     const answer = await this.lookupHostWithTracking(
       tracker,
       { service: 'ls_slap', query: { service: run.question.service } },
-      MAX_TRACKER_WAIT_TIME,
+      this.trackerTimeoutMs,
       signal,
       {
         maxResponseBytes: run.limits.maxResponseBytes,

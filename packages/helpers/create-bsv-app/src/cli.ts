@@ -3,16 +3,17 @@ import type { ProjectConfig, PackageManager } from './config/model.js'
 import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
 import { detectExistingProject } from './config/detect.js'
 import { resolveConfigFromFile } from './config/file.js'
-import { resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
+import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
 import { applyConfig, type RunResult } from './pipeline.js'
-import { ConfigError } from './config/validate.js'
+import { ConfigError, requestedCapabilityIds, resolveBsvDir } from './config/validate.js'
 import { getStarter } from './starters.js'
 
 export type StartUi = (opts: {
   existing: ProjectManifest | null
   targetDir: string
+  flags?: ConfigDraft
   runCommand?: RunCommand
 }) => Promise<RunResult>
 
@@ -42,7 +43,7 @@ Options:
   --capabilities <names>       Add comma-separated BSV capabilities
   --package-manager <name>     Use npm, pnpm, yarn, or bun
   --network <main|test|ttn>    Select the BSV network
-  --yes                        Accept defaults without prompting
+  --yes                        Resolve from flags without prompting
   --force                      Overwrite conflicting generated files
   --ui                         Open the browser-based configurator
   --glue | --no-glue          Enable or disable integration glue
@@ -169,15 +170,18 @@ function existingProject(targetDir: string): ProjectManifest | null {
   return readValidManifest(targetDir) ?? detectExistingProject(targetDir)
 }
 
+/** Defaults the project name to the target directory's name unless `--name` is given. */
+function withDefaultName(flags: ConfigDraft, targetDir: string): ConfigDraft {
+  return flags.name === undefined ? { ...flags, name: basename(resolve(targetDir)) } : { ...flags }
+}
+
 function flagsWithDefaultName(
   args: CliArgs,
   existing: ProjectManifest | null,
   targetDir: string
 ): ConfigDraft {
-  const flags = { ...args.draft }
-  const mode = flags.mode ?? (existing == null ? 'new' : 'add')
-  if (mode === 'new' && flags.name === undefined) flags.name = basename(resolve(targetDir))
-  return flags
+  const mode = args.draft.mode ?? (existing == null ? 'new' : 'add')
+  return mode === 'new' ? withDefaultName(args.draft, targetDir) : { ...args.draft }
 }
 
 async function resolveCliConfig(
@@ -205,17 +209,28 @@ export async function run(
   const initialTargetDir = args.dir ?? '.'
 
   if (args.ui) {
+    // the form cannot correct these flag values, so fail before starting it, as --yes would
+    const flagInput = draftToConfigInput(args.draft)
+    requestedCapabilityIds(flagInput)
+    resolveBsvDir(flagInput)
     const existing = existingProject(initialTargetDir)
     const startUi =
       deps?.startUi ??
       (async (o: {
         existing: ProjectManifest | null
         targetDir: string
+        flags?: ConfigDraft
         runCommand?: RunCommand
       }) => {
         return await (await import('./ui/ui-server.js')).runUi(o)
       })
-    return await startUi({ existing, targetDir: initialTargetDir, runCommand: deps?.runCommand })
+    return await startUi({
+      existing,
+      targetDir: initialTargetDir,
+      // the page can switch to either mode, so the name defaults as for --yes in new mode
+      flags: withDefaultName(args.draft, initialTargetDir),
+      runCommand: deps?.runCommand
+    })
   }
 
   const config = await resolveCliConfig(args, initialTargetDir, provider)

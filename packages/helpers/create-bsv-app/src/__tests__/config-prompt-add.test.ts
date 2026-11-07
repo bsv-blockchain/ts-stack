@@ -45,8 +45,10 @@ describe('runPrompts – add mode (mocked 2-cap registry)', () => {
       capabilities: ['a']
     }
     const askedKeys: string[] = []
-    const ask: Ask = async (field: ConfigField) => {
+    let initialCapabilities: unknown
+    const ask: Ask = async (field: ConfigField, _options, initial) => {
       askedKeys.push(field.key)
+      if (field.key === 'capabilities') initialCapabilities = initial
       // Answer 'b' when asked about capabilities; undefined for any other field
       return field.key === 'capabilities' ? ['b'] : undefined
     }
@@ -56,5 +58,6 @@ describe('runPrompts – add mode (mocked 2-cap registry)', () => {
     expect(c.mode).toBe('add')
     expect(c.stack.frontend?.framework).toBe('react')
     expect(c.capabilities).toEqual(['a', 'b']) // union: existing 'a' + newly added 'b'
+    expect(initialCapabilities).toEqual([]) // 'b' offered but not pre-ticked in add mode
   })
 })

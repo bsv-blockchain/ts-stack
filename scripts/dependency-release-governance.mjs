@@ -460,12 +460,11 @@ async function npmView(name, fields, allowUnpublished = false) {
 
 async function mapWithConcurrency(items, limit, operation) {
   const results = Array.from({ length: items.length })
-  let next = 0
+  // Share a lazy queue: each worker claims one index, then awaits its result
+  // before claiming another. The concurrency limit never starts all work at once.
+  const queue = items.entries()
   async function worker() {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await operation(items[index])
-    }
+    for await (const [index, item] of queue) results[index] = await operation(item)
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, worker))
   return results
@@ -548,12 +547,18 @@ export async function createDirectLatestInventory(now = new Date()) {
 function publishedBaselines(notes) {
   const result = new Map()
   for (const entry of notes.entries ?? []) {
-    result.set(entry.name, entry.publishedVersion ?? entry.published ?? entry.baselineVersion)
+    result.set(
+      entry.name,
+      entry.publishedVersion !== undefined
+        ? entry.publishedVersion
+        : (entry.published ?? entry.baselineVersion)
+    )
   }
   return result
 }
 
 function publishedStatus(source, latest, baseline) {
+  if (baseline === null) return 'diverged'
   if (source === latest) return 'current'
   if (baseline === latest) return 'first-party-release-held'
   return 'diverged'

@@ -25,6 +25,7 @@ import {
   BroadcastResponse,
   BroadcastFailure
 } from '@bsv/sdk'
+import type { BdkVerifierInterface } from '@bsv/sdk'
 import { AdvertisementData, Advertiser } from './Advertiser.js'
 import type { Advertisement } from './Advertisement.js'
 import { GASP, GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/gasp'
@@ -306,6 +307,22 @@ type StaleOutput = {
 
 type SubmissionMode = 'historical-tx' | 'current-tx' | 'historical-tx-no-spv'
 
+/**
+ * Receives each per-topic validation failure that `Engine.submit` records in
+ * `failedTopics`. The Engine swallows those errors by design and reports the
+ * topic as `{ outputsToAdmit: [], coinsToRetain: [] }`, which is the same STEAK
+ * shape as a duplicate or an empty admission. This callback lets a host tell
+ * the three apart without parsing log output.
+ *
+ * The Engine invokes it inside its own try/catch, so a throwing reporter
+ * cannot turn a per-topic rejection into a whole-submission failure.
+ */
+export type TopicFailureReporter = (
+  topic: string,
+  error: unknown,
+  context: { txid: string; mode: SubmissionMode }
+) => void
+
 type TopicSubmissionContext = {
   tx: Transaction
   txid: string
@@ -366,6 +383,14 @@ function requireBASMDefined<T>(value: T | undefined, aligned: boolean, message: 
  * An engine for running BSV Overlay Services (topic managers and lookup services).
  */
 export class Engine {
+  /**
+   * Optional reporter for per-topic validation failures during `submit`.
+   * Unset by default; the Engine's behavior is unchanged when it is unset.
+   * A field rather than a constructor parameter, so the positional constructor
+   * signature stays as it is.
+   */
+  onTopicFailed?: TopicFailureReporter
+
   private submissionTail: Promise<void> = Promise.resolve()
   private basmFetchImpl?: typeof fetch
 
@@ -391,6 +416,7 @@ export class Engine {
    * @param {boolean} basmSyncEnabled - Whether BASM sync should run automatically.
    * @param {number} unprovenEvictionBlocks - Default block age for opt-in unproven state eviction.
    * @param {number} maxLookupResults - Maximum lookup formulas hydrated per request. Use -1 to opt out.
+   * @param {BdkVerifierInterface} [scriptVerifier] - Optional script backend for SPV verification of submitted and GASP-synced transactions, for example a preloaded `BdkVerifier` from `@bsv/verifast`. When omitted, the SDK's JavaScript interpreter verifies scripts.
    */
   constructor(
     public managers: { [key: string]: TopicManager },
@@ -412,7 +438,8 @@ export class Engine {
     public topicAnchorHeaderResolver?: TopicAnchorHeaderResolver,
     public basmSyncEnabled = false,
     public unprovenEvictionBlocks = 144,
-    public maxLookupResults = 1000
+    public maxLookupResults = 1000,
+    public scriptVerifier?: BdkVerifierInterface
   ) {
     if (
       maxLookupResults !== -1 &&
@@ -1134,6 +1161,7 @@ export class Engine {
         `Error validating topic during submit: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(error)}`
       )
       failedTopics.add(topic)
+      this.reportTopicFailure(topic, error, { txid, mode })
       return {
         topic,
         isDupe: false,
@@ -1141,6 +1169,22 @@ export class Engine {
         previousOutputs: [],
         admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
       }
+    }
+  }
+
+  private reportTopicFailure(
+    topic: string,
+    error: unknown,
+    context: { txid: string; mode: SubmissionMode }
+  ): void {
+    if (this.onTopicFailed === undefined) return
+    try {
+      this.onTopicFailed(topic, error, context)
+    } catch (reporterError) {
+      // An observability hook must never change admission behavior.
+      this.logger.error(
+        `Error in onTopicFailed reporter: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(reporterError)}`
+      )
     }
   }
 
@@ -1718,7 +1762,7 @@ export class Engine {
     // public submission mode, so it keeps the full SPV check.
     if (mode !== 'historical-tx-no-spv') {
       this.startTime(`chainTracker_${txid.substring(0, 10)}`)
-      const txValid = await tx.verify(this.chainTracker)
+      const txValid = await tx.verify(this.chainTracker, undefined, undefined, this.scriptVerifier)
       if (!txValid) throw new Error('Unable to verify SPV information.')
       this.endTime(`chainTracker_${txid.substring(0, 10)}`)
     }

@@ -7,6 +7,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | |
 | --- |
 | [AsyncSessionManager](#interface-asyncsessionmanager) |
+| [AuthFetchOptions](#interface-authfetchoptions) |
 | [AuthMessage](#interface-authmessage) |
 | [PeerSession](#interface-peersession) |
 | [RequestedCertificateSet](#interface-requestedcertificateset) |
@@ -56,6 +57,31 @@ consumed. Peer fails closed when an asynchronous store omits this method.
 claimMessageNonce?: (sessionNonce: string, messageNonce: string) => Promise<boolean>
 ```
 See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: AuthFetchOptions
+
+AuthFetch configuration in its existing transport-options constructor position.
+
+```ts
+export interface AuthFetchOptions extends SimplifiedFetchTransportOptions {
+    responseTimeoutMs?: number;
+}
+```
+
+See also: [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions)
+
+#### Property responseTimeoutMs
+
+Authenticated response-wait deadline in milliseconds. Defaults to 30000.
+Must be a positive integer no greater than 2147483647. This is independent
+of requestTimeoutMs, which bounds transport fetch and response-body reads.
+
+```ts
+responseTimeoutMs?: number
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -347,8 +373,9 @@ bytes, and payment derivation material are not included.
 ```ts
 export class AuthFetch {
     readonly #transportOptions: SimplifiedFetchTransportOptions;
+    readonly #responseTimeoutMs: number;
     peers: Record<string, AuthPeer> = {};
-    constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: SimplifiedFetchTransportOptions = {}, fetchClient?: typeof fetch)
+    constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: AuthFetchOptions = {}, fetchClient?: typeof fetch)
     async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response>
     async #getOrCreatePeer(baseURL: string): Promise<AuthPeer>
     async sendCertificateRequest(baseUrl: string, certificatesToRequest: RequestedCertificateSet): Promise<VerifiableCertificate[]>
@@ -376,16 +403,16 @@ export class AuthFetch {
 }
 ```
 
-See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [SimplifiedFetchTransport](./auth.md#class-simplifiedfetchtransport), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [string](./remittance.md#function-string)
+See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [AuthFetchOptions](./auth.md#interface-authfetchoptions), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [SimplifiedFetchTransport](./auth.md#class-simplifiedfetchtransport), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs a new AuthFetch instance.
 
 ```ts
-constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: SimplifiedFetchTransportOptions = {}, fetchClient?: typeof fetch)
+constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: AuthFetchOptions = {}, fetchClient?: typeof fetch)
 ```
-See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [AuthFetchOptions](./auth.md#interface-authfetchoptions), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [WalletInterface](./wallet.md#interface-walletinterface)
 
 Argument Details
 

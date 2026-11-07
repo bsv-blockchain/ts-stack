@@ -72,6 +72,7 @@ export const NAV: NavSection[] = [
             label: '@bsv/overlay-discovery-services',
             href: '/packages/overlays/overlay-discovery-services/'
           },
+          { label: '@bsv/eqc', href: '/packages/overlays/eqc/' },
           { label: '@bsv/gasp', href: '/packages/overlays/gasp/' },
           { label: '@bsv/btms-backend', href: '/packages/overlays/btms-backend/' }
         ]

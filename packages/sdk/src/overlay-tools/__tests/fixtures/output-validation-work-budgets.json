@@ -1,0 +1,132 @@
+{
+  "reference": {
+    "package": "@bsv/sdk",
+    "version": "4.0.1",
+    "tarball": "https://registry.npmjs.org/@bsv/sdk/-/sdk-4.0.1.tgz",
+    "integrity": "sha512-aLaRa38h+ck5OhqRlNiQ9oUIOuB+vSZwWzkgWlXzr/9qwK5F0pbtog5PM+1Wo2GNIzxVAEnvxYCLL5SU55cW0w==",
+    "tarballSha256": "8800f16ad87a23ddf502bf58dbdc82b91d7a6446a8df799f3a74ac439d91c31b",
+    "purpose": "Released validation and error-identity compatibility; hand-authored BRC-192 boundary cases"
+  },
+  "cases": {
+    "parseOutputJSONWithStringRecords/ascii": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "parseOutputJSONWithOwnedRecords/ascii": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/ascii": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/ascii": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithStringRecords/unicode": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "parseOutputJSONWithOwnedRecords/unicode": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/unicode": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/unicode": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithStringRecords/empty": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "parseOutputJSONWithOwnedRecords/empty": {
+      "maximumNativeCalls": 97,
+      "referenceCalls": 77
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/empty": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/empty": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithOwnedRecords/null": {
+      "maximumNativeCalls": 206,
+      "referenceCalls": 172
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/null": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/null": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithOwnedRecords/true": {
+      "maximumNativeCalls": 206,
+      "referenceCalls": 172
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/true": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/true": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithOwnedRecords/false": {
+      "maximumNativeCalls": 206,
+      "referenceCalls": 172
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/false": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/false": {
+      "maximumNativeCalls": 123,
+      "referenceCalls": 100
+    },
+    "parseOutputJSONWithOwnedRecords/zero": {
+      "maximumNativeCalls": 234,
+      "referenceCalls": 196
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/zero": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/zero": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    },
+    "parseOutputJSONWithOwnedRecords/positive": {
+      "maximumNativeCalls": 234,
+      "referenceCalls": 196
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/positive": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/positive": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    },
+    "parseOutputJSONWithOwnedRecords/negative": {
+      "maximumNativeCalls": 234,
+      "referenceCalls": 196
+    },
+    "inspectOutputJSONEncodingWithScalarRecords/negative": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    },
+    "inspectOutputJSONEncodingWithOwnedRecords/negative": {
+      "maximumNativeCalls": 179,
+      "referenceCalls": 148
+    }
+  }
+}

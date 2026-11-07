@@ -75,6 +75,75 @@ describe('assembleBaseFile', () => {
   })
 })
 
+// Run the generated config.ts against a given environment (with @bsv/sdk stubbed) and return its exports.
+function loadServerConfig(env: Record<string, string>): Record<string, unknown> {
+  const js = ts.transpileModule(serverConfig(CTX), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+  }).outputText
+  const sdk = {
+    PrivateKey: {
+      fromRandom: () => ({ toString: () => 'k' }),
+      fromString: (s: string) => ({ toString: () => s })
+    }
+  }
+  const exports: Record<string, unknown> = {}
+  new Function('require', 'exports', 'process', js)(() => sdk, exports, { env })
+  return exports
+}
+
+describe('generated server config: SERVER_ORIGIN', () => {
+  test.each([
+    ['http://192.168.1.205:3000', 'ws://192.168.1.205:3000'],
+    ['http://10.0.0.7:3000/', 'ws://10.0.0.7:3000'],
+    ['http://172.16.4.2:8080', 'ws://172.16.4.2:8080'],
+    ['http://172.31.255.1:3000', 'ws://172.31.255.1:3000'],
+    ['http://127.0.0.1:3000', 'ws://127.0.0.1:3000'],
+    ['http://localhost:4000', 'ws://localhost:4000'],
+    ['http://[fd12:3456::1]:3000', 'ws://[fd12:3456::1]:3000'],
+    ['https://api.example.com', 'wss://api.example.com']
+  ])('accepts %s and derives relay %s', (origin, relay) => {
+    const cfg = loadServerConfig({ SERVER_ORIGIN: origin })
+    expect(cfg.SERVER_ORIGIN).toBe(new URL(origin).origin)
+    expect(cfg.RELAY_URL).toBe(relay)
+  })
+  test('defaults to http://localhost:<PORT> with a matching ws relay', () => {
+    expect(loadServerConfig({ PORT: '3100' })).toMatchObject({
+      SERVER_ORIGIN: 'http://localhost:3100',
+      RELAY_URL: 'ws://localhost:3100'
+    })
+  })
+  test.each([
+    'http://8.8.8.8:3000',
+    'http://172.32.0.1:3000',
+    'http://192.169.1.1:3000',
+    'http://api.example.com',
+    'http://phone.local:3000',
+    'http://[2001:db8::1]:3000',
+    'https://api.example.com/api',
+    'https://api.example.com/?x=1',
+    'https://api.example.com/#h',
+    'https://user:pw@api.example.com',
+    'ftp://192.168.1.205'
+  ])('rejects %s', origin => {
+    expect(() => loadServerConfig({ SERVER_ORIGIN: origin })).toThrow(/SERVER_ORIGIN/)
+  })
+  test('production requires SERVER_ORIGIN and HTTPS', () => {
+    const prod = {
+      NODE_ENV: 'production',
+      SERVER_PRIVATE_KEY: 'k',
+      CLIENT_ORIGIN: 'https://app.example.com'
+    }
+    expect(() => loadServerConfig(prod)).toThrow('SERVER_ORIGIN is required in production')
+    expect(() => loadServerConfig({ ...prod, SERVER_ORIGIN: 'http://192.168.1.205:3000' })).toThrow(
+      /SERVER_ORIGIN/
+    )
+    expect(loadServerConfig({ ...prod, SERVER_ORIGIN: 'https://api.example.com' })).toMatchObject({
+      SERVER_ORIGIN: 'https://api.example.com',
+      RELAY_URL: 'wss://api.example.com'
+    })
+  })
+})
+
 describe('bsvImport', () => {
   test("src/-prefixed bsvDir → './' relative path", () => {
     expect(bsvImport(CTX, 'WalletProviders')).toBe('./bsv/WalletProviders')

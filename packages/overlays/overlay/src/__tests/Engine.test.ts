@@ -634,6 +634,70 @@ describe('BSV Overlay Services Engine', () => {
     )
   })
 
+  describe('onTopicFailed', () => {
+    it('reports a per-topic validation failure without changing the STEAK', async () => {
+      const failure = new Error('manager rejected the transaction')
+      mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
+        throw failure
+      })
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        { Hello: mockLookupService },
+        mockStorageEngine,
+        mockChainTracker
+      )
+      engine.logger = { ...console, error: jest.fn() }
+      const onTopicFailed = jest.fn()
+      engine.onTopicFailed = onTopicFailed
+
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(onTopicFailed).toHaveBeenCalledTimes(1)
+      expect(onTopicFailed).toHaveBeenCalledWith('Hello', failure, {
+        txid: exampleTXID,
+        mode: 'current-tx'
+      })
+      expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+    })
+
+    it('is not invoked for a duplicate or a successful admission', async () => {
+      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const onTopicFailed = jest.fn()
+      engine.onTopicFailed = onTopicFailed
+
+      await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+      expect(mockStorageEngine.insertOutput).toHaveBeenCalled()
+
+      mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => true)
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(onTopicFailed).not.toHaveBeenCalled()
+    })
+
+    it('contains a throwing reporter so submit still resolves', async () => {
+      mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
+        throw new Error('manager rejected the transaction')
+      })
+      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const logger = { ...console, error: jest.fn() }
+      engine.logger = logger
+      engine.onTopicFailed = jest.fn(() => {
+        throw new Error('reporter exploded')
+      })
+
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(engine.onTopicFailed).toHaveBeenCalledTimes(1)
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error in onTopicFailed reporter')
+      )
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('reporter exploded'))
+    })
+  })
+
   it('deduplicates stored consumer relations by outpoint value', async () => {
     const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
     const consumer = { txid: exampleTXID, outputIndex: 0 }
@@ -2035,6 +2099,35 @@ describe('BSV Overlay Services Engine', () => {
         'bb6f640cc4ee56bf38eb5a1969ac0c16caa2d3d202b22bf3735d10eec0ca6e00',
         814435
       )
+    })
+    it('Passes the configured script verifier to SPV verification', async () => {
+      const scriptVerifier = { verifyScripts: jest.fn(async () => true) }
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          ...Array(16).fill(undefined),
+          scriptVerifier
+        )
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, scriptVerifier)
+      } finally {
+        verify.mockRestore()
+      }
+    })
+    it('Verifies with the SDK interpreter when no script verifier is configured', async () => {
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+        expect(engine.scriptVerifier).toBeUndefined()
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, undefined)
+      } finally {
+        verify.mockRestore()
+      }
     })
     it('Throws an error if an invalid envelope is provided', async () => {
       const engine = new Engine(

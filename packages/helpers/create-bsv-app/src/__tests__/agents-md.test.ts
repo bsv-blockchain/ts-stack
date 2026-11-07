@@ -1,5 +1,7 @@
 // src/__tests__/agents-md.test.ts
 import { describe, expect, test } from '@jest/globals'
+import { dirname } from 'node:path'
+import ts from 'typescript'
 import { renderAgentsMd } from '../agents-md'
 import { walletConnect } from '../capabilities/wallet-connect'
 import { walletLogin } from '../capabilities/wallet-login'
@@ -18,6 +20,52 @@ const config: ProjectConfig = {
   install: false,
   packageManager: 'npm',
   network: 'test'
+}
+
+// The fenced `server/src/index.ts` block of a manual-wiring AGENTS.md.
+function serverSnippet(md: string): string {
+  const match = /### `server\/src\/index\.ts`\n\n```ts\n([\s\S]*?)\n```/.exec(md)
+  if (match == null) throw new Error('no server/src/index.ts snippet')
+  return match[1]
+}
+
+// Express-shaped stand-ins for what the snippet's own comments say the user's server already has.
+const SERVER_PRELUDE = [
+  'interface Res { setHeader (k: string, v: string): void, json (b: unknown): void, status (c: number): Res }',
+  'declare const app: { get (path: string, handler: (req: unknown, res: Res) => void): void }',
+  'declare const server: unknown',
+  'declare const serverWallet: unknown'
+].join('\n')
+
+// Strict typecheck of a pasted server snippet against SERVER_PRELUDE; @bsv/wallet-relay is stubbed.
+function typecheckServerSnippet(snippet: string): string[] {
+  const files: Record<string, string> = {
+    '/virtual/index.ts': `${SERVER_PRELUDE}\n${snippet}\nexport {}\n`,
+    '/virtual/wallet-relay.d.ts':
+      "declare module '@bsv/wallet-relay' { export class WalletRelayService { constructor (opts: Record<string, unknown>); createSession (opts?: { origin?: string }): Promise<unknown> } }\n"
+  }
+  const options: ts.CompilerOptions = {
+    strict: true,
+    noEmit: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    types: ['node'],
+    typeRoots: [dirname(dirname(require.resolve('@types/node/package.json')))],
+    skipLibCheck: true
+  }
+  const host = ts.createCompilerHost(options)
+  const getSourceFile = host.getSourceFile.bind(host)
+  const fileExists = host.fileExists.bind(host)
+  const readFile = host.readFile.bind(host)
+  host.getSourceFile = (name, lang) =>
+    name in files ? ts.createSourceFile(name, files[name], lang) : getSourceFile(name, lang)
+  host.fileExists = name => name in files || fileExists(name)
+  host.readFile = name => files[name] ?? readFile(name)
+  const program = ts.createProgram(Object.keys(files), options, host)
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
 }
 
 describe('renderAgentsMd', () => {
@@ -80,6 +128,23 @@ describe('renderAgentsMd', () => {
     // SERVER_PRIVATE_KEY note because there is a server route
     expect(md).toContain('SERVER_PRIVATE_KEY')
     expect(md).toContain('.env')
+  })
+
+  test.each([
+    ['add mode', config],
+    ['--no-glue', { ...config, mode: 'new' as const, glue: false }]
+  ])('%s: the wallet-connect server snippet compiles on its own', (_label, cfg) => {
+    const snippet = serverSnippet(renderAgentsMd(cfg, [walletConnect]))
+    // config.ts is written only for new glued projects, so the snippet must not import it.
+    expect(snippet).not.toContain('config.js')
+    expect(snippet).toContain('SERVER_ORIGIN is required in production')
+    expect(typecheckServerSnippet(snippet)).toEqual([])
+  })
+
+  test('manual wiring env note lists SERVER_ORIGIN next to SERVER_PRIVATE_KEY', () => {
+    const md = renderAgentsMd(config, [walletConnect])
+    const note = md.split('\n').find(l => l.startsWith('> **`SERVER_PRIVATE_KEY`**')) ?? ''
+    expect(note).toContain('`SERVER_ORIGIN`')
   })
 
   test('new+glue: wiring section says wired automatically, no snippet dump', () => {

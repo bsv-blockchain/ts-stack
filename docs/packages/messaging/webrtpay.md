@@ -3,7 +3,7 @@ id: pkg-webrtpay
 title: '@bsv/webrtpay'
 kind: package
 domain: messaging
-version: '0.2.2'
+version: '0.2.3'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-10-22'
 last_verified: '2026-10-22'
@@ -25,7 +25,7 @@ can read it. Both sides prove their identity key bound to the DTLS session, so w
 the signaling cannot read, change or redirect a payment. The payer connects before it creates
 the transaction, so an unreachable payee costs nothing.
 
-The 0.2.0 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. The
+The 0.2.3 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.1`. The
 byte-level protocol is specified in the package's
 [docs/protocol.md](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/messaging/webrtpay/docs/protocol.md).
 
@@ -128,3 +128,7 @@ rejects Node builtins and `ws` in the browser graph.
 - [@bsv/message-box-client](./message-box-client.md)
 - [Peer-to-peer messaging guide](../../guides/peer-to-peer-messaging.md)
 - [npm](https://www.npmjs.com/package/@bsv/webrtpay)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

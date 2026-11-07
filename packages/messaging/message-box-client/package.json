@@ -90,7 +90,7 @@
     "@bsv/authsocket-client": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.8.6 || ^3.0.0 || ^4.0.0"
+    "@bsv/sdk": "^2.8.6 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

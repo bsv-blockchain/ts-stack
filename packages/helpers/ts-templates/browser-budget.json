@@ -14,7 +14,9 @@
     "R1K1Wallet",
     "StasToken",
     "decodeStrictCbor",
-    "encodeStrictCbor"
+    "encodeStrictCbor",
+    "oneColorTokenIdFromString",
+    "readOneColorAttributes"
   ],
   "prohibitedExports": [],
   "maximumBytes": {

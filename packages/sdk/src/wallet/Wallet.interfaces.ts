@@ -35,6 +35,15 @@ export type Byte = number // NOSONAR
 export type PositiveIntegerOrZero = number // NOSONAR
 
 /**
+ * @typedef {number} PositiveInteger64OrZero
+ * A non-negative integer. As a JavaScript number it is exact up to `2^53` and rounded above.
+ * JSON carries the Number at any magnitude; the binary wire carries it as an unsigned 64-bit
+ * varint, so it cannot carry `2^64` or more, and the wire processor refuses such a value.
+ * @minimum 0
+ */
+export type PositiveInteger64OrZero = number // NOSONAR
+
+/**
  * @typedef {number} PositiveInteger
  * A positive integer that excludes zero, and has an upper bound of `2^32 - 1`.
  * @minimum 1
@@ -108,6 +117,8 @@ export type Base64String = string // NOSONAR
 /**
  * @typedef {string} DecimalString
  * A canonical nonnegative decimal integer, matching `0|[1-9][0-9]*`, with no upper bound.
+ * @deprecated 4.0.0 typed a module balance as DecimalString; since 4.0.1 totalOutputs is
+ * PositiveInteger64OrZero. Kept for source compatibility.
  */
 export type DecimalString = string // NOSONAR
 
@@ -649,11 +660,14 @@ export interface ListOutputsArgs {
 }
 
 /**
- * @param totalOutputs - The number of matching outputs. For a BRC-112 module balance query
- * (`p <module> balance <basket>`) it is instead the exact balance as a `DecimalString`, with no outputs and no BEEF.
+ * @param totalOutputs - The number of matching outputs, at most 2^32 - 1. For a BRC-112 balance
+ * query (`balance <basket>` or `p <module> balance <basket>`) it is instead the balance, a
+ * nonnegative integer that may exceed 2^32 - 1, with no outputs and no BEEF. As a JavaScript
+ * number it is exact up to 2^53 and rounded above. JSON carries the Number; the binary wire
+ * cannot carry 2^64 or more, and the wire processor refuses it.
  */
 export interface ListOutputsResult {
-  totalOutputs: PositiveIntegerOrZero | DecimalString
+  totalOutputs: PositiveInteger64OrZero
   BEEF?: BEEF
   outputs: WalletOutput[]
 }

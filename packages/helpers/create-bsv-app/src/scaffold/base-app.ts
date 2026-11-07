@@ -6,7 +6,7 @@ export function newBuilder(): BaseBuilder {
   return {
     main: { imports: [], wraps: [] },
     app: { imports: [], routes: [] },
-    server: { imports: [], routes: [], setup: [] }
+    server: { imports: [], config: [], routes: [], setup: [] }
   }
 }
 
@@ -79,6 +79,38 @@ const server = http.createServer(app)
 server.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`) })
 `
 
+// SERVER_ORIGIN + RELAY_URL with their checks. Shared verbatim by the generated bsv/config.ts and
+// the manual (add-mode / --no-glue) server wiring snippet, which never gets that file.
+export const SERVER_ORIGIN_CONFIG = String.raw`// Plain HTTP/WS only for development on loopback or a private-network IP literal — the
+// hosts @bsv/wallet-relay accepts: localhost, 127/8, [::1], 10/8, 172.16/12, 192.168/16, fc00::/7.
+function isLocalDevelopmentHost (host: string): boolean {
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^\[f[cd][0-9a-f]{2}:/.test(host)) return true
+  const ipv4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host)
+  if (ipv4 == null) return false
+  const a = Number(ipv4[1])
+  const b = Number(ipv4[2])
+  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
+
+// The address a phone uses to reach this server: embedded in the wallet pairing QR, and the
+// relay WebSocket URL is derived from it. To pair a phone on your network in development set
+// SERVER_ORIGIN=http://<your LAN IP>:<PORT>; public hosts and production require HTTPS.
+const configuredServerOrigin = process.env.SERVER_ORIGIN
+if (process.env.NODE_ENV === 'production' && configuredServerOrigin == null) {
+  throw new Error('SERVER_ORIGIN is required in production')
+}
+const parsedServerOrigin = new URL(configuredServerOrigin ?? 'http://localhost:' + (process.env.PORT ?? '3000'))
+const localServer = parsedServerOrigin.protocol === 'http:' && process.env.NODE_ENV !== 'production' &&
+  isLocalDevelopmentHost(parsedServerOrigin.hostname)
+if ((parsedServerOrigin.protocol !== 'https:' && !localServer) || parsedServerOrigin.username !== '' ||
+    parsedServerOrigin.password !== '' || parsedServerOrigin.pathname !== '/' ||
+    parsedServerOrigin.search !== '' || parsedServerOrigin.hash !== '') {
+  throw new Error('SERVER_ORIGIN must be a credential-free HTTPS origin (HTTP only on a loopback or private-network IP in development)')
+}
+const SERVER_ORIGIN = parsedServerOrigin.origin
+const RELAY_URL = SERVER_ORIGIN.replace(/^http/, 'ws')
+`
+
 // Baseline server config — every env the server reads, in one place.
 export function serverConfig(ctx: CapabilityContext): string {
   return `// Centralized server configuration, read from the environment.
@@ -117,6 +149,8 @@ if ((parsedClientOrigin.protocol !== 'https:' && !localClient) || parsedClientOr
   throw new Error('CLIENT_ORIGIN must be credential-free HTTPS (or exact HTTP localhost development) origin')
 }
 export const CLIENT_ORIGIN = parsedClientOrigin.origin
+
+${SERVER_ORIGIN_CONFIG}export { SERVER_ORIGIN, RELAY_URL }
 
 const configuredNetwork = process.env.BSV_NETWORK ?? '${ctx.network}'
 if (configuredNetwork !== 'main' && configuredNetwork !== 'test' && configuredNetwork !== 'ttn') {
@@ -200,7 +234,10 @@ export function assembleBaseFile(template: string, b: BaseBuilder, ctx: Capabili
   sub('{/*{{main.app}}*/}', wrappedApp(b.main.wraps))
   sub('/*{{app.imports}}*/', appImports)
   sub('{/*{{app.routes}}*/}', routeJsx(b.app.routes))
-  sub('/*{{server.imports}}*/', b.server.imports.join('\n'))
+  sub(
+    '/*{{server.imports}}*/',
+    [...b.server.imports, ...b.server.config.map(c => c.import)].join('\n')
+  )
   sub('/*{{server.routes}}*/', b.server.routes.join('\n'))
   sub('/*{{server.setup}}*/', b.server.setup.join('\n'))
   sub(

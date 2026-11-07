@@ -495,27 +495,69 @@ function validateMutationTool(root, tool, propertyTesting, errors) {
   validateMutationToolBudget(tool, propertyTesting, errors)
 }
 
-function validateMutationWorkflow(root, workflowPath, fragments, errors) {
-  if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) return
-  const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
-  for (const fragment of fragments) {
-    if (!workflow.includes(fragment)) {
-      errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
+function workflowJob(workflow, name) {
+  const marker = `\n  ${name}:\n`
+  const start = workflow.indexOf(marker)
+  if (start < 0) return ''
+  const remaining = workflow.slice(start + marker.length)
+  const end = remaining.search(/\n {2}[a-z][a-z0-9-]*:\n/)
+  return end < 0 ? remaining : remaining.slice(0, end)
+}
+
+function workflowRunsMutation(workflow) {
+  const lines = workflow.split('\n')
+  const commands = []
+  for (const [index, line] of lines.entries()) {
+    const run = /^ {8}run: (.+)$/.exec(line)
+    if (!run) continue
+    if (run[1] !== '|') {
+      commands.push(run[1])
+      continue
     }
+    for (let next = index + 1; next < lines.length && /^ {10}/.test(lines[next]); next++)
+      commands.push(lines[next].slice(10))
   }
+  return commands.some(command =>
+    /^node scripts\/mutation-testing\.mjs --(?:target|all)(?:\s|$)/.test(command)
+  )
+}
+
+function validateMutationAdmissionWorkflow(root, file, errors) {
+  if (typeof file !== 'string' || !fs.existsSync(path.join(root, file))) return
+  const source = fs.readFileSync(path.join(root, file), 'utf8')
+  if (
+    workflowRunsMutation(source) ||
+    /uses:.*mutation-(?:tests|execution)\.yml|needs\.(?:full-mutation|mutation-quality)/.test(
+      source
+    )
+  )
+    errors.push(`mutation campaign cannot enter admission workflow ${file}`)
 }
 
 function validateMutationWorkflows(root, tool, errors) {
-  const workflows = new Map([
-    [tool.ciWorkflow, ['mutation-tests:', 'mutation-quality:', 'scripts/mutation-testing.mjs']],
-    [
-      tool.scheduledWorkflow,
-      ['schedule:', 'workflow_dispatch:', 'matrix:', 'scripts/mutation-testing.mjs']
-    ]
+  if (tool.admission !== 'background-only')
+    errors.push('mutation testing admission must be background-only')
+  for (const file of [
+    tool.ciWorkflow,
+    '.github/workflows/release.yaml',
+    '.github/workflows/infra-release.yaml',
+    '.github/workflows/wab-marketplace-release.yml'
   ])
-  for (const [workflowPath, fragments] of workflows) {
-    validateMutationWorkflow(root, workflowPath, fragments, errors)
-  }
+    validateMutationAdmissionWorkflow(root, file, errors)
+  const file = tool.scheduledWorkflow
+  if (typeof file !== 'string' || !fs.existsSync(path.join(root, file))) return
+  const source = fs.readFileSync(path.join(root, file), 'utf8')
+  if (
+    !/^ {2}workflow_dispatch:/m.test(source) ||
+    /^ {2}(?:workflow_call|push|pull_request|schedule):/m.test(source)
+  )
+    errors.push('background mutation workflow must have only an explicit dispatch entry point')
+  if (!workflowRunsMutation(workflowJob(source, 'audit')))
+    errors.push('background mutation workflow lacks an executable audit')
+  if (!/^ {4}timeout-minutes: 30$/m.test(workflowJob(source, 'audit')))
+    errors.push('background mutation audit must have its 30 minute budget')
+  if (!source.includes('node scripts/mutation-findings.mjs report'))
+    errors.push('background mutation workflow must raise advisory findings')
 }
 
 function validateMutationSuite(target, suite, label, errors) {

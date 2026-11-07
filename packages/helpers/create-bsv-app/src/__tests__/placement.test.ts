@@ -103,7 +103,7 @@ describe('planPlacement — monorepo', () => {
     const result = planPlacement(monorepoConfig, bothCaps)
     expect(result.deps.server).toHaveProperty('@bsv/wallet-relay')
     expect(result.deps.server).toHaveProperty('qrcode')
-    expect(result.deps.server).toHaveProperty('ws')
+    expect(result.deps.server).not.toHaveProperty('ws') // a direct dependency of @bsv/wallet-relay since 0.5
   })
 
   test('deps.client does not have express (server-only dep)', () => {

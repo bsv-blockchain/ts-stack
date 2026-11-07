@@ -400,7 +400,7 @@ export default class HttpClient {
         headers: responseHeaders
       })
       if (!bounded.ok) {
-        throw new PaymailServerResponseError(await bounded.text())
+        throw new PaymailServerResponseError(await bounded.text(), bounded.status)
       }
       return bounded
     } finally {

@@ -78,6 +78,17 @@ test('package outputs exclude node_modules and nested packages', () => {
       'packages/wallet/mobile/dist',
       'packages/wallet/mobile/tsconfig.tsbuildinfo'
     ])
+    // A reference application's server bundles are restored with its client build.
+    for (const directory of ['dist', 'dist-proposals', 'dist-server', 'src'])
+      mkdirSync(path.join(root, 'apps/reference', directory), { recursive: true })
+    const app = [
+      { name: 'reference-app', path: 'apps/reference', sourceRoots: [], dependencies: [] }
+    ]
+    assert.deepEqual(packageOutputs(app, 'reference-app', root), [
+      'apps/reference/dist',
+      'apps/reference/dist-proposals',
+      'apps/reference/dist-server'
+    ])
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

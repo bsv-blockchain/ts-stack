@@ -4,9 +4,9 @@ title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-discovery-services'
-version: '2.2.8'
-last_updated: '2026-09-26'
-last_verified: '2026-09-26'
+version: '2.2.9'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services'
 status: stable
@@ -15,7 +15,7 @@ tags: ['overlay', 'discovery']
 
 # @bsv/overlay-discovery-services
 
-This source candidate declares SDK peer `^2.4.0 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -225,3 +225,7 @@ const serviceDiscovery = await engine.lookup({
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-discovery-services/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-discovery-services)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

@@ -146,7 +146,8 @@ The commands validate working-tree bytes; align the index and working tree befor
 treating their results as evidence for the next push. Directly
 changed packages run coverage; affected dependents run regressions and their
 declared consumer/platform checks; prerequisites build without duplicate tests.
-Critical boundaries retain property/mutation and compatibility requirements.
+Critical boundaries retain relevant property, native, conformance and compatibility checks.
+Mutation audit candidates are advisory background work only.
 The printed commands are advisory: review the changed contract and applicable
 service/platform profile, especially for new or unknown boundaries. The plan
 does not grant a remote scope skip or qualification.
@@ -154,8 +155,9 @@ does not grant a remote scope skip or qualification.
 Reuse a frozen install and exact-input build outputs during the edit loop. On a
 cold checkout, install with `pnpm install --frozen-lockfile --ignore-scripts`,
 rebuild only audited tools as documented by CI, and build the package graph
-before typechecking consumers that require workspace declarations. Invariant
-checks run once for the completed batch before opening/updating the PR:
+before typechecking consumers that require workspace declarations. Shared CI, governance and toolchain changes run the root invariant
+checks once for the completed batch. Ordinary package edits use affected-package
+checks; documentation edits use the relevant documentation checks:
 
 ```sh
 pnpm health:check
@@ -185,14 +187,14 @@ pnpm docs:build
 
 # Governed high-risk boundaries
 pnpm test:property
-pnpm test:mutation --target <target>
 ```
 
 Use the package’s declared `test:browser`, `test:mobile`, `test:consumers`, or
 other profile command when applicable. Root toolchain, SDK, CI, or governance
-changes may select the full workspace test scope. Mutation testing does not run
-on pull requests; the full registry runs on a manual `CI` dispatch, the
-scheduled `Mutation quality` workflow, and release qualification. Infrastructure or
+changes may select the full workspace test scope. Mutation campaigns never block development, PRs, publication or deployment.
+They run only as separately budgeted background audits and raise triage findings.
+Use the independent background workflow for an explicitly selected target and
+partition; do not run a campaign to qualify an ordinary change or release. Infrastructure or
 container changes require their root CI matrix and runtime-contract evidence;
 do not substitute a macOS image build for hosted Linux/amd64 validation.
 
@@ -206,9 +208,9 @@ contention rather than assuming every developer machine is faster. Avoid
 nested worker pools or concurrent heavy campaigns that starve another agent.
 Hosted CI verifies the resulting exact head and platform-specific requirements;
 retain its complete required gate and investigate failures without automatic
-rerun loops. Full workspace/campaign checks belong at shared-control changes,
-affected critical boundaries and the existing scheduled/release qualification,
-rather than every edit. Do not use stale local reports as current-head evidence.
+rerun loops. Full workspace deterministic checks apply when shared controls or dependent
+contracts require them. Mutation campaigns remain background-only for every
+change, including critical code and release machinery. Do not use stale local reports as current-head evidence.
 
 ## Dependencies and automation
 
@@ -279,7 +281,7 @@ Before pushing, self-review the complete diff for:
 
 After every push, remain responsible for the exact head:
 
-1. wait for all applicable GitHub checks to reach a terminal state;
+1. wait for all applicable required foreground checks to reach a terminal state;
 2. fix every failure or unexpected skip and rerun it;
 3. resolve all review conversations;
 4. require zero new Sonar findings, zero unreviewed Sonar hotspots, and zero new
@@ -291,7 +293,8 @@ repository-owned exact-head zero-finding job and complete merge gate are the
 authority. Reclassifying a new issue as accepted or false-positive does not
 make it mergeable.
 
-Do not call a PR complete or hand it off with pending or failed CI. If a check
+Do not call a PR complete or hand it off with pending or failed required foreground CI. Background mutation audits and
+findings are excluded from this readiness rule. If a check
 is transient, rerun and continue monitoring. If work must genuinely transfer
 to another person, describe the unresolved state explicitly instead of
 presenting it as finished.
@@ -311,3 +314,16 @@ reconcile registry state.
 For a release or deployed change, retain source SHA, workflow, artifact digest,
 version, migration/rollback evidence, and live validation as applicable. Never
 claim availability from a local build.
+
+## Background mutation findings
+
+Mutation scores, raw reports and historical receipts are audit evidence, never
+release authorization. Audit failure, timeout, absence or an open mutation finding
+cannot block a merge or publication. Triage missing oracles and equivalent mutants
+without hiding raw results. Confirm actual product defects with focused regression
+and contract tests; apply the normal security process to sensitive findings.
+
+The background workflow is manual and main-only, runs one explicit target/partition
+with a 30-minute audit job cap, retains available reports, and opens or updates a
+metadata-only triage issue on unsuccessful execution. It has no workflow-call or
+qualified-source output. No full-registry schedule is enabled by this change.

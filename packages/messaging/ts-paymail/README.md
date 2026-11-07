@@ -1,5 +1,7 @@
 # BSV Paymail
 
+Patch candidate `2.4.12` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 `@bsv/paymail` provides a typed Paymail client and an Express router for
 capability discovery, public profiles, PKI, P2P transaction delivery,
 transaction negotiation, and simple ordinal flows.
@@ -172,6 +174,52 @@ Authentication and authorization must be enforced by the protocol or route
 logic rather than by assuming browser-origin headers are an access-control
 boundary.
 
+## Profile lookup (BRC-235)
+
+[BRC-235](https://github.com/bsv-blockchain/BRCs/blob/master/payments/0235.md)
+resolves `handle@domain` to an identity key and back. Hosts answer with
+self-signed BRC-52 profile certificates; the identity key is the BRC-29
+payment recipient. A host may serve these two capabilities and nothing else:
+
+```ts
+import { PaymailRouter, ProfileLookupRoute, ProfileReverseLookupRoute } from '@bsv/paymail'
+
+const paymail = new PaymailRouter({
+  baseUrl: 'https://paymail.example.com',
+  routes: [
+    new ProfileLookupRoute({
+      domain: 'example.com',
+      // query is lowercase, 2-32 characters, any @example.com suffix removed
+      domainLogicHandler: async query => await registry.search(query) // stored certificates, best first
+    }),
+    new ProfileReverseLookupRoute({
+      domain: 'example.com',
+      domainLogicHandler: async identityKey => await registry.byIdentityKey(identityKey) // or undefined
+    })
+  ]
+})
+```
+
+Its discovery document then lists only `0ace65da5987` and `43dcf83ddc5f`. The
+routes serve at most ten certificates and drop any that are not servable
+profiles for the configured domain (wrong type, not self-signed, tombstoned,
+another domain). Signature checks on write are the registry's job; use
+`verifyProfileCertificate` before storing a submitted certificate.
+
+Clients verify every certificate before using it:
+
+```ts
+import { PaymailClient } from '@bsv/paymail'
+
+const client = new PaymailClient()
+const suggestions = await client.lookupProfiles('example.com', 'ali') // show each paymail; let the user choose
+const alice = await client.resolveProfile('alice@example.com') // exact paymail only
+const name = await client.reverseLookupProfile('example.com', alice?.identityKey ?? '')
+```
+
+`createProfileCertificate({ signer, paymail, displayName })` signs a profile
+with a BRC-100 wallet's identity key; pass `released: true` for a tombstone.
+
 ## Signing compatibility
 
 `createP2PSignature` produces the compact Base64 Bitcoin Signed Message form
@@ -240,3 +288,10 @@ code under its package-specific Open BSV License Version 4 grant.
 Redistributors must preserve
 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

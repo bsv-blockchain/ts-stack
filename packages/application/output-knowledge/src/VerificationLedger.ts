@@ -1,0 +1,363 @@
+import {
+  Hash,
+  Utils,
+  canonicalOutputJSON,
+  closedOutputObject,
+  outputHex32,
+  outputString,
+  outputU32,
+  outputU64,
+  OutputProtocolError,
+  type OutputJSONObject
+} from '@bsv/sdk'
+import {
+  parseSourceCurrentnessRules,
+  type SourceCurrentnessRule
+} from './SourceCurrentnessPolicy.js'
+import { EvidencePool, type EvidenceSupport } from './EvidencePool.js'
+import { factFromAssembly } from './EvidenceAssembler.js'
+import { parseVerificationContext } from './validation.js'
+import { compareKnowledgeText } from './SourceMembership.js'
+import type { EvidenceVerifier, VerificationContext, VerificationResult } from './ports.js'
+
+/** Local storage reference, not a transferable or provider-authenticated attestation. */
+export interface ProofReference {
+  basis: string
+  receipts: string[]
+  txid: string
+  outputIndex: number
+  variantId: string
+}
+export interface ProofCheck {
+  contextId: string
+  status: VerificationResult['status']
+  placement?: { blockHash: string; height: string }
+}
+export interface VerifiedWork {
+  proof: ProofReference
+  checks: ProofCheck[]
+}
+interface LegacyKnowledgeLocalFrame {
+  profile: 'urn:bsv:output-knowledge:local-verification:1'
+  version: 1
+  nonFinal: boolean
+  work: VerifiedWork[]
+}
+export type KnowledgeLocalFrame =
+  | LegacyKnowledgeLocalFrame
+  | {
+      profile: 'urn:bsv:output-knowledge:local-verification:2'
+      version: 2
+      nonFinal: boolean
+      currentnessRules: SourceCurrentnessRule[]
+      work: VerifiedWork[]
+    }
+  | {
+      profile: 'urn:bsv:output-knowledge:local-verification:3'
+      version: 3
+      nonFinal: boolean
+      currentnessRules: SourceCurrentnessRule[]
+      work: VerifiedWork[]
+    }
+export type KnowledgeLocalVersion = KnowledgeLocalFrame['version']
+const canonicalProfile = 'urn:bsv:output-knowledge:local-verification:3' as const
+const currentnessProfile = 'urn:bsv:output-knowledge:local-verification:2' as const
+const profile = 'urn:bsv:output-knowledge:local-verification:1' as const
+const statuses = new Set([
+  'verified',
+  'invalid',
+  'unresolved',
+  'limited',
+  'cancelled',
+  'context-changed'
+])
+function assertLocal(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new OutputProtocolError('invalid', message)
+}
+function localId(value: unknown): string {
+  assertLocal(
+    typeof value === 'string' &&
+      value.length > 0 &&
+      new TextEncoder().encode(value).length <= 16384,
+    'Invalid local evidence reference'
+  )
+  return value
+}
+export function proofReference(support: EvidenceSupport): ProofReference {
+  return {
+    basis: support.basis,
+    receipts: [...support.receipts],
+    txid: support.candidate.evidence.txid,
+    outputIndex: support.candidate.evidence.outputIndex,
+    variantId: support.candidate.variantId
+  }
+}
+export function proofReferenceKey(proof: ProofReference): string {
+  return canonicalOutputJSON(proof)
+}
+
+export function parseKnowledgeLocalFrame(input: unknown): KnowledgeLocalFrame {
+  const value: unknown = JSON.parse(canonicalOutputJSON(input))
+  closedOutputObject(value, ['profile', 'version', 'nonFinal', 'work'], ['currentnessRules'])
+  const legacy = value.profile === profile && value.version === 1
+  const currentness = value.profile === currentnessProfile && value.version === 2
+  const canonical = value.profile === canonicalProfile && value.version === 3
+  if (!legacy && !currentness && !canonical)
+    throw new OutputProtocolError('unsupported', 'Unknown local verification storage profile')
+  assertLocal(
+    legacy === (value.currentnessRules === undefined),
+    'Invalid currentness frame configuration'
+  )
+  const currentnessRules = legacy ? [] : parseSourceCurrentnessRules(value.currentnessRules)
+  assertLocal(
+    typeof value.nonFinal === 'boolean' && Array.isArray(value.work),
+    'Invalid local verification frame'
+  )
+  const seen = new Set<string>()
+  const work = value.work.map(item => {
+    closedOutputObject(item, ['proof', 'checks'])
+    closedOutputObject(item.proof, ['basis', 'receipts', 'txid', 'outputIndex', 'variantId'])
+    const source = item.proof
+    assertLocal(
+      Array.isArray(source.receipts) && source.receipts.length > 0 && source.receipts.length <= 32,
+      'Invalid supporting receipt set'
+    )
+    const receipts = source.receipts.map(localId)
+    assertLocal(
+      receipts.every(
+        (receipt, index) => index === 0 || compareKnowledgeText(receipts[index - 1], receipt) < 0
+      ) && receipts.includes(localId(source.basis)),
+      'Invalid original receipt reference'
+    )
+    const proof = {
+      basis: localId(source.basis),
+      receipts,
+      txid: outputHex32(source.txid),
+      outputIndex: outputU32(source.outputIndex),
+      variantId: outputHex32(source.variantId)
+    }
+    const key = proofReferenceKey(proof)
+    assertLocal(!seen.has(key), 'Duplicate local proof reference')
+    seen.add(key)
+    assertLocal(Array.isArray(item.checks), 'Invalid local proof checks')
+    const contexts = new Set<string>()
+    const checks = item.checks.map(raw => {
+      closedOutputObject(raw, ['contextId', 'status'], ['placement'])
+      const contextId = outputString(raw.contextId)
+      assertLocal(
+        !contexts.has(contextId) && statuses.has(raw.status as string),
+        'Invalid or duplicated local context check'
+      )
+      contexts.add(contextId)
+      let placement: ProofCheck['placement']
+      if (raw.placement !== undefined) {
+        assertLocal(raw.status === 'verified', 'Only verified evidence has placement')
+        closedOutputObject(raw.placement, ['blockHash', 'height'])
+        outputU64(raw.placement.height)
+        placement = {
+          blockHash: outputHex32(raw.placement.blockHash),
+          height: raw.placement.height as string
+        }
+      }
+      return {
+        contextId,
+        status: raw.status as ProofCheck['status'],
+        ...(placement ? { placement } : {})
+      }
+    })
+    return { proof, checks }
+  })
+  if (legacy) return { profile, version: 1, nonFinal: value.nonFinal, work }
+  if (canonical)
+    return {
+      profile: canonicalProfile,
+      version: 3,
+      nonFinal: value.nonFinal,
+      currentnessRules,
+      work
+    }
+  return {
+    profile: currentnessProfile,
+    version: 2,
+    nonFinal: value.nonFinal,
+    currentnessRules,
+    work
+  }
+}
+
+export function knowledgeLocalFrame(
+  nonFinal: boolean,
+  work: VerifiedWork[],
+  rules: readonly SourceCurrentnessRule[] = [],
+  version?: KnowledgeLocalVersion
+): OutputJSONObject {
+  const currentnessRules = parseSourceCurrentnessRules(rules)
+  const selected = version ?? (currentnessRules.length ? 2 : 1)
+  if (selected === 1 && currentnessRules.length)
+    throw new OutputProtocolError('invalid', 'Version 1 cannot retain source currentness rules')
+  let frame: KnowledgeLocalFrame
+  switch (selected) {
+    case 1:
+      frame = { profile, version: 1, nonFinal, work }
+      break
+    case 2:
+      frame = { profile: currentnessProfile, version: 2, nonFinal, currentnessRules, work }
+      break
+    case 3:
+      frame = { profile: canonicalProfile, version: 3, nonFinal, currentnessRules, work }
+      break
+    default:
+      throw new OutputProtocolError('unsupported', 'Unknown local verification storage version')
+  }
+  return JSON.parse(canonicalOutputJSON(parseKnowledgeLocalFrame(frame))) as OutputJSONObject
+}
+
+/** Replayable local proof decisions; a remote source cannot insert these checks. */
+export class VerificationLedger {
+  private work = new Map<string, VerifiedWork>()
+  private readonly currentnessRules: SourceCurrentnessRule[]
+  private storageVersion: KnowledgeLocalVersion | undefined
+  get version(): KnowledgeLocalVersion | undefined {
+    return this.storageVersion
+  }
+  constructor(
+    readonly nonFinal: boolean,
+    currentnessRules: readonly SourceCurrentnessRule[] = []
+  ) {
+    this.currentnessRules = parseSourceCurrentnessRules(currentnessRules)
+  }
+
+  apply(
+    input: unknown,
+    pool: EvidencePool,
+    contexts: ReadonlyMap<string, VerificationContext>
+  ): void {
+    const frame = parseKnowledgeLocalFrame(input)
+    if (this.storageVersion !== undefined && (this.storageVersion === 3) !== (frame.version === 3))
+      throw new OutputProtocolError(
+        'reset-required',
+        'Local replay version changed without a new journal namespace'
+      )
+    if (frame.nonFinal !== this.nonFinal)
+      throw new OutputProtocolError(
+        'reset-required',
+        'Spend policy changed without an explicit journal generation reset'
+      )
+    const rules = frame.version === 1 ? [] : frame.currentnessRules
+    if (canonicalOutputJSON(rules) !== canonicalOutputJSON(this.currentnessRules))
+      throw new OutputProtocolError(
+        'reset-required',
+        'Source currentness policy changed without a journal generation reset'
+      )
+    const next = new Map(this.work)
+    for (const addition of frame.work) {
+      const support = pool.materialize(
+        addition.proof.basis,
+        addition.proof.receipts,
+        addition.proof
+      )
+      if (support.candidate.variantId !== addition.proof.variantId)
+        throw new OutputProtocolError('reset-required', 'Retained proof bytes changed')
+      const key = proofReferenceKey(addition.proof),
+        previous = next.get(key)
+      const checks = new Map(previous?.checks.map(check => [check.contextId, check]) ?? [])
+      for (const check of addition.checks) this.applyCheck(check, support, contexts, checks)
+      next.set(key, { proof: addition.proof, checks: [...checks.values()] })
+    }
+    this.work = next
+    this.storageVersion = frame.version
+  }
+  private applyCheck(
+    check: ProofCheck,
+    support: EvidenceSupport,
+    contexts: ReadonlyMap<string, VerificationContext>,
+    checks: Map<string, ProofCheck>
+  ): void {
+    const context = contexts.get(check.contextId)
+    if (!context)
+      throw new OutputProtocolError(
+        'reset-required',
+        'Historical verification context is unavailable'
+      )
+    if (canonicalOutputJSON(context.view.chain) !== canonicalOutputJSON(support.candidate.chain))
+      throw new OutputProtocolError('invalid', 'Proof check changed configured chain')
+    if (check.placement && outputU64(check.placement.height) > outputU64(context.view.tipHeight))
+      throw new OutputProtocolError('invalid', 'Proof placement is beyond the selected view')
+    const prior = checks.get(check.contextId)
+    if (prior?.status === 'verified' && canonicalOutputJSON(prior) !== canonicalOutputJSON(check))
+      throw new OutputProtocolError('context-changed', 'A verified immutable proof context changed')
+    checks.set(check.contextId, check)
+  }
+  entries(): VerifiedWork[] {
+    return structuredClone([...this.work.values()])
+  }
+  get(proof: ProofReference, contextId: string): ProofCheck | undefined {
+    const check = this.work
+      .get(proofReferenceKey(proof))
+      ?.checks.find(value => value.contextId === contextId)
+    return check ? structuredClone(check) : undefined
+  }
+}
+
+/**
+ * Verify an immutable historical view with a fresh local work deadline. This does
+ * not refresh source authentication, an offer, an assessment or a release policy.
+ * Readiness still names the original retained chain/finality context.
+ */
+export async function checkRetainedProof(
+  verifier: EvidenceVerifier,
+  support: EvidenceSupport,
+  selected: VerificationContext,
+  signal: AbortSignal,
+  options: { now?: () => number; deadlineMs?: number } = {}
+): Promise<ProofCheck> {
+  const original = parseVerificationContext(selected),
+    milliseconds = (options.now ?? Date.now)(),
+    deadlineMs = options.deadlineMs ?? 15000
+  assertLocal(
+    Number.isSafeInteger(milliseconds) &&
+      milliseconds >= 0 &&
+      Number.isSafeInteger(deadlineMs) &&
+      deadlineMs > 0 &&
+      deadlineMs <= 60000,
+    'Invalid verification work clock or deadline'
+  )
+  const now = String(Math.floor(milliseconds / 1000)),
+    deadline = String(Math.ceil((milliseconds + deadlineMs) / 1000))
+  const id = `recheck-${Utils.toHex(Hash.sha256(Utils.toArray(canonicalOutputJSON({ context: original, now, deadline }), 'utf8')))}`
+  const context: VerificationContext = {
+    ...original,
+    id,
+    now,
+    limits: { ...original.limits, deadline }
+  }
+  const candidate = JSON.parse(
+    canonicalOutputJSON(support.candidate)
+  ) as EvidenceSupport['candidate']
+  const result = await verifier.verify(candidate, context, signal)
+  if (signal.aborted)
+    throw new OutputProtocolError('cancelled', 'Verification result arrived after cancellation')
+  if (
+    result.contextId !== id ||
+    result.variantId !== candidate.variantId ||
+    !statuses.has(result.status)
+  )
+    throw new OutputProtocolError('invalid', 'Verifier result identity mismatch')
+  if (result.status !== 'verified') return { contextId: original.id, status: result.status }
+  if (
+    !support.plan.target ||
+    canonicalOutputJSON(result.fact) !==
+      canonicalOutputJSON(factFromAssembly(candidate.chain, support.plan.target))
+  )
+    throw new OutputProtocolError('invalid', 'Verifier fact differs from reconstructed evidence')
+  if (result.placement) {
+    outputHex32(result.placement.blockHash)
+    if (outputU64(result.placement.height) > outputU64(original.view.tipHeight))
+      throw new OutputProtocolError('invalid', 'Verifier placement exceeds selected view')
+  }
+  return {
+    contextId: original.id,
+    status: 'verified',
+    ...(result.placement ? { placement: { ...result.placement } } : {})
+  }
+}

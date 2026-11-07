@@ -17,7 +17,13 @@ const CONTROL_PATH_PREFIXES = [
   '.github/workflows/mutation-tests.yml',
   'governance/mutation-testing/stryker.config.mjs'
 ]
-const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
+const CONTROL_PATHS = new Set([
+  'package.json',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+  'scripts/mutation-build.mjs',
+  'scripts/mutation-execution-batches.mjs'
+])
 const REGEXP_META = new Set('.*+?^$(){}|[]\\')
 const OPTION_REQUIREMENTS = new Map([
   ['--target', 'an exact target ID'],
@@ -30,11 +36,23 @@ function normalized(value) {
   return value.split(path.sep).join('/').replace(/^\.\//, '')
 }
 
+export function mutationRunnerLimit(mutant) {
+  if (mutant.status !== 'Killed') return undefined
+  const reason = mutant.statusReason ?? ''
+  if (/^(?:Error: )?Property interrupted after \d+ tests/m.test(reason))
+    return 'property-exploration-limit'
+  if (/^Error:(?: thrown:)? ["']?Exceeded timeout of \d+ ms for a (?:test|hook)/m.test(reason))
+    return 'jest-deadline'
+  return undefined
+}
+
 export function calculateMutationMetrics(mutants) {
   const counts = {}
   let unexecuted = 0
+  let runnerLimitedKills = 0
   for (const mutant of mutants) {
     counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
+    if (mutationRunnerLimit(mutant)) runnerLimitedKills += 1
     // A survivor that ran zero tests was never judged. Stryker always runs at
     // least one covering test (or the whole suite for static mutants), so this
     // means the runner silently selected nothing (stryker-js#6210, Vitest 5).
@@ -49,6 +67,7 @@ export function calculateMutationMetrics(mutants) {
     undetected,
     valid,
     unexecuted,
+    runnerLimitedKills,
     score: valid === 0 ? 100 : (detected / valid) * 100
   }
 }
@@ -69,7 +88,9 @@ function globPattern(pattern) {
 
 function targetInputPatterns(target) {
   const packageDirectory = normalized(target.packageDirectory)
-  const patterns = []
+  const patterns = (target.additionalInputs ?? []).map(input =>
+    path.posix.normalize(`${packageDirectory}/${input}`)
+  )
   for (const mutate of target.mutate ?? []) {
     patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
   }
@@ -216,6 +237,11 @@ export function evaluateMutationReport(targetName, metrics, policy, { requireSco
       `${targetName} has ${unexecuted} survived mutants that ran no tests; the test runner selected nothing, so the score is not evidence`
     )
   }
+  if ((metrics.runnerLimitedKills ?? 0) > 0) {
+    errors.push(
+      `${targetName} has ${metrics.runnerLimitedKills} reported kills caused by a property or Jest runner limit; incomplete exploration is not assertion evidence`
+    )
+  }
   const invalid = (metrics.counts.RuntimeError ?? 0) + (metrics.counts.CompileError ?? 0)
   if (invalid > targetPolicy.maximumInvalid) {
     errors.push(
@@ -259,7 +285,8 @@ async function runTarget(targetName, target, policy, partition = 'whole') {
     force: true
   })
   const stryker = path.join(REPOSITORY_ROOT, 'node_modules/.bin/stryker')
-  const reporters = process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'json'
+  const reporters =
+    process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'progress-append-only,json'
   const propertyEnvironment = {
     FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
     FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),

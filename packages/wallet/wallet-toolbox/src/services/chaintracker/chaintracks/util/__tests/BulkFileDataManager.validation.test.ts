@@ -196,6 +196,47 @@ describe('BulkFileDataManager metadata boundaries', () => {
     expect(storage.getBulkFiles).not.toHaveBeenCalled()
   })
 
+  test('holds the deletion promise and write lock until known files are persisted', async () => {
+    const manager = new BulkFileDataManager('main')
+    const files = await manager.getBulkFiles()
+    expect(files.length).toBeGreaterThan(0)
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let nextId = 0
+    const storage = {
+      getBulkFiles: jest.fn(async () => files),
+      getBulkFileData: jest.fn(),
+      insertBulkFile: jest.fn(async () => { await gate; return ++nextId }),
+      updateBulkFile: jest.fn(),
+      deleteBulkFile: jest.fn()
+    }
+    await manager.setStorage(storage as never, jest.fn())
+    let settled = false
+    const deletion = manager.deleteBulkFiles().then(() => { settled = true })
+    await new Promise(resolve => setImmediate(resolve))
+    expect(storage.insertBulkFile).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+    release()
+    await deletion
+    expect(storage.insertBulkFile).toHaveBeenCalledTimes(files.length)
+    expect((await manager.getBulkFiles()).map(file => file.fileId)).toEqual(files.map((_, index) => index + 1))
+  })
+
+  test('propagates known-file persistence failure from deletion', async () => {
+    const manager = new BulkFileDataManager('main')
+    const files = await manager.getBulkFiles()
+    const failure = new Error('storage insert failed')
+    const storage = {
+      getBulkFiles: jest.fn(async () => files),
+      getBulkFileData: jest.fn(),
+      insertBulkFile: jest.fn(async () => { throw failure }),
+      updateBulkFile: jest.fn(),
+      deleteBulkFile: jest.fn()
+    }
+    await manager.setStorage(storage as never, jest.fn())
+    await expect(manager.deleteBulkFiles()).rejects.toBe(failure)
+  })
+
   test('rejects unsafe export arguments before touching the filesystem', async () => {
     const manager = new BulkFileDataManager({ chain: 'main', maxPerFile: 1 })
     const fs = { pathJoin: jest.fn() }

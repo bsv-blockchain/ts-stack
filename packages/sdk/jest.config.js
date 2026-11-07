@@ -8,7 +8,8 @@ export default {
 
   // Ignore compiled output
   testPathIgnorePatterns: ['dist/', String.raw`\.man\.test\.ts$`],
-  modulePathIgnorePatterns: ['<rootDir>/dist'],
+  // A mutation sandbox is itself a test root; ignore generated children only.
+  modulePathIgnorePatterns: ['<rootDir>/dist', String.raw`<rootDir>/\.stryker-tmp/`],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/__test/**',

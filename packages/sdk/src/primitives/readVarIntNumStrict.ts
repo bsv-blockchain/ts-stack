@@ -36,3 +36,25 @@ export default function readVarIntNumStrict(
   }
   return value.toNumber()
 }
+
+/**
+ * Canonical CompactSize decoding of the full unsigned 64-bit range, for values
+ * (such as a BRC-112 balance) that are not bounded by Number.MAX_SAFE_INTEGER.
+ */
+export function readVarIntBnStrict(reader: CompactSizeReader): BigNumber {
+  const first = reader.readUInt8()
+  if (first < 0xfd) return new BigNumber(first)
+  if (first === 0xfd) {
+    const value = reader.readUInt16LE()
+    if (value < 0xfd) throw new Error('non-canonical varInt')
+    return new BigNumber(value)
+  }
+  if (first === 0xfe) {
+    const value = reader.readUInt32LE()
+    if (value <= 0xffff) throw new Error('non-canonical varInt')
+    return new BigNumber(value)
+  }
+  const value = reader.readUInt64LEBn()
+  if (value.lte(UINT32_MAX)) throw new Error('non-canonical varInt')
+  return value
+}

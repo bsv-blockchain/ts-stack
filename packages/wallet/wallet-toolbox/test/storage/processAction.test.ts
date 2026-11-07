@@ -1,9 +1,10 @@
-import { Beef, Telemetry, TelemetryEvent } from '@bsv/sdk'
+import { WalletLogger } from '../../src/WalletLogger'
+import { Beef, MerklePath, Script, Transaction, Telemetry, TelemetryEvent } from '@bsv/sdk'
 import { processAction, shareReqsWithWorld } from '../../src/storage/methods/processAction'
 import { StorageProvider } from '../../src/storage/StorageProvider'
 import { TableProvenTxReq } from '../../src/storage/schema/tables/TableProvenTxReq'
 
-function makeReadyReq (): TableProvenTxReq {
+function makeReadyReq(): TableProvenTxReq {
   const now = new Date()
   return {
     created_at: now,
@@ -20,7 +21,7 @@ function makeReadyReq (): TableProvenTxReq {
   }
 }
 
-function makeStorageFake () {
+function makeStorageFake() {
   return {
     transaction: jest.fn(async (callback: (trx?: unknown) => Promise<unknown>) => await callback(undefined)),
     updateProvenTxReq: jest.fn(async () => 1),
@@ -42,23 +43,29 @@ describe('processAction shareReqsWithWorld', () => {
       telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
     }
 
-    const result = await processAction(storage as any, { userId: 1 }, {
-      isNewTx: false,
-      isSendWith: false,
-      isNoSend: true,
-      isDelayed: false,
-      sendWith: []
-    })
+    const result = await processAction(
+      storage as any,
+      { userId: 1 },
+      {
+        isNewTx: false,
+        isSendWith: false,
+        isNoSend: true,
+        isDelayed: false,
+        sendWith: []
+      }
+    )
 
     expect(result.sendWithResults).toEqual([])
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'wallet.storage.process_action.share', spanStatus: 'ok' }),
-      expect.objectContaining({
-        name: 'wallet.storage.process_action',
-        spanStatus: 'ok',
-        attributes: expect.objectContaining({ 'action.send_result_count': 0 })
-      })
-    ]))
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'wallet.storage.process_action.share', spanStatus: 'ok' }),
+        expect.objectContaining({
+          name: 'wallet.storage.process_action',
+          spanStatus: 'ok',
+          attributes: expect.objectContaining({ 'action.send_result_count': 0 })
+        })
+      ])
+    )
   })
 
   test('preserves the non-instrumented processAction path when telemetry is disabled', async () => {
@@ -67,13 +74,19 @@ describe('processAction shareReqsWithWorld', () => {
       telemetry: new Telemetry()
     }
 
-    await expect(processAction(storage as any, { userId: 1 }, {
-      isNewTx: false,
-      isSendWith: false,
-      isNoSend: true,
-      isDelayed: false,
-      sendWith: []
-    })).resolves.toMatchObject({ sendWithResults: [] })
+    await expect(
+      processAction(
+        storage as any,
+        { userId: 1 },
+        {
+          isNewTx: false,
+          isSendWith: false,
+          isNoSend: true,
+          isDelayed: false,
+          sendWith: []
+        }
+      )
+    ).resolves.toMatchObject({ sendWithResults: [] })
   })
 
   test('delayed sends do not build aggregate BEEF before scheduling', async () => {
@@ -90,7 +103,11 @@ describe('processAction shareReqsWithWorld', () => {
     const result = await shareReqsWithWorld(storage as any, 1, [req.txid], true)
 
     expect(storage.getReqsAndBeefToShareWithWorld).not.toHaveBeenCalled()
-    expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith(
+      [req.provenTxReqId],
+      expect.objectContaining({ status: 'unsent' }),
+      undefined
+    )
     expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
   })
@@ -110,7 +127,11 @@ describe('processAction shareReqsWithWorld', () => {
     })
 
     expect(beef.verify).not.toHaveBeenCalled()
-    expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith(
+      [req.provenTxReqId],
+      expect.objectContaining({ status: 'unsent' }),
+      undefined
+    )
     expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
   })
@@ -176,9 +197,7 @@ describe('processAction shareReqsWithWorld', () => {
 
     const result = await storage.getReqsAndBeefToShareWithWorld([req.txid], [])
 
-    expect(result.details).toEqual([
-      expect.objectContaining({ txid: req.txid, status: 'error' })
-    ])
+    expect(result.details).toEqual([expect.objectContaining({ txid: req.txid, status: 'error' })])
   })
 
   test('immediate sends still validate the aggregate BEEF before broadcasting', async () => {
@@ -188,12 +207,20 @@ describe('processAction shareReqsWithWorld', () => {
       toLogString: () => 'invalid beef'
     } as unknown as Beef
     const storage = makeStorageFake()
+    const logger = new WalletLogger()
 
-    await expect(shareReqsWithWorld(storage as any, 1, [req.txid], false, {
-      beef,
-      details: [{ txid: req.txid, status: 'readyToSend', req }]
-    })).rejects.toThrow('merged Beef failed validation')
+    await expect(
+      shareReqsWithWorld(
+        storage as any,
+        1,
+        [req.txid],
+        false,
+        { beef, details: [{ txid: req.txid, status: 'readyToSend', req }] },
+        logger
+      )
+    ).rejects.toThrow('merged Beef failed validation')
 
+    expect(logger.toLogString()).toContain('BEEF verification declined: {"stage":"structure"}')
     expect(beef.verify).toHaveBeenCalled()
     expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
   })
@@ -216,5 +243,113 @@ describe('processAction shareReqsWithWorld', () => {
     expect(beef.verify).not.toHaveBeenCalled()
     expect(storage.attemptToPostReqsToNetwork).toHaveBeenCalledTimes(1)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'unproven' }])
+  })
+  test('records the exact declined root without relaxing foreground verification', async () => {
+    const tx = new Transaction()
+    tx.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
+    const beef = new Beef()
+    beef.mergeRawTx(tx.toBinary())
+    const path = new MerklePath(100, [
+      [
+        { offset: 0, hash: 'ab'.repeat(32) },
+        { offset: 1, hash: tx.id('hex'), txid: true }
+      ]
+    ])
+    beef.mergeBump(path)
+    const req = { ...makeReadyReq(), txid: tx.id('hex') }
+    const storage = makeStorageFake()
+    storage.getServices.mockReturnValue({
+      getChainTracker: jest.fn(async () => ({
+        currentHeight: async () => 101,
+        isValidRootForHeight: async () => false
+      }))
+    })
+    const logger = new WalletLogger()
+    await expect(
+      shareReqsWithWorld(
+        storage as any,
+        1,
+        [req.txid],
+        false,
+        {
+          beef,
+          details: [{ txid: req.txid, status: 'readyToSend', req }]
+        },
+        logger
+      )
+    ).rejects.toThrow('merged Beef failed validation')
+    expect(logger.toLogString()).toContain('"height":100')
+    expect(logger.toLogString()).toContain(path.computeRoot(tx.id('hex')))
+    expect(logger.toLogString()).toContain('"result":"declined"')
+    expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
+  })
+  test('preserves tracker binding and errors before the first root lookup', async () => {
+    const error = new Error('Chain height unavailable')
+    const req = makeReadyReq()
+    const tracker = {
+      currentHeight: jest.fn(async function (this: unknown) {
+        expect(this).toBe(tracker)
+        throw error
+      }),
+      isValidRootForHeight: jest.fn(async () => true)
+    }
+    const beef = {
+      verify: async (provider: { currentHeight: () => Promise<number> }) => {
+        await provider.currentHeight()
+        return true
+      }
+    } as unknown as Beef
+    const storage = makeStorageFake()
+    storage.getServices.mockReturnValue({ getChainTracker: jest.fn(async () => tracker) })
+    const logger = new WalletLogger()
+
+    await expect(
+      shareReqsWithWorld(
+        storage as any,
+        1,
+        [req.txid],
+        false,
+        { beef, details: [{ txid: req.txid, status: 'readyToSend', req }] },
+        logger
+      )
+    ).rejects.toBe(error)
+    expect(tracker.currentHeight).toHaveBeenCalledTimes(1)
+    expect(tracker.isValidRootForHeight).not.toHaveBeenCalled()
+    expect(logger.toLogString()).toContain('BEEF verification provider error: {"stage":"structure"}')
+    expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
+  })
+  test('records provider lookup errors without converting them into an invalid-proof verdict', async () => {
+    const error = new Error('Chain provider unavailable')
+    const req = makeReadyReq()
+    const beef = {
+      verify: async (tracker: { isValidRootForHeight: (root: string, height: number) => Promise<boolean> }) =>
+        await tracker.isValidRootForHeight('ab'.repeat(32), 100)
+    } as unknown as Beef
+    const storage = makeStorageFake()
+    storage.getServices.mockReturnValue({
+      getChainTracker: jest.fn(async () => ({
+        currentHeight: async () => 101,
+        isValidRootForHeight: async () => {
+          throw error
+        }
+      }))
+    })
+    const logger = new WalletLogger()
+    await expect(
+      shareReqsWithWorld(
+        storage as any,
+        1,
+        [req.txid],
+        false,
+        {
+          beef,
+          details: [{ txid: req.txid, status: 'readyToSend', req }]
+        },
+        logger
+      )
+    ).rejects.toBe(error)
+    expect(logger.toLogString()).toContain('BEEF verification provider error')
+    expect(logger.toLogString()).toContain('"height":100')
+    expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
   })
 })

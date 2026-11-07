@@ -68,9 +68,10 @@ import { WalletError, walletErrors } from '../WalletError.js'
 import PublicKey from '../../primitives/PublicKey.js'
 import { validateOriginator } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
-import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
+import { isBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
+import { readVarIntBnStrict } from '../../primitives/readVarIntNumStrict.js'
 
 const MAX_WIRE_RESPONSE_COLLECTION_ITEMS = 100_000
 
@@ -90,9 +91,18 @@ const ACTION_STATUS_MAP: Record<number, ActionStatus> = {
  */
 export default class WalletWireTransceiver implements WalletInterface {
   wire: WalletWire
+  readonly #listOutputsSpendable: boolean
 
-  constructor(wire: WalletWire) {
+  constructor(wire: WalletWire, options: { listOutputsEncoding?: 'legacy' | 'spendable' } = {}) {
     this.wire = wire
+    if (
+      options.listOutputsEncoding !== undefined &&
+      options.listOutputsEncoding !== 'legacy' &&
+      options.listOutputsEncoding !== 'spendable'
+    ) {
+      throw new Error('Invalid listOutputs encoding')
+    }
+    this.#listOutputsSpendable = options.listOutputsEncoding === 'spendable'
   }
 
   readonly #certificateProfiles = new WeakMap<WalletWire, Promise<boolean>>()
@@ -711,23 +721,16 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.#writeOptionalVarInt(paramWriter, args.offset)
     this.#writeOptionalBool(paramWriter, args.seekPermission)
 
-    const result = await this.#transmit('listOutputs', originator, paramWriter.toUint8Array())
-    const resultReader = new ReaderUint8Array(result)
-    if (isModuleBalanceQuery(args.basket)) {
-      const balance = toUTF8Strict(resultReader.read(resultReader.readVarIntNumStrict(false)))
-      if (!resultReader.eof()) throw new Error('Invalid listOutputs module balance response')
-      return validateWalletResult(
-        'listOutputs',
-        { totalOutputs: balance, outputs: [] },
-        bindingRequest
-      )
-    }
-    const totalOutputs = this.#requireInteger(
-      resultReader.readVarIntNumStrict(false),
-      'listOutputs totalOutputs',
-      0,
-      0xffffffff
-    )
+    const resultReader = await this.#transmitListOutputs(paramWriter, originator)
+    // A BRC-112 balance is not an output count: read the full canonical varint, rounded above 2^53.
+    const totalOutputs = isBalanceQuery(args.basket)
+      ? Number(readVarIntBnStrict(resultReader).toString(10))
+      : this.#requireInteger(
+          resultReader.readVarIntNumStrict(false),
+          'listOutputs totalOutputs',
+          0,
+          0xffffffff
+        )
     const beefLength = resultReader.readVarIntNumStrict()
     const BEEF = beefLength >= 0 ? resultReader.readView(beefLength) : undefined
     const outputs: ListOutputsResult['outputs'] = []
@@ -737,6 +740,21 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
     this.#assertPageCount(outputs.length, totalOutputs, 'listOutputs')
     return validateWalletResult('listOutputs', { totalOutputs, BEEF, outputs }, bindingRequest)
+  }
+
+  async #transmitListOutputs(
+    params: WriterUint8Array,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ReaderUint8Array> {
+    // Historical peers omit spendability from output records. Only request the
+    // extended layout explicitly; never guess it from response field values.
+    if (this.#listOutputsSpendable) params.writeUInt8(1)
+    const result = await this.#transmit('listOutputs', originator, params.toUint8Array())
+    const reader = new ReaderUint8Array(result)
+    if (this.#listOutputsSpendable && reader.readVarIntNumStrict() !== -1) {
+      throw new Error('Missing listOutputs spendable encoding acknowledgement')
+    }
+    return reader
   }
 
   #parseListOutputEntry(reader: ReaderUint8Array): ListOutputsResult['outputs'][number] {
@@ -750,7 +768,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     const output: ListOutputsResult['outputs'][number] = { spendable: true, outpoint, satoshis }
     const scriptLen = reader.readVarIntNumStrict()
     if (scriptLen >= 0) output.lockingScript = toHex(reader.read(scriptLen))
-    output.spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
+    if (this.#listOutputsSpendable) {
+      output.spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
+    }
     const custLen = reader.readVarIntNumStrict()
     if (custLen >= 0) output.customInstructions = toUTF8Strict(reader.read(custLen))
     const tagsLen = reader.readVarIntNumStrict()

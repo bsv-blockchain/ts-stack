@@ -1,7 +1,17 @@
 import { describe, expect, it } from '@jest/globals'
-import { Beef, Transaction, type CreateActionArgs } from '@bsv/sdk'
+import { createServer } from 'node:http'
+import {
+  Beef,
+  Transaction,
+  WalletClient,
+  WalletWireProcessor,
+  WalletWireTransceiver,
+  HTTPWalletJSON,
+  type CreateActionArgs
+} from '@bsv/sdk'
 import { OneColor } from '@bsv/templates'
 import { maybeDecryptMetadata, WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { ColorPlan } from '../ColorPlan.js'
 import { assetBasket, assetTag } from '../identifiers.js'
 import {
@@ -10,14 +20,71 @@ import {
   FakeProvider,
   FakeWallet,
   holdTokens,
+  suffixTagOf,
   tokenPayment,
   validInput
 } from './fixtures.js'
+import { FakeStore, issuerLikePayload, issuerLikeProfile } from './profileFixtures.js'
 
 const ADMIN = 'admin.example'
 const APP = 'app.example'
 
 describe('color module registered on a WalletPermissionsManager', () => {
+  it.each([
+    { name: 'ordinary', amounts: [180n] },
+    { name: 'rounded above 2^53', amounts: [2n ** 53n, 1n] },
+    { name: 'above the binary uint64 limit', amounts: [2n ** 63n - 1n, 2n ** 63n - 1n, 3n] }
+  ])('preserves numeric $name balances through the manager and transports', async ({ amounts }) => {
+    const wallet = new FakeWallet()
+    const provider = new FakeProvider()
+    const color = createModule(wallet, provider, async () => true)
+    const manager = new WalletPermissionsManager(wallet.asWallet(), ADMIN, {
+      permissionModules: { color },
+      seekSpendingPermissions: false
+    })
+    const { assetId } = await deployAsset(new FakeWallet(), provider, 1_000n)
+    await holdTokens(wallet, provider, assetId, amounts)
+    const args = { basket: `p color balance ${assetTag(assetId)}` }
+    const expected = {
+      totalOutputs: Number(amounts.reduce((sum, amount) => sum + amount, 0n)),
+      outputs: []
+    }
+    const validated = new WalletClient(manager, APP)
+    await expect(validated.listOutputs(args)).resolves.toEqual(expected)
+    const wire = new WalletClient(new WalletWireTransceiver(new WalletWireProcessor(manager)), APP)
+    if (expected.totalOutputs >= 2 ** 64) {
+      await expect(wire.listOutputs(args)).rejects.toThrow('below 2^64')
+    } else {
+      await expect(wire.listOutputs(args)).resolves.toEqual(expected)
+    }
+    const server = createServer(async (req, res) => {
+      try {
+        const chunks: Buffer[] = []
+        for await (const chunk of req) chunks.push(Buffer.from(chunk))
+        const result = await validated.listOutputs(JSON.parse(Buffer.concat(chunks).toString()))
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch {
+        res.writeHead(400, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ isError: true, message: 'Invalid wallet request', code: 1 }))
+      }
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('Missing test listener')
+      const json = new WalletClient(new HTTPWalletJSON(APP, `http://127.0.0.1:${address.port}`))
+      await expect(json.listOutputs(args)).resolves.toEqual(expected)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close(error => (error ? reject(error) : resolve()))
+      )
+    }
+  })
+
   it('receives tokens, then sends them in one createAction signed through the signAction hook', async () => {
     const wallet = new FakeWallet()
     const provider = new FakeProvider()
@@ -117,8 +184,8 @@ describe('color module registered on a WalletPermissionsManager', () => {
     })
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
-    ).resolves.toEqual({ totalOutputs: '180', outputs: [] })
-    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=5')
+    ).resolves.toEqual({ totalOutputs: 180, outputs: [] })
+    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=4')
   })
 
   it('aborts a declined send, so the inputs it reserved are spendable again', async () => {
@@ -171,6 +238,71 @@ describe('color module registered on a WalletPermissionsManager', () => {
     })
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
-    ).resolves.toEqual({ totalOutputs: '300', outputs: [] })
+    ).resolves.toEqual({ totalOutputs: 300, outputs: [] })
+  })
+
+  it('a pending profile receipt passes through WalletPermissionsManager tagged color_offline', async () => {
+    const wallet = new FakeWallet()
+    const issuer = new FakeWallet()
+    const provider = new FakeProvider()
+    const store = new FakeStore()
+    const handler = issuerLikeProfile({
+      K: issuer.identityKey,
+      admit: async () => ({ credit: 'pending' })
+    })
+    const color = new ColorPermissionModule({
+      wallet: wallet.asWallet(),
+      provider,
+      requestTokenAccess: async () => true,
+      profiles: { [handler.id]: handler },
+      store
+    })
+    const manager = new WalletPermissionsManager(wallet.asWallet(), ADMIN, {
+      permissionModules: { color },
+      seekSpendingPermissions: false,
+      encryptWalletMetadata: true
+    })
+    const { assetId } = await deployAsset(
+      issuer,
+      provider,
+      1_000n,
+      issuerLikePayload(issuer.identityKey)
+    )
+    const { tx, customInstructions } = await tokenPayment(issuer, wallet, assetId, 300n)
+    await expect(
+      manager.internalizeAction(
+        {
+          tx: tx.toAtomicBEEF(),
+          description: 'Receive tokens',
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance: { basket: assetBasket(assetId, 'value'), customInstructions }
+            }
+          ]
+        },
+        APP
+      )
+    ).resolves.toMatchObject({ accepted: true })
+    const stored = wallet.outputs.get(`${tx.id('hex')}.0`)
+    expect(stored?.tags).toEqual([suffixTagOf(customInstructions), 'color_offline'])
+    expect(stored?.customInstructions?.startsWith('{')).toBe(false)
+    expect(await maybeDecryptMetadata(wallet.asWallet(), stored?.customInstructions ?? '')).toBe(
+      customInstructions
+    )
+    await expect(
+      manager.listOutputs(
+        { basket: `p color balance ${assetTag(assetId)}`, tags: ['color_offline'] },
+        APP
+      )
+    ).resolves.toEqual({ totalOutputs: 300, outputs: [] })
+    await color.markSettled(tx.id('hex'))
+    await expect(
+      manager.listOutputs(
+        { basket: `p color balance ${assetTag(assetId)}`, tags: ['color_offline'] },
+        APP
+      )
+    ).resolves.toEqual({ totalOutputs: 0, outputs: [] })
   })
 })

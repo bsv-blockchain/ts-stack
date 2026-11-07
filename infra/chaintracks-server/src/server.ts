@@ -918,21 +918,28 @@ async function main() {
     }
   }
 
-  process.on('SIGINT', () => shutdown('SIGINT'))
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  const requestShutdown = (signal: string): void => {
+    shutdown(signal).catch(error => {
+      log.error({ operation: 'shutdown', outcome: 'error', err: error }, 'Shutdown failed')
+      process.exit(1)
+    })
+  }
+
+  process.on('SIGINT', () => requestShutdown('SIGINT'))
+  process.on('SIGTERM', () => requestShutdown('SIGTERM'))
   process.on('uncaughtException', error => {
     log.error(
       { operation: 'uncaught_exception', outcome: 'error', err: error },
       'Uncaught Exception'
     )
-    shutdown('uncaughtException')
+    requestShutdown('uncaughtException')
   })
   process.on('unhandledRejection', (reason, promise) => {
     log.error(
       { operation: 'unhandled_rejection', outcome: 'error', err: reason, promise },
       'Unhandled Rejection'
     )
-    shutdown('unhandledRejection')
+    requestShutdown('unhandledRejection')
   })
 }
 

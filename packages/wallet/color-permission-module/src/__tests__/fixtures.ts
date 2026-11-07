@@ -12,6 +12,8 @@ import {
   type InternalizeActionArgs,
   type ListOutputsArgs,
   type ListOutputsResult,
+  type ListActionsArgs,
+  type ListActionsResult,
   type LookupAnswer,
   type SignActionArgs,
   type SignActionResult,
@@ -32,7 +34,7 @@ import {
   DISCOVERY_TOPIC,
   ISSUE
 } from '../identifiers.js'
-import { readAnyTokenOutput } from '../tokenOutputs.js'
+import { readAnyTokenOutput, readProfiledTokenOutput } from '../tokenOutputs.js'
 
 interface StoredOutput {
   tx: Transaction
@@ -41,6 +43,7 @@ interface StoredOutput {
   customInstructions?: string
   reservedBy?: string
   spent: boolean
+  /** The output's stored wallet tags. */
   tags?: string[]
 }
 
@@ -72,6 +75,19 @@ export class FakeWallet {
   readonly identityKey: string
   readonly outputs = new Map<string, StoredOutput>()
   readonly pending = new Map<string, { tx: Transaction; args: CreateActionArgs }>()
+  /** Every signed action, by reference: its txid, labels and toolbox-like status. */
+  readonly actions = new Map<
+    string,
+    { reference: string; txid: string; labels: string[]; status: string }
+  >()
+  /** The txids of every `sendWith` createAction, one array per call. */
+  readonly sentWith: string[][] = []
+  /** Thrown by the next `sendWith` createActions when set. */
+  sendWithError?: Error
+  /** The status each `sendWithResults` entry reports (default `'unproven'`). */
+  sendWithStatus?: 'unproven' | 'sending' | 'failed'
+  /** Thrown by `listActions` when set (a wallet outage). */
+  listActionsError?: Error
   /** Every listOutputs call, in order. */
   readonly listOutputsCalls: ListOutputsArgs[] = []
   /**
@@ -120,7 +136,7 @@ export class FakeWallet {
       basket,
       customInstructions,
       spent: false,
-      tags
+      ...(tags === undefined ? {} : { tags: [...tags] })
     })
   }
 
@@ -158,7 +174,7 @@ export class FakeWallet {
               : undefined,
           customInstructions:
             args.includeCustomInstructions === true ? output.customInstructions : undefined,
-          tags: args.includeTags === true ? (output.tags ?? []) : undefined
+          tags: args.includeTags === true ? [...(output.tags ?? [])] : undefined
         }
       })
     }
@@ -168,6 +184,15 @@ export class FakeWallet {
   }
 
   async createAction(args: CreateActionArgs): Promise<CreateActionResult> {
+    const sendWith = args.options?.sendWith
+    if (sendWith !== undefined && sendWith.length > 0) {
+      this.sentWith.push([...sendWith])
+      if (this.sendWithError !== undefined) throw this.sendWithError
+      const status = this.sendWithStatus ?? 'unproven'
+      for (const action of this.actions.values())
+        if (sendWith.includes(action.txid) && status !== 'failed') action.status = status
+      return { sendWithResults: sendWith.map(txid => ({ txid, status })) }
+    }
     if (this.requireInputBEEF) {
       const beef = args.inputBEEF === undefined ? new Beef() : Beef.fromBinary(args.inputBEEF)
       for (const input of args.inputs ?? []) {
@@ -210,6 +235,12 @@ export class FakeWallet {
       if (!validInput(pending.tx, Number(index))) throw new Error(`input ${index} does not unlock`)
     }
     this.pending.delete(args.reference)
+    this.actions.set(args.reference, {
+      reference: args.reference,
+      txid: pending.tx.id('hex'),
+      labels: [...(pending.args.labels ?? [])],
+      status: 'nosend'
+    })
     for (const input of pending.args.inputs ?? []) this.outputs.get(input.outpoint)!.spent = true
     pending.args.outputs?.forEach((output, vout) => {
       this.store(pending.tx, vout, output.basket, output.customInstructions, output.tags)
@@ -219,9 +250,38 @@ export class FakeWallet {
 
   async abortAction(args: { reference: string }): Promise<{ aborted: true }> {
     this.pending.delete(args.reference)
+    const action = this.actions.get(args.reference)
+    if (action !== undefined) action.status = 'failed'
     for (const output of this.outputs.values())
       if (output.reservedBy === args.reference) output.reservedBy = undefined
     return { aborted: true }
+  }
+
+  /** The signed actions carrying the labels (all or any), except failed (aborted) ones, as the toolbox lists. */
+  async listActions(args: ListActionsArgs): Promise<ListActionsResult> {
+    if (this.listActionsError !== undefined) throw this.listActionsError
+    const all = args.labelQueryMode !== 'any'
+    const matching = [...this.actions.values()].filter(
+      action =>
+        action.status !== 'failed' &&
+        (all
+          ? args.labels.every(label => action.labels.includes(label))
+          : args.labels.some(label => action.labels.includes(label)))
+    )
+    const offset = args.offset ?? 0
+    const page = matching.slice(offset, offset + (args.limit ?? 10))
+    return {
+      totalActions: matching.length,
+      actions: page.map(action => ({
+        txid: action.txid,
+        satoshis: 0,
+        status: action.status as ListActionsResult['actions'][number]['status'],
+        isOutgoing: true,
+        description: 'Fake action',
+        version: 1,
+        lockTime: 0
+      }))
+    }
   }
 
   /**
@@ -246,11 +306,16 @@ export class FakeWallet {
   }
 }
 
-/** An overlay provider that admits whatever token outputs it is given. */
+/**
+ * An overlay provider that admits whatever token outputs it is given. Like an overlay, it applies
+ * base validity only, so it reads outputs with the profile-aware reader.
+ */
 export class FakeProvider {
   readonly current = new Map<string, { assetId: string; tx: Transaction; vout: number }>()
   readonly history = new Map<string, { assetId: string; tx: Transaction; vout: number }>()
-  readonly submissions: Array<{ topics: string[]; txid: string }> = []
+  readonly submissions: Array<{ topics: string[]; txid: string; offChainValues?: number[] }> = []
+  /** How often each provider method was called. */
+  readonly calls = { spendability: 0, admission: 0, submit: 0 }
   rejectSubmissions = false
 
   admit(assetId: string, tx: Transaction, vout: number): void {
@@ -267,19 +332,27 @@ export class FakeProvider {
     this.spent.add(outpoint)
   }
 
-  spendability = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> =>
-    this.#answer(this.current, assetId, outpoints)
+  spendability = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> => {
+    this.calls.spendability++
+    return this.#answer(this.current, assetId, outpoints)
+  }
 
-  admission = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> =>
-    this.#answer(this.history, assetId, outpoints)
+  admission = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> => {
+    this.calls.admission++
+    return this.#answer(this.history, assetId, outpoints)
+  }
 
   /** Seeds a deploy's asset overlay from the discovery topic, as a configured provider would. */
   seedDeploys = true
 
-  submit = async (topics: string[], beef: number[]): Promise<STEAK> => {
+  submit = async (topics: string[], beef: number[], offChainValues?: number[]): Promise<STEAK> => {
+    this.calls.submit++
     const tx = Transaction.fromAtomicBEEF(beef)
     const txid = tx.id('hex')
-    this.submissions.push({ topics, txid })
+    // offChainValues is recorded only when passed, so 0.1.0 submissions keep their exact shape.
+    this.submissions.push(
+      offChainValues === undefined ? { topics, txid } : { topics, txid, offChainValues }
+    )
     for (const input of tx.inputs)
       this.spend(`${input.sourceTransaction!.id('hex')}.${input.sourceOutputIndex}`)
     const steak: STEAK = {}
@@ -288,7 +361,8 @@ export class FakeProvider {
       const outputsToAdmit = this.rejectSubmissions
         ? []
         : tx.outputs.flatMap((output, vout) =>
-            readAnyTokenOutput(output.lockingScript, { txid, vout })?.assetId === assetId
+            readAnyTokenOutput(output.lockingScript, { txid, vout }, readProfiledTokenOutput)
+              ?.assetId === assetId
               ? [vout]
               : []
           )
@@ -379,7 +453,6 @@ export async function deployAsset(
   return { assetId, tx }
 }
 
-/** A transaction paying `amount` of an asset to `recipient`, keyed by `sender` as BRC-207 specifies. */
 /** A BRC-161 JSON deploy+mint at output `vout`, admitted to its asset's overlay. */
 export function legacyDeploy(provider: FakeProvider, vout: number): string {
   const push = (bytes: number[]): string =>
@@ -405,11 +478,16 @@ export function legacyDeploy(provider: FakeProvider, vout: number): string {
   return assetId
 }
 
+/**
+ * A transaction paying `amount` of an asset to `recipient`, keyed by `sender` as BRC-207 specifies,
+ * with `payload` as its output payload.
+ */
 export async function tokenPayment(
   sender: FakeWallet,
   recipient: FakeWallet,
   assetId: string,
-  amount: bigint
+  amount: bigint,
+  payload?: number[]
 ): Promise<{ tx: Transaction; customInstructions: string }> {
   const custody = {
     version: 1,
@@ -437,27 +515,39 @@ export async function tokenPayment(
     unlockingScript: new UnlockingScript()
   })
   tx.addOutput({
-    lockingScript: new OneColor().lock(assetId, amount, hash160(toArray(publicKey, 'hex'))),
+    lockingScript: new OneColor().lock(
+      assetId,
+      amount,
+      hash160(toArray(publicKey, 'hex')),
+      payload
+    ),
     satoshis: 1000
   })
   return { tx, customInstructions: JSON.stringify(custody) }
 }
 
+/** The suffix tag of an output filed with the custody JSON `customInstructions`. */
+export function suffixTagOf(customInstructions: string): string {
+  const { derivationSuffix } = JSON.parse(customInstructions) as { derivationSuffix: string }
+  return derivationSuffixTag(derivationSuffix)
+}
+
 /**
- * Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts filed
- * with their suffix tag, or untagged as filed before suffix tags.
+ * Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts, each
+ * carrying `payload`, filed with their suffix tag, or untagged as filed before suffix tags.
  */
 export async function holdTokens(
   holder: FakeWallet,
   provider: FakeProvider,
   assetId: string,
   amounts: bigint[],
+  payload?: number[],
   tagged = true
 ): Promise<Transaction[]> {
   const sender = new FakeWallet()
   const txs: Transaction[] = []
   for (const amount of amounts) {
-    const { tx, customInstructions } = await tokenPayment(sender, holder, assetId, amount)
+    const { tx, customInstructions } = await tokenPayment(sender, holder, assetId, amount, payload)
     provider.admit(assetId, tx, 0)
     const { derivationSuffix } = JSON.parse(customInstructions) as { derivationSuffix: string }
     holder.store(

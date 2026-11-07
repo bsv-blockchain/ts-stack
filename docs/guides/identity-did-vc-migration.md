@@ -95,7 +95,7 @@ pass for SDK3. SDK2.8.11 retains nine pre-existing cold-import failures: the two
 BasePoint/JacobianPoint leaf spellings in ESM/CommonJS and native ESM `./umd`.
 Its other 1,646 runtime imports, strict declarations and exact documentation
 examples pass. Published SDK2 bytes are not patched or represented as entirely
-green; the separate SDK2.9 program remains independently owned.
+green; the separate output-knowledge program remains independently owned. Its unpublished SDK2.9 additions are being carried into the SDK3 candidate; they do not broaden this identity migration qualification.
 
 Both matrices compile all nine actual governed example fences and execute the
 offline identity/original-envelope examples. SDK3's corrected leaf initialization

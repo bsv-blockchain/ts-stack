@@ -44,6 +44,32 @@ describe('BRC-103 untrusted message validation', () => {
     }
   )
 
+  test.each([undefined, null, 2])(
+    'preserves malformed-message validation under local payload policy %s',
+    maxGeneralPayloadBytes => {
+      for (const input of [null, true, 1, 'message', []]) {
+        expect(() => snapshotAuthMessage(input, { maxGeneralPayloadBytes })).toThrow(
+          expect.objectContaining({ name: 'Error', message: 'Invalid authentication message.' })
+        )
+      }
+      expect(() => snapshotAuthMessage({}, { maxGeneralPayloadBytes })).toThrow(
+        expect.objectContaining({
+          name: 'Error',
+          message: 'Invalid or unsupported message auth version! Received: undefined, expected: 0.1'
+        })
+      )
+    }
+  )
+
+  test('keeps nested payload-shaped metadata within the original message byte budget', () => {
+    const nested = Array(MAX_AUTH_MESSAGE_BYTES / 4).fill(1)
+    expect(() =>
+      snapshotAuthMessage(general({ extra: { payload: nested } }), {
+        maxGeneralPayloadBytes: null
+      })
+    ).toThrow('Authentication message exceeds the byte limit.')
+  }, 30000)
+
   test('enforces a separate payload budget and retains metadata and byte validation', () => {
     const options = { maxGeneralPayloadBytes: 2 }
     expect(snapshotAuthMessage(general({ payload: [1, 2] }), options).payload).toEqual([1, 2])

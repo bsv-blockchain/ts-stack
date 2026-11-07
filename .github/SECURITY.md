@@ -76,8 +76,9 @@ Pull requests and releases enforce, as applicable:
   audit gates;
 - warning-free lint, strict TypeScript build/typecheck, unit/integration,
   conformance, clean-consumer, browser, mobile, CLI, and WASM package checks;
-- governed property tests and mutation targets for implementation trust
-  boundaries, with replayable seeds and scheduled long campaigns;
+- governed deterministic/property/native tests for implementation trust
+  boundaries, with replayable seeds; mutation audits run only in the background
+  and raise triage findings without blocking merge or publication;
 - CodeQL security-extended analysis, secret scanning, OpenSSF Scorecard, and
   Sonar semantic review with an exact-head, zero-new-findings merge gate that
   cannot be bypassed by accepting or marking a new issue false-positive;

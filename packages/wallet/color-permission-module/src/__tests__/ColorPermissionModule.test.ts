@@ -281,7 +281,7 @@ describe('ColorPermissionModule', () => {
           throw new Error('not forwarded')
         }
       )) as ListOutputsResult
-      expect(balance).toEqual({ totalOutputs: '260', outputs: [] })
+      expect(balance).toEqual({ totalOutputs: 260, outputs: [] })
     })
 
     it('asks for approval of the funded action and signs nothing when declined', async () => {
@@ -1130,7 +1130,7 @@ describe('ColorPermissionModule', () => {
     })
 
     it('does not select an untagged output', async () => {
-      await holdTokens(wallet, provider, assetId, [300n], false)
+      await holdTokens(wallet, provider, assetId, [300n], undefined, false)
       const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
       await expect(fund({ outputs: [output] })).rejects.toThrow('insufficient spendable balance')
       const [tagged] = await holdTokens(wallet, provider, assetId, [200n])
@@ -1140,7 +1140,7 @@ describe('ColorPermissionModule', () => {
     })
 
     it('refuses an untagged app-named input', async () => {
-      const [untagged] = await holdTokens(wallet, provider, assetId, [100n], false)
+      const [untagged] = await holdTokens(wallet, provider, assetId, [100n], undefined, false)
       await expect(
         fund({
           inputs: [
@@ -1239,7 +1239,7 @@ describe('ColorPermissionModule', () => {
         wallet.listOutputs = async args => {
           const result = await listOutputs(args)
           return args.include === 'entire transactions'
-            ? { ...result, totalOutputs: count }
+            ? { ...result, totalOutputs: count as number }
             : result
         }
         await expect(
@@ -1686,7 +1686,7 @@ describe('ColorPermissionModule', () => {
             throw new Error('not forwarded')
           }
         )
-      ).resolves.toEqual({ totalOutputs: '200', outputs: [] })
+      ).resolves.toEqual({ totalOutputs: 200, outputs: [] })
     })
   })
 
@@ -1774,7 +1774,27 @@ describe('ColorPermissionModule', () => {
           },
           notForwarded
         )
-      ).resolves.toEqual({ totalOutputs: '11', outputs: [] })
+      ).resolves.toEqual({ totalOutputs: 11, outputs: [] })
+    })
+
+    it('answers a balance as a number, above 2^32 - 1 and rounded above 2^53', async () => {
+      const balanceOf = async (): Promise<ListOutputsResult> =>
+        (await module.handleRequest(
+          {
+            method: 'listOutputs',
+            args: { basket: `p color balance ${assetTag(assetId)}` },
+            originator: APP
+          },
+          notForwarded
+        )) as ListOutputsResult
+      await holdTokens(wallet, provider, assetId, [2n ** 32n, 5n])
+      await expect(balanceOf()).resolves.toEqual({ totalOutputs: 2 ** 32 + 5, outputs: [] })
+      // 2^32 + 5 + 2 * (2^63 - 1) is summed exactly as a bigint and rounded once to a number.
+      await holdTokens(wallet, provider, assetId, [2n ** 63n - 1n, 2n ** 63n - 1n])
+      const exact = 2n ** 32n + 5n + 2n * (2n ** 63n - 1n)
+      const balance = await balanceOf()
+      expect(typeof balance.totalOutputs).toBe('number')
+      expect(balance).toEqual({ totalOutputs: Number(exact), outputs: [] })
     })
 
     it('decrypts custody only for the inventory page it returns', async () => {
@@ -1824,7 +1844,7 @@ describe('ColorPermissionModule', () => {
           },
           notForwarded
         )
-      ).resolves.toEqual({ totalOutputs: '1', outputs: [] })
+      ).resolves.toEqual({ totalOutputs: 1, outputs: [] })
       await expect(
         module.handleRequest(
           { method: 'listOutputs', args: { basket: 'p color balance assets' }, originator: APP },

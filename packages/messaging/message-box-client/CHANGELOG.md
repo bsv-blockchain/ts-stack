@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
 ### 2.7.0 candidate — live socket reconnection, room restoration and reported status
 
 - **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
@@ -94,6 +96,8 @@ All notable changes to this project will be documented in this file. The format 
   an encrypted message; now it always is, because the body is read before any
   subscriber is called. A consumer asserting synchronous delivery in a test
   needs to let the microtask run.
+
+- Prepare `2.6.1` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
 
 ### 2.6.0 candidate — list APIs keep payments the wallet did not store (#503)
 

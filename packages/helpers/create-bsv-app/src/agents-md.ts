@@ -49,12 +49,18 @@ function appBlock(builder: BaseBuilder): string | null {
 function serverBlock(builder: BaseBuilder): string | null {
   if (
     builder.server.imports.length === 0 &&
+    builder.server.config.length === 0 &&
     builder.server.routes.length === 0 &&
     builder.server.setup.length === 0
   )
     return null
   const lines: string[] = []
   if (builder.server.imports.length > 0) lines.push(builder.server.imports.join('\n'))
+  // The generated bsv/config.ts exists only in new glued projects, so inline its definitions.
+  if (builder.server.config.length > 0)
+    lines.push(
+      `// Add after the imports in server/src/index.ts (new glued projects keep this in bsv/config.ts):\n${builder.server.config.map(c => c.inline.trimEnd()).join('\n')}`
+    )
   if (builder.server.routes.length > 0)
     lines.push(
       `// Add after app setup in server/src/index.ts:\n${builder.server.routes.join('\n')}`
@@ -88,7 +94,11 @@ function wiringSection(
 
   if (builder.server.routes.length > 0 || builder.server.setup.length > 0) {
     out +=
-      '\n> **`SERVER_PRIVATE_KEY`** — add to `.env`: the server template initialises `serverWallet` from this variable (e.g. `SERVER_PRIVATE_KEY=<your-private-key>`).\n'
+      '\n> **`SERVER_PRIVATE_KEY`** — add to `.env`: the server template initialises `serverWallet` from this variable (e.g. `SERVER_PRIVATE_KEY=<your-private-key>`).' +
+      (builder.server.config.length > 0
+        ? ' **`SERVER_ORIGIN`** — the address a phone uses to reach the server for wallet pairing, and the origin the wallet shows the user; required and HTTPS in production (in development, e.g. `SERVER_ORIGIN=http://<your LAN IP>:<your server port>`).'
+        : '') +
+      '\n'
   }
 
   return out
