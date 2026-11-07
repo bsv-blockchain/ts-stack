@@ -198,12 +198,42 @@ describe('ColorPermissionModule', () => {
       ).resolves.toEqual(expect.objectContaining({ args: expect.anything() }))
     })
 
-    it('rejects a receipt whose input does not unlock its source', async () => {
+    // A mined transaction arrives as its subject and merkle path only: its input sources are not
+    // part of the Atomic BEEF, so the module judges the received output and the overlay by id.
+    function mined(tx: Transaction): Transaction {
+      tx.merklePath = new MerklePath(1_000_000, [[{ offset: 0, hash: tx.id('hex'), txid: true }]])
+      tx.inputs.forEach(input => {
+        input.sourceTXID = input.sourceTransaction!.id('hex')
+        input.sourceTransaction = undefined
+      })
+      return Transaction.fromAtomicBEEF(tx.toAtomicBEEF())
+    }
+
+    it('accepts an admitted output of a mined transaction that carries no input sources', async () => {
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
       provider.admit(assetId, tx, 0)
+      const received = mined(tx)
+      expect(received.inputs.every(input => input.sourceTransaction === undefined)).toBe(true)
+      await expect(receipt(customInstructions, undefined, received)).resolves.toEqual(
+        expect.objectContaining({ args: expect.anything() })
+      )
+    })
+
+    it('rejects a mined transaction whose output the overlay has not admitted', async () => {
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
+      provider.admit(assetId, tx, 0)
+      provider.spend(`${tx.id('hex')}.0`)
+      await expect(receipt(customInstructions, undefined, mined(tx))).rejects.toThrow(
+        'not admitted and unspent'
+      )
+    })
+
+    it('does not evaluate the inputs of an unmined received transaction', async () => {
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
       tx.inputs[0].unlockingScript = UnlockingScript.fromHex('00')
-      await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
-        'Script evaluation error'
+      provider.admit(assetId, tx, 0)
+      await expect(receipt(customInstructions, undefined, tx)).resolves.toEqual(
+        expect.objectContaining({ args: expect.anything() })
       )
     })
 

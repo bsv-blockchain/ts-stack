@@ -2,7 +2,6 @@ import {
   Beef,
   LockingScript,
   Signature,
-  Spend,
   Transaction,
   TransactionSignature,
   UnlockingScript,
@@ -864,27 +863,6 @@ export function submissionAssets(
   return { assetIds: [...assetIds], deploy: outputs[0]?.deploy === true }
 }
 
-/** Runs one input's unlocking script against its source output; throws when it does not unlock. */
-export function assertUnlocks(tx: Transaction, inputIndex: number): void {
-  const input = tx.inputs[inputIndex]
-  const source = input.sourceTransaction?.outputs[input.sourceOutputIndex]
-  if (source?.satoshis === undefined || input.unlockingScript === undefined)
-    throw new Error(`BRC-207: transaction input ${inputIndex} lacks its source or unlocking script`)
-  new Spend({
-    sourceTXID: input.sourceTransaction!.id('hex'),
-    sourceOutputIndex: input.sourceOutputIndex,
-    sourceSatoshis: source.satoshis,
-    lockingScript: source.lockingScript,
-    transactionVersion: tx.version,
-    otherInputs: tx.inputs.filter((_, index) => index !== inputIndex),
-    outputs: tx.outputs,
-    inputIndex,
-    unlockingScript: input.unlockingScript,
-    inputSequence: input.sequence ?? 0xffffffff,
-    lockTime: tx.lockTime
-  }).validate()
-}
-
 function addToken(totals: Map<string, Holding>, token: TokenOutput): void {
   const entry = holding(totals, token.assetId, emptyHolding)
   if (token.role === 'value') entry.value += token.amount
@@ -1369,7 +1347,6 @@ export class ColorPermissionModule implements PermissionsModule {
     if (receipts.length === 0) return args
     if (this.profiles.size > 0)
       return await this.internalizeProfiled(args, tx, receipts, originator)
-    await this.assertCompletedTransaction(tx)
     const tags = new Map<number, string[]>()
     await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
       const custody = await this.verifyReceipt(tx, outputIndex, remittance, originator)
@@ -1389,17 +1366,6 @@ export class ColorPermissionModule implements PermissionsModule {
             }
       )
     }
-  }
-
-  /**
-   * Checks a received transaction: every input unlocks its source and every asset it involves is
-   * supported. Token amounts are not re-evaluated: the received output must be admitted and
-   * unspent, and its overlay admits it only after applying the amount and authority rules.
-   */
-  protected async assertCompletedTransaction(tx: Transaction): Promise<void> {
-    for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
-    const { inputs, outputs } = transactionTokens(tx)
-    await this.assertSupportedAssets([...inputs.keys(), ...outputs.keys()])
   }
 
   /** Checks each distinct asset in order, so the first unsupported one is the one reported. */
@@ -1455,8 +1421,8 @@ export class ColorPermissionModule implements PermissionsModule {
    * The receipt path with profiles registered. In order:
    * 1. every receipt's customInstructions is plain custody JSON of at most 1000 bytes; any
    *    `profileData` fails, as in 0.1.0;
-   * 2. every input must unlock, every asset of the transaction resolves against the registered
-   *    profiles, and every token must conform to its deploy;
+   * 2. every asset of the received outputs resolves against the registered profiles, and every
+   *    token must conform to its deploy; the transaction's inputs are not read;
    * 3. basket, role and ownership are checked;
    * 4. per asset, in first-receipt order: when a required profile defines `admitReceipt`, it
    *    decides each receipt (a throw credits nothing); otherwise the receipt must be currently
@@ -1479,9 +1445,7 @@ export class ColorPermissionModule implements PermissionsModule {
         'receipt customInstructions'
       )
     }))
-    for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
     const txid = tx.id('hex')
-    const { consumed } = transactionTokens(tx, false, this.read)
     // As in 0.1.0, a new deploy among the outputs is resolved only when it is itself a receipt.
     const outputTokens = tx.outputs.flatMap((output, vout) => {
       const token = this.read(output.lockingScript, { txid, vout })
@@ -1491,22 +1455,16 @@ export class ColorPermissionModule implements PermissionsModule {
     const assets = new Map<string, ResolvedAsset>()
     const involved = [
       ...located.map(receipt => receipt.token.assetId),
-      ...consumed.map(input => input.assetId),
       ...outputTokens.map(token => token.assetId)
     ]
     await eachInOrder(new Set(involved), async assetId => {
       assets.set(assetId, await this.resolveAsset(assetId))
     })
     // BRC-161 JSON legs of the transaction's assets conform too: they supply no ext state.
-    const jsonLegs = [
-      ...tokenSources(tx, new Set(), true, this.read).map(input => input.token),
-      ...this.outputTokens(tx)
-    ].filter(token => token.encoding === 'brc161' && assets.has(token.assetId))
-    await this.assertConformingTokens([
-      ...consumed.map(input => input.token),
-      ...outputTokens,
-      ...jsonLegs
-    ])
+    const jsonLegs = [...this.outputTokens(tx)].filter(
+      token => token.encoding === 'brc161' && assets.has(token.assetId)
+    )
+    await this.assertConformingTokens([...outputTokens, ...jsonLegs])
     const checked = located.map(receipt => ({
       ...receipt,
       resolved: assets.get(receipt.token.assetId)!

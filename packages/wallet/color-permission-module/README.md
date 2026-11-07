@@ -128,9 +128,11 @@ the manager's `getVersion` string.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's
   value or authority basket and the BRC-207 receipt instructions. For assets
   without required profiles, the caller must already have submitted the
-  transaction; the received output must be admitted and unspent, and every
-  input must unlock its source. The module relies on that admission for the
-  transaction's token amounts rather than re-evaluating them. A receipt carries
+  transaction; the received output must be admitted and unspent. The module
+  does not read the transaction's inputs: the overlay admits the output only
+  after judging the whole transaction, and a mined transaction arrives without
+  its input sources, so the module relies on that admission rather than
+  re-evaluating them. A receipt carries
   BRC-207 custody instructions only (`version`, `assetId`, `derivationPrefix`,
   `derivationSuffix`, `senderIdentityKey`, at most 1000 bytes). For an asset
   whose required profile defines `admitReceipt`, that hook decides admission

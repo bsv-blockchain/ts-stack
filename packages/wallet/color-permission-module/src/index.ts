@@ -6,7 +6,6 @@ export {
   actionConsent,
   assertPlanAssets,
   assertTransactionOperations,
-  assertUnlocks,
   authorityOperation,
   deployOperation,
   readSentToken,
