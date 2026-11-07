@@ -4,6 +4,19 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.4 (source candidate)
+
+- `WalletPermissionsManager` keeps a grant for the session when its
+  permission token cannot be minted because the wallet has no coins to fund it
+  (`WERR_INSUFFICIENT_FUNDS`). The user is not asked again for the same
+  permission while the manager lives, and a grouped or counterparty grant
+  resumes the call waiting on it instead of rejecting it. The grant call still
+  throws the funding error, since no token was written; the next session asks
+  again and, once funded, mints the token as before. Spending authorizations
+  are never kept without their token, and every other mint failure still
+  re-opens the prompt. `revokeAllForOriginator` also clears matching session
+  grants, respecting its permission-type filters, without a token transaction.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with
