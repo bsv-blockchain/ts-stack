@@ -1367,6 +1367,7 @@ export class ColorPermissionModule implements PermissionsModule {
     const tx = parsed('the received transaction', () => Transaction.fromAtomicBEEF(args.tx))
     const receipts = colorReceipts(args)
     if (receipts.length === 0) return args
+    await this.attachMissingSources(tx, originator)
     if (this.profiles.size > 0)
       return await this.internalizeProfiled(args, tx, receipts, originator)
     await this.assertCompletedTransaction(tx)
@@ -1388,6 +1389,72 @@ export class ColorPermissionModule implements PermissionsModule {
               }
             }
       )
+    }
+  }
+
+  /**
+   * A proven subject's Atomic BEEF carries no input sources (BRC-95), so a mined transaction
+   * arrives with `sourceTXID` only. BRC-207 Internalization takes that evidence from the
+   * asset overlay's historical admission or from transactions the wallet already holds. Each
+   * missing source is fetched here, by outpoint, from the overlay for every asset the
+   * transaction's outputs carry (`color-admission`, whose answer carries the output's BEEF and
+   * is checked against the txid), then from the wallet's default basket. An input with neither
+   * fails the receipt.
+   */
+  protected async attachMissingSources(tx: Transaction, originator: string): Promise<void> {
+    const missing = tx.inputs.filter(input => input.sourceTransaction === undefined)
+    if (missing.length === 0) return
+    const txid = tx.id('hex')
+    const assetIds = new Set<string>()
+    tx.outputs.forEach((output, vout) => {
+      const token = this.read(output.lockingScript, { txid, vout })
+      if (token !== undefined && !token.deploy) assetIds.add(token.assetId)
+    })
+    const unresolved: Array<{ input: (typeof missing)[number]; outpoint: string }> = []
+    await eachInOrder(missing, async input => {
+      const sourceTxid = input.sourceTXID
+      if (sourceTxid === undefined || input.sourceOutputIndex === undefined)
+        throw new Error('BRC-207: a received input names no source output')
+      const outpoint = outpointString(sourceTxid, input.sourceOutputIndex)
+      let found: Transaction | undefined
+      await eachInOrder(assetIds, async assetId => {
+        if (found !== undefined) return
+        try {
+          const provider = await this.providerFor(assetId)
+          found = readOutputList(await provider.admission(assetId, [outpoint]), [outpoint]).get(
+            outpoint
+          )?.transaction
+        } catch {
+          // An unreachable or malformed overlay answer is no evidence; the next source decides.
+        }
+      })
+      if (found === undefined) unresolved.push({ input, outpoint })
+      else input.sourceTransaction = found
+    })
+    if (unresolved.length === 0) return
+    const wanted = new Set(unresolved.map(({ input }) => input.sourceTXID!))
+    const held = new Beef()
+    try {
+      for (let offset = 0; [...wanted].some(id => held.findTxid(id) === undefined);) {
+        const page = await this.wallet.listOutputs(
+          { basket: 'default', include: 'entire transactions', limit: LIST_PAGE_LIMIT, offset },
+          originator
+        )
+        if (page.BEEF !== undefined) held.mergeBeef(page.BEEF)
+        offset += page.outputs.length
+        if (page.outputs.length < LIST_PAGE_LIMIT) break
+      }
+    } catch {
+      // The wallet cannot list its records: nothing is held, and the inputs below fail.
+    }
+    for (const { input, outpoint } of unresolved) {
+      const source = held.findTxid(input.sourceTXID!)?.tx
+      if (source === undefined || source.id('hex') !== input.sourceTXID) {
+        throw new Error(
+          `BRC-207: no evidence for received input ${outpoint}: it is not admitted in an overlay for the transaction's assets and the wallet does not hold it`
+        )
+      }
+      input.sourceTransaction = source
     }
   }
 
