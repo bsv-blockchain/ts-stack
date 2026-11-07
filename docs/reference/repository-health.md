@@ -103,14 +103,15 @@ reclassified as generated to reduce quality findings.
 
 `.github/codeql/codeql-config.yml` is the executable CodeQL boundary. Its
 `paths-ignore` entries must exactly match the owned generated artifacts above.
-The advanced workflow keeps authored JavaScript/TypeScript and GitHub Actions
-analysis on pull requests, `main` pushes, and a weekly schedule with the
-`security-extended` suite. The repository's Python files are deterministic
-OpenAPI output under `conformance/generated/**`; their source specifications,
-locked generator, and checked-in output are verified by codegen CI instead of
-being misrepresented as authored Python in CodeQL. A repository-control test
-rejects any loss of the authored languages, events, permissions, query
-coverage, or required check names.
+The advanced workflow keeps authored JavaScript/TypeScript, GitHub Actions, and
+Python analysis on pull requests, `main` pushes, and a weekly schedule with the
+`security-extended` suite. Deterministic OpenAPI output under
+`conformance/generated/**` stays excluded by `paths-ignore`; codegen CI verifies
+its specifications, locked generator, and checked-in output. The authored
+BRC-206 checker `packages/wallet/rabin-permission-module/conformance/rabin_check.py`
+is scanned by the Python lane. A repository-control test rejects any loss of
+the authored languages, events, permissions, query coverage, or required check
+names.
 The advanced workflow is unconditional for each configured event. Do not gate
 it on repository variables: those variables are unavailable to fork-origin
 pull-request jobs, which would silently skip analysis of external contributions.
