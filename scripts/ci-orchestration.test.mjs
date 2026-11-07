@@ -173,7 +173,7 @@ test('CI contributes mobile and type-only wallet surfaces to aggregate patch cov
 })
 
 const APPLICATION_PACKAGE = '@bsv/output-knowledge'
-const APPLICATION_TEST_SHARDS = 6
+const APPLICATION_TEST_SHARDS = 10
 
 // Run a prepare-step jq that appends the application's shard rows to a planned
 // matrix, and check every selection keeps each other package exactly once.
