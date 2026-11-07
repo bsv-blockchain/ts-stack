@@ -1451,7 +1451,7 @@ export class ColorPermissionModule implements PermissionsModule {
       const source = held.findTxid(input.sourceTXID!)?.tx
       if (source === undefined || source.id('hex') !== input.sourceTXID) {
         throw new Error(
-          `BRC-207: no evidence for received input ${outpoint}: it is not admitted in an overlay for the transaction's assets and the wallet does not hold it`
+          `BRC-207: no evidence for received input ${outpoint}: no overlay for the transaction's assets admitted it and it is not in the wallet's default basket`
         )
       }
       input.sourceTransaction = source
