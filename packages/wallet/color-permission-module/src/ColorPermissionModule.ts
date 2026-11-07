@@ -1369,7 +1369,8 @@ export class ColorPermissionModule implements PermissionsModule {
     if (receipts.length === 0) return args
     if (this.profiles.size > 0)
       return await this.internalizeProfiled(args, tx, receipts, originator)
-    await this.assertCompletedTransaction(tx)
+    // A proven transaction's merkle proof is its script evidence (BRC-95, BRC-207 Internalization).
+    if (tx.merklePath === undefined) await this.assertCompletedTransaction(tx)
     const tags = new Map<number, string[]>()
     await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
       const custody = await this.verifyReceipt(tx, outputIndex, remittance, originator)
@@ -1479,9 +1480,10 @@ export class ColorPermissionModule implements PermissionsModule {
         'receipt customInstructions'
       )
     }))
-    for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
+    const proven = tx.merklePath !== undefined
+    if (!proven) for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
     const txid = tx.id('hex')
-    const { consumed } = transactionTokens(tx, false, this.read)
+    const consumed = proven ? [] : transactionTokens(tx, false, this.read).consumed
     // As in 0.1.0, a new deploy among the outputs is resolved only when it is itself a receipt.
     const outputTokens = tx.outputs.flatMap((output, vout) => {
       const token = this.read(output.lockingScript, { txid, vout })

@@ -172,6 +172,60 @@ describe('ColorPermissionModule', () => {
       )
     })
 
+    // A mined transaction arrives as its subject and merkle path only (BRC-95): its merkle proof is
+    // its script evidence (BRC-207 Internalization), so only the received output's admission is judged.
+    function mined(tx: Transaction): Transaction {
+      tx.merklePath = new MerklePath(1_000_000, [[{ offset: 0, hash: tx.id('hex'), txid: true }]])
+      tx.inputs.forEach(input => {
+        input.sourceTXID = input.sourceTransaction!.id('hex')
+        input.sourceTransaction = undefined
+      })
+      return Transaction.fromAtomicBEEF(tx.toAtomicBEEF())
+    }
+
+    /** A payment with a second, sats input whose locking script is `satsScript`. */
+    async function swapWithSatsInput(satsScript = new LockingScript([{ op: OP.OP_TRUE }])) {
+      const paid = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
+      const satsSource = new Transaction()
+      satsSource.addOutput({ lockingScript: satsScript, satoshis: 500 })
+      paid.tx.addInput({
+        sourceTransaction: satsSource,
+        sourceOutputIndex: 0,
+        unlockingScript: new UnlockingScript()
+      })
+      return paid
+    }
+
+    it('accepts a mined receipt with no input sources once its output is admitted', async () => {
+      const { tx, customInstructions } = await swapWithSatsInput()
+      const received = mined(tx)
+      expect(received.inputs.every(input => input.sourceTransaction === undefined)).toBe(true)
+      provider.admit(assetId, tx, 0)
+      await expect(receipt(customInstructions, undefined, received)).resolves.toEqual(
+        expect.objectContaining({ args: expect.anything() })
+      )
+    })
+
+    it('refuses a mined receipt whose output the overlay has not admitted', async () => {
+      const { tx, customInstructions } = await swapWithSatsInput()
+      const received = mined(tx)
+      provider.admit(assetId, tx, 0)
+      provider.spend(`${tx.id('hex')}.0`)
+      await expect(receipt(customInstructions, undefined, received)).rejects.toThrow(
+        'not admitted and unspent'
+      )
+    })
+
+    it('still checks the unlocking scripts of an unmined receipt', async () => {
+      const { tx, customInstructions } = await swapWithSatsInput(
+        new LockingScript([{ op: OP.OP_FALSE }])
+      )
+      provider.admit(assetId, tx, 0)
+      await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
+        'Script evaluation error'
+      )
+    })
+
     it('accepts an admitted output spending inputs it cannot read as BRC-162', async () => {
       const legacyId = legacyDeploy(provider, 1)
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, legacyId, 25n)
