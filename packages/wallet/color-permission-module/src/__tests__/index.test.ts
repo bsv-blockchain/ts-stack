@@ -21,6 +21,7 @@ describe('package exports', () => {
       'assertNoRequiredProfiles',
       'assertPlanAssets',
       'assertTransactionOperations',
+      'assertUnlocks',
       'assetBasket',
       'assetTag',
       'authorityOperation',
