@@ -245,6 +245,48 @@ describe('Script', () => {
       expect(Script.fromASM('OP_0 3 010203 OP_0').toASM()).toEqual('OP_0 03 010203 OP_0')
       expect(Script.fromASM('').toASM()).toEqual('')
     })
+
+    it('reads an empty ASM string as the empty script', () => {
+      const empty = new Script()
+      const parsed = Script.fromASM('')
+      expect(parsed.chunks).toEqual([])
+      expect(parsed.toHex()).toEqual('')
+      expect(parsed.toASM()).toEqual('')
+
+      const roundTrip = Script.fromASM(empty.toASM())
+      expect(roundTrip.chunks).toEqual([])
+      expect(roundTrip.toHex()).toEqual(empty.toHex())
+      expect(roundTrip.toASM()).toEqual(empty.toASM())
+    })
+
+    it('rejects an empty ASM token instead of inserting an empty push', () => {
+      const emptyToken = /invalid ASM: empty token/
+      expect(() => Script.fromASM('OP_DUP  OP_HASH160')).toThrow(emptyToken)
+      expect(() => Script.fromASM(' OP_1')).toThrow(emptyToken)
+      expect(() => Script.fromASM('OP_1 ')).toThrow(emptyToken)
+      expect(() => Script.fromASM('OP_1   OP_2')).toThrow(emptyToken)
+      expect(() => Script.fromASM(' ')).toThrow(emptyToken)
+      expect(() => Script.fromASM('OP_PUSHDATA1  01')).toThrow(emptyToken)
+      expect(() => Script.fromASM('OP_PUSHDATA1 1 ')).toThrow(emptyToken)
+    })
+
+    it('still reads an explicit empty push', () => {
+      expect(Script.fromASM('OP_0').chunks).toHaveLength(1)
+      expect(Script.fromASM('OP_0').toHex()).toEqual('00')
+      expect(Script.fromASM('0').toHex()).toEqual('00')
+      expect(Script.fromASM('OP_FALSE').toHex()).toEqual('00')
+    })
+
+    it('writes a zero-length push as OP_0', () => {
+      const pushdata1 = Script.fromHex('4c00')
+      expect(pushdata1.toHex()).toEqual('4c00')
+      expect(pushdata1.toASM()).toEqual('OP_0')
+      expect(Script.fromASM(pushdata1.toASM()).toASM()).toEqual('OP_0')
+
+      const insideBranch = Script.fromHex('00634c006851')
+      expect(insideBranch.toASM()).toEqual('OP_0 OP_IF OP_0 OP_ENDIF OP_1')
+      expect(Script.fromASM(insideBranch.toASM()).toASM()).toEqual(insideBranch.toASM())
+    })
     it('should parse this known script in ASM', () => {
       const asm =
         'OP_DUP OP_HASH160 f4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG'

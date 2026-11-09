@@ -65,12 +65,24 @@ export default class Script {
   /**
    * @method fromASM
    * Static method to construct a Script instance from an ASM (Assembly) formatted string.
+   *
+   * The empty string is the empty script, so `fromASM(toASM(script))` holds when
+   * `script` has no chunks. That matches `toASM()` and go-sdk `NewFromASM("")`.
+   * Tokens are separated by one space. An empty token — a leading, trailing, or
+   * repeated space — is refused with `invalid ASM: empty token` instead of being
+   * read as an empty push. Spell an intentional empty push as `0`, `OP_0`, or
+   * `OP_FALSE`. `toASM()` writes a zero-length push the same way, including a
+   * non-minimal `OP_PUSHDATA*` of length 0, so a blank is never required to
+   * round-trip.
+   *
    * @param asm - The script in ASM string format.
    * @returns A new Script instance.
    * @example
    * const script = Script.fromASM("OP_DUP OP_HASH160 abcd... OP_EQUALVERIFY OP_CHECKSIG")
    */
   static fromASM(asm: string): Script {
+    // ''.split(' ') is [''], which would otherwise decode as one empty push.
+    if (asm.length === 0) return new Script()
     const chunks: ScriptChunk[] = []
     const tokens = asm.split(' ')
     let i = 0
@@ -91,6 +103,7 @@ export default class Script {
 
   static #parseASMToken(tokens: string[], i: number): { chunk: ScriptChunk; advance: number } {
     const token = tokens[i]
+    if (token.length === 0) throw new Error('invalid ASM: empty token')
 
     // Special literal tokens
     if (token === '0') return { chunk: { op: 0 }, advance: 1 }
@@ -105,7 +118,12 @@ export default class Script {
       opCodeNum === OP.OP_PUSHDATA2 ||
       opCodeNum === OP.OP_PUSHDATA4
     ) {
-      return { chunk: { data: toArray(tokens[i + 2], 'hex'), op: opCodeNum }, advance: 3 }
+      const sizeToken = tokens[i + 1]
+      const dataToken = tokens[i + 2]
+      // A blank size or data token is the same stray space as between opcodes.
+      // A missing token stays on the existing push path.
+      if (sizeToken === '' || dataToken === '') throw new Error('invalid ASM: empty token')
+      return { chunk: { data: toArray(dataToken, 'hex'), op: opCodeNum }, advance: 3 }
     }
 
     // Unknown opcode token — treat as raw hex push data
@@ -668,8 +686,11 @@ export default class Script {
   #_chunkToString(chunk: ScriptChunk): string {
     const op = chunk.op
     let str = ''
-    if (chunk.data === undefined) {
-      const val = OP[op] as string
+    // A zero-length push used to be a blank token. That made fromASM('') and a
+    // doubled space indistinguishable from an empty push. OP_0 is the minimal
+    // empty push, and it does not swallow the next ASM token.
+    if (chunk.data === undefined || (chunk.data.length === 0 && op <= OP.OP_PUSHDATA4)) {
+      const val = (chunk.data === undefined ? OP[op] : OP[0]) as string
       str = `${str} ${val}`
     } else {
       str = `${str} ${toHex(chunk.data)}`
