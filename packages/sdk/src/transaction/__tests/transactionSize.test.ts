@@ -82,6 +82,30 @@ describe('transactionSize', () => {
     expect(varUintSize(value)).toBe(size)
   })
 
+  it('adds term by term like the previous fee code, even past MAX_SAFE_INTEGER', () => {
+    // A copy of the sum SatoshisPerKilobyte used before this helper existed.
+    const previousSize = (inputs: number[], outputs: number[]): number => {
+      let size = 4
+      size += varUintSize(inputs.length)
+      for (const length of inputs) {
+        size += 40
+        size += varUintSize(length)
+        size += length
+      }
+      size += varUintSize(outputs.length)
+      for (const length of outputs) {
+        size += 8
+        size += varUintSize(length)
+        size += length
+      }
+      return size + 4
+    }
+    const huge = [9007199254740988]
+    expect(transactionSize(huge, [])).toBe(previousSize(huge, []))
+    expect(transactionSize(huge, [])).toBe(9007199254741048)
+    expect(Math.ceil((transactionSize(huge, []) / 1000) * 200)).toBe(1801439850948210)
+  })
+
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
     'rejects script length %s',
     length => {

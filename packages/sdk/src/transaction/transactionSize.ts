@@ -45,12 +45,20 @@ export function transactionOutputSize(scriptSize: number): number {
  * @throws RangeError when a length is negative or not a safe integer.
  */
 export function transactionSize(inputs: number[], outputs: number[]): number {
-  return (
-    4 + // version
-    varUintSize(inputs.length) +
-    inputs.reduce((a, e) => a + transactionInputSize(e), 0) +
-    varUintSize(outputs.length) +
-    outputs.reduce((a, e) => a + transactionOutputSize(e), 0) +
-    4 // lock time
-  )
+  // Summed one term at a time, in the order SatoshisPerKilobyte has always used,
+  // so even an estimate past Number.MAX_SAFE_INTEGER rounds exactly as before.
+  let size = 4 // version
+  size += varUintSize(inputs.length)
+  for (const length of inputs) {
+    size += 40 // txid, output index, sequence number
+    size += varUintSize(length) // validates the length
+    size += length
+  }
+  size += varUintSize(outputs.length)
+  for (const length of outputs) {
+    size += 8 // satoshis
+    size += varUintSize(length) // validates the length
+    size += length
+  }
+  return size + 4 // lock time
 }
