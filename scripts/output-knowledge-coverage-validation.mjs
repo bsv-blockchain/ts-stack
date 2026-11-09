@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const packageDirectory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
-export const APPLICATION_COVERAGE_SHARDS = 6
+export const APPLICATION_COVERAGE_SHARDS = 10
 export const APPLICATION_COVERAGE_LANE = 'output-knowledge-coverage'
 const require = createRequire(import.meta.url)
 const { planShard } = require('./jest-duration-sequencer.cjs')
