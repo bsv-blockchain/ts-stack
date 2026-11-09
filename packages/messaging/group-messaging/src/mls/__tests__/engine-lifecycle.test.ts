@@ -1,5 +1,5 @@
 import { KeyDeriver, PrivateKey } from '@bsv/sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GroupMessagingError } from '../../errors.js'
 import { IdentityService } from '../../identity/index.js'
 import { DEFAULT_CIPHERSUITE, type MlsCiphersuiteName } from '../../types.js'
@@ -106,6 +106,37 @@ describe('MlsEngine group lifecycle', () => {
         privateKeyPackage: minted.privateKeyPackage
       })
     ).rejects.toThrow(GroupMessagingError)
+  })
+
+  /**
+   * Two phones are never on the same second. The admitter checks the added
+   * KeyPackage's lifetime against its own clock, and `ts-mls` runs that check
+   * unconditionally when the commit is the caller's own — no config turns it
+   * off — so the only place skew can be absorbed is where the lifetime is
+   * minted.
+   */
+  it("adds a member whose clock runs ahead of the admitter's", async () => {
+    const alice = await newEngine()
+    const bob = await newEngine()
+
+    const aliceKp = await alice.createKeyPackage()
+    const created = await alice.createGroup({
+      keyPackage: aliceKp.keyPackage,
+      privateKeyPackage: aliceKp.privateKeyPackage
+    })
+
+    // Bob mints while his clock reads a minute later than Alice's.
+    const realNow = Date.now
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow.call(Date) + 60_000)
+    const bobKp = await bob.createKeyPackage()
+    vi.restoreAllMocks()
+
+    const added = await alice.addMembers({
+      state: created.state,
+      keyPackages: [bobKp.keyPackage]
+    })
+
+    expect((await alice.info(added.state)).epoch).toBe(1n)
   })
 
   it('refuses to add a member whose KeyPackage is for another ciphersuite', async () => {

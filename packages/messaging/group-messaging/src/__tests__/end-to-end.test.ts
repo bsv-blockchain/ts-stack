@@ -115,6 +115,59 @@ describe('two wallets, end to end', () => {
     await bob.close()
   })
 
+  /**
+   * The one identifier that has to agree across clients. A reply or a reaction
+   * names a message, so if the sender and the recipient derive different ids
+   * for the same message the reference points at nothing.
+   */
+  it('gives the sender and the recipient the same id for one message', async () => {
+    const { alice, bob, aliceGroup } = await pair()
+
+    const received = nextEvent(bob, 'message')
+    const sent = await aliceGroup.sendText('hello Bob')
+    const message = await received
+
+    expect(message.messageId).toBe(sent)
+    expect(sent).toMatch(/^[0-9a-f]{64}$/)
+
+    await alice.close()
+    await bob.close()
+  })
+
+  it('gives two identical messages different ids', async () => {
+    const { alice, bob, aliceGroup } = await pair()
+
+    const first = await aliceGroup.sendText('ok')
+    const second = await aliceGroup.sendText('ok')
+
+    expect(first).not.toBe(second)
+
+    await alice.close()
+    await bob.close()
+  })
+
+  it('carries a reply that names the id the recipient saw', async () => {
+    const { alice, bob, aliceGroup, bobGroup } = await pair()
+
+    const atBob = nextEvent(bob, 'message')
+    await aliceGroup.sendText('what time?')
+    const original = await atBob
+
+    // Asserted before it is used as a reference: with no id on either side
+    // the reference is `undefined` and so is `replyTo`, and the comparison
+    // below passes while proving nothing.
+    expect(original.messageId).toMatch(/^[0-9a-f]{64}$/)
+
+    const atAlice = nextEvent(alice, 'message')
+    await bobGroup.sendReply({ reference: original.messageId, body: 'three' })
+    const reply = await atAlice
+
+    expect(reply.content.replyTo).toBe(original.messageId)
+
+    await alice.close()
+    await bob.close()
+  })
+
   it('carries a reply back the other way', async () => {
     const { alice, bob, aliceGroup, bobGroup } = await pair()
 
