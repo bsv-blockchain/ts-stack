@@ -1,5 +1,10 @@
 # 2.16.0 unpublished integration candidate
 
+Batch fresh MySQL journal-destination schema metadata reads to avoid one SQL
+round trip per table and index during archive requests. Complete table, column,
+constraint, index, trigger and quota validation remains uncached and fail closed.
+No protocol, schema, ownership, resource limit or deadline changes.
+
 Fix certificate pagination found during populated TTN qualification: aggregate
 counts discard page offset/limit, preserve ownership/type/issuer filters, and
 later short or empty certificate pages retain the full matching total. No schema

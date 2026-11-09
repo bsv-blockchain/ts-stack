@@ -139,12 +139,40 @@ async function verifyMysql(
 ): Promise<void> {
   const specs = ddl.filter(sql => sql.startsWith('CREATE TABLE ')).map(table)
   const standalone = [...ddl.filter(sql => sql.startsWith('CREATE INDEX ')), ...nativeIndexes].map(index)
+  // Read fresh metadata in bounded batches. Grouping retains every per-object
+  // definition/count check without one database round trip per table or index.
+  const tableNames = specs.map(spec => spec.name)
+  const objectRows: Array<Record<string, unknown>> = await k('information_schema.TABLES')
+    .whereRaw('TABLE_SCHEMA=DATABASE()')
+    .whereIn('TABLE_NAME', tableNames)
+    .select('TABLE_NAME', 'TABLE_TYPE', 'ENGINE', 'TABLE_COLLATION', 'ROW_FORMAT', 'CREATE_OPTIONS')
+    .limit(specs.length * 2 + 1)
+  // Only null/empty defaults, extras and generation expressions are valid.
+  // Bound rejected definitions before materializing a whole metadata batch.
+  const columnRows: Array<Record<string, unknown>> = await k('information_schema.COLUMNS')
+    .whereRaw('TABLE_SCHEMA=DATABASE()')
+    .whereIn('TABLE_NAME', tableNames)
+    .select(
+      'TABLE_NAME',
+      'COLUMN_NAME',
+      k.raw('substr(??,1,129) AS ??', ['COLUMN_TYPE', 'COLUMN_TYPE']),
+      'IS_NULLABLE',
+      k.raw('substr(??,1,1) AS ??', ['COLUMN_DEFAULT', 'COLUMN_DEFAULT']),
+      k.raw('substr(??,1,1) AS ??', ['EXTRA', 'EXTRA']),
+      'CHARACTER_SET_NAME',
+      'COLLATION_NAME',
+      k.raw('substr(??,1,1) AS ??', ['GENERATION_EXPRESSION', 'GENERATION_EXPRESSION'])
+    )
+    .orderBy('TABLE_NAME')
+    .orderBy('ORDINAL_POSITION')
+    .limit(specs.length * 33 + 1)
+  const constraintRows: Array<Record<string, unknown>> = await k('information_schema.TABLE_CONSTRAINTS')
+    .whereRaw('TABLE_SCHEMA=DATABASE()')
+    .whereIn('TABLE_NAME', tableNames)
+    .select('TABLE_NAME', 'CONSTRAINT_NAME', 'CONSTRAINT_TYPE')
+    .limit(specs.length * 2 + 1)
   for (const spec of specs) {
-    const objects: Array<Record<string, unknown>> = await k('information_schema.TABLES')
-      .whereRaw('TABLE_SCHEMA=DATABASE()')
-      .where('TABLE_NAME', spec.name)
-      .select('TABLE_TYPE', 'ENGINE', 'TABLE_COLLATION', 'ROW_FORMAT', 'CREATE_OPTIONS')
-      .limit(2)
+    const objects = objectRows.filter(row => row.TABLE_NAME === spec.name)
     if (
       objects.length !== 1 ||
       objects[0].TABLE_TYPE !== 'BASE TABLE' ||
@@ -154,21 +182,7 @@ async function verifyMysql(
       objects[0].CREATE_OPTIONS !== spec.options
     )
       invalid()
-    const columns: Array<Record<string, unknown>> = await k('information_schema.COLUMNS')
-      .whereRaw('TABLE_SCHEMA=DATABASE()')
-      .where('TABLE_NAME', spec.name)
-      .select(
-        'COLUMN_NAME',
-        'COLUMN_TYPE',
-        'IS_NULLABLE',
-        'COLUMN_DEFAULT',
-        'EXTRA',
-        'CHARACTER_SET_NAME',
-        'COLLATION_NAME',
-        'GENERATION_EXPRESSION'
-      )
-      .orderBy('ORDINAL_POSITION')
-      .limit(33)
+    const columns = columnRows.filter(row => row.TABLE_NAME === spec.name)
     if (
       columns.length !== spec.columns.length ||
       columns.some((column, i) => {
@@ -187,11 +201,7 @@ async function verifyMysql(
       })
     )
       invalid()
-    const constraints: Array<Record<string, unknown>> = await k('information_schema.TABLE_CONSTRAINTS')
-      .whereRaw('TABLE_SCHEMA=DATABASE()')
-      .where('TABLE_NAME', spec.name)
-      .select('CONSTRAINT_NAME', 'CONSTRAINT_TYPE')
-      .limit(2)
+    const constraints = constraintRows.filter(row => row.TABLE_NAME === spec.name)
     if (
       constraints.length !== 1 ||
       constraints[0].CONSTRAINT_NAME !== 'PRIMARY' ||
@@ -210,13 +220,31 @@ async function verifyMysql(
     ...specs.flatMap(spec => spec.indexes),
     ...standalone.filter(value => !specs.some(spec => spec.name === value.table))
   ]
+  const indexRows: Array<Record<string, unknown>> =
+    all.length === 0
+      ? []
+      : await k('information_schema.STATISTICS')
+          .whereRaw('TABLE_SCHEMA=DATABASE()')
+          .where(function () {
+            for (const value of all) void this.orWhere({ TABLE_NAME: value.table, INDEX_NAME: value.name })
+          })
+          .select(
+            'TABLE_NAME',
+            'INDEX_NAME',
+            'COLUMN_NAME',
+            'NON_UNIQUE',
+            'COLLATION',
+            'SUB_PART',
+            'INDEX_TYPE',
+            'IS_VISIBLE',
+            k.raw('substr(??,1,1) AS ??', ['EXPRESSION', 'EXPRESSION'])
+          )
+          .orderBy('TABLE_NAME')
+          .orderBy('INDEX_NAME')
+          .orderBy('SEQ_IN_INDEX')
+          .limit(all.length * 17 + 1)
   for (const value of all) {
-    const rows: Array<Record<string, unknown>> = await k('information_schema.STATISTICS')
-      .whereRaw('TABLE_SCHEMA=DATABASE()')
-      .where({ TABLE_NAME: value.table, INDEX_NAME: value.name })
-      .select('COLUMN_NAME', 'NON_UNIQUE', 'COLLATION', 'SUB_PART', 'INDEX_TYPE', 'IS_VISIBLE', 'EXPRESSION')
-      .orderBy('SEQ_IN_INDEX')
-      .limit(17)
+    const rows = indexRows.filter(row => row.TABLE_NAME === value.table && row.INDEX_NAME === value.name)
     if (
       rows.length !== value.columns.length ||
       rows.some(
@@ -232,12 +260,13 @@ async function verifyMysql(
     )
       invalid()
   }
+  const indexNames: Array<{ TABLE_NAME: unknown; INDEX_NAME: unknown }> = await k('information_schema.STATISTICS')
+    .whereRaw('TABLE_SCHEMA=DATABASE()')
+    .whereIn('TABLE_NAME', tableNames)
+    .distinct('TABLE_NAME', 'INDEX_NAME')
+    .limit(specs.length * 17 + 1)
   for (const spec of specs) {
-    const names: Array<{ INDEX_NAME: unknown }> = await k('information_schema.STATISTICS')
-      .whereRaw('TABLE_SCHEMA=DATABASE()')
-      .where('TABLE_NAME', spec.name)
-      .distinct('INDEX_NAME')
-      .limit(17)
+    const names = indexNames.filter(row => row.TABLE_NAME === spec.name)
     if (
       names.length !== spec.indexes.length ||
       names.some(row => !spec.indexes.some(value => value.name === row.INDEX_NAME))
