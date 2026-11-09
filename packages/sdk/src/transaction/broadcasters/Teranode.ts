@@ -3,57 +3,19 @@ import Transaction from '../Transaction.js'
 import { binaryHttpClient } from '../http/BinaryFetchClient.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import {
+  ARC_ERROR_STATUSES,
+  boundedText,
+  MAX_ARC_INFO_BYTES,
+  MAX_ARC_STATUS_BYTES,
   normalizeBroadcasterHttpClient,
   normalizeBroadcasterUrl,
+  ownArcData,
+  parseArcData,
   providerDiagnostic,
   providerStatusCode,
   TRANSACTION_ID
 } from './BroadcasterValidation.js'
 import { lockConfiguration } from '../http/ConfigurationLock.js'
-import { hasControlCharacter, utf8ByteLength } from '../../primitives/UTF8.js'
-
-// Statuses an ARC-style service (such as BSV Broadcaster) may answer with a 2xx
-// that still mean the transaction was not accepted; the same set ARC treats as
-// failures.
-const FAILED_TX_STATUSES = new Set([
-  'DOUBLE_SPEND_ATTEMPTED',
-  'REJECTED',
-  'INVALID',
-  'MALFORMED',
-  'MINED_IN_STALE_BLOCK'
-])
-const MAX_STATUS_BYTES = 128
-const MAX_INFO_BYTES = 8192
-
-function boundedText(value: unknown, maximumBytes: number): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length !== 0 &&
-    utf8ByteLength(value) <= maximumBytes &&
-    !hasControlCharacter(value)
-  )
-}
-
-/** Own data fields of a JSON object body, or undefined for any other body. */
-function statusBody(data: unknown): Record<string, unknown> | undefined {
-  let value = data
-  if (typeof value === 'string') {
-    if (!value.trimStart().startsWith('{')) return undefined
-    try {
-      value = JSON.parse(value)
-    } catch {
-      return undefined
-    }
-  }
-  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const prototype = Object.getPrototypeOf(value)
-  if (prototype !== Object.prototype && prototype !== null) return undefined
-  const fields: Record<string, unknown> = Object.create(null)
-  for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-    if ('value' in descriptor) fields[name] = descriptor.value
-  }
-  return fields
-}
 
 /**
  * Represents an Teranode transaction broadcaster.
@@ -80,11 +42,14 @@ export default class Teranode implements Broadcaster {
    * A bare 2xx (a Teranode node answers `OK` or nothing) is reported as
    * `broadcast successful`. When the endpoint answers an ARC-style JSON body
    * with a `txStatus` (for example BSV Broadcaster's `POST /tx`), the success
-   * message carries that status, so `RECEIVED` (taken in, not yet validated)
-   * can be told apart from `SEEN_ON_NETWORK` or `MINED`; a refusal status or a
-   * body naming another transaction is returned as a failure. A non-2xx keeps
-   * the HTTP status as `code` and adds the body's ARC `status` and `detail`
-   * under `more`.
+   * carries it as `txStatus` (and the body's numeric `status` as `arcStatus`),
+   * and its message as `ARC` builds it. `RECEIVED` is still a success but means
+   * taken in, not yet validated; callers that need certainty check `txStatus`
+   * or poll the service. A status in ARC's failure set, an orphan, or a body
+   * naming another transaction is returned as a failure. Unlike `ARC`, an
+   * unknown status stays a success, since a plain node may answer anything.
+   * A non-2xx keeps the HTTP status as `code` and adds the body's ARC
+   * `status`, `txStatus` and `detail` under `more`.
    *
    * @param {Transaction} tx - The transaction to be broadcasted.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} A promise that resolves to either a success or failure response.
@@ -126,15 +91,16 @@ export default class Teranode implements Broadcaster {
 /**
  * A Teranode node answers a bare 2xx, which stays a plain success. An ARC-style
  * service answers a JSON body whose txStatus distinguishes "received, not yet
- * validated" from network acceptance and from a refusal, so it is reported.
+ * validated" from network acceptance and from a refusal, so it is surfaced.
  */
 function successfulResponse(data: unknown, txid: string): BroadcastResponse | BroadcastFailure {
-  const body = statusBody(data)
-  const txStatus = body?.txStatus
-  if (body === undefined || !boundedText(txStatus, MAX_STATUS_BYTES)) {
+  const body = ownArcData(parseArcData(data))
+  const read = (name: string): unknown => body?.[name]?.value
+  const txStatus = read('txStatus')
+  if (!boundedText(txStatus, MAX_ARC_STATUS_BYTES, false)) {
     return { status: 'success', txid, message: 'broadcast successful' }
   }
-  const echoed = body.txid
+  const echoed = read('txid')
   if (typeof echoed === 'string' && echoed.toLowerCase() !== txid) {
     return {
       status: 'error',
@@ -142,29 +108,32 @@ function successfulResponse(data: unknown, txid: string): BroadcastResponse | Br
       description: 'Teranode acknowledged a transaction other than the submitted transaction.'
     }
   }
-  const extraInfo = boundedText(body.extraInfo, MAX_INFO_BYTES) ? body.extraInfo : ''
-  const description = `${txStatus} ${extraInfo}`.trim()
-  const upper = txStatus.toUpperCase()
-  if (
-    FAILED_TX_STATUSES.has(upper) ||
-    upper.includes('ORPHAN') ||
-    extraInfo.toUpperCase().includes('ORPHAN')
-  ) {
-    return { status: 'error', code: txStatus, txid, description }
+  const extraInfo = read('extraInfo')
+  const description =
+    `${txStatus} ${boundedText(extraInfo, MAX_ARC_INFO_BYTES) ? extraInfo : ''}`.trim()
+  const fields: { txStatus: string; arcStatus?: number } = { txStatus }
+  const arcStatus = read('status')
+  if (Number.isSafeInteger(arcStatus)) fields.arcStatus = arcStatus as number
+  const upper = description.toUpperCase()
+  if (ARC_ERROR_STATUSES.has(txStatus.trim().toUpperCase()) || upper.includes('ORPHAN')) {
+    return { status: 'error', code: txStatus, txid, description, more: fields }
   }
-  return { status: 'success', txid, message: description }
+  return { status: 'success', txid, message: description, ...fields }
 }
 
-/** Keeps the HTTP status as the code and adds the ARC status of an error body. */
+/** Keeps the HTTP status as the code and adds the ARC fields of an error body. */
 function failedResponse(status: unknown, data: unknown, tx: Transaction): BroadcastFailure {
   const failure: BroadcastFailure = {
     status: 'error',
     code: providerStatusCode(status),
     description: providerDiagnostic(data)
   }
-  const body = statusBody(data)
+  const body = ownArcData(parseArcData(data))
   if (body === undefined) return failure
-  const echoed = body.txid
+  const read = (name: string): unknown => body[name]?.value
+  const echoed = read('txid')
+  // A body naming another transaction only loses its txid here; the HTTP code
+  // stays, unlike ARC's ERR_TXID_MISMATCH, so existing callers see no change.
   if (typeof echoed === 'string' && TRANSACTION_ID.test(echoed)) {
     let txid: unknown
     try {
@@ -176,9 +145,13 @@ function failedResponse(status: unknown, data: unknown, tx: Transaction): Broadc
       failure.txid = echoed.toLowerCase()
     }
   }
-  const more: { arcStatus?: number; detail?: string } = {}
-  if (Number.isSafeInteger(body.status)) more.arcStatus = body.status as number
-  if (boundedText(body.detail, MAX_INFO_BYTES)) more.detail = body.detail
+  const more: { arcStatus?: number; txStatus?: string; detail?: string } = {}
+  const arcStatus = read('status')
+  const txStatus = read('txStatus')
+  const detail = read('detail')
+  if (Number.isSafeInteger(arcStatus)) more.arcStatus = arcStatus as number
+  if (boundedText(txStatus, MAX_ARC_STATUS_BYTES, false)) more.txStatus = txStatus
+  if (boundedText(detail, MAX_ARC_INFO_BYTES, false)) more.detail = detail
   if (Object.keys(more).length !== 0) failure.more = more
   return failure
 }

@@ -72,7 +72,8 @@ describe('ARC Broadcaster', () => {
     expect(response).toEqual({
       status: 'success',
       txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      message: 'success received'
+      message: 'success received',
+      txStatus: 'success'
     })
   })
 
@@ -91,7 +92,8 @@ describe('ARC Broadcaster', () => {
     expect(response).toEqual({
       status: 'success',
       txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      message: 'success received'
+      message: 'success received',
+      txStatus: 'success'
     })
   })
 
@@ -107,7 +109,8 @@ describe('ARC Broadcaster', () => {
     expect(response).toEqual({
       status: 'success',
       txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      message: 'success received'
+      message: 'success received',
+      txStatus: 'success'
     })
   })
 
@@ -122,7 +125,8 @@ describe('ARC Broadcaster', () => {
     expect(response).toEqual({
       status: 'success',
       txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      message: 'success received'
+      message: 'success received',
+      txStatus: 'success'
     })
   })
 
@@ -368,6 +372,7 @@ describe('ARC Broadcaster', () => {
     if (response.status === 'success') {
       expect(response.txid).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       expect(response.message).toBe('SEEN_ON_NETWORK Transaction accepted')
+      expect(response.txStatus).toBe('SEEN_ON_NETWORK')
     }
   })
 

@@ -116,6 +116,7 @@ describe('ARC security boundaries', () => {
       status: 'success',
       txid: TXID,
       message: 'SEEN_ON_NETWORK',
+      txStatus: 'SEEN_ON_NETWORK',
       competingTxs: ['c'.repeat(64)]
     })
     competingTxs[0] = OTHER_TXID
@@ -139,7 +140,8 @@ describe('ARC security boundaries', () => {
     expect(results[0]).toEqual({
       status: 'success',
       txid: TXID,
-      message: 'SEEN_ON_NETWORK'
+      message: 'SEEN_ON_NETWORK',
+      txStatus: 'SEEN_ON_NETWORK'
     })
     expect(results[0]).not.toBe(first)
     expect(results[1]).toMatchObject({ status: 'error', code: 'ERR_INVALID_RESPONSE' })

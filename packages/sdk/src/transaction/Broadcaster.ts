@@ -55,6 +55,11 @@ export function validateBroadcastResult(
       txid: expectedTxid.toLowerCase(),
       message
     }
+    // Optional status fields are kept only when well formed; dropping them never fails a success.
+    const txStatus = ownDataProperty(result, 'txStatus').value
+    const arcStatus = ownDataProperty(result, 'arcStatus').value
+    if (boundedString(txStatus, MAX_BROADCAST_CODE_BYTES)) normalized.txStatus = txStatus
+    if (Number.isSafeInteger(arcStatus)) normalized.arcStatus = arcStatus as number
     if (competing.present) {
       if (!Array.isArray(competing.value) || competing.value.length > MAX_COMPETING_TXS) {
         return invalidBroadcastResult()
@@ -115,6 +120,15 @@ export interface BroadcastResponse {
   txid: string
   message: string
   competingTxs?: string[]
+  /**
+   * The service's transaction status, when it reported one (set by `ARC` and
+   * `Teranode`). `RECEIVED` means taken in but not yet validated: the
+   * transaction may still be rejected, so callers that need certainty check
+   * this field or poll the service.
+   */
+  txStatus?: string
+  /** The numeric `status` of an ARC-style response body, when it carried one. */
+  arcStatus?: number
 }
 
 /**

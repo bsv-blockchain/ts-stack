@@ -131,7 +131,7 @@ describe('Teranode Broadcaster', () => {
     [200, '{not json']
   ])('keeps the plain success for a %p response with body %p', async (status, data) => {
     const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status, data })))
-    await expect(broadcaster.broadcast(transaction)).resolves.toEqual({
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
       status: 'success',
       txid: 'a'.repeat(64),
       message: 'broadcast successful'
@@ -139,16 +139,21 @@ describe('Teranode Broadcaster', () => {
   })
 
   it.each([
-    [202, { txid: 'A'.repeat(64), txStatus: 'RECEIVED' }, 'RECEIVED'],
-    [200, { txid: 'a'.repeat(64), txStatus: 'SEEN_ON_NETWORK' }, 'SEEN_ON_NETWORK'],
-    [200, { txStatus: 'ACCEPTED_BY_NETWORK', extraInfo: 'ok' }, 'ACCEPTED_BY_NETWORK ok']
-  ])('reports the txStatus of a %p status body', async (status, data, message) => {
+    [202, { txid: 'A'.repeat(64), txStatus: 'RECEIVED', status: 202 }, 'RECEIVED', 202],
+    [200, { txid: 'a'.repeat(64), txStatus: 'SEEN_ON_NETWORK' }, 'SEEN_ON_NETWORK', undefined],
+    [200, { txStatus: 'MINED', extraInfo: 'ok', status: 200 }, 'MINED ok', 200],
+    // Unknown statuses stay successes (ARC refuses them); the caller judges txStatus.
+    [200, { txStatus: 'QUEUED_SOMEWHERE' }, 'QUEUED_SOMEWHERE', undefined]
+  ])('reports the txStatus of a %p status body', async (status, data, message, arcStatus) => {
     const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status, data })))
-    await expect(broadcaster.broadcast(transaction)).resolves.toEqual({
+    const expected: Record<string, unknown> = {
       status: 'success',
       txid: 'a'.repeat(64),
-      message
-    })
+      message,
+      txStatus: data.txStatus
+    }
+    if (arcStatus !== undefined) expected.arcStatus = arcStatus
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual(expected)
   })
 
   it('reads a status body that the HTTP client already parsed', async () => {
@@ -161,22 +166,39 @@ describe('Teranode Broadcaster', () => {
       })
     }
     const response = await new Teranode(URL, httpClient).broadcast(transaction)
-    expect(response).toEqual({ status: 'success', txid: 'a'.repeat(64), message: 'RECEIVED' })
+    expect(response).toStrictEqual({
+      status: 'success',
+      txid: 'a'.repeat(64),
+      message: 'RECEIVED',
+      txStatus: 'RECEIVED'
+    })
   })
 
   it.each([
     ['REJECTED', 'input already spent', 'REJECTED input already spent'],
+    ['REJECTED ', undefined, 'REJECTED'],
     ['DOUBLE_SPEND_ATTEMPTED', undefined, 'DOUBLE_SPEND_ATTEMPTED'],
     ['SEEN_IN_ORPHAN_MEMPOOL', undefined, 'SEEN_IN_ORPHAN_MEMPOOL'],
     ['STORED', 'parent is an orphan', 'STORED parent is an orphan']
   ])('returns a failure when a 2xx body reports %p', async (txStatus, extraInfo, description) => {
     const data = { txid: 'a'.repeat(64), txStatus, extraInfo }
     const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
-    await expect(broadcaster.broadcast(transaction)).resolves.toEqual({
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
       status: 'error',
       code: txStatus,
       txid: 'a'.repeat(64),
-      description
+      description,
+      more: { txStatus }
+    })
+  })
+
+  it('carries the ARC status of a 2xx refusal', async () => {
+    const data = { txid: 'a'.repeat(64), txStatus: 'REJECTED', status: 200 }
+    const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
+    await expect(broadcaster.broadcast(transaction)).resolves.toMatchObject({
+      status: 'error',
+      code: 'REJECTED',
+      more: { txStatus: 'REJECTED', arcStatus: 200 }
     })
   })
 
@@ -210,8 +232,28 @@ describe('Teranode Broadcaster', () => {
     })
   })
 
+  it('exposes the txStatus of an error body', async () => {
+    const body = JSON.stringify({ status: 461, txStatus: 'REJECTED', txid: 'a'.repeat(64) })
+    const broadcaster = new Teranode(
+      URL,
+      new BinaryFetchClient(mockedFetch({ status: 400, data: body }))
+    )
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+      status: 'error',
+      code: '400',
+      txid: 'a'.repeat(64),
+      description: body,
+      more: { arcStatus: 461, txStatus: 'REJECTED' }
+    })
+  })
+
   it('does not attach a mismatched txid or malformed ARC fields to an error', async () => {
-    const body = JSON.stringify({ status: '465', detail: 7, txid: 'b'.repeat(64) })
+    const body = JSON.stringify({
+      status: '465',
+      detail: 7,
+      txStatus: 'BAD\u0007',
+      txid: 'b'.repeat(64)
+    })
     const broadcaster = new Teranode(
       URL,
       new BinaryFetchClient(mockedFetch({ status: 400, data: body }))

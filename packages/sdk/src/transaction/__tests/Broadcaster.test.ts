@@ -2,7 +2,8 @@ import {
   BroadcastResponse,
   BroadcastFailure,
   isBroadcastResponse,
-  isBroadcastFailure
+  isBroadcastFailure,
+  validateBroadcastResult
 } from '../../transaction/Broadcaster'
 
 // Broadcaster.ts contains two interfaces (BroadcastResponse, BroadcastFailure, Broadcaster)
@@ -170,5 +171,33 @@ describe('BroadcastFailure interface shape', () => {
     }
     expect(minimal.txid).toBeUndefined()
     expect(minimal.more).toBeUndefined()
+  })
+})
+
+describe('validateBroadcastResult status fields', () => {
+  const txid = 'a'.repeat(64)
+
+  it('keeps a reported txStatus and arcStatus on a success', () => {
+    expect(
+      validateBroadcastResult(
+        { status: 'success', txid, message: 'RECEIVED', txStatus: 'RECEIVED', arcStatus: 202 },
+        txid
+      )
+    ).toStrictEqual({
+      status: 'success',
+      txid,
+      message: 'RECEIVED',
+      txStatus: 'RECEIVED',
+      arcStatus: 202
+    })
+  })
+
+  it('drops malformed status fields instead of refusing the success', () => {
+    expect(
+      validateBroadcastResult(
+        { status: 'success', txid, message: 'ok', txStatus: 'X'.repeat(129), arcStatus: 1.5 },
+        txid
+      )
+    ).toStrictEqual({ status: 'success', txid, message: 'ok' })
   })
 })
