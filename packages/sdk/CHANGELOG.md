@@ -277,6 +277,16 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Added: overlay broadcast error detail and STEAK validation export (minor candidate)
+
+- `HTTPSOverlayBroadcastFacilitator.send` now rejects a non-2xx answer with
+  `OverlayBroadcastHTTPError`, which keeps the HTTP `status` and the first
+  8 KiB of the response `body`. It still extends `Error` with the message
+  `Failed to facilitate broadcast`, so existing handling is unchanged.
+- Export `validateSTEAK(value, topics)`, the check `TopicBroadcaster` applies to
+  every facilitator answer, so callers using a facilitator directly can apply
+  it to `send()`. Additive only; no migration is required.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
