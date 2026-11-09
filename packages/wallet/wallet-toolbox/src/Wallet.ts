@@ -1,3 +1,4 @@
+import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
 import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
 import {
   BRC197_INTERNALIZATION_PROFILE,
@@ -18,7 +19,6 @@ import {
   validateCreateActionArgs,
   validateDiscoverByAttributesArgs,
   validateDiscoverByIdentityKeyArgs,
-  validateInternalizeActionArgs,
   validateListActionsArgs,
   validateListCertificatesArgs,
   validateListOutputsArgs as validateSDKListOutputsArgs,

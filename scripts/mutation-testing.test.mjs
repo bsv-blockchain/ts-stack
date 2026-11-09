@@ -8,6 +8,7 @@ import { createOverlayTestProjects } from '../packages/overlays/overlay-express/
 import {
   REPOSITORY_ROOT,
   calculateMutationMetrics,
+  mutationRunnerLimit,
   evaluateMutationReport,
   parseArguments,
   selectAffectedMutationTargets,
@@ -22,10 +23,7 @@ const targets = {
 
 test('each batch execution control selects every original canonical mutation target', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  for (const control of [
-    'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml'
-  ])
+  for (const control of ['scripts/mutation-execution-batches.mjs'])
     assert.deepEqual(
       selectAffectedMutationTargets(configured, [control]),
       Object.keys(configured),
@@ -164,6 +162,38 @@ test('mutation metrics count survivors whose runner executed no tests', () => {
   ])
 
   assert.equal(metrics.unexecuted, 1)
+})
+
+test('runner limits preserve raw Stryker scores but cannot qualify as assertion kills', () => {
+  const reasons = [
+    'Error: Property interrupted after 290 tests\n{ seed: 3242026 }',
+    'Error: thrown: "Exceeded timeout of 5000 ms for a test.',
+    'Error: Exceeded timeout of 5000 ms for a hook.'
+  ]
+  const mutants = reasons.map(statusReason => ({ status: 'Killed', statusReason }))
+  const metrics = calculateMutationMetrics(mutants)
+  assert.deepEqual(metrics.counts, { Killed: 3 })
+  assert.equal(metrics.score, 100)
+  assert.equal(metrics.detected, 3)
+  assert.equal(metrics.runnerLimitedKills, 3)
+  const policy = {
+    targets: [{ id: 'one', minimumScore: 90, maximumNoCoverage: 0, maximumInvalid: 0 }]
+  }
+  for (const requireScore of [true, false])
+    assert.match(
+      evaluateMutationReport('one', metrics, policy, { requireScore }).join('\n'),
+      /3 reported kills.*runner limit/
+    )
+  for (const mutant of [
+    { status: 'Timeout', statusReason: reasons[0] },
+    {
+      status: 'Killed',
+      statusReason: 'Error: Property failed after 1 tests\nCounterexample: [false]'
+    },
+    { status: 'Killed', statusReason: 'Error: expect(received).toEqual(expected)' },
+    { status: 'Killed' }
+  ])
+    assert.equal(mutationRunnerLimit(mutant), undefined)
 })
 
 test('mutation command parsing rejects missing values and conflicting modes', () => {
@@ -948,6 +978,7 @@ test('durable buyer qualifies every complete owner and retains native one-action
   ])
   assert.deepEqual(buyer.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-lookup-buyer.test.ts',
+    '<rootDir>/test/private-lookup-buyer.property.test.ts',
     '<rootDir>/test/private-buyer-payment.test.ts',
     '<rootDir>/test/private-purchase-buyer*.test.ts',
     '<rootDir>/test/private-purchase-wallet-native*.test.ts'

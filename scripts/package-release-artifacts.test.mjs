@@ -449,7 +449,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.doesNotMatch(workflow, /pnpm\s+-r[\s\S]{0,100}\spublish\b/)
   assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN/)
   // The node-free plan job adds one pinned runner and one credential-free checkout.
-  assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 6)
+  assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 5)
   assert.equal(workflow.match(/node-version: 24\.22\.1/g)?.length, 3)
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 4)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)

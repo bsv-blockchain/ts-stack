@@ -32,7 +32,8 @@ const semanticTargets = [
   'wallet-recovery-encoding',
   'private-purchase-http',
   'sdk-auth-http',
-  'protected-ledger'
+  'protected-ledger',
+  'private-lookup-buyer'
 ]
 const mutantIdentity = mutant =>
   JSON.stringify([
@@ -138,7 +139,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
     230, 133, 532, 1100, 645, 1617, 179, 289, 346, 1199, 496, 484, 380, 382, 948, 465, 170, 695,
-    939, 1063
+    939, 1063, 771
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
@@ -189,7 +190,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 156)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 606)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 616)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {
