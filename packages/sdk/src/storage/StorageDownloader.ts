@@ -1,7 +1,7 @@
 import LookupResolver, { type LookupNetworkPreset } from '../overlay-tools/LookupResolver.js'
 import { getHashFromURL, isValidURL, normalizeURL } from './StorageUtils.js'
 import Transaction from '../transaction/Transaction.js'
-import { SHA256 } from '../primitives/Hash.js'
+import { sha256 } from '../primitives/Hash.js'
 import { toHex } from '../primitives/utils.js'
 import { createPublicHTTPSFetch } from './PublicHTTPSFetch.js'
 import { decodeAndVerifyUHRPAdvertisement } from './UHRPAdvertisementValidation.js'
@@ -34,9 +34,9 @@ export interface DownloaderConfig {
   /** Explicit transport injection for controlled/test environments. */
   fetchClient?: typeof fetch
   /**
-   * Deadline in milliseconds for each host, covering the request and the body.
-   * A host that misses it is aborted and the next host is tried. No deadline
-   * by default.
+   * Deadline in milliseconds for each host (1 to 2147483647), covering the
+   * request and the body. A host that misses it has its request aborted and
+   * its body read cancelled, and the next host is tried. No deadline by default.
    */
   timeoutMs?: number
 }
@@ -79,12 +79,6 @@ export class StorageDownloadError extends Error {
   }
 }
 
-class DownloadRefusal extends Error {
-  constructor(readonly reason: StorageDownloadFailureReason) {
-    super(reason)
-  }
-}
-
 export interface DownloadResult {
   data: Uint8Array
   mimeType: string | null
@@ -107,8 +101,12 @@ export class StorageDownloader {
     this.#maxDownloadBytes = maximum
     this.#fetchClient = config?.fetchClient ?? createPublicHTTPSFetch()
     const timeoutMs = config?.timeoutMs
-    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
-      throw new RangeError('timeoutMs must be a positive safe integer')
+    // Timers treat a delay above 2^31-1 ms as about 1 ms, which would time out every host.
+    if (
+      timeoutMs !== undefined &&
+      (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647)
+    ) {
+      throw new RangeError('timeoutMs must be an integer between 1 and 2147483647')
     }
     this.#timeoutMs = timeoutMs
   }
@@ -219,8 +217,9 @@ export class StorageDownloader {
     // The race also covers a fetch client that ignores the abort signal.
     const deadline = new Promise<StorageDownloadAttempt>(resolve => {
       timer = setTimeout(() => {
-        controller.abort()
+        // Settle first so a read the abort ends early cannot win the race.
         resolve({ url, reason: 'timeout' })
+        controller.abort()
       }, timeoutMs)
     })
     try {
@@ -265,57 +264,52 @@ export class StorageDownloader {
 
       let data: Uint8Array
       if (result.body != null) {
-        data = await this.#readAndValidateBody(
-          result.body.getReader(),
-          expected,
-          this.#maxDownloadBytes
-        )
+        const reader = result.body.getReader()
+        // Some transports (the default Node one included) stop honouring the
+        // request signal once headers arrive, so the deadline cancels the read.
+        const cancel = (): void => {
+          reader.cancel().catch(() => {})
+        }
+        if (signal?.aborted === true) cancel()
+        signal?.addEventListener('abort', cancel, { once: true })
+        const body = await this.#readBody(reader, this.#maxDownloadBytes)
+        if (body === undefined) return { url, reason: 'size' }
+        data = body
       } else if (typeof result.arrayBuffer === 'function') {
         // Compatibility for fetch implementations without a WHATWG body stream
         // (such as React Native's). The declared length was checked above, but
         // the body is only measured once it has been read.
         data = new Uint8Array(await result.arrayBuffer())
         if (data.byteLength > this.#maxDownloadBytes) return { url, reason: 'size' }
-        if (toHex(new SHA256().update(Array.from(data)).digest()) !== expected) {
-          return { url, reason: 'integrity' }
-        }
       } else {
         return { url, reason: 'empty' }
       }
+      if (toHex(sha256(data)) !== expected) return { url, reason: 'integrity' }
       return {
         data,
         mimeType: result.headers.get('Content-Type')
       }
-    } catch (error) {
-      if (error instanceof DownloadRefusal) return { url, reason: error.reason }
+    } catch {
       return { url, reason: signal?.aborted === true ? 'timeout' : 'network' }
     }
   }
 
-  async #readAndValidateBody(
+  async #readBody(
     reader: ReadableStreamDefaultReader<Uint8Array>,
-    expected: string,
     maximum: number
-  ): Promise<Uint8Array> {
-    const hashStream = new SHA256()
+  ): Promise<Uint8Array | undefined> {
     const chunks: Uint8Array[] = []
     let totalLength = 0
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      hashStream.update(Array.from(value))
       chunks.push(value)
       totalLength += value.length
       if (!Number.isSafeInteger(totalLength) || totalLength > maximum) {
         await reader.cancel('Storage download exceeds the configured size limit')
-        throw new DownloadRefusal('size')
+        return undefined
       }
-    }
-
-    const digest = toHex(hashStream.digest())
-    if (digest !== expected) {
-      throw new DownloadRefusal('integrity')
     }
 
     const data = new Uint8Array(totalLength)

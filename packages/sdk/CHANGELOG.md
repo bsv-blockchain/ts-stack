@@ -283,9 +283,10 @@ replay, payment authorization, wire change or consumer migration is introduced.
   the existing messages and adds `attempts`: each advertised host tried, with
   a `reason` (`http` with its `status`, `timeout`, `size`, `integrity`,
   `empty` or `network`). An empty list means no host advertises the file.
-- Add `DownloaderConfig.timeoutMs`, an opt-in per-host deadline covering the
-  request and the body; a host that misses it is aborted and the next host is
-  tried. There is still no deadline by default.
+- Add `DownloaderConfig.timeoutMs` (1 to 2147483647), an opt-in per-host
+  deadline covering the request and the body; a host that misses it has its
+  request aborted and its body read cancelled, and the next host is tried.
+  There is still no deadline by default.
 - `StorageDownloader` and `StorageUploader` read a response that has no
   WHATWG body stream (such as React Native's fetch) through `arrayBuffer()`,
   with the same size and hash checks, instead of skipping the host or

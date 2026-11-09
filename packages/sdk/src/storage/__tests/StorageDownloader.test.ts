@@ -415,20 +415,47 @@ describe('StorageDownloader', () => {
       expect(fetchClient).toHaveBeenCalledTimes(2)
     })
 
-    it('reports a host whose body stalls past the deadline', async () => {
+    it('reports a host whose body stalls past the deadline and cancels its body', async () => {
+      const cancel = jest.fn()
       const stalled = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(new Uint8Array([1]))
-        }
+        },
+        cancel
       })
       const instance = new StorageDownloader({
         timeoutMs: 20,
+        // Ignores the signal once headers are in, as the default Node transport does.
         fetchClient: async () => new Response(stalled as any, { status: 200 })
       })
       jest.spyOn(instance, 'resolve').mockResolvedValue(['https://a.example/f'])
       await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
         attempts: [{ url: 'https://a.example/f', reason: 'timeout' }]
       })
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(cancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('cancels the body of a response that arrives after the deadline', async () => {
+      const cancel = jest.fn()
+      let arrive: () => void = () => {}
+      const late = new Promise<void>(resolve => {
+        arrive = resolve
+      })
+      const instance = new StorageDownloader({
+        timeoutMs: 20,
+        fetchClient: async () => {
+          await late
+          return new Response(new ReadableStream<Uint8Array>({ cancel }) as any, { status: 200 })
+        }
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(['https://a.example/f'])
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [{ url: 'https://a.example/f', reason: 'timeout' }]
+      })
+      arrive()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(cancel).toHaveBeenCalledTimes(1)
     })
 
     it('keeps the request shape and has no deadline unless one is configured', async () => {
@@ -440,10 +467,17 @@ describe('StorageDownloader', () => {
       })
     })
 
-    it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('rejects timeoutMs %p', timeoutMs => {
-      expect(() => new StorageDownloader({ timeoutMs })).toThrow(
-        'timeoutMs must be a positive safe integer'
-      )
+    it.each([0, -1, 1.5, 2_147_483_648, Number.MAX_SAFE_INTEGER + 1])(
+      'rejects timeoutMs %p',
+      timeoutMs => {
+        expect(() => new StorageDownloader({ timeoutMs })).toThrow(
+          'timeoutMs must be an integer between 1 and 2147483647'
+        )
+      }
+    )
+
+    it('accepts the largest timer delay as timeoutMs', () => {
+      expect(() => new StorageDownloader({ timeoutMs: 2_147_483_647 })).not.toThrow()
     })
   })
 })
