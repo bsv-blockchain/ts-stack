@@ -291,6 +291,7 @@ replay, payment authorization, wire change or consumer migration is introduced.
 - No version bump in this change. This is a patch defect fix for the next SDK
   release. Valid single-spaced ASM needs no migration. Callers that relied on a
   blank token becoming an empty push must spell that push as `OP_0`.
+  `@bsv/wallet-helper` `addOpReturnData` does that for an empty field.
 
 ### Optional client timeout configuration (4.0.1 patch candidate)
 

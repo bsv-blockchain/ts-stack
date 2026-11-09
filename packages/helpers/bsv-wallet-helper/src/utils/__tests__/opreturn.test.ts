@@ -185,6 +185,8 @@ describe('addOpReturnData', () => {
 
       const asm = result.toASM()
       expect(asm).toContain('OP_RETURN')
+      expect(asm).toContain('OP_0')
+      expect(result.toHex()).toContain('6a00')
     })
 
     it('should preserve the original locking script', () => {

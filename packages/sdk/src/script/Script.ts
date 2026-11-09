@@ -83,6 +83,7 @@ export default class Script {
   static fromASM(asm: string): Script {
     // ''.split(' ') is [''], which would otherwise decode as one empty push.
     if (asm.length === 0) return new Script()
+    if (asm.trim() !== asm || asm.includes('  ')) throw new Error('invalid ASM: empty token')
     const chunks: ScriptChunk[] = []
     const tokens = asm.split(' ')
     let i = 0
@@ -103,7 +104,6 @@ export default class Script {
 
   static #parseASMToken(tokens: string[], i: number): { chunk: ScriptChunk; advance: number } {
     const token = tokens[i]
-    if (token.length === 0) throw new Error('invalid ASM: empty token')
 
     // Special literal tokens
     if (token === '0') return { chunk: { op: 0 }, advance: 1 }
@@ -118,12 +118,7 @@ export default class Script {
       opCodeNum === OP.OP_PUSHDATA2 ||
       opCodeNum === OP.OP_PUSHDATA4
     ) {
-      const sizeToken = tokens[i + 1]
-      const dataToken = tokens[i + 2]
-      // A blank size or data token is the same stray space as between opcodes.
-      // A missing token stays on the existing push path.
-      if (sizeToken === '' || dataToken === '') throw new Error('invalid ASM: empty token')
-      return { chunk: { data: toArray(dataToken, 'hex'), op: opCodeNum }, advance: 3 }
+      return { chunk: { data: toArray(tokens[i + 2], 'hex'), op: opCodeNum }, advance: 3 }
     }
 
     // Unknown opcode token — treat as raw hex push data
@@ -684,17 +679,14 @@ export default class Script {
   }
 
   #_chunkToString(chunk: ScriptChunk): string {
-    const op = chunk.op
-    let str = ''
-    // A zero-length push used to be a blank token. That made fromASM('') and a
-    // doubled space indistinguishable from an empty push. OP_0 is the minimal
-    // empty push, and it does not swallow the next ASM token.
-    if (chunk.data === undefined || (chunk.data.length === 0 && op <= OP.OP_PUSHDATA4)) {
-      const val = (chunk.data === undefined ? OP[op] : OP[0]) as string
-      str = `${str} ${val}`
-    } else {
-      str = `${str} ${toHex(chunk.data)}`
+    let op = chunk.op
+    let data = chunk.data
+    // A zero-length push is OP_0. A blank token would be read back as another push.
+    if (data != null && data.length === 0 && op <= OP.OP_PUSHDATA4) {
+      op = 0
+      data = undefined
     }
-    return str
+    if (data === undefined) return ` ${OP[op] as string}`
+    return ` ${toHex(data)}`
   }
 }
