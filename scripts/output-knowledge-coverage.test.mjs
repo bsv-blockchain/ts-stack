@@ -4,6 +4,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
   APPLICATION_COVERAGE_SHARDS,
+  applicationCoverageShard,
   compareCoveragePaths,
   validateShardUnion
 } from './output-knowledge-coverage-validation.mjs'
@@ -12,7 +13,11 @@ const directory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
 const identity = { sha: 'a'.repeat(40), run: '1', attempt: '1', configuration: 'b'.repeat(64) }
-const expected = ['test/a.test.ts', 'test/b.test.ts', 'test/c.test.ts', 'test/d.test.ts']
+// One test file per shard, so every shard selects exactly one.
+const expected = Array.from(
+  { length: APPLICATION_COVERAGE_SHARDS },
+  (_, index) => `test/${String.fromCodePoint(97 + index)}.test.ts`
+)
 
 test('canonical path ordering retains deterministic code units and the original input array', () => {
   const input = ['é', 'a', '😀', 'A', '_', '-']
@@ -131,10 +136,16 @@ test('failed, missing, pending, todo and unexecuted assertions cannot qualify', 
   }
 })
 
-test('a missing or relabeled fourth shard cannot qualify a complete campaign', () => {
+test('a missing or relabeled final shard cannot qualify complete coverage', () => {
   const missing = evidence().slice(0, -1)
   assert.throws(() => validateShardUnion(missing, identity, expected))
-  for (const id of [0, 5, 1.5, '4', NaN]) {
+  for (const id of [
+    0,
+    APPLICATION_COVERAGE_SHARDS + 1,
+    1.5,
+    String(APPLICATION_COVERAGE_SHARDS),
+    NaN
+  ]) {
     const changed = evidence()
     changed.at(-1).manifest.shard = id
     assert.throws(() => validateShardUnion(changed, identity, expected))
@@ -293,4 +304,40 @@ test('a failed, skipped, relabeled or unexecuted batch cannot qualify the merged
     mutate(rows[0].results)
     assert.throws(() => mergeCoverageBatchResults(rows, identity, batchSelected))
   }
+})
+
+test('measured coverage placement retains every file once and balances the slow files', () => {
+  const files = 'abcdefghijklmn'.split('').map(name => `test/${name}.test.ts`)
+  const before = [...files]
+  const seconds = Object.fromEntries(
+    files.slice(0, 12).map((file, index) => [file, 120 - index * 10])
+  )
+  const shards = Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) =>
+    applicationCoverageShard(files, seconds, index + 1)
+  )
+  assert.deepEqual(shards.flat().toSorted(compareCoveragePaths), files)
+  assert.equal(new Set(shards.flat()).size, files.length)
+  assert.deepEqual(files, before)
+  for (const shard of shards) {
+    assert.deepEqual(shard, shard.toSorted(compareCoveragePaths))
+    assert.ok(shard.reduce((sum, file) => sum + (seconds[file] ?? 2), 0) <= 134)
+  }
+  // Unknown/new files remain selected with the existing two-second estimate.
+  assert.ok(shards.flat().includes(files[12]))
+  assert.ok(shards.flat().includes(files[13]))
+  for (let index = 0; index < APPLICATION_COVERAGE_SHARDS; index++)
+    assert.deepEqual(applicationCoverageShard(files, { ...seconds }, index + 1), shards[index])
+})
+
+test('coverage planning rejects missing duration lanes and malformed shard selections', () => {
+  for (const seconds of [undefined, null, [], 1, 'durations'])
+    assert.throws(
+      () => applicationCoverageShard(expected, seconds, 1),
+      /missing application coverage durations/
+    )
+  for (const shard of [0, APPLICATION_COVERAGE_SHARDS + 1, 1.5, '1', NaN])
+    assert.throws(() => applicationCoverageShard(expected, {}, shard))
+  assert.throws(() => applicationCoverageShard([...expected, expected[0]], {}, 1), /duplicate/)
+  assert.throws(() => applicationCoverageShard([...expected].reverse(), {}, 1), /unordered/)
+  assert.throws(() => applicationCoverageShard(['test/../outside.test.ts'], {}, 1))
 })

@@ -19,7 +19,31 @@ const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '
 const plans = new Map([
   [
     'private-lookup-buyer',
-    { fallback: 'buyer', files: new Map([['src/private/WalletToolboxBuyerPayment.ts', 'payment']]) }
+    {
+      // The complete 573-site buyer row exceeds its 45-minute hosted limit.
+      // Keep native payment separate; declaration-anchored cuts preserve every
+      // original range, test and global score while bounding execution units.
+      fallback: 'buyer-binding',
+      files: new Map([['src/private/WalletToolboxBuyerPayment.ts', 'payment']]),
+      lines: new Map([
+        [
+          'src/private/PrivateLookupBuyer.ts',
+          [
+            ['buyer-binding', null],
+            ['buyer-constructor', '  private constructor('],
+            ['buyer-initialization', '  static async initialize('],
+            ['buyer-objects', '  private async initialized('],
+            ['buyer-access', '  private installed():'],
+            ['buyer-state', '  private async load():'],
+            ['buyer-challenge', '  private challenge('],
+            ['buyer-recovery', '  private async retain('],
+            ['buyer-advance', '  advance('],
+            ['buyer-validation', '  validate('],
+            ['buyer-work', '  private run<T>(']
+          ]
+        ]
+      ])
+    }
   ],
   [
     'protected-operation-objects',
@@ -718,6 +742,26 @@ const rangePlans = new Map(
 )
 
 const refinedFileParts = new Map([
+  [
+    'lch-overlay-acquisition',
+    new Map([
+      [
+        'auto-18',
+        new Map([
+          [
+            'src/overlayAcquisitionTerms.ts',
+            {
+              label: 'terms',
+              markers: [
+                'function bytes(value: unknown, length: number, name: string): Uint8Array {',
+                'export function validateLCHOverlayCapability('
+              ]
+            }
+          ]
+        ])
+      ]
+    ])
+  ],
   [
     'wallet-recovery-encoding',
     new Map([
@@ -1554,6 +1598,7 @@ const executionCompanions = new Map([
 ])
 
 function withExecutionCompanions(targetId, parts) {
+  if (parts.length === 1 && parts[0].id === 'whole') return parts
   const companion = executionCompanions.get(targetId)
   if (!companion) return parts
   const [from, into] = companion
@@ -1927,11 +1972,13 @@ export function selectedMutationPartition(targetId, target, partition = 'whole')
   const selected = partitionMutationTarget(targetId, target).find(value => value.id === partition)
   // Keep an existing complete file-part CLI usable as a diagnostic alias. The
   // execution matrix and complete aggregate require every new refined part.
-  if (
-    !selected &&
-    (refinedFileParts.get(targetId)?.has(partition) ||
-      [...(plans.get(targetId)?.files.values() ?? [])].includes(partition))
-  ) {
+  if (!selected && refinedFileParts.get(targetId)?.has(partition)) {
+    const original = canonicalMutationPartitions(targetId, target).find(
+      value => value.id === partition
+    )
+    if (original) return original.target
+  }
+  if (!selected && [...(plans.get(targetId)?.files.values() ?? [])].includes(partition)) {
     const plan = plans.get(targetId)
     const mutate = target.mutate.filter(
       specification => (plan.files.get(partitionFile(specification)) ?? plan.fallback) === partition

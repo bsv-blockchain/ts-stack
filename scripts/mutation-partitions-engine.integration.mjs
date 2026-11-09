@@ -43,7 +43,8 @@ const semanticTargets = [
   'wallet-recovery-encoding',
   'private-purchase-http',
   'sdk-auth-http',
-  'protected-ledger'
+  'protected-ledger',
+  'private-lookup-buyer'
 ]
 
 const mutantIdentity = mutant =>
@@ -64,6 +65,41 @@ function compare(left, right) {
 async function* serialResults(values, read) {
   for (const value of values) yield read(value)
 }
+
+test('the measured LCH acquisition hotspot retains every actual engine site across three bounded executions', async () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['lch-overlay-acquisition'],
+    original = selectedMutationPartition('lch-overlay-acquisition', target, 'auto-18'),
+    directory = resolve(REPOSITORY_ROOT, target.packageDirectory),
+    canonical = await canonicalInventory(
+      directory,
+      targetSources(REPOSITORY_ROOT, original),
+      original.mutate
+    ),
+    parts = partitionMutationTarget('lch-overlay-acquisition', target).filter(part =>
+      part.id.startsWith('terms-')
+    ),
+    observed = []
+  assert.equal(parts.length, 3)
+  const inventories = await Promise.all(
+    parts.map(part => {
+      assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
+      return canonicalInventory(
+        directory,
+        targetSources(REPOSITORY_ROOT, part.target),
+        part.target.mutate
+      )
+    })
+  )
+  for (const [index, inventory] of inventories.entries()) {
+    assert.ok(inventory.length > 0, `${parts[index].id} must execute actual mutation sites`)
+    observed.push(...inventory)
+  }
+  assert.deepEqual(
+    observed.map(mutantIdentity).toSorted(compare),
+    canonical.map(mutantIdentity).toSorted(compare)
+  )
+  assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
+})
 
 test('declaration companions preserve the complete pinned-engine inventory without empty executions', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
@@ -112,8 +148,8 @@ test('declaration companions preserve the complete pinned-engine inventory witho
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
-    229, 131, 525, 1082, 580, 1570, 176, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 673,
-    890, 994
+    230, 133, 532, 1100, 645, 1617, 179, 289, 346, 1199, 496, 484, 380, 382, 948, 465, 170, 695,
+    939, 1063, 771
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
@@ -125,11 +161,9 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
   for await (const { index, id, original, directory, canonical } of inventories) {
     const parts = partitionMutationTarget(id, original),
       observed = []
-    // Preserve all twenty original golden totals and explicitly include every
-    // new protected-envelope framing, retained-recovery and AuthFetch sites in the same complete partitions.
-    const addedFramingSites =
-      { 'protected-ledger': 29, 'wallet-recovery-plan': 4, 'sdk-auth-http': 33 }[id] ?? 0
-    assert.equal(canonical.length, expectedCounts[index] + addedFramingSites)
+    // Pin the reviewed10.1.1 totals. Cross-engine replay retains every9.6.1
+    // site, including all protected-envelope framing sites; see the dated review.
+    assert.equal(canonical.length, expectedCounts[index])
     assert.ok(parts.length > 1)
     assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
     const partInventories = serialResults(parts, async part => {
@@ -152,10 +186,10 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
       if (id === 'wallet-recovery-plan')
         assert.equal(
           inventory.length,
-          { 'plan-1': 62, 'construction-1': 35, 'construction-2': 38 }[part.id]
+          { 'plan-1': 63, 'construction-1': 36, 'construction-2': 34 }[part.id]
         )
       if (id === 'wallet-recovery-store')
-        assert.equal(inventory.length, [44, 9, 14, 16, 20, 10, 93, 13, 10][parts.indexOf(part)])
+        assert.equal(inventory.length, [44, 9, 15, 16, 20, 10, 93, 13, 10][parts.indexOf(part)])
       observed.push(...inventory)
     }
     assert.deepEqual(
@@ -165,8 +199,8 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
     assert.equal(selectedMutationPartition(id, original), original)
   }
-  assert.equal(Object.keys(targets).length, 216)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 1678)
+  assert.equal(Object.keys(targets).length, 156)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 616)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {

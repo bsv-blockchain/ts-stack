@@ -279,6 +279,18 @@ SQL receipt claim. Source versions are candidates until published through the
 protected release workflow; upgrading an app alone does not upgrade its remote
 storage server.
 
+The 2.15.3 source candidate restores legacy AtomicBEEF normalization before the
+strict argument framing check. An exactly decoded envelope may contain unrelated
+branches from an older sender; internalization retains only its declared payment
+and required dependencies, then reruns the unchanged SDK validator. Truncated or
+trailing data, an absent subject and missing dependencies remain rejected. Normal
+chain proof, Script, remittance ownership and receipt checks still run. SQL receipt
+admission and manager forwarding use canonical bytes without changing other caller
+arguments. No API, wire or schema migration is required. Upgrade the wallet host
+and remote Storage separately; a source candidate is not a deployed release.
+For a previously rejected receipt, reconcile the original TXID before retrying the
+original import. Do not create a replacement payment or rebroadcast a mined one.
+
 ## Reorg proof recovery
 
 `TaskReorg` compares the latest 12 heights after each processed tip, including

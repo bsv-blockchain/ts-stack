@@ -34,7 +34,6 @@ const INPUTS = [
   'governance/mutation-testing/execution-partitions.json',
   'scripts/mutation-partition-evidence.mjs',
   'scripts/mutation-execution-batches.mjs',
-  '.github/workflows/mutation-execution.yml',
   'scripts/wallet-journal-ci.mjs',
   'scripts/wallet-composed-native-ci.mjs',
   '.github/workflows/ci.yml',
@@ -54,9 +53,7 @@ function compare(left, right) {
 }
 
 const ordered = values => [...values].sort(compare)
-
-const PINNED_ENGINE = '9.6.1'
-
+const PINNED_ENGINE = '10.1.1'
 const quietLogger = { debug() {}, info() {}, warn() {}, isDebugEnabled: () => false }
 
 let enginePromise

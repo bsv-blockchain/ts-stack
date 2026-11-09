@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -75,10 +76,7 @@ test('both batch controls bind the actual final configuration identity alongside
     'pnpm-workspace.yaml',
     'tsconfig.base.json'
   ]
-  const batchInputs = [
-    'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml'
-  ]
+  const batchInputs = ['scripts/mutation-execution-batches.mjs']
   const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
   const commit = () => {
     git(['add', '.'])
@@ -134,6 +132,26 @@ test('complete exact-source campaigns preserve every target score, no-coverage a
   assert.throws(() => entry('one', ['CompileError']), /invalid/)
   assert.throws(() => entry('one', ['Pending']), /Unknown/)
   assert.ok(inventory.length > 5)
+})
+
+test('canonical raw rechecks reject interrupted kills even with matching digests and a forged passing receipt', () => {
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex')
+  for (const reason of [
+    'Error: Property interrupted after 290 tests\n{ seed: 3242026 }',
+    'Error: thrown: "Exceeded timeout of 5000 ms for a test.'
+  ]) {
+    const value = report()
+    Object.values(value.files)[0].mutants[0].statusReason = reason
+    assert.throws(() => capture(value), /reported kills.*runner limit/)
+    const packet = entry('one')
+    packet.reportBytes = JSON.stringify(value)
+    packet.executionBytes = executionFor(packet.reportBytes)
+    packet.receipt.reportDigest = digest(packet.reportBytes)
+    packet.receipt.executionDigest = digest(packet.executionBytes)
+    assert.equal(packet.receipt.metrics.score, 100)
+    assert.equal(packet.receipt.metrics.runnerLimitedKills, 0)
+    assert.throws(() => qualify([packet, entry('two')]), /reported kills.*runner limit/)
+  }
 })
 
 test('missing, duplicate, extra and diagnostic targets never qualify a full campaign', () => {

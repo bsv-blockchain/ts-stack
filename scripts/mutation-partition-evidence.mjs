@@ -145,7 +145,7 @@ export function combinePartitionEvidence(
   if (seen.size !== expected.size) throw new Error('Missing canonical execution partition')
   const reportBytes = JSON.stringify({
     schemaVersion: '1.0',
-    framework: { name: 'StrykerJS', version: '9.6.1' },
+    framework: { name: 'StrykerJS', version: '10.1.1' },
     projectRoot: canonical.projectRoot,
     config: canonical.config,
     files: Object.fromEntries(

@@ -30,6 +30,7 @@ import { createOverlayTestProjects } from '../packages/overlays/overlay-express/
 import {
   calculateMutationMetrics,
   mutationTargetModule,
+  mutationRunnerLimit,
   evaluateMutationReport,
   parseArguments,
   REPOSITORY_ROOT,
@@ -55,10 +56,7 @@ const targets = {
 
 test('each batch execution control selects every original canonical mutation target', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  for (const control of [
-    'scripts/mutation-execution-batches.mjs',
-    '.github/workflows/mutation-execution.yml'
-  ])
+  for (const control of ['scripts/mutation-execution-batches.mjs'])
     assert.deepEqual(
       selectAffectedMutationTargets(configured, [control]),
       Object.keys(configured),
@@ -197,6 +195,38 @@ test('mutation metrics count survivors whose runner executed no tests', () => {
   ])
 
   assert.equal(metrics.unexecuted, 1)
+})
+
+test('runner limits preserve raw Stryker scores but cannot qualify as assertion kills', () => {
+  const reasons = [
+    'Error: Property interrupted after 290 tests\n{ seed: 3242026 }',
+    'Error: thrown: "Exceeded timeout of 5000 ms for a test.',
+    'Error: Exceeded timeout of 5000 ms for a hook.'
+  ]
+  const mutants = reasons.map(statusReason => ({ status: 'Killed', statusReason }))
+  const metrics = calculateMutationMetrics(mutants)
+  assert.deepEqual(metrics.counts, { Killed: 3 })
+  assert.equal(metrics.score, 100)
+  assert.equal(metrics.detected, 3)
+  assert.equal(metrics.runnerLimitedKills, 3)
+  const policy = {
+    targets: [{ id: 'one', minimumScore: 90, maximumNoCoverage: 0, maximumInvalid: 0 }]
+  }
+  for (const requireScore of [true, false])
+    assert.match(
+      evaluateMutationReport('one', metrics, policy, { requireScore }).join('\n'),
+      /3 reported kills.*runner limit/
+    )
+  for (const mutant of [
+    { status: 'Timeout', statusReason: reasons[0] },
+    {
+      status: 'Killed',
+      statusReason: 'Error: Property failed after 1 tests\nCounterexample: [false]'
+    },
+    { status: 'Killed', statusReason: 'Error: expect(received).toEqual(expected)' },
+    { status: 'Killed' }
+  ])
+    assert.equal(mutationRunnerLimit(mutant), undefined)
 })
 
 test('mutation command parsing rejects missing values and conflicting modes', () => {
@@ -979,6 +1009,7 @@ test('durable buyer qualifies every complete owner and retains native one-action
   ])
   assert.deepEqual(buyer.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-lookup-buyer.test.ts',
+    '<rootDir>/test/private-lookup-buyer.property.test.ts',
     '<rootDir>/test/private-buyer-payment.test.ts',
     '<rootDir>/test/private-purchase-buyer*.test.ts',
     '<rootDir>/test/private-purchase-wallet-native*.test.ts'
@@ -2064,7 +2095,7 @@ test('listing public-arithmetic mutations include the bounded-retention regressi
   assert.ok(target.mutate.includes('src/script/templates/RevenueListingKeys.ts'))
 })
 
-test('complete alias regression initial-suite allowances retain their exact fourteen-target scope', () => {
+test('complete native initial-suite allowances retain their exact scope and alias selectors', () => {
   const allowances = new Map([
     ['private-purchase-alias-state', 15],
     ['private-purchase-alias-custody', 15],
@@ -2081,14 +2112,35 @@ test('complete alias regression initial-suite allowances retain their exact four
     ['private-purchase-alias-disclosure', 15],
     ['private-purchase-buyer-alias', 15]
   ])
+  const composed = new Set([
+    'private-purchase-http',
+    'private-acquisition-http',
+    'private-lookup-buyer',
+    'wallet-purchase-payment',
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant',
+    'lch-overlay-covenant-candidate'
+  ])
   const configured = buildMutationTargets(REPOSITORY_ROOT)
+  assert.notEqual(
+    configured['lch-overlay-covenant-candidate'].runnerOptions,
+    configured['lch-overlay-covenant'].runnerOptions
+  )
   for (const [id, target] of Object.entries(configured)) {
-    assert.equal(target.runnerOptions.dryRunTimeoutMinutes, allowances.get(id), id)
+    assert.equal(
+      target.runnerOptions.dryRunTimeoutMinutes,
+      composed.has(id) ? 15 : allowances.get(id),
+      id
+    )
     if (allowances.has(id))
       for (const selector of currentAliasRegressionTests)
         assert.ok(target.runnerOptions.jest.config.testMatch.includes(selector), id)
   }
-  for (const id of allowances.keys()) assert.ok(Object.hasOwn(configured, id), id)
+  for (const id of [...allowances.keys(), ...composed]) assert.ok(Object.hasOwn(configured, id), id)
 })
 
 test('wallet functional routing recognizes globs and preserves every other actual Jest selection', async () => {

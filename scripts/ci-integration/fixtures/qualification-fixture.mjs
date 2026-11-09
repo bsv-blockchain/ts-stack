@@ -56,7 +56,7 @@ export function report(statuses = ['Killed']) {
   }
   return {
     schemaVersion: '1.0',
-    framework: { name: 'StrykerJS', version: '9.6.1' },
+    framework: { name: 'StrykerJS', version: '10.1.1' },
     projectRoot: directory,
     config: structuredClone(evidence.config),
     files

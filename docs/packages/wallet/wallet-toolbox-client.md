@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
 version: '2.16.0'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+last_updated: '2026-11-09'
+last_verified: '2026-11-09'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -14,6 +14,15 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+The 2.15.3 source candidate restores ordinary import of exactly framed legacy
+AtomicBEEF with surplus unrelated branches. It retains the declared payment and
+its dependencies, reruns strict SDK argument validation, and preserves native
+proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
+remain rejected. No API, wire or schema migration is required. Upgrade the host
+and remote Storage separately; reconcile and retry the original import instead
+of creating or broadcasting a replacement payment. Source is not publication or
+deployment.
 
 The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
 

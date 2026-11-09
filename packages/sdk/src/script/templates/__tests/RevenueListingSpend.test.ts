@@ -54,6 +54,9 @@ test('purchase commitment preserves the full independent SHA256d preimage digest
 })
 
 test('purchase commitment refuses absent or contradictory source data and nonfinal purchases', () => {
+  expect(() => revenueListingPurchaseCommitment(new Transaction())).toThrow(
+    'Listing predecessor evidence required'
+  )
   const trace = accepted.find(item => item.operation === 1)!
   const fresh = () => {
     const tx = transaction(trace.txid)
@@ -81,6 +84,25 @@ test('purchase commitment refuses absent or contradictory source data and nonfin
   negative.outputs[0].satoshis = 0
   expect(() => revenueListingPurchaseCommitment(negative)).toThrow('funded amount')
 })
+
+test.each([0, 2100000000000001])(
+  'purchase commitment rejects a native predecessor outside the funded amount domain: %s',
+  satoshis => {
+    const trace = accepted.find(item => item.operation === 1)!,
+      tx = transaction(trace.txid),
+      parent = transaction(trace.sources[0].txid)
+    parent.outputs[trace.sources[0].index].satoshis = satoshis
+    // Reparse the actual changed bytes and bind their actual hash. These are
+    // calculation refusal inputs, not claims of signed purchase validity.
+    const owned = Transaction.fromBinary(parent.toBinary())
+    tx.inputs[0].sourceTransaction = owned
+    tx.inputs[0].sourceTXID = owned.id('hex')
+    expect(tx.inputs[0].sourceTXID).not.toBe(trace.sources[0].txid)
+    const original = tx.toHex()
+    expect(() => revenueListingPurchaseCommitment(tx)).toThrow('Invalid funded amount')
+    expect(tx.toHex()).toBe(original)
+  }
+)
 function fixture(name: string) {
   const trace = accepted.find(item => item.name === name)!
   const tx = transaction(trace.txid)

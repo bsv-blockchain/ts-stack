@@ -7654,12 +7654,14 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/revenue-profile.test.ts',
+          '<rootDir>/test/revenue-profile-graph.test.ts',
+          '<rootDir>/test/revenue-profile-purchase.test.ts',
           '<rootDir>/test/revenue-profile-work.test.ts',
           '<rootDir>/test/revenue-profile.property.test.ts',
           '<rootDir>/test/revenue-lineage-package.test.ts',
           '<rootDir>/test/revenue-lineage-package.property.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'revenue-listing-purchase': {
@@ -9224,7 +9226,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/proposal-bitcoin-core.test.ts',
           '<rootDir>/test/bitcoin-knowledge.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'proposal-client-verification': {
@@ -9378,6 +9380,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/private-lookup-buyer.test.ts',
+          '<rootDir>/test/private-lookup-buyer.property.test.ts',
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
           '<rootDir>/test/private-purchase-wallet-native*.test.ts'
@@ -11464,6 +11467,23 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [`src/private/${module}.ts`]
     }
   }
+  // These complete selections compose real native custody/purchase fixtures
+  // and exceed Stryker's five-minute startup default. Preserve every individual
+  // test/property deadline and the original outer diagnostic job caps.
+  for (const id of [
+    'private-purchase-http',
+    'private-acquisition-http',
+    'private-lookup-buyer',
+    'wallet-purchase-payment',
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant',
+    'lch-overlay-covenant-candidate'
+  ])
+    targets[id].runnerOptions = { ...targets[id].runnerOptions, dryRunTimeoutMinutes: 15 }
   appendMutationBuildInputs(repositoryRoot, targets)
   for (const [name, additions] of Object.entries(walletDataAdditions)) {
     const target = targets[name]
