@@ -277,6 +277,17 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Added: BRC-77 signing through a wallet and an expected signer on verify (patch candidate)
+
+- `SignedMessage.signWithWallet(message, wallet, verifier?, originator?)`
+  produces a BRC-77 signature through a `WalletInterface` (`createSignature`
+  under `[2, 'message signing']`, signer = the wallet's identity key). The
+  result is byte-compatible with `SignedMessage.sign` and verifies with
+  `SignedMessage.verify`.
+- `SignedMessage.verify` takes an optional fourth argument
+  `{ expectedSigner }` (a `PublicKey` or its hex). A valid signature by any
+  other key then verifies as `false`. Existing calls are unchanged.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
