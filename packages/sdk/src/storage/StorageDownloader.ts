@@ -33,6 +33,56 @@ export interface DownloaderConfig {
   maxDownloadBytes?: number
   /** Explicit transport injection for controlled/test environments. */
   fetchClient?: typeof fetch
+  /**
+   * Deadline in milliseconds for each host, covering the request and the body.
+   * A host that misses it is aborted and the next host is tried. No deadline
+   * by default.
+   */
+  timeoutMs?: number
+}
+
+/** Why one advertised host did not yield the file. */
+export type StorageDownloadFailureReason =
+  /** The host answered a non-success HTTP status. */
+  | 'http'
+  /** The host missed the configured `timeoutMs`. */
+  | 'timeout'
+  /** The declared or actual size was malformed or exceeded `maxDownloadBytes`. */
+  | 'size'
+  /** The bytes did not hash to the UHRP URL. */
+  | 'integrity'
+  /** The response had no readable body. */
+  | 'empty'
+  /** The request or the body read failed (connection, TLS, refused redirect, reset). */
+  | 'network'
+
+/** The outcome of trying one advertised host. */
+export interface StorageDownloadAttempt {
+  url: string
+  reason: StorageDownloadFailureReason
+  /** The HTTP status, for `reason: 'http'`. */
+  status?: number
+}
+
+/**
+ * Thrown by {@link StorageDownloader.download} when no host yields the file.
+ * The message is unchanged from earlier releases; `attempts` lists each
+ * advertised host tried, in order, and is empty when no host advertises it.
+ */
+export class StorageDownloadError extends Error {
+  readonly attempts: StorageDownloadAttempt[]
+
+  constructor(message: string, attempts: StorageDownloadAttempt[]) {
+    super(message)
+    this.name = 'StorageDownloadError'
+    this.attempts = attempts
+  }
+}
+
+class DownloadRefusal extends Error {
+  constructor(readonly reason: StorageDownloadFailureReason) {
+    super(reason)
+  }
 }
 
 export interface DownloadResult {
@@ -45,6 +95,7 @@ export class StorageDownloader {
   readonly #lookupResolver: LookupResolver
   readonly #maxDownloadBytes: number
   readonly #fetchClient: typeof fetch
+  readonly #timeoutMs?: number
 
   constructor(config?: DownloaderConfig) {
     this.#networkPreset = config?.networkPreset ?? 'mainnet'
@@ -55,6 +106,11 @@ export class StorageDownloader {
     }
     this.#maxDownloadBytes = maximum
     this.#fetchClient = config?.fetchClient ?? createPublicHTTPSFetch()
+    const timeoutMs = config?.timeoutMs
+    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
+      throw new RangeError('timeoutMs must be a positive safe integer')
+    }
+    this.#timeoutMs = timeoutMs
   }
 
   /**
@@ -129,6 +185,7 @@ export class StorageDownloader {
    * Downloads the content from the UHRP URL after validating the hash for integrity.
    * @param uhrpUrl The UHRP URL to download.
    * @returns A promise that resolves to the downloaded content.
+   * @throws {StorageDownloadError} When no advertised host yields the file.
    */
   public async download(uhrpUrl: string): Promise<DownloadResult> {
     if (!isValidURL(uhrpUrl)) {
@@ -139,39 +196,99 @@ export class StorageDownloader {
     const downloadURLs = await this.resolve(uhrpUrl)
 
     if (!Array.isArray(downloadURLs) || downloadURLs.length === 0) {
-      throw new Error('No one currently hosts this file!')
+      throw new StorageDownloadError('No one currently hosts this file!', [])
     }
 
+    const attempts: StorageDownloadAttempt[] = []
     for (const url of downloadURLs) {
       const result = await this.#tryDownload(url, expected)
-      if (result !== undefined) return result
+      if (!('reason' in result)) return result
+      attempts.push(result)
     }
-    throw new Error(`Unable to download content from ${uhrpUrl}`)
+    throw new StorageDownloadError(`Unable to download content from ${uhrpUrl}`, attempts)
   }
 
-  async #tryDownload(url: string, expected: string): Promise<DownloadResult | undefined> {
+  async #tryDownload(
+    url: string,
+    expected: string
+  ): Promise<DownloadResult | StorageDownloadAttempt> {
+    const timeoutMs = this.#timeoutMs
+    if (timeoutMs === undefined) return await this.#fetchAndValidate(url, expected)
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // The race also covers a fetch client that ignores the abort signal.
+    const deadline = new Promise<StorageDownloadAttempt>(resolve => {
+      timer = setTimeout(() => {
+        controller.abort()
+        resolve({ url, reason: 'timeout' })
+      }, timeoutMs)
+    })
     try {
-      const result = await this.#fetchClient(url, { method: 'GET', redirect: 'error' })
-      if (!result.ok || result.status >= 400 || result.body == null) return undefined
+      return await Promise.race([
+        this.#fetchAndValidate(url, expected, controller.signal),
+        deadline
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /** Never rejects: every failure becomes an attempt record. */
+  async #fetchAndValidate(
+    url: string,
+    expected: string,
+    signal?: AbortSignal
+  ): Promise<DownloadResult | StorageDownloadAttempt> {
+    let result: Response
+    try {
+      const init: RequestInit = { method: 'GET', redirect: 'error' }
+      if (signal !== undefined) init.signal = signal
+      result = await this.#fetchClient(url, init)
+    } catch {
+      return { url, reason: 'network' }
+    }
+    try {
+      if (!result.ok || result.status >= 400) {
+        const attempt: StorageDownloadAttempt = { url, reason: 'http' }
+        if (Number.isSafeInteger(result.status)) attempt.status = result.status
+        return attempt
+      }
 
       const declaredLength = result.headers.get('Content-Length')
       if (declaredLength !== null) {
-        if (!/^\d+$/.test(declaredLength)) return undefined
+        if (!/^\d+$/.test(declaredLength)) return { url, reason: 'size' }
         const length = Number(declaredLength)
-        if (!Number.isSafeInteger(length) || length > this.#maxDownloadBytes) return undefined
+        if (!Number.isSafeInteger(length) || length > this.#maxDownloadBytes) {
+          return { url, reason: 'size' }
+        }
       }
 
-      const data = await this.#readAndValidateBody(
-        result.body.getReader(),
-        expected,
-        this.#maxDownloadBytes
-      )
+      let data: Uint8Array
+      if (result.body != null) {
+        data = await this.#readAndValidateBody(
+          result.body.getReader(),
+          expected,
+          this.#maxDownloadBytes
+        )
+      } else if (typeof result.arrayBuffer === 'function') {
+        // Compatibility for fetch implementations without a WHATWG body stream
+        // (such as React Native's). The declared length was checked above, but
+        // the body is only measured once it has been read.
+        data = new Uint8Array(await result.arrayBuffer())
+        if (data.byteLength > this.#maxDownloadBytes) return { url, reason: 'size' }
+        if (toHex(new SHA256().update(Array.from(data)).digest()) !== expected) {
+          return { url, reason: 'integrity' }
+        }
+      } else {
+        return { url, reason: 'empty' }
+      }
       return {
         data,
         mimeType: result.headers.get('Content-Type')
       }
-    } catch {
-      return undefined
+    } catch (error) {
+      if (error instanceof DownloadRefusal) return { url, reason: error.reason }
+      return { url, reason: signal?.aborted === true ? 'timeout' : 'network' }
     }
   }
 
@@ -192,13 +309,13 @@ export class StorageDownloader {
       totalLength += value.length
       if (!Number.isSafeInteger(totalLength) || totalLength > maximum) {
         await reader.cancel('Storage download exceeds the configured size limit')
-        throw new Error('Storage download exceeds the configured size limit')
+        throw new DownloadRefusal('size')
       }
     }
 
     const digest = toHex(hashStream.digest())
     if (digest !== expected) {
-      throw new Error('Data integrity error: value of content does not match hash of the url given')
+      throw new DownloadRefusal('integrity')
     }
 
     const data = new Uint8Array(totalLength)

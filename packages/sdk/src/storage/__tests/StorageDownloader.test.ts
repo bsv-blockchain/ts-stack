@@ -1,4 +1,5 @@
 import { StorageDownloader } from '../StorageDownloader.js'
+import { StorageDownloadError } from '../index.js'
 import { StorageUtils } from '../index.js'
 import { LookupResolver } from '../../overlay-tools/index.js'
 import Transaction from '../../transaction/Transaction.js'
@@ -259,6 +260,190 @@ describe('StorageDownloader', () => {
       jest.spyOn(limited, 'resolve').mockResolvedValue(['https://public.example/file'])
 
       await expect(limited.download('validUrl')).rejects.toThrow('Unable to download')
+    })
+  })
+
+  describe('download() failure detail, deadline and body fallback', () => {
+    const content = new Uint8Array([1, 2, 3, 4])
+    const uhrpUrl = StorageUtils.getURLForFile(content)
+
+    function hosted(
+      fetchClient: typeof fetch,
+      config: { timeoutMs?: number } = {}
+    ): StorageDownloader {
+      const instance = new StorageDownloader({ fetchClient, ...config })
+      jest
+        .spyOn(instance, 'resolve')
+        .mockResolvedValue(['https://a.example/f', 'https://b.example/f', 'https://c.example/f'])
+      return instance
+    }
+
+    it('reports why each advertised host failed', async () => {
+      const responses: Record<string, () => Promise<Response>> = {
+        'https://a.example/f': async () => new Response(null, { status: 404 }),
+        'https://b.example/f': async () =>
+          new Response(new Uint8Array([9, 9, 9, 9]), { status: 200 }),
+        'https://c.example/f': async () => {
+          throw new TypeError('fetch failed')
+        }
+      }
+      const instance = hosted(async input => await responses[String(input)]())
+
+      const error = await instance.download(uhrpUrl).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(StorageDownloadError)
+      expect(error).toBeInstanceOf(Error)
+      expect(error).toMatchObject({
+        name: 'StorageDownloadError',
+        message: `Unable to download content from ${uhrpUrl}`,
+        attempts: [
+          { url: 'https://a.example/f', reason: 'http', status: 404 },
+          { url: 'https://b.example/f', reason: 'integrity' },
+          { url: 'https://c.example/f', reason: 'network' }
+        ]
+      })
+    })
+
+    it('reports size refusals and a response with no readable body', async () => {
+      const responses: Record<string, () => Response> = {
+        'https://a.example/f': () =>
+          new Response(content, { status: 200, headers: { 'Content-Length': 'abc' } }),
+        'https://b.example/f': () => new Response(new Uint8Array(5), { status: 200 }),
+        'https://c.example/f': () => ({ ok: true, status: 200, headers: new Headers() }) as Response
+      }
+      const instance = new StorageDownloader({
+        maxDownloadBytes: 4,
+        fetchClient: async input => responses[String(input)]()
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(Object.keys(responses))
+
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [
+          { url: 'https://a.example/f', reason: 'size' },
+          { url: 'https://b.example/f', reason: 'size' },
+          { url: 'https://c.example/f', reason: 'empty' }
+        ]
+      })
+    })
+
+    it('reports an oversized declared length and a body that breaks mid-read', async () => {
+      const broken = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.error(new Error('connection reset'))
+        }
+      })
+      const responses: Record<string, () => Response> = {
+        'https://a.example/f': () =>
+          new Response(content, { status: 200, headers: { 'Content-Length': '10' } }),
+        'https://b.example/f': () => new Response(broken as any, { status: 200 })
+      }
+      const instance = new StorageDownloader({
+        maxDownloadBytes: 4,
+        fetchClient: async input => responses[String(input)]()
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(Object.keys(responses))
+
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [
+          { url: 'https://a.example/f', reason: 'size' },
+          { url: 'https://b.example/f', reason: 'network' }
+        ]
+      })
+    })
+
+    it('reports an unhosted file with no attempts', async () => {
+      const instance = new StorageDownloader({ fetchClient: jest.fn<typeof fetch>() })
+      jest.spyOn(instance, 'resolve').mockResolvedValue([])
+      const error = await instance.download(uhrpUrl).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(StorageDownloadError)
+      expect(error).toMatchObject({ message: 'No one currently hosts this file!', attempts: [] })
+    })
+
+    it('reads a response without a body stream through arrayBuffer()', async () => {
+      const streamless = {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'application/test' }),
+        body: null,
+        arrayBuffer: async () => content.slice().buffer
+      } as unknown as Response
+      const instance = hosted(async () => streamless)
+      await expect(instance.download(uhrpUrl)).resolves.toEqual({
+        data: content,
+        mimeType: 'application/test'
+      })
+    })
+
+    it('bounds and verifies a response without a body stream', async () => {
+      const streamless = (bytes: Uint8Array): Response =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          arrayBuffer: async () => bytes.slice().buffer
+        }) as unknown as Response
+      const responses: Record<string, Response> = {
+        'https://a.example/f': streamless(new Uint8Array(5)),
+        'https://b.example/f': streamless(new Uint8Array([4, 3, 2, 1]))
+      }
+      const instance = new StorageDownloader({
+        maxDownloadBytes: 4,
+        fetchClient: async input => responses[String(input)]
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(Object.keys(responses))
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [
+          { url: 'https://a.example/f', reason: 'size' },
+          { url: 'https://b.example/f', reason: 'integrity' }
+        ]
+      })
+    })
+
+    it('moves to the next host when one stalls past the deadline', async () => {
+      let stalledSignal: AbortSignal | undefined
+      const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+        if (String(input) === 'https://a.example/f') {
+          stalledSignal = init?.signal ?? undefined
+          // Never settles and ignores the signal, like a host that accepts the
+          // connection and never answers.
+          return await new Promise<Response>(() => {})
+        }
+        return new Response(content, { status: 200 })
+      })
+      const instance = hosted(fetchClient, { timeoutMs: 20 })
+      await expect(instance.download(uhrpUrl)).resolves.toMatchObject({ data: content })
+      expect(stalledSignal?.aborted).toBe(true)
+      expect(fetchClient).toHaveBeenCalledTimes(2)
+    })
+
+    it('reports a host whose body stalls past the deadline', async () => {
+      const stalled = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1]))
+        }
+      })
+      const instance = new StorageDownloader({
+        timeoutMs: 20,
+        fetchClient: async () => new Response(stalled as any, { status: 200 })
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(['https://a.example/f'])
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [{ url: 'https://a.example/f', reason: 'timeout' }]
+      })
+    })
+
+    it('keeps the request shape and has no deadline unless one is configured', async () => {
+      const fetchClient = jest.fn<typeof fetch>(async () => new Response(content, { status: 200 }))
+      await hosted(fetchClient).download(uhrpUrl)
+      expect(fetchClient).toHaveBeenCalledWith('https://a.example/f', {
+        method: 'GET',
+        redirect: 'error'
+      })
+    })
+
+    it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('rejects timeoutMs %p', timeoutMs => {
+      expect(() => new StorageDownloader({ timeoutMs })).toThrow(
+        'timeoutMs must be a positive safe integer'
+      )
     })
   })
 })
