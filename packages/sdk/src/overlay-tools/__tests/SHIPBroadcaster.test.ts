@@ -330,6 +330,60 @@ describe('SHIPCast', () => {
     ).rejects.toMatchObject({ status: response.status, body: kept })
   })
 
+  it('keeps the status when a failed response body stalls', async () => {
+    jest.useFakeTimers()
+    const cancel = jest.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('partial'))
+      },
+      cancel
+    })
+    const httpClient = jest.fn().mockResolvedValue(new Response(body, { status: 503 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'OverlayBroadcastHTTPError',
+      status: 503,
+      body: 'partial'
+    })
+
+    await jest.advanceTimersByTimeAsync(5_000)
+    await rejection
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the status when a failed response arrives just before the deadline', async () => {
+    jest.useFakeTimers()
+    const httpClient = jest.fn(
+      async (): Promise<Response> =>
+        await new Promise(resolve => {
+          setTimeout(() => {
+            resolve({
+              ok: false,
+              status: 502,
+              text: async () => await new Promise<string>(() => {})
+            } as unknown as Response)
+          }, 29_500)
+        })
+    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({ status: 502, body: '' })
+
+    await jest.advanceTimersByTimeAsync(30_000)
+    await rejection
+  })
+
+  it('reports status 0 for an adapter that answers a malformed status', async () => {
+    const httpClient = jest.fn().mockResolvedValue({ ok: false, status: '503' })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toMatchObject({ status: 0, body: '' })
+  })
+
   it('exports the STEAK validation TopicBroadcaster applies to facilitator answers', () => {
     expect(
       validateSTEAK({ tm_foo: { outputsToAdmit: [0, 2], coinsToRetain: [], coinsRemoved: [1] } }, [

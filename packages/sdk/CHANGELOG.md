@@ -282,7 +282,10 @@ replay, payment authorization, wire change or consumer migration is introduced.
 - `HTTPSOverlayBroadcastFacilitator.send` now rejects a non-2xx answer with
   `OverlayBroadcastHTTPError`, which keeps the HTTP `status` and the first
   8 KiB of the response `body`. It still extends `Error` with the message
-  `Failed to facilitate broadcast`, so existing handling is unchanged.
+  `Failed to facilitate broadcast`, so existing handling is unchanged. The
+  body read is bounded to 2 s and ends before the request deadline, so an
+  error body that stalls keeps what arrived and never turns the known status
+  into `SHIP request timed out.`
 - Export `validateSTEAK(value, topics)`, the check `TopicBroadcaster` applies to
   every facilitator answer, so callers using a facilitator directly can apply
   it to `send()`. Additive only; no migration is required.

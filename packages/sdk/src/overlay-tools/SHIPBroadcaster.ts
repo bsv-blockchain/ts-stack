@@ -101,6 +101,7 @@ const MAX_SHIP_ADVERTISEMENT_BEEF_BYTES = 16 * 1024 * 1024
 const MAX_SHIP_TOTAL_ADVERTISEMENT_BEEF_BYTES = 64 * 1024 * 1024
 const SHIP_REQUEST_TIMEOUT_MS = 30_000
 const MAX_SHIP_ERROR_BODY_BYTES = 8192
+const SHIP_ERROR_BODY_TIMEOUT_MS = 2_000
 
 function shipEndpoint(base: string, allowHTTP: boolean): URL {
   const httpEnabled = allowHTTP === true
@@ -348,38 +349,50 @@ export class OverlayBroadcastHTTPError extends Error {
   }
 }
 
-async function readSHIPErrorBody(response: Response): Promise<string> {
+/**
+ * Reads at most 8 KiB of an error body for diagnostics, for at most `timeoutMs`.
+ * A body that stalls or fails keeps what arrived, so the known HTTP status is
+ * never lost to a slow diagnostic.
+ */
+async function readSHIPErrorBody(response: Response, timeoutMs: number): Promise<string> {
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const reader = response.body?.getReader()
-    let bytes: Uint8Array
-    if (reader == null) {
-      if (typeof response.text !== 'function') return ''
-      bytes = utf8Bytes(await response.text()).subarray(0, MAX_SHIP_ERROR_BODY_BYTES)
-    } else {
-      const chunks: Uint8Array[] = []
-      let total = 0
-      let done = false
-      while (!done && total < MAX_SHIP_ERROR_BODY_BYTES) {
-        const next = await reader.read()
-        done = next.done
-        if (next.value !== undefined) {
-          const kept = next.value.subarray(0, MAX_SHIP_ERROR_BODY_BYTES - total)
-          chunks.push(kept)
-          total += kept.byteLength
-        }
+    reader = response.body?.getReader()
+    const read = async (): Promise<void> => {
+      if (reader == null) {
+        if (typeof response.text === 'function') chunks.push(utf8Bytes(await response.text()))
+        return
       }
-      if (!done) await reader.cancel().catch(() => {})
-      bytes = new Uint8Array(total)
-      let offset = 0
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset)
-        offset += chunk.byteLength
+      while (total < MAX_SHIP_ERROR_BODY_BYTES) {
+        const next = await reader.read()
+        if (next.done) return
+        chunks.push(next.value)
+        total += next.value.byteLength
       }
     }
-    return new TextDecoder('utf-8').decode(bytes)
+    await Promise.race([
+      read(),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, timeoutMs)
+      })
+    ])
   } catch {
-    return ''
+    // An unreadable body keeps what arrived before the failure.
+  } finally {
+    clearTimeout(timer)
+    // Release the rest without waiting on a transport that may never answer.
+    void reader?.cancel().catch(() => {})
   }
+  const bytes = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder('utf-8').decode(bytes.subarray(0, MAX_SHIP_ERROR_BODY_BYTES))
 }
 
 export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilitator {
@@ -423,6 +436,7 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
     }
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = Date.now() + SHIP_REQUEST_TIMEOUT_MS
     const request = (async () => {
       const response = await this.httpClient(endpoint.toString(), {
         method: 'POST',
@@ -432,7 +446,13 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
         redirect: 'error'
       })
       if (!response.ok) {
-        throw new OverlayBroadcastHTTPError(response.status, await readSHIPErrorBody(response))
+        // The diagnostic read ends before the request deadline, so the status always wins.
+        const body = await readSHIPErrorBody(
+          response,
+          Math.min(SHIP_ERROR_BODY_TIMEOUT_MS, deadline - Date.now() - 1)
+        )
+        const status = Number.isSafeInteger(response.status) ? response.status : 0
+        throw new OverlayBroadcastHTTPError(status, body)
       }
       return await readSHIPJSON(response)
     })()
