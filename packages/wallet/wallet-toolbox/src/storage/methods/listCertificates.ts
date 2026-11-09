@@ -70,7 +70,7 @@ export async function listCertificates(
         keyring: cwf.masterKeyring
       }))
     }
-    if (r.certificates.length < paged.limit) r.totalCertificates = r.certificates.length
+    if (paged.offset === 0 && r.certificates.length < paged.limit) r.totalCertificates = r.certificates.length
     else {
       r.totalCertificates = await storage.countCertificates(findCertsArgs)
     }

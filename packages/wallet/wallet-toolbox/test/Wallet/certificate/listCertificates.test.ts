@@ -55,6 +55,32 @@ describe('listCertificates', () => {
     jest.clearAllMocks()
   })
 
+  test.each([0, 2])('preserves the full total on a later page containing %i certificates', async length => {
+    vargs.offset = 10
+    mockStorage.findCertificates.mockResolvedValueOnce(
+      Array.from({ length }, (_, index) => ({
+        certificateId: index + 1,
+        userId: auth.userId,
+        type: 'credential',
+        serialNumber: String(index),
+        certifier: 'issuer',
+        subject: 'owner',
+        revocationOutpoint: 'revocation.0',
+        signature: 'signature',
+        isDeleted: false,
+        created_at: new Date(),
+        updated_at: new Date()
+      })) as TableCertificate[]
+    )
+    mockStorage.findCertificateFields.mockResolvedValue([])
+    mockStorage.countCertificates.mockResolvedValueOnce(12)
+
+    const result = await listCertificates(mockStorage, auth, vargs)
+
+    expect(result.certificates).toHaveLength(length)
+    expect(result.totalCertificates).toBe(12)
+  })
+
   test('should return an empty result when no certificates are found', async () => {
     // Setup mocks
     mockStorage.findCertificates.mockResolvedValueOnce([]) // no certs returned

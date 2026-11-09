@@ -3805,8 +3805,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async getCount<T extends object>(q: Knex.QueryBuilder<T, T[]>): Promise<number> {
     // Alias the count: the default result key differs by dialect, and Postgres
     // returns count(*) as a bigint string.
-    // A paged find query orders its rows; an aggregate cannot keep that order on Postgres.
-    void q.clearOrder().count({ count: '*' })
+    // Count the whole filtered result. A find query's offset/limit would page
+    // the aggregate row itself; a nonzero offset can discard it entirely.
+    // An aggregate also cannot keep the find order on Postgres.
+    void q.clearOrder().clear('limit').clear('offset').count({ count: '*' })
     const r = await q
     return Number(r[0].count)
   }

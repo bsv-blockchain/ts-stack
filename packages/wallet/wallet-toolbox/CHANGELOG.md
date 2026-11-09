@@ -1,5 +1,10 @@
 # 2.16.0 unpublished integration candidate
 
+Fix certificate pagination found during populated TTN qualification: aggregate
+counts discard page offset/limit, preserve ownership/type/issuer filters, and
+later short or empty certificate pages retain the full matching total. No schema
+or wire migration is required.
+
 Includes the reviewed PR1492 strict-framing compatibility correction for ordinary
 legacy AtomicBEEF imports. Canonical bytes reach existing receipt and authorized
 writer admission without changing PR569 archive, journal or handoff contracts.
