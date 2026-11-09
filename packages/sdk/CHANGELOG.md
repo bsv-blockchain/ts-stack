@@ -277,6 +277,23 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: answer a certificate request embedded in an initialResponse (patch candidate)
+
+- `Peer`'s automatic answer and `AuthFetch`'s certificate listener now send an
+  empty `certificateResponse` when the wallet holds no requested certificate,
+  as `Peer` already did for a standalone `certificateRequest`. The empty list
+  validates nothing; it lets a certificate-gated server decide now instead of
+  at its own certificate deadline. A wallet error or declined disclosure still
+  sends nothing.
+- `toPeer` waits, for at most 30 seconds, until `Peer`'s own answer to a
+  certificate request embedded in the session's `initialResponse` has been
+  sent or has ended without one, so a server that refuses general messages
+  while certificates are pending does not receive one first. An application
+  certificate-request listener runs outside this wait.
+- `SimplifiedFetchTransport` dispatches a later certificate message of a
+  session only after that session's empty `certificateResponse` has its HTTP
+  response, because servers route these messages by the session nonce.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

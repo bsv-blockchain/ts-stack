@@ -454,9 +454,10 @@ export class AuthFetch {
           verifier,
           this.originator
         )
-        if (certificatesToInclude.length > 0) {
-          await newPeer.sendCertificateResponse(verifier, certificatesToInclude)
-        }
+        // Answer even when nothing matches: an empty list validates nothing, but lets a
+        // certificate-gated server decide now instead of at its own certificate deadline.
+        // A wallet error or declined disclosure throws above and sends nothing.
+        await newPeer.sendCertificateResponse(verifier, certificatesToInclude)
       } finally {
         // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry.
         await this.wait(500)

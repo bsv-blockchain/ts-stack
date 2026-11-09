@@ -55,6 +55,8 @@ export class SimplifiedFetchTransport implements Transport {
   private readonly maxResponseBytes: number
   readonly #maxHandshakeResponseBytes: number
   readonly #requestTimeoutMs: number
+  // Per session nonce: settles when every empty certificateResponse sent so far has its HTTP response.
+  readonly #emptyCertificateResponses = new Map<string, Promise<void>>()
 
   /**
    * Constructs a new instance of SimplifiedFetchTransport.
@@ -134,12 +136,24 @@ export class SimplifiedFetchTransport implements Transport {
   }
 
   async #sendAuthMessage(message: AuthMessage): Promise<void> {
+    // Taken synchronously, so a message sent after an empty certificateResponse is held behind it.
+    const { prior, release } = this.#orderBehindEmptyCertificateResponses(message)
     return await new Promise((resolve, reject) => {
       void (async () => {
         try {
           const url = `${this.baseUrl}/.well-known/auth`
           const responseWork = this.#withDeadline(url, async signal => {
-            const response = await this.#fetchAuthMessage(url, message, signal)
+            if (prior != null) {
+              await prior
+              // Past its own deadline while held: the caller has its error; never dispatch.
+              if (signal.aborted) return
+            }
+            let response: Response
+            try {
+              response = await this.#fetchAuthMessage(url, message, signal)
+            } finally {
+              release?.()
+            }
             if (!response.ok) {
               const body = await this.readResponseBody(
                 url,
@@ -167,9 +181,48 @@ export class SimplifiedFetchTransport implements Transport {
           if (message.messageType === 'initialRequest') resolve()
         } catch (error) {
           reject(error)
+        } finally {
+          // Covers an exchange that never reached fetch (its deadline came first).
+          release?.()
         }
       })()
     })
+  }
+
+  /**
+   * A server routes a session's `/.well-known/auth` messages by the client's session nonce
+   * (`initialNonce`), so two of them open at once collide: one is refused as a duplicate, or
+   * answered on the wrong response. An empty certificateResponse is answered at once, so later
+   * messages of its session wait until its HTTP response arrives. A populated one is answered
+   * only after the server application decides, so it is not waited for, as before.
+   */
+  #orderBehindEmptyCertificateResponses(message: AuthMessage): {
+    prior?: Promise<void>
+    release?: () => void
+  } {
+    const session = message.initialNonce
+    if (typeof session !== 'string') return {}
+    const prior = this.#emptyCertificateResponses.get(session)
+    if (
+      message.messageType !== 'certificateResponse' ||
+      !Array.isArray(message.certificates) ||
+      message.certificates.length > 0
+    ) {
+      return { prior }
+    }
+    let release!: () => void
+    const exchange = new Promise<void>(resolve => {
+      release = resolve
+    })
+    // Includes every earlier empty answer, so releasing this one never releases the session
+    // ahead of them.
+    const pending = Promise.all([prior, exchange]).then(() => {
+      if (this.#emptyCertificateResponses.get(session) === pending) {
+        this.#emptyCertificateResponses.delete(session)
+      }
+    })
+    this.#emptyCertificateResponses.set(session, pending)
+    return { prior, release }
   }
 
   #encodeRequestBody(body: number[], contentType: string): string | Uint8Array {
