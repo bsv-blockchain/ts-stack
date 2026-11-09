@@ -100,6 +100,12 @@ SQL receipt claim. Source versions are candidates until published through the
 protected release workflow; upgrading an app alone does not upgrade its remote
 storage server.
 
+The 2.15.4 source candidate reports `listCertificates` `totalCertificates` as
+the number of matching certificates at every offset. A short page at a non-zero
+offset used to report its own length. A short first page, or a non-empty short
+page, is the rows skipped plus the page. An empty page past the end, and a full
+page, use an unpaged stored count. No API, wire, or schema migration is required.
+
 The 2.15.3 source candidate restores legacy AtomicBEEF normalization before the
 strict argument framing check. An exactly decoded envelope may contain unrelated
 branches from an older sender; internalization retains only its declared payment

@@ -4,6 +4,15 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.4 (source candidate)
+
+- `listCertificates` reports `totalCertificates` as the number of certificates
+  matching the criteria at every offset. A short page used to report its own
+  length, so five matches requested at offset 3 with limit 10 returned 2.
+  A short first page, or a non-empty short page, is the rows skipped plus the
+  page. An empty page past the end, and a full page, use an unpaged stored
+  count. No API, wire, or schema migration.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with

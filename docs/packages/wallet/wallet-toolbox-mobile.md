@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.15.4'
+last_updated: '2026-11-09'
+last_verified: '2026-11-09'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,13 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+The 2.15.4 source candidate reports `listCertificates` `totalCertificates` as the
+number of matching certificates at every offset. A short page at a non-zero
+offset used to report its own length. A short first page, or a non-empty short
+page, is the rows skipped plus the page. An empty page past the end, and a full
+page, use an unpaged stored count. No API, wire, or schema migration is
+required. Source is not publication or deployment.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and

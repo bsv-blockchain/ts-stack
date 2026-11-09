@@ -230,23 +230,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "listCertificates reports totalCertificates as the number of certificates matching the criteria at every offset. A short page used to report its own length, so five matches at offset 3 with limit 10 returned 2. A short first page, or a non-empty short page, is the rows skipped plus the page. An empty page past the end, and a full page, use an unpaged stored count.",
+      "migration": "No API, wire, or schema migration. Callers that follow BRC-100 already expect totalCertificates to be the size of the matching set. A caller that treated a short page at a non-zero offset as the full result now receives the real total and can keep paging until the page is exhausted. Published 2.15.3 still returns the page length in that case."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "listCertificates reports totalCertificates as the number of certificates matching the criteria at every offset. A short page used to report its own length, so five matches at offset 3 with limit 10 returned 2. A short first page, or a non-empty short page, is the rows skipped plus the page. An empty page past the end, and a full page, use an unpaged stored count.",
+      "migration": "No API, wire, or schema migration. Callers that follow BRC-100 already expect totalCertificates to be the size of the matching set. A caller that treated a short page at a non-zero offset as the full result now receives the real total and can keep paging until the page is exhausted. Published 2.15.3 still returns the page length in that case."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "listCertificates reports totalCertificates as the number of certificates matching the criteria at every offset. A short page used to report its own length, so five matches at offset 3 with limit 10 returned 2. A short first page, or a non-empty short page, is the rows skipped plus the page. An empty page past the end, and a full page, use an unpaged stored count.",
+      "migration": "No API, wire, or schema migration. Callers that follow BRC-100 already expect totalCertificates to be the size of the matching set. A caller that treated a short page at a non-zero offset as the full result now receives the real total and can keep paging until the page is exhausted. Published 2.15.3 still returns the page length in that case."
     },
     {
       "name": "@bsv/webrtpay",
