@@ -277,6 +277,27 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: zero-field initial certificate proofs (4.0.2 patch candidate)
+
+- A `Peer` that initiates a handshake may now accept an initial response that
+  proves a certificate with zero revealed fields, when the locally retained
+  session request asked for that certifier and type with an empty field list.
+  The keyring must be empty, null or omitted, and nothing is decrypted. Only
+  an initial response on a session the `Peer` initiated qualifies: one that
+  arrives on a responder's session, or after the handshake completed, keeps the
+  nonempty path, and zero-field standalone (mid-session) responses stay refused.
+- A zero-field proof carries no keyring encrypted for the verifier, and the
+  initial-response signature covers only the nonces, not the certificates. So
+  it shows that a valid certificate names the authenticated identity as its
+  subject, not that the holder's wallet presented it.
+- `validateCertificates` takes an optional fifth argument, `allowZeroFields`,
+  default `false`. Existing callers keep the nonempty path; `Peer` opts in only
+  for the request its session retained.
+- A session store that loses the request snapshot keeps the nonempty path; the
+  snapshot is no longer backfilled from the mutable `certificatesToRequest`.
+  On such a session, a later standalone response's handshake policy falls back
+  to the current `certificatesToRequest`. No wire-format change.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

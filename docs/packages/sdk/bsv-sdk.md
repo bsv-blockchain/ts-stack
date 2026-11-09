@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.0.1'
+version: '4.0.2'
 npm: '@bsv/sdk'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+last_updated: '2026-11-09'
+last_verified: '2026-11-09'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 4.0.2 source candidate lets a `Peer` that initiates a handshake accept an
+initial response proving a certificate with zero revealed fields, when its
+retained request lists that certifier and type with an empty field list. The
+signed core is checked, the keyring must be empty, null or omitted, and nothing
+is decrypted. `validateCertificates` takes an optional `allowZeroFields`
+argument, default `false`, so existing callers keep the nonempty path. Responder
+sessions and standalone responses keep the nonempty path. No wire or stored-data
+change. Source is not publication.
 
 The 4.0.1 source candidate types `ListOutputsResult.totalOutputs` as a number
 again, `PositiveInteger64OrZero` (a finite nonnegative integer summary; below 2^64 on the binary wire). A BRC-112 balance query (`balance <basket>` or
