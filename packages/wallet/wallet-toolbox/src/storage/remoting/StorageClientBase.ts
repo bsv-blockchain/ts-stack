@@ -214,6 +214,8 @@ type RemoteStorageSettings = TableSettings & {
   snapshotJournalFields?: typeof snapshotJournalFieldRpcCapabilities
   snapshotJournalFieldArchive?: SnapshotJournalFieldArchiveCapabilities
   snapshotJournalArchiveContentVersion?: 1
+  /** Optional bounded two-packet read; original archive packets remain version one. */
+  snapshotJournalArchivePairVersion?: 1
   snapshotJournalData?: SnapshotJournalDataCapabilities
   snapshotJournalDataContent?: typeof snapshotJournalDataContentCapabilities
   snapshotArchiveReaderVersion?: 1
@@ -391,6 +393,11 @@ function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
     (properties.snapshotJournalArchiveContentVersion.value !== 1 || properties.snapshotJournalArchive == null)
   )
     throw new Error('Wallet storage returned invalid journal content settings.')
+  if (
+    properties.snapshotJournalArchivePairVersion != null &&
+    (properties.snapshotJournalArchivePairVersion.value !== 1 || properties.snapshotJournalArchive == null)
+  )
+    throw new Error('Wallet storage returned invalid journal pair settings.')
   for (const name of ['snapshotJournalFieldArchiveRecoveryVersion', 'snapshotJournalFieldRecoveryVersion'])
     if (properties[name] !== undefined && properties[name].value !== 1)
       throw new TypeError('Invalid field recovery capability')
@@ -557,7 +564,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       identityKey,
       this.snapshotSource.identityKey,
       this.snapshotSource.chain,
-      settings.snapshotJournalArchive
+      settings.snapshotJournalArchive,
+      settings.snapshotJournalArchivePairVersion
     )
     return await openRemoteSnapshotJournalArchive(transport, position, options)
   }

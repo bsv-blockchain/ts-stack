@@ -633,8 +633,34 @@ export class KnexSnapshotArchiveStore {
     return await this.readPage(identityKey, archiveId, sequence, false)
   }
 
-  async readJournal(identityKey: string, archiveId: string, sequence: number): Promise<SnapshotArchivePage> {
-    return await this.readPage(identityKey, archiveId, sequence, true)
+  async journalPairFits(identityKey: string, archiveId: string, sequence: number, prefix: number): Promise<boolean> {
+    await this.ready(identityKey, archiveId, true)
+    const rows: Array<{ size: number | string }> = await this.knex('snapshot_archive_pages')
+      .where({ archiveId })
+      .whereIn('sequence', [sequence, prefix])
+      .select(this.knex.raw('length(??) AS size', ['payload']))
+      .limit(3)
+    if (
+      rows.length !== 2 ||
+      rows.some(
+        row =>
+          !Number.isSafeInteger(Number(row.size)) ||
+          Number(row.size) < 0 ||
+          Number(row.size) > snapshotArchiveLimits.pageBytes
+      )
+    )
+      throw unavailable()
+    await this.ready(identityKey, archiveId, true)
+    return rows.reduce((sum, row) => sum + Number(row.size), 0) <= snapshotArchiveLimits.pageBytes
+  }
+
+  async readJournal(
+    identityKey: string,
+    archiveId: string,
+    sequence: number,
+    maximumBytes = snapshotArchiveLimits.pageBytes
+  ): Promise<SnapshotArchivePage> {
+    return await this.readPage(identityKey, archiveId, sequence, true, maximumBytes)
   }
 
   async readJournalFields(identityKey: string, archiveId: string, sequence: number): Promise<SnapshotArchivePage> {
@@ -645,12 +671,27 @@ export class KnexSnapshotArchiveStore {
     identityKey: string,
     archiveId: string,
     sequence: number,
-    journal: boolean | 'fields'
+    journal: boolean | 'fields',
+    maximumBytes?: number
   ): Promise<SnapshotArchivePage> {
     integer(sequence, 0, snapshotArchiveLimits.pages - 1, 'sequence')
     const header = await this.ready(identityKey, archiveId, journal)
     if (sequence >= header.nextSequence) throw unavailable()
-    const page: PageRow | undefined = await this.knex('snapshot_archive_pages').where({ archiveId, sequence }).first()
+    const query = this.knex('snapshot_archive_pages').where({ archiveId, sequence })
+    if (maximumBytes !== undefined) {
+      if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0 || maximumBytes > snapshotArchiveLimits.pageBytes)
+        throw unavailable()
+      query.select(
+        'sequence',
+        'tableName',
+        'rows',
+        'done',
+        'digest',
+        this.knex.raw('substr(??,1,?) AS ??', ['payload', maximumBytes + 1, 'payload'])
+      )
+    }
+    const page: PageRow | undefined = await query.first()
+    if (page !== undefined && maximumBytes !== undefined && page.payload.length > maximumBytes) throw unavailable()
     if (page === undefined) throw unavailable()
     if (hash(page.payload) !== page.digest) throw unavailable()
     // Release/expiry during I/O cannot return a newly stale page.

@@ -1076,7 +1076,7 @@ export class StorageServer {
       ...(snapshotArchive === undefined ? {} : { snapshotArchive, snapshotArchiveReaderVersion: 1 }),
       ...(snapshotJournalArchive === undefined
         ? {}
-        : { snapshotJournalArchive, snapshotJournalArchiveContentVersion: 1 }),
+        : { snapshotJournalArchive, snapshotJournalArchiveContentVersion: 1, snapshotJournalArchivePairVersion: 1 }),
       ...(snapshotJournalFieldArchive === undefined ? {} : { snapshotJournalFieldArchive }),
       ...(snapshotSyncDestination === undefined ? {} : { snapshotSyncDestination }),
       ...(snapshotSyncContent === undefined ? {} : { snapshotSyncContent }),

@@ -344,3 +344,37 @@ test('journal directory binds exact metadata, packet kinds, source scope and all
   expect(() => verifySnapshotJournalArchiveDirectory(directory, { ...expected, chain: 'main' }, Date.now())).toThrow()
   expect(() => verifySnapshotJournalArchiveDirectory(directory, expected, manifest.expiresAt)).toThrow()
 })
+
+test('journal pair byte preflight rejects a grown payload without loading it', async () => {
+  const f = await fixture()
+  const manifest = await captureSnapshotJournalArchiveSource(await f.open(), f.store)
+  const directory = verifySnapshotJournalArchiveDirectory(
+    await f.store.journalDirectory(identityKey, manifest.archiveId),
+    {
+      identityKey,
+      chain: 'test',
+      sourceStorageIdentityKey: 'source',
+      sourceSchema: manifest.binding.sourceSchema,
+      archiveId: manifest.archiveId,
+      digest: manifest.digest,
+      expiresAt: manifest.expiresAt
+    },
+    Date.now()
+  )
+  const frame = directory.frames.find(value => value.sequence === value.firstPrefix + 1)!
+  expect(frame).toBeDefined()
+  expect(await f.store.journalPairFits(identityKey, manifest.archiveId, frame.sequence, frame.firstPrefix)).toBe(true)
+  await f.storage
+    .knex('snapshot_archive_pages')
+    .where({ archiveId: manifest.archiveId, sequence: frame.sequence })
+    .update({ payload: Buffer.alloc(snapshotArchiveLimits.pageBytes + 1) })
+  const observed: string[] = []
+  f.storage.knex.on('query', query => {
+    if (query.sql.includes('snapshot_archive_pages')) observed.push(query.sql)
+  })
+  await expect(
+    f.store.journalPairFits(identityKey, manifest.archiveId, frame.sequence, frame.firstPrefix)
+  ).rejects.toThrow()
+  expect(observed.some(sql => sql.includes('length'))).toBe(true)
+  expect(observed.every(sql => !/select \*/i.test(sql))).toBe(true)
+})

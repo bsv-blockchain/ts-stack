@@ -1,3 +1,4 @@
+import { snapshotArchiveLimits } from '../archive/SnapshotArchive'
 import type { SnapshotArchiveChain } from '../archive/SnapshotArchiveChain'
 import { awaitFromSync } from '../../../utility/promiseFromSync'
 import {
@@ -57,7 +58,8 @@ export class SnapshotJournalArchiveTransport {
     private readonly identityKey: string,
     private readonly storageIdentityKey: string,
     private readonly chain: SnapshotArchiveChain,
-    capabilities: SnapshotJournalArchiveCapabilities
+    capabilities: SnapshotJournalArchiveCapabilities,
+    private readonly pairVersion?: 1
   ) {
     this.capabilities = validateSnapshotJournalArchiveCapabilities(capabilities)
   }
@@ -172,6 +174,64 @@ export class SnapshotJournalArchiveTransport {
       now
     )
   }
+  async pair(
+    input: SnapshotJournalArchiveReaderRequest,
+    directory: VerifiedSnapshotJournalArchiveDirectory,
+    sequence: number,
+    prefix: number,
+    signal?: AbortSignal
+  ): Promise<[Uint8Array, Uint8Array] | undefined> {
+    if (this.pairVersion !== 1) return undefined
+    if (
+      !Number.isSafeInteger(sequence) ||
+      !Number.isSafeInteger(prefix) ||
+      prefix < 0 ||
+      prefix >= sequence ||
+      sequence >= directory.receipts.length
+    )
+      throw new TypeError('Invalid journal pair sequence')
+    const request = parseSnapshotJournalArchiveReaderRequest(input)
+    const value = await this.call(
+      'readSnapshotJournalArchivePair',
+      { request, archiveId: directory.manifest.archiveId, sequence, prefix },
+      signal
+    )
+    const outcome =
+      value !== null && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'outcome')?.value : undefined
+    const row = snapshotJournalDataRecord(
+      value,
+      outcome === 'pages' ? ['version', 'outcome', 'pages'] : ['version', 'outcome']
+    )
+    if (row.version !== 1) throw new TypeError('Invalid journal pair reply')
+    if (row.outcome === 'individual') return undefined
+    if (
+      row.outcome !== 'pages' ||
+      !Array.isArray(row.pages) ||
+      row.pages.length !== 2 ||
+      Reflect.ownKeys(row.pages).length !== 3
+    )
+      throw new TypeError('Invalid journal pair reply')
+    const values = [0, 1].map(index => {
+      const descriptor = Object.getOwnPropertyDescriptor(row.pages, String(index))
+      if (descriptor === undefined || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
+        throw new TypeError('Invalid journal pair page')
+      return descriptor.value
+    })
+    // Check the combined raw extent before either verifier allocates its copy.
+    const lengths = values.map(value => {
+      const bytes =
+        value !== null && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'bytes') : undefined
+      if (bytes === undefined || !Object.hasOwn(bytes, 'value') || !(bytes.value instanceof Uint8Array))
+        throw new TypeError('Invalid journal pair bytes')
+      return bytes.value.length
+    })
+    if (lengths[0] + lengths[1] > snapshotArchiveLimits.pageBytes)
+      throw new TypeError('Journal pair exceeds its original page budget')
+    const frame = verifySnapshotArchivePage(values[0], directory.receipts[sequence])
+    const identities = verifySnapshotArchivePage(values[1], directory.receipts[prefix])
+    return [frame, identities]
+  }
+
   async page(
     input: SnapshotJournalArchiveReaderRequest,
     directory: VerifiedSnapshotJournalArchiveDirectory,

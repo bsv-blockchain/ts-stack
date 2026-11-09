@@ -22,6 +22,7 @@ export const snapshotJournalArchiveMethods = Object.freeze([
   'getSnapshotJournalArchiveStatus',
   'getSnapshotJournalArchiveDirectory',
   'readSnapshotJournalArchivePage',
+  'readSnapshotJournalArchivePair',
   'cancelSnapshotJournalArchiveRequest'
 ] as const)
 export type SnapshotJournalArchiveMethod = (typeof snapshotJournalArchiveMethods)[number]
@@ -101,6 +102,14 @@ export type SnapshotJournalArchiveRpcInput =
       archiveId: string
       sequence: number
     }
+  | {
+      method: 'readSnapshotJournalArchivePair'
+      identityKey: string
+      request: Readonly<SnapshotJournalArchiveReaderRequest>
+      archiveId: string
+      sequence: number
+      prefix: number
+    }
 
 /** Strict new namespace. The original row/content parser stays version1/2. */
 export function parseSnapshotJournalArchiveRpcInput(
@@ -118,11 +127,13 @@ export function parseSnapshotJournalArchiveRpcInput(
   const extra =
       method === 'getSnapshotJournalArchiveReaderOffer'
         ? ['options', 'position']
-        : method === 'readSnapshotJournalArchivePage'
-          ? ['request', 'archiveId', 'sequence']
-          : method === 'getSnapshotJournalArchiveDirectory'
-            ? ['request', 'archiveId']
-            : ['request'],
+        : method === 'readSnapshotJournalArchivePair'
+          ? ['request', 'archiveId', 'sequence', 'prefix']
+          : method === 'readSnapshotJournalArchivePage'
+            ? ['request', 'archiveId', 'sequence']
+            : method === 'getSnapshotJournalArchiveDirectory'
+              ? ['request', 'archiveId']
+              : ['request'],
     value = snapshotJournalDataRecord(parameter.value, ['version', 'identityKey', ...extra])
   if (
     value.version !== 1 ||
@@ -146,6 +157,12 @@ export function parseSnapshotJournalArchiveRpcInput(
       return { method, identityKey, request }
     case 'getSnapshotJournalArchiveDirectory':
       return { method, identityKey, request, archiveId: snapshotJournalDataDigest(value.archiveId) }
+    case 'readSnapshotJournalArchivePair': {
+      const sequence = integer(value.sequence, 0, snapshotArchiveLimits.pages - 1)
+      const prefix = integer(value.prefix, 0, snapshotArchiveLimits.pages - 1)
+      if (prefix >= sequence) invalid()
+      return { method, identityKey, request, archiveId: snapshotJournalDataDigest(value.archiveId), sequence, prefix }
+    }
     case 'readSnapshotJournalArchivePage':
       return {
         method,

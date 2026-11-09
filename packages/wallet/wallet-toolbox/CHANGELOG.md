@@ -1,5 +1,12 @@
 # 2.16.0 unpublished integration candidate
 
+Negotiate an optional journal frame/prefix pair read to reduce HTTP round trips.
+Both original packets share the existing 1 MiB page budget and retain independent
+receipt hashes, request ownership, expiry and cancellation checks. Peers without
+the additive setting retain individual reads; valid pairs that exceed the shared
+budget use that same fallback. No persisted schema or packet-format migration is
+required. Deploy serving pools homogeneously before advertising the setting.
+
 Batch fresh MySQL journal-destination schema metadata reads to avoid one SQL
 round trip per table and index during archive requests. Complete table, column,
 constraint, index, trigger and quota validation remains uncached and fail closed.

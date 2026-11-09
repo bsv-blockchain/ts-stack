@@ -1,3 +1,4 @@
+import { snapshotArchiveLimits } from './SnapshotArchive'
 import { parseSnapshotJournalFieldArchiveReaderRequest } from '../journal/SnapshotJournalArchiveReaderRequest'
 import { captureSnapshotJournalFieldArchiveSource } from '../journal/captureSnapshotJournalFieldArchiveSource'
 import { closeSnapshotJournalSource } from '../journal/closeSnapshotJournalSource'
@@ -374,6 +375,37 @@ export class KnexSnapshotArchiveService {
   async readJournal(identityKey: string, archiveId: string, sequence: number) {
     this.assertOpen()
     return await this.archives.readJournal(identityKey, archiveId, sequence)
+  }
+
+  async readJournalPair(identityKey: string, request: unknown, archiveId: string, sequence: number, prefix: number) {
+    const ready = await this.journalStatus(identityKey, request)
+    if (ready.state !== 'ready' || ready.archiveId !== archiveId)
+      throw new WERR_INVALID_OPERATION('Journal pair differs from its ready request')
+    if (!(await this.archives.journalPairFits(identityKey, archiveId, sequence, prefix))) return undefined
+    const pages = []
+    let remaining = snapshotArchiveLimits.pageBytes
+    for (const ordinal of [sequence, prefix]) {
+      const before = await this.journalStatus(identityKey, request)
+      if (
+        before.state !== 'ready' ||
+        before.archiveId !== archiveId ||
+        before.digest !== ready.digest ||
+        before.expiresAt !== ready.expiresAt
+      )
+        throw new WERR_INVALID_OPERATION('Journal pair changed before DATA read')
+      const page = await this.archives.readJournal(identityKey, archiveId, ordinal, remaining)
+      remaining -= page.bytes.length
+      const after = await this.journalStatus(identityKey, request)
+      if (
+        after.state !== 'ready' ||
+        after.archiveId !== archiveId ||
+        after.digest !== ready.digest ||
+        after.expiresAt !== ready.expiresAt
+      )
+        throw new WERR_INVALID_OPERATION('Journal pair closed during DATA read')
+      pages.push(page)
+    }
+    return pages
   }
 
   async cancelJournalReader(identityKey: string, input: unknown): Promise<void> {

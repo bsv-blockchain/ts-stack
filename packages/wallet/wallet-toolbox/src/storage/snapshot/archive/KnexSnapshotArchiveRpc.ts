@@ -254,6 +254,16 @@ export class KnexSnapshotArchiveRpc {
           throw new WERR_INVALID_OPERATION('Journal archive closed while reading its DATA')
         return result
       }
+      case 'readSnapshotJournalArchivePair': {
+        const pages = await this.service.readJournalPair(
+          identityKey,
+          input.request,
+          input.archiveId,
+          input.sequence,
+          input.prefix
+        )
+        return pages === undefined ? { version: 1, outcome: 'individual' } : { version: 1, outcome: 'pages', pages }
+      }
       case 'cancelSnapshotJournalArchiveRequest':
         try {
           await this.service.cancelJournalReader(identityKey, input.request)

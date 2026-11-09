@@ -9,6 +9,7 @@ import type { RemoteSnapshotJournalArchive } from './openRemoteSnapshotJournalAr
 import type { KnexSnapshotArchiveRpc } from '../archive/KnexSnapshotArchiveRpc'
 import { snapshotJournalArchiveReaderRequestId } from './SnapshotJournalArchiveReaderRequest'
 import { PrivateKey } from '@bsv/sdk'
+import { snapshotArchiveLimits } from '../archive/SnapshotArchive'
 
 afterEach(() => jest.restoreAllMocks())
 
@@ -203,35 +204,185 @@ test('journal HTTP authenticates before source work, rejects unissued DATA, and 
   }
 })
 
-test('actual HTTP journal packet corruption cannot reach an identity consumer and still drains its owner', async () => {
+test.each(['legacy', 'paired-frame', 'paired-prefix'] as const)(
+  'actual HTTP %s corruption cannot reach an identity consumer and still drains its owner',
+  async mode => {
+    const fixture = await snapshotHttpFixture()
+    let archive: RemoteSnapshotJournalArchive | undefined
+    try {
+      const { server, url } = await fixture.serve()
+      if (mode === 'legacy') {
+        const target = server as unknown as { snapshotArchiveSettings: () => Promise<Record<string, unknown>> }
+        const original = target.snapshotArchiveSettings.bind(target)
+        jest.spyOn(target, 'snapshotArchiveSettings').mockImplementation(async () => {
+          const settings = await original()
+          delete settings.snapshotJournalArchivePairVersion
+          return settings
+        })
+      }
+      const client = new StorageClient(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+      archive = await client.openSnapshotJournalArchive(fixture.identityKey)
+      if (archive === undefined) throw new Error('Actual journal artifact unavailable')
+      const rpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc,
+        dispatch = rpc.dispatch.bind(rpc)
+      let corrupted = false
+      jest.spyOn(rpc, 'dispatch').mockImplementation(async (method, params, identityKey) => {
+        const result = await dispatch(method, params, identityKey)
+        if (mode === 'legacy' && method === 'readSnapshotJournalArchivePage') {
+          const bytes = new Uint8Array(Reflect.get(result as object, 'bytes'))
+          bytes[bytes.length - 1] ^= 1
+          corrupted = true
+          return { ...(result as object), bytes }
+        }
+        if (mode !== 'legacy' && method === 'readSnapshotJournalArchivePair') {
+          const pages = Reflect.get(result as object, 'pages') as Array<Record<string, unknown>>
+          const index = mode === 'paired-frame' ? 0 : 1
+          const bytes = new Uint8Array(pages[index].bytes as Uint8Array)
+          bytes[bytes.length - 1] ^= 1
+          corrupted = true
+          return { ...(result as object), pages: pages.map((page, i) => (i === index ? { ...page, bytes } : page)) }
+        }
+        return result
+      })
+      const capture = jest.fn(async () => {
+        await fixture.storage.knex('users').first()
+      })
+      await expect(archive.readFrame(0, capture)).rejects.toThrow()
+      expect(corrupted).toBe(true)
+      expect(capture).not.toHaveBeenCalled()
+      await archive.close()
+      expect(await fixture.storage.knex('snapshot_archive_capacity').first()).toMatchObject({
+        archives: 0,
+        reservedBytes: 0
+      })
+    } finally {
+      await archive?.close()
+      await fixture.close()
+    }
+  }
+)
+
+test.each([StorageClient, StorageMobile])('negotiated %p reads a frame and prefix in one RPC', async Client => {
   const fixture = await snapshotHttpFixture()
   let archive: RemoteSnapshotJournalArchive | undefined
   try {
-    const { server, url } = await fixture.serve(),
-      client = new StorageClient(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+    const { server, url } = await fixture.serve()
+    const rpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc
+    const calls = jest.spyOn(rpc, 'dispatch')
+    const client = new Client(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+    expect((await client.makeAvailable()).snapshotJournalArchivePairVersion).toBe(1)
     archive = await client.openSnapshotJournalArchive(fixture.identityKey)
-    if (archive === undefined) throw new Error('Actual journal artifact unavailable')
-    const rpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc,
-      dispatch = rpc.dispatch.bind(rpc)
-    jest.spyOn(rpc, 'dispatch').mockImplementation(async (method, params, identityKey) => {
-      const result = await dispatch(method, params, identityKey)
-      if (method !== 'readSnapshotJournalArchivePage') return result
-      const bytes = new Uint8Array(Reflect.get(result as object, 'bytes'))
-      bytes[bytes.length - 1] ^= 1
-      return { ...(result as object), bytes }
-    })
-    const capture = jest.fn(async () => {
-      await fixture.storage.knex('users').first()
-    })
-    await expect(archive.readFrame(0, capture)).rejects.toThrow()
-    expect(capture).not.toHaveBeenCalled()
-    await archive.close()
-    expect(await fixture.storage.knex('snapshot_archive_capacity').first()).toMatchObject({
-      archives: 0,
-      reservedBytes: 0
-    })
+    if (archive === undefined) throw new Error('Journal artifact unavailable')
+    calls.mockClear()
+    const capture = jest.fn(async () => {})
+    const frame = await archive.readFrame(0, capture)
+    expect(frame.page.changes.length).toBeGreaterThan(0)
+    expect(capture).toHaveBeenCalled()
+    expect(calls.mock.calls.map(call => call[0])).toEqual(['readSnapshotJournalArchivePair'])
   } finally {
     await archive?.close()
     await fixture.close()
   }
 })
+
+test('missing pair negotiation retains the original page RPCs', async () => {
+  const fixture = await snapshotHttpFixture()
+  let archive: RemoteSnapshotJournalArchive | undefined
+  try {
+    const { server, url } = await fixture.serve()
+    const settings = server as unknown as { snapshotArchiveSettings: () => Promise<Record<string, unknown>> }
+    const original = settings.snapshotArchiveSettings.bind(settings)
+    jest.spyOn(settings, 'snapshotArchiveSettings').mockImplementation(async () => {
+      const value = await original()
+      delete value.snapshotJournalArchivePairVersion
+      return value
+    })
+    const calls = jest.spyOn(Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc, 'dispatch')
+    const client = new StorageClient(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+    expect((await client.makeAvailable()).snapshotJournalArchivePairVersion).toBeUndefined()
+    archive = await client.openSnapshotJournalArchive(fixture.identityKey)
+    if (archive === undefined) throw new Error('Journal artifact unavailable')
+    calls.mockClear()
+    await archive.readFrame(0, async () => {})
+    expect(calls.mock.calls.length).toBeGreaterThan(1)
+    expect(calls.mock.calls.every(call => call[0] === 'readSnapshotJournalArchivePage')).toBe(true)
+  } finally {
+    await archive?.close()
+    await fixture.close()
+  }
+})
+
+test('an explicit bounded-pair fallback uses ordinary verified page reads', async () => {
+  const fixture = await snapshotHttpFixture()
+  let archive: RemoteSnapshotJournalArchive | undefined
+  try {
+    const { server, url } = await fixture.serve()
+    const rpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc
+    const original = rpc.dispatch.bind(rpc)
+    const calls = jest
+      .spyOn(rpc, 'dispatch')
+      .mockImplementation(async (method, params, identity) =>
+        method === 'readSnapshotJournalArchivePair'
+          ? { version: 1, outcome: 'individual' }
+          : await original(method, params, identity)
+      )
+    const client = new StorageClient(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+    await client.makeAvailable()
+    archive = await client.openSnapshotJournalArchive(fixture.identityKey)
+    if (archive === undefined) throw new Error('Journal artifact unavailable')
+    calls.mockClear()
+    const capture = jest.fn(async () => {})
+    expect((await archive.readFrame(0, capture)).page.changes.length).toBeGreaterThan(0)
+    expect(capture).toHaveBeenCalled()
+    expect(calls.mock.calls.map(call => call[0])).toEqual([
+      'readSnapshotJournalArchivePair',
+      'readSnapshotJournalArchivePage',
+      'readSnapshotJournalArchivePage'
+    ])
+  } finally {
+    await archive?.close()
+    await fixture.close()
+  }
+})
+
+test.each(['missing page', 'extra page', 'extra field', 'wrong version', 'swapped pages', 'combined budget'])(
+  'malformed pair %s refuses before identity consumption',
+  async fault => {
+    const fixture = await snapshotHttpFixture()
+    let archive: RemoteSnapshotJournalArchive | undefined
+    try {
+      const { server, url } = await fixture.serve()
+      const rpc = Reflect.get(server, 'snapshotArchives') as KnexSnapshotArchiveRpc
+      const original = rpc.dispatch.bind(rpc)
+      jest.spyOn(rpc, 'dispatch').mockImplementation(async (method, params, identity) => {
+        const result = await original(method, params, identity)
+        if (method !== 'readSnapshotJournalArchivePair') return result
+        const value = result as { version: number; outcome: string; pages: unknown[] }
+        if (fault === 'missing page') return { ...value, pages: value.pages.slice(0, 1) }
+        if (fault === 'extra page') return { ...value, pages: [...value.pages, value.pages[0]] }
+        if (fault === 'extra field') return { ...value, unexpected: true }
+        if (fault === 'wrong version') return { ...value, version: 2 }
+        if (fault === 'combined budget')
+          return {
+            ...value,
+            pages: value.pages.map(page => ({
+              ...(page as object),
+              bytes: new Uint8Array(snapshotArchiveLimits.pageBytes / 2 + 1)
+            }))
+          }
+        return { ...value, pages: [...value.pages].reverse() }
+      })
+      const client = new StorageClient(fixture.wallet, url, { serverIdentityKey: fixture.serverIdentityKey })
+      archive = await client.openSnapshotJournalArchive(fixture.identityKey)
+      if (archive === undefined) throw new Error('Journal artifact unavailable')
+      const capture = jest.fn(async () => {})
+      await expect(archive.readFrame(0, capture)).rejects.toThrow(
+        fault === 'combined budget' ? 'original page budget' : undefined
+      )
+      expect(capture).not.toHaveBeenCalled()
+    } finally {
+      await archive?.close()
+      await fixture.close()
+    }
+  }
+)

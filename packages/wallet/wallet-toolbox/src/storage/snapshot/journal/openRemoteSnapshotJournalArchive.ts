@@ -115,9 +115,19 @@ export async function openRemoteSnapshotJournalArchive(
             throw new TypeError('Invalid journal artifact frame ordinal')
           const index = directory.frames[ordinal],
             stream = snapshotJournalArchiveStreams[index.streamIndex]
+          // A negotiated pair stays inside one existing page-byte budget and
+          // one lease operation. No future frame or new writer is retained.
+          const paired =
+            index.sequence === index.firstPrefix + 1 && typeof transport.pair === 'function'
+              ? await transport.pair(request, directory, index.sequence, index.firstPrefix, signal)
+              : undefined
           const read = async (sequence: number) =>
             decodeSnapshotJournalArchivePacket(
-              await transport.page(request, directory, sequence, signal),
+              paired !== undefined && sequence === index.sequence
+                ? paired[0]
+                : paired !== undefined && sequence === index.firstPrefix
+                  ? paired[1]
+                  : await transport.page(request, directory, sequence, signal),
               { stream: stream.stream, tableId: stream.tableId },
               directory.manifest.binding.journal.receipt.highWater
             )
