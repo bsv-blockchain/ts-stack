@@ -2330,7 +2330,7 @@ export function validateWalletResult<T>(call: CallType, value: T, request?: unkn
       // BRC-205 lets attributes follow the base after a semicolon: the base keeps
       // BRC-100's 7–30 bytes and the whole string may be up to 2048 bytes.
       const version = result.version
-      const base = typeof version === 'string' ? version.split(';', 1)[0] : version
+      const base = typeof version === 'string' ? split(version, ';')[0] : version
       string(base, call, 'version', 7, 30)
       string(version, call, 'version', 7, 2048)
       break
