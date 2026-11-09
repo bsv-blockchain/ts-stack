@@ -682,7 +682,7 @@ export default class Script {
     let op = chunk.op
     let data = chunk.data
     // A zero-length push is OP_0. A blank token would be read back as another push.
-    if (data != null && data.length === 0 && op <= OP.OP_PUSHDATA4) {
+    if (data?.length === 0 && op <= OP.OP_PUSHDATA4) {
       op = 0
       data = undefined
     }

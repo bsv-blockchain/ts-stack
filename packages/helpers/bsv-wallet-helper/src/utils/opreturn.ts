@@ -19,11 +19,10 @@ const isHex = (str: string): boolean => {
  */
 const toHexField = (field: string | number[]): string => {
   // An empty field is a zero-length push. ASM rejects a blank token, so spell it OP_0.
-  const hex = Array.isArray(field)
-    ? toHex(field)
-    : isHex(field)
-      ? field.toLowerCase()
-      : toHex(toArray(field))
+  let hex: string
+  if (Array.isArray(field)) hex = toHex(field)
+  else if (isHex(field)) hex = field.toLowerCase()
+  else hex = toHex(toArray(field))
   return hex.length === 0 ? 'OP_0' : hex
 }
 
