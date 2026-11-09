@@ -454,8 +454,8 @@ export class AuthFetch {
           verifier,
           this.originator
         )
-        // Answer even when nothing matches: an empty list validates nothing, but lets a
-        // certificate-gated server decide now instead of at its own certificate deadline.
+        // Answer even when nothing matches: an empty list validates nothing, but a server
+        // that decides on the certificates it receives need not wait for its own deadline.
         // A wallet error or declined disclosure throws above and sends nothing.
         await newPeer.sendCertificateResponse(verifier, certificatesToInclude)
       } finally {

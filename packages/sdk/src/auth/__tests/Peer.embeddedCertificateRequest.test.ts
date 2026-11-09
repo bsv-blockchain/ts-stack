@@ -5,13 +5,15 @@ import { AuthMessage, PeerSession, RequestedCertificateSet, Transport } from '..
 import { PrivateKey } from '../../primitives/index.js'
 import { ListCertificatesResult, ProveCertificateResult } from '../../wallet/Wallet.interfaces.js'
 import { CompletedProtoWallet } from '../certificates/__tests/CompletedProtoWallet.js'
+import { MasterCertificate } from '../certificates/MasterCertificate.js'
 
 // A server may request certificates in its initialResponse and refuse (not queue) a general
 // message of that session until a certificateResponse arrives. The default Peer must answer
 // that request even when it holds no matching certificate, and must not let a general message
 // of the session reach the transport before the answer has been sent or has ended without one.
 
-const certifier = new PrivateKey(9).toPublicKey().toString()
+const certifierKey = new PrivateKey(9)
+const certifier = certifierKey.toPublicKey().toString()
 const certificateType = 'z40BOInXkI8m7f/wBrv4MJ09bZfzZbTj2fJqCtONqCY='
 const requested: RequestedCertificateSet = {
   certifiers: [certifier],
@@ -87,6 +89,58 @@ class NeverAnsweringWallet extends CompletedProtoWallet {
   }
 }
 
+/** A server wallet holding one real certificate, so the server presents it in its initialResponse. */
+class CertificateHoldingServerWallet extends CompletedProtoWallet {
+  private master?: MasterCertificate
+
+  async certificate(): Promise<MasterCertificate> {
+    this.master ??= await MasterCertificate.issueCertificateForSubject(
+      new CompletedProtoWallet(certifierKey),
+      serverIdentity,
+      { firstName: 'Server' },
+      certificateType,
+      async () => `${'00'.repeat(32)}.0`
+    )
+    return this.master
+  }
+
+  override async listCertificates(): Promise<ListCertificatesResult> {
+    const master = await this.certificate()
+    return {
+      totalCertificates: 1,
+      certificates: [
+        {
+          type: master.type,
+          serialNumber: master.serialNumber,
+          subject: master.subject,
+          certifier: master.certifier,
+          revocationOutpoint: master.revocationOutpoint,
+          fields: master.fields,
+          signature: master.signature as string
+        }
+      ]
+    }
+  }
+
+  override async proveCertificate(args: {
+    fieldsToReveal: string[]
+    verifier: string
+  }): Promise<ProveCertificateResult> {
+    const master = await this.certificate()
+    return {
+      keyringForVerifier: await MasterCertificate.createKeyringForVerifier(
+        this,
+        certifier,
+        args.verifier,
+        master.fields,
+        args.fieldsToReveal,
+        master.masterKeyring,
+        master.serialNumber
+      )
+    }
+  }
+}
+
 /** One ordered message channel per connection, as a WebSocket is. */
 class SocketLikeTransport implements Transport {
   other?: SocketLikeTransport
@@ -115,7 +169,8 @@ class SocketLikeTransport implements Transport {
  */
 function gatedConnection(
   clientWallet: CompletedProtoWallet,
-  clientSessions?: SessionManager
+  clientSessions?: SessionManager,
+  mutual = false
 ): {
   client: Peer
   clientTransport: SocketLikeTransport
@@ -152,8 +207,18 @@ function gatedConnection(
       })
     }
   }
-  void new Peer(new CompletedProtoWallet(serverKey), serverTransport, requested)
-  const client = new Peer(clientWallet, clientTransport, undefined, clientSessions)
+  const serverWallet = mutual
+    ? new CertificateHoldingServerWallet(serverKey)
+    : new CompletedProtoWallet(serverKey)
+  void new Peer(serverWallet, serverTransport, requested)
+  // In the mutual case the client requests the server's certificate too, so the
+  // initialResponse carries one and the client validates it and notifies its observers.
+  const client = new Peer(
+    clientWallet,
+    clientTransport,
+    mutual ? requested : undefined,
+    clientSessions
+  )
   return { client, clientTransport, arrivals, refused, admitted }
 }
 
@@ -282,6 +347,74 @@ describe('Peer answers a certificate request embedded in an initialResponse', ()
       'initialRequest',
       'general'
     ])
+  }, 15000)
+
+  test('a certificates-received observer that sends on the session finds the answer already sent', async () => {
+    const connection = gatedConnection(
+      new SlowNoCertificateWallet(new PrivateKey(8)),
+      undefined,
+      true
+    )
+    let observed: string[] | undefined
+    let observerSent = false
+    connection.client.listenForCertificatesReceived(async (sender, certificates) => {
+      observed = certificates.map(certificate => certificate.type)
+      // Awaited inside the observer: a hold released only after observers return stalls here.
+      await connection.client.toPeer([5], sender)
+      observerSent = true
+    })
+
+    await withinMs(connection.client.toPeer(payload, serverIdentity), 2000, 'the general send')
+    await withinMs(
+      (async () => {
+        while (connection.arrivals.filter(type => type === 'general').length < 2) await settle(5)
+      })(),
+      2000,
+      'both general messages'
+    )
+
+    expect(observed).toEqual([certificateType])
+    expect(observerSent).toBe(true)
+    expect(connection.arrivals).toEqual([
+      'initialRequest',
+      'certificateResponse',
+      'general',
+      'general'
+    ])
+    expect(connection.refused).toEqual([])
+    const answer = connection.clientTransport.sent.find(
+      m => m.messageType === 'certificateResponse'
+    )
+    expect(answer?.certificates).toEqual([])
+  }, 15000)
+
+  test('with an observer, a wallet failure still releases the handshake and the waiting message', async () => {
+    const connection = gatedConnection(
+      new SlowUnavailableWallet(new PrivateKey(8)),
+      undefined,
+      true
+    )
+    let observerRan = false
+    connection.client.listenForCertificatesReceived(() => {
+      observerRan = true
+    })
+
+    await withinMs(connection.client.toPeer(payload, serverIdentity), 2000, 'the general send')
+    await untilArrived(connection.arrivals, 'general')
+
+    expect(observerRan).toBe(true)
+    expect(connection.clientTransport.sent.map(m => m.messageType)).toEqual([
+      'initialRequest',
+      'general'
+    ])
+    await withinMs(
+      (async () => {
+        while (connection.clientTransport.handlerErrors.length === 0) await settle(5)
+      })(),
+      3000,
+      'the wallet error'
+    )
+    expect(String(connection.clientTransport.handlerErrors[0])).toContain('wallet unavailable')
   }, 15000)
 
   test('an application listener runs outside the hold and may send on the session', async () => {

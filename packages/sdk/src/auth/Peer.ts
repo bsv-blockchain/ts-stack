@@ -1017,7 +1017,8 @@ export class Peer {
 
   private async validateInitialResponseCertificates(
     message: AuthMessage,
-    peerSession: PeerSession
+    peerSession: PeerSession,
+    beforeObservers?: () => Promise<void>
   ): Promise<void> {
     if (
       !peerSession.certificatesRequired ||
@@ -1039,6 +1040,7 @@ export class Peer {
     })
     this.#resolveCertificateValidation(sessionNonce)
 
+    if (this.onCertificatesReceivedCallbacks.size > 0) await beforeObservers?.()
     for (const callback of this.onCertificatesReceivedCallbacks.values()) {
       await callback(
         message.identityKey,
@@ -1090,21 +1092,41 @@ export class Peer {
       this.#originator
     )
     // Answer even when nothing matches, as processCertificateRequest does: an empty list
-    // validates nothing, but lets the peer decide now instead of at its own timeout. A wallet
-    // error or declined disclosure throws above and sends nothing.
+    // validates nothing, but a peer that decides on the certificates it receives need not
+    // wait for its own deadline. A wallet error or declined disclosure throws above and
+    // sends nothing.
     await this.sendCertificateResponse(message.identityKey, verifiableCertificates)
   }
 
   async #processInitialResponse(message: AuthMessage): Promise<void> {
     let releaseHold: (() => void) | undefined
+    let earlyAnswer: Promise<{ error: unknown } | undefined> | undefined
     try {
       const peerSession = await this.authenticateInitialResponse(message, release => {
         releaseHold = release
       })
-      await this.validateInitialResponseCertificates(message, peerSession)
+      await this.validateInitialResponseCertificates(message, peerSession, async () => {
+        // A certificates-received observer may send on this session, and that send waits on
+        // the hold, so the automatic answer goes out before observers run. Application
+        // certificate-request listeners keep their place after the handshake waiters.
+        if (this.onCertificateRequestReceivedCallbacks.size === 0) {
+          earlyAnswer = this.#answerInitialCertificateRequest(message).then(
+            () => undefined,
+            (error: unknown) => ({ error })
+          )
+          await earlyAnswer
+        }
+        releaseHold?.()
+      })
       this.lastInteractedWithPeer = message.identityKey
       this.#releaseInitialResponseWaiters(peerSession)
-      await this.#answerInitialCertificateRequest(message, releaseHold)
+      if (earlyAnswer === undefined) {
+        await this.#answerInitialCertificateRequest(message, releaseHold)
+      } else {
+        // An early answer's failure surfaces here, after the waiters, as a late one's does.
+        const failure = await earlyAnswer
+        if (failure !== undefined) throw failure.error
+      }
     } finally {
       // Sent, failed, declined, or never reached: held general messages go out either way.
       releaseHold?.()
