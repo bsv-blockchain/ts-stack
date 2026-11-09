@@ -60,12 +60,23 @@ function assertRequestedDisclosedFields(
  * certificate and disclosed field must be requested, but this helper does not
  * prove that every listed type or field was supplied. Callers must enforce
  * complete application authorization against the resulting certificates.
+ *
+ * Zero-field proofs are opt-in. With allowZeroFields=true and a requested set
+ * that lists the certificate's type with an empty field array, the signed core
+ * is validated without decryption and the keyring must be empty, null or omitted.
+ * Only opt in for a request the caller retained locally and bound to an
+ * authenticated message; a peer-supplied requestedCertificates member is not
+ * request authority. A zero-field proof carries no keyring encrypted for the
+ * verifier, so it binds to the holder only through the subject check against
+ * the authenticated identity key; it does not show that the holder's wallet
+ * produced a proof for this verifier.
  */
 export const validateCertificates = async (
   verifierWallet: WalletInterface,
   message: AuthMessage,
   certificatesRequested?: RequestedCertificateSet,
-  originator?: OriginatorDomainNameStringUnder250Bytes
+  originator?: OriginatorDomainNameStringUnder250Bytes,
+  allowZeroFields: boolean = false
 ): Promise<void> => {
   message = snapshotBoundedAuthData(message)
   certificatesRequested =
@@ -119,6 +130,21 @@ export const validateCertificates = async (
         requestedFields = types[certToVerify.type]
         if (requestedFields == null) {
           throw new Error(`Certificate with type ${certToVerify.type} was not requested`)
+        }
+
+        // BRC-52 permits zero revealed fields and an empty or omitted keyring.
+        // The signed core and requested issuer/type have already been checked.
+        if (allowZeroFields && Array.isArray(requestedFields) && requestedFields.length === 0) {
+          const { keyring } = certToVerify
+          if (
+            keyring != null &&
+            (typeof keyring !== 'object' ||
+              Array.isArray(keyring) ||
+              Reflect.ownKeys(keyring).length > 0)
+          ) {
+            throw new Error('Unexpected keyring.')
+          }
+          return
         }
       }
 

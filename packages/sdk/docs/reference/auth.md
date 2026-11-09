@@ -2054,7 +2054,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: validateCertificates
 
 ```ts
-validateCertificates = async (verifierWallet: WalletInterface, message: AuthMessage, certificatesRequested?: RequestedCertificateSet, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<void> => {
+validateCertificates = async (verifierWallet: WalletInterface, message: AuthMessage, certificatesRequested?: RequestedCertificateSet, originator?: OriginatorDomainNameStringUnder250Bytes, allowZeroFields: boolean = false): Promise<void> => {
     message = snapshotBoundedAuthData(message);
     certificatesRequested =
         certificatesRequested === undefined ? undefined : snapshotBoundedAuthData(certificatesRequested);
@@ -2082,6 +2082,16 @@ validateCertificates = async (verifierWallet: WalletInterface, message: AuthMess
             requestedFields = types[certToVerify.type];
             if (requestedFields == null) {
                 throw new Error(`Certificate with type ${certToVerify.type} was not requested`);
+            }
+            if (allowZeroFields && Array.isArray(requestedFields) && requestedFields.length === 0) {
+                const { keyring } = certToVerify;
+                if (keyring != null &&
+                    (typeof keyring !== "object" ||
+                        Array.isArray(keyring) ||
+                        Reflect.ownKeys(keyring).length > 0)) {
+                    throw new Error("Unexpected keyring.");
+                }
+                return;
             }
         }
         const decryptedFields = await certToVerify.decryptFields(verifierWallet, undefined, undefined, originator);
