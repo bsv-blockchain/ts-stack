@@ -197,10 +197,10 @@ export type EntityNameStringMax100Bytes = string // NOSONAR
 export type EntityIconURLStringMax500Bytes = string // NOSONAR
 
 /**
- * @typedef {string & { minLength: 7, maxLength: 30 }} VersionString7To30Bytes
- * Represents a version string, with a length between 7 and 30 characters.
- *
- * The format is [vendor]-[major].[minor].[patch]
+ * @typedef {string & { minLength: 7, maxLength: 2048 }} VersionString7To30Bytes
+ * Represents a wallet version string. Its base, [vendor]-[major].[minor].[patch],
+ * is 7 to 30 bytes. BRC-205 allows `; key=value;` attributes after the base, up
+ * to 2048 bytes for the whole string.
  */
 export type VersionString7To30Bytes = string // NOSONAR
 

@@ -157,6 +157,17 @@ describe('WalletWire Integration Tests', () => {
     expect(result.signableTransaction?.tx).toEqual(inputBEEF)
   })
 
+  it('round-trips a BRC-205 version string with capability attributes', async () => {
+    const version = 'wallet-brc100-1.0.0; brc207-color=4; brc207-color-attested=1; brc177-nosend=2;'
+    const wallet = new WalletWireTransceiver(
+      new WalletWireProcessor({
+        getVersion: jest.fn(async () => ({ version }))
+      } as unknown as WalletInterface)
+    )
+
+    await expect(wallet.getVersion({})).resolves.toEqual({ version })
+  })
+
   it('round-trips authentication and network metadata operations', async () => {
     const isAuthenticated = jest.fn(async () => ({ authenticated: false }))
     const waitForAuthentication = jest.fn(async () => ({ authenticated: true }))

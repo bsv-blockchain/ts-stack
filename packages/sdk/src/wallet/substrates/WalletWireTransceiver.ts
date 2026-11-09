@@ -2074,12 +2074,10 @@ export default class WalletWireTransceiver implements WalletInterface {
   ): Promise<{ version: VersionString7To30Bytes }> {
     validateWalletArgs('getVersion', args)
     const version = await this.#transmit('getVersion', originator)
-    if (version.length < 7 || version.length > 30) {
+    if (version.length < 7 || version.length > 2048) {
       throw new Error('Wallet returned an invalid version')
     }
-    return {
-      version: toUTF8Strict(version)
-    }
+    return validateWalletResult('getVersion', { version: toUTF8Strict(version) })
   }
 
   #assertResponseConsumed(reader: ReaderUint8Array, call: string): void {
