@@ -277,6 +277,20 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: Teranode broadcaster reads ARC-style status bodies (patch candidate)
+
+- `Teranode.broadcast` reported every 2xx as `broadcast successful` without
+  reading the body. Against an ARC-style endpoint such as BSV Broadcaster's
+  `POST /tx`, a `202 {"txStatus":"RECEIVED"}` (taken in, not yet validated)
+  was indistinguishable from network acceptance. A JSON body with a
+  `txStatus` is now reported: the success message carries the status, as
+  `ARC` does; a refusal status (`REJECTED`, `DOUBLE_SPEND_ATTEMPTED`, orphan,
+  and the rest of ARC's failure set) or a body naming another transaction is
+  returned as a failure. A non-2xx keeps its HTTP `code` and adds the body's
+  ARC `status` and `detail` under `more`.
+- A bare 2xx with no body, `OK` or any non-status body is unchanged, so plain
+  Teranode nodes see the same result. No API or migration change.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
