@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-11-04",
+  "lastReviewed": "2026-11-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -230,23 +230,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "A sendMax (maxPossibleSatoshis) output is funded from unproven change when the wallet's confirmed coins cannot pay the fee. Funding tries confirmed coins first; with none, the sendMax output was reduced to minus the fee of a transaction with no inputs, the plan counted as funded, and createAction failed in the signer with 'The o.satoshis parameter must be a valid number of satoshis'. generateChangeSdk now refuses a zero or negative sendMax adjustment with WERR_INSUFFICIENT_FUNDS, which moves ordinary funding on to the next tier and makes an action batch extend its reservation.",
+      "migration": "No API, wire or schema migration. The ordinary createAction path runs in Storage, so upgrade a remote Storage server for it; the action batch path is fixed by upgrading the wallet host."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "A sendMax (maxPossibleSatoshis) output is funded from unproven change when the wallet's confirmed coins cannot pay the fee. Funding tries confirmed coins first; with none, the sendMax output was reduced to minus the fee of a transaction with no inputs, the plan counted as funded, and createAction failed in the signer with 'The o.satoshis parameter must be a valid number of satoshis'. generateChangeSdk now refuses a zero or negative sendMax adjustment with WERR_INSUFFICIENT_FUNDS, which moves ordinary funding on to the next tier and makes an action batch extend its reservation.",
+      "migration": "No API, wire or schema migration. The ordinary createAction path runs in Storage, so upgrade a remote Storage server for it; the action batch path is fixed by upgrading the wallet host."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "A sendMax (maxPossibleSatoshis) output is funded from unproven change when the wallet's confirmed coins cannot pay the fee. Funding tries confirmed coins first; with none, the sendMax output was reduced to minus the fee of a transaction with no inputs, the plan counted as funded, and createAction failed in the signer with 'The o.satoshis parameter must be a valid number of satoshis'. generateChangeSdk now refuses a zero or negative sendMax adjustment with WERR_INSUFFICIENT_FUNDS, which moves ordinary funding on to the next tier and makes an action batch extend its reservation.",
+      "migration": "No API, wire or schema migration. The ordinary createAction path runs in Storage, so upgrade a remote Storage server for it; the action batch path is fixed by upgrading the wallet host."
     },
     {
       "name": "@bsv/webrtpay",
