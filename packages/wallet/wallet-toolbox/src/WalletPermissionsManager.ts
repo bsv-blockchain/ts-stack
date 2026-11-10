@@ -956,7 +956,9 @@ export class WalletPermissionsManager implements WalletInterface {
               originator: req.originator,
               label: 'BRC-177 noSend expiry',
               reason: req.method,
-              usageType: req.method === 'createAction' ? 'apply' : 'list'
+              usageType: req.method === 'createAction' ? 'apply' : 'list',
+              // CreateActionArgs has no seekPermission; ListActionsArgs does.
+              seekPermission: req.method === 'listActions' ? (req.args as ListActionsArgs).seekPermission : undefined
             })
             if (req.method === 'createAction') {
               await this.ensureSpendingAuthorization({
@@ -5166,6 +5168,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originator: originator!,
         label: lbl,
         reason: 'listActions',
+        seekPermission: requestArgs.seekPermission,
         usageType: 'list'
       })
     }
@@ -5239,6 +5242,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originator,
         basket,
         reason: requestArgs.description,
+        seekPermission: requestArgs.seekPermission,
         usageType: 'insertion'
       })
       if (customInstructions == null || customInstructions === '') continue
@@ -5257,6 +5261,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originator,
         label,
         reason: requestArgs.description,
+        seekPermission: requestArgs.seekPermission,
         usageType: 'apply'
       })
     }
@@ -5359,6 +5364,7 @@ export class WalletPermissionsManager implements WalletInterface {
       originator: originator!,
       basket: requestArgs.basket,
       reason: 'listOutputs',
+      seekPermission: requestArgs.seekPermission,
       usageType: 'listing'
     })
     const results = await this.underlying.listOutputs(...args)
@@ -5497,6 +5503,7 @@ export class WalletPermissionsManager implements WalletInterface {
       privileged: requestArgs.privileged!,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'encrypting'
     })
     return await this.underlying.encrypt(...args)
@@ -5523,6 +5530,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: requestArgs.protocolID,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'encrypting'
     })
     return await this.underlying.decrypt(...args)
@@ -5551,6 +5559,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: requestArgs.protocolID,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'hmac'
     })
     return await this.underlying.createHmac(...args)
@@ -5579,6 +5588,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: requestArgs.protocolID,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'hmac'
     })
     return await this.underlying.verifyHmac(...args)
@@ -5607,6 +5617,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: requestArgs.protocolID,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'signing'
     })
     return await this.underlying.createSignature(...args)
@@ -5635,6 +5646,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: requestArgs.protocolID,
       counterparty: requestArgs.counterparty || 'self',
       reason: requestArgs.privilegedReason,
+      seekPermission: requestArgs.seekPermission,
       usageType: 'signing'
     })
     return await this.underlying.verifySignature(...args)
@@ -5710,7 +5722,7 @@ export class WalletPermissionsManager implements WalletInterface {
   public async discoverByIdentityKey(
     ...args: Parameters<WalletInterface['discoverByIdentityKey']>
   ): ReturnType<WalletInterface['discoverByIdentityKey']> {
-    const [_, originator] = args
+    const [requestArgs, originator] = args
     if (this.config.seekPermissionsForIdentityResolution) {
       await this.ensureProtocolPermission({
         originator: originator!,
@@ -5718,6 +5730,7 @@ export class WalletPermissionsManager implements WalletInterface {
         protocolID: [1, 'identity resolution'],
         counterparty: 'self',
         reason: 'discoverByIdentityKey',
+        seekPermission: requestArgs.seekPermission,
         usageType: 'generic'
       })
     }
@@ -5729,7 +5742,7 @@ export class WalletPermissionsManager implements WalletInterface {
   public async discoverByAttributes(
     ...args: Parameters<WalletInterface['discoverByAttributes']>
   ): ReturnType<WalletInterface['discoverByAttributes']> {
-    const [_, originator] = args
+    const [requestArgs, originator] = args
     if (this.config.seekPermissionsForIdentityResolution) {
       await this.ensureProtocolPermission({
         originator: originator!,
@@ -5737,6 +5750,7 @@ export class WalletPermissionsManager implements WalletInterface {
         protocolID: [1, 'identity resolution'],
         counterparty: 'self',
         reason: 'discoverByAttributes',
+        seekPermission: requestArgs.seekPermission,
         usageType: 'generic'
       })
     }

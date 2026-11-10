@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.4 (source candidate)
+
+- `WalletPermissionsManager` honors the caller's BRC-100 `seekPermission: false` on
+  `listActions`, `internalizeAction`, `listOutputs`, `encrypt`, `decrypt`, `createHmac`,
+  `verifyHmac`, `createSignature`, `verifySignature`, `discoverByIdentityKey` and
+  `discoverByAttributes`, and on the built-in BRC-177 module's label check for
+  `listActions`, as `getPublicKey` already did. A call that passes `false` and would
+  otherwise prompt now fails with the existing `seekPermission=false` errors. Calls that
+  need no prompt (an admin originator, an existing grant, an exempt protocol), and calls
+  that omit the flag or pass `true`, are unaffected. No migration.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with
