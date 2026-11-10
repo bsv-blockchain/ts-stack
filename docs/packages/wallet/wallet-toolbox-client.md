@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.15.4'
+last_updated: '2026-11-10'
+last_verified: '2026-11-10'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -15,14 +15,11 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 # @bsv/wallet-toolbox-client
 
-The 2.15.3 source candidate restores ordinary import of exactly framed legacy
-AtomicBEEF with surplus unrelated branches. It retains the declared payment and
-its dependencies, reruns strict SDK argument validation, and preserves native
-proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
-remain rejected. No API, wire or schema migration is required. Upgrade the host
-and remote Storage separately; reconcile and retry the original import instead
-of creating or broadcasting a replacement payment. Source is not publication or
-deployment.
+The 2.15.4 source candidate makes nLockTimeIsFinal apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote

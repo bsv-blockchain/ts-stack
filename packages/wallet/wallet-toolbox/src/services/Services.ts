@@ -53,6 +53,7 @@ import {
   validateMerklePathResult,
   ValidatedMerklePathResult
 } from './validateMerklePathResult'
+import { getMedianTimePast } from './getMedianTimePast'
 import { validateStatusForTxidsResult } from './validateStatusForTxidsResult'
 import { MAX_RAW_TRANSACTION_BYTES, validateRawTxResult } from './validateRawTxResult'
 import { normalizeWalletOutpoint, validateUtxoStatusResult } from './validateUtxoStatusResult'
@@ -1094,7 +1095,7 @@ export class Services implements WalletServices {
       }
 
       if (tx instanceof BsvTransaction) {
-        if (tx.inputs.every(i => i.sequence === MAXINT)) {
+        if (tx.inputs.every(i => (i.sequence ?? MAXINT) === MAXINT)) {
           return true
         }
         nLockTime = tx.lockTime
@@ -1103,13 +1104,16 @@ export class Services implements WalletServices {
       }
     }
 
+    if (nLockTime === 0) return true
+
     if (nLockTime >= BLOCK_LIMIT) {
-      const limit = Math.floor(Date.now() / 1000)
-      return nLockTime < limit
+      // The network compares time locks with median time past, not the wall clock.
+      return nLockTime < (await getMedianTimePast(this))
     }
 
+    // The transaction can be mined once nLockTime is below the next block's height.
     const height = await this.getHeight()
-    return nLockTime < height
+    return nLockTime < height + 1
   }
 
   async getBeefForTxid(txid: string): Promise<Beef> {
