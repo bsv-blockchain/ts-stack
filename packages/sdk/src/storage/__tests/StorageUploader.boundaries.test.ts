@@ -241,6 +241,35 @@ describe('StorageUploader boundary validation', () => {
     )
   })
 
+  it('treats an omitted requiredHeaders as no extra upload headers', async () => {
+    // Reply shape served by go-uhrp-storage-server, which omits an empty header map.
+    jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10,
+        description: 'File can now be uploaded.'
+      })
+    )
+    const putInits: RequestInit[] = []
+    const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+      if (String(input).endsWith('/quote')) {
+        return jsonResponse({ status: 'success', quote: 10 })
+      }
+      expect(String(input)).toBe('https://uploads.example/put?objectID=abc')
+      putInits.push(init as RequestInit)
+      return new Response('', { status: 200 })
+    })
+    const result = await uploader(fetchClient, ['https://one.example']).publishFile({
+      file: { data: [1, 2, 3], type: 'text/plain' },
+      retentionPeriod: 60
+    })
+    expect(result).toMatchObject({ published: true, hostedBy: ['https://one.example'] })
+    expect(putInits).toHaveLength(1)
+    expect(putInits[0]).toMatchObject({ method: 'PUT', redirect: 'error' })
+    expect(putInits[0].headers).toEqual({ 'Content-Type': 'text/plain' })
+  })
+
   it.each([
     [new Response('', { status: 500 }), 'Upload info request failed'],
     [jsonResponse({ status: 'error' }), 'Upload route returned an error'],

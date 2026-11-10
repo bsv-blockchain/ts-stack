@@ -277,6 +277,15 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### StorageUploader accepts an omitted requiredHeaders (4.0.2 patch candidate)
+
+- `StorageUploader` again treats an `/upload` reply without `requiredHeaders` as
+  no extra upload headers, as 2.7.x did. Since 2.8.0 such a reply was refused
+  as a malformed JSON object after the payment had been made, so every paid
+  upload to go-uhrp-storage-server hosts (which omit an empty header map)
+  failed. A present `requiredHeaders`, including `null`, is validated as before.
+  No API, wire or migration change.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
