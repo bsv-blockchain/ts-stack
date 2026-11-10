@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.15.4'
+last_updated: '2026-11-10'
+last_verified: '2026-11-10'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -15,14 +15,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
-The 2.15.3 source candidate restores ordinary import of exactly framed legacy
-AtomicBEEF with surplus unrelated branches. It retains the declared payment and
-its dependencies, reruns strict SDK argument validation, and preserves native
-proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
-remain rejected. No API, wire or schema migration is required. Upgrade the host
-and remote Storage separately; reconcile and retry the original import instead
-of creating or broadcasting a replacement payment. Source is not publication or
-deployment.
+The 2.15.4 source candidate makes WalletPermissionsManager honor the caller's
+BRC-100 seekPermission: false on listActions, internalizeAction, listOutputs,
+encrypt, decrypt, createHmac, verifyHmac, createSignature, verifySignature and
+the discover methods, as getPublicKey already did: a call that would otherwise
+prompt fails with the existing seekPermission=false error instead. Calls that
+omit the flag are unchanged. No API, wire or schema migration is required.
+Source is not publication or deployment.
 
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
