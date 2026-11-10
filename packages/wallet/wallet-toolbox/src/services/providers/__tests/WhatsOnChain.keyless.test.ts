@@ -345,6 +345,190 @@ describe('WhatsOnChain optional authentication', () => {
     })
   })
 
+  // `/unspent/all` lists mempool outputs with `status: 'unconfirmed'` and no `height` field.
+  const unconfirmedUtxoEntry = (txHash: string, txPos: number): Record<string, unknown> => ({
+    tx_pos: txPos,
+    tx_hash: txHash,
+    value: 85,
+    isSpentInMempoolTx: false,
+    hex: `76a914${'11'.repeat(20)}88ac`,
+    status: 'unconfirmed'
+  })
+
+  test('reports an unconfirmed UTXO, listed without a height, as unspent', async () => {
+    const scriptHash = 'aa'.repeat(32)
+    const txid = '55'.repeat(32)
+    const data = { script: scriptHash, result: [unconfirmedUtxoEntry(txid, 0)], error: '' }
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        return { ok: true, status: 200, statusText: 'OK', data: data as T }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+
+    const result = await woc.getUtxoStatus(scriptHash, 'hashBE', `${txid}.0`)
+    expect(result).toMatchObject({
+      status: 'success',
+      details: [{ txid, satoshis: 85, index: 0 }],
+      isUtxo: true
+    })
+    expect(result.details[0].height).toBeUndefined()
+  })
+
+  test.each([
+    ['unconfirmed', (txid: string) => ({ ...unconfirmedUtxoEntry(txid, 0), isSpentInMempoolTx: true })],
+    [
+      'confirmed',
+      (txid: string) => ({
+        height: 10,
+        tx_pos: 0,
+        tx_hash: txid,
+        value: 85,
+        isSpentInMempoolTx: true,
+        status: 'confirmed'
+      })
+    ]
+  ])('does not report a %s output already spent by a mempool transaction as unspent', async (_kind, entry) => {
+    const scriptHash = 'aa'.repeat(32)
+    const spentTxid = '66'.repeat(32)
+    const unspentTxid = '77'.repeat(32)
+    const data = {
+      script: scriptHash,
+      result: [entry(spentTxid), unconfirmedUtxoEntry(unspentTxid, 1)],
+      error: ''
+    }
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        return { ok: true, status: 200, statusText: 'OK', data: data as T }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${spentTxid}.0`)).resolves.toMatchObject({
+      status: 'success',
+      details: [{ txid: unspentTxid, index: 1 }],
+      isUtxo: false
+    })
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${unspentTxid}.1`)).resolves.toMatchObject({
+      status: 'success',
+      isUtxo: true
+    })
+  })
+
+  test.each([
+    ['spent first', true, false],
+    ['unspent first', false, true]
+  ])('fails an answer listing one outpoint twice with conflicting spend flags (%s)', async (_order, first, second) => {
+    const scriptHash = 'aa'.repeat(32)
+    const txid = '88'.repeat(32)
+    const entry = (isSpentInMempoolTx: boolean): Record<string, unknown> => ({
+      height: 10,
+      tx_pos: 0,
+      tx_hash: txid,
+      value: 85,
+      isSpentInMempoolTx,
+      status: 'confirmed'
+    })
+    const data = { script: scriptHash, result: [entry(first), entry(second)], error: '' }
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        return { ok: true, status: 200, statusText: 'OK', data: data as T }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${txid}.0`)).resolves.toMatchObject({
+      status: 'error',
+      details: [],
+      isUtxo: undefined
+    })
+  })
+
+  test('parses a mixed confirmed and unconfirmed UTXO set', async () => {
+    const scriptHash = 'aa'.repeat(32)
+    const confirmedTxid = '44'.repeat(32)
+    const unconfirmedTxid = '55'.repeat(32)
+    const data = {
+      script: scriptHash,
+      result: [
+        {
+          height: 10,
+          tx_pos: 3,
+          tx_hash: confirmedTxid,
+          value: 42,
+          isSpentInMempoolTx: false,
+          status: 'confirmed'
+        },
+        unconfirmedUtxoEntry(unconfirmedTxid, 1)
+      ],
+      error: ''
+    }
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        return { ok: true, status: 200, statusText: 'OK', data: data as T }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+
+    const result = await woc.getUtxoStatus(scriptHash, 'hashBE')
+    expect(result).toMatchObject({ status: 'success', isUtxo: true })
+    expect(result.details).toEqual([
+      { txid: confirmedTxid, satoshis: 42, height: 10, index: 3 },
+      { txid: unconfirmedTxid, satoshis: 85, height: undefined, index: 1 }
+    ])
+    expect(result.details[1].height).toBeUndefined()
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${confirmedTxid}.3`)).resolves.toMatchObject({
+      status: 'success',
+      isUtxo: true
+    })
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${unconfirmedTxid}.1`)).resolves.toMatchObject({
+      status: 'success',
+      isUtxo: true
+    })
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${unconfirmedTxid}.0`)).resolves.toMatchObject({
+      status: 'success',
+      isUtxo: false
+    })
+  })
+
+  test.each([
+    ['a confirmed entry without a height', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), status: 'confirmed' }],
+    ['an entry without a height or a status', { tx_pos: 0, tx_hash: '55'.repeat(32), value: 85 }],
+    ['an unconfirmed entry with a null height', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), height: null }],
+    ['an unconfirmed entry with a string height', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), height: '10' }],
+    ['an unconfirmed entry with a negative height', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), height: -1 }],
+    ['an unconfirmed entry with a fractional height', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), height: 1.5 }],
+    ['an unconfirmed entry without a tx_hash', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), tx_hash: undefined }],
+    ['an unconfirmed entry with a short tx_hash', unconfirmedUtxoEntry('55'.repeat(31), 0)],
+    ['an unconfirmed entry without a tx_pos', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), tx_pos: undefined }],
+    ['an unconfirmed entry with a negative tx_pos', unconfirmedUtxoEntry('55'.repeat(32), -1)],
+    ['an unconfirmed entry without a value', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), value: undefined }],
+    ['an unconfirmed entry with a negative value', { ...unconfirmedUtxoEntry('55'.repeat(32), 0), value: -1 }],
+    [
+      'an entry with a non-boolean isSpentInMempoolTx',
+      { ...unconfirmedUtxoEntry('55'.repeat(32), 0), isSpentInMempoolTx: 'true' }
+    ]
+  ])('rejects %s without returning a verdict', async (_name, entry) => {
+    const scriptHash = 'aa'.repeat(32)
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: { script: scriptHash, result: [entry], error: '' } as T
+        }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+
+    await expect(woc.getUtxoStatus(scriptHash, 'hashBE', `${'55'.repeat(32)}.0`)).resolves.toMatchObject({
+      status: 'error',
+      details: [],
+      isUtxo: undefined
+    })
+  })
+
   test('fails closed when a UTXO response is bound to a different script hash', async () => {
     const httpClient: HttpClient = {
       async request<T>(): Promise<HttpClientResponse<T>> {

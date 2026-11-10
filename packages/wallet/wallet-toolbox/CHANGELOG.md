@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.4 (source candidate)
+
+- WhatsOnChain `getUtxoStatus` accepts `/unspent/all` entries whose `status` is
+  `'unconfirmed'` and that carry no `height`, as WhatsOnChain returns them for mempool
+  outputs. Any answer containing one previously failed as a whole, so `isUtxo` could
+  report neither the unconfirmed output nor confirmed outputs of the same script until
+  it was mined. A height that is present is still validated, and a confirmed entry still
+  requires one. Entries that WhatsOnChain marks `isSpentInMempoolTx: true` are no longer
+  reported as unspent; a non-boolean value for that field, or an outpoint listed twice,
+  fails the answer. No migration is required.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with
