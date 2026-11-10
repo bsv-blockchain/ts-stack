@@ -602,7 +602,16 @@ async function generateChangeSdkCore(
       // Reduce the fixed output with satoshis of maxPossibleSatoshis to what will just fund the transaction...
       if (fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis !== maxPossibleSatoshis) throw new WERR_INTERNAL()
       const adjustment = feeExcess()
-      fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis += adjustment
+      const adjusted = fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis + adjustment
+      if (adjusted < 1) {
+        // The funding leaves nothing (or less) for the output after the fee. Refusing rather
+        // than planning a zero or negative output lets tiered callers try the next funding tier.
+        const werr = new WERR_INSUFFICIENT_FUNDS(spending() - maxPossibleSatoshis + 1 + feeTarget(), 1 - adjusted)
+        logger?.error(`throwing WERR_INSUFFICIENT_FUNDS for sendMax moreSatoshisNeeded ${werr.moreSatoshisNeeded}`)
+        await releaseAllocatedChangeInputs()
+        throw werr
+      }
+      fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis = adjusted
       fixedSpending += adjustment
       r.maxPossibleSatoshisAdjustment = {
         fixedOutputIndex: vgcpr.hasMaxPossibleOutput,

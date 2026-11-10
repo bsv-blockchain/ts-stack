@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
-  "version": "2.15.3",
+  "version": "2.15.4",
   "type": "module",
   "sideEffects": false,
   "engines": {
