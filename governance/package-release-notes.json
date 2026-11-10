@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-11-04",
+  "lastReviewed": "2026-11-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -230,23 +230,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "Services.nLockTimeIsFinal and MockServices.nLockTimeIsFinal apply the node's finality rule for the next block. A height lock time is final when it is below tip + 1, so a lock time equal to the tip is no longer refused. A time lock time is final when it is below the median time past of the tip and its ten predecessors (BIP113) rather than the wall clock. Inputs with an omitted sequence count as final, as they serialize as 0xffffffff. Judging a time lock reads up to eleven block headers, and a header-service failure propagates instead of reporting the transaction as not final.",
+      "migration": "No API, wire or schema migration. Height acceptance widens by one block; time-lock acceptance follows median time past, usually about an hour behind the wall clock."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "Services.nLockTimeIsFinal and MockServices.nLockTimeIsFinal apply the node's finality rule for the next block. A height lock time is final when it is below tip + 1, so a lock time equal to the tip is no longer refused. A time lock time is final when it is below the median time past of the tip and its ten predecessors (BIP113) rather than the wall clock. Inputs with an omitted sequence count as final, as they serialize as 0xffffffff. Judging a time lock reads up to eleven block headers, and a header-service failure propagates instead of reporting the transaction as not final.",
+      "migration": "No API, wire or schema migration. Height acceptance widens by one block; time-lock acceptance follows median time past, usually about an hour behind the wall clock."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "Services.nLockTimeIsFinal and MockServices.nLockTimeIsFinal apply the node's finality rule for the next block. A height lock time is final when it is below tip + 1, so a lock time equal to the tip is no longer refused. A time lock time is final when it is below the median time past of the tip and its ten predecessors (BIP113) rather than the wall clock. Inputs with an omitted sequence count as final, as they serialize as 0xffffffff. Judging a time lock reads up to eleven block headers, and a header-service failure propagates instead of reporting the transaction as not final.",
+      "migration": "No API, wire or schema migration. Height acceptance widens by one block; time-lock acceptance follows median time past, usually about an hour behind the wall clock."
     },
     {
       "name": "@bsv/webrtpay",

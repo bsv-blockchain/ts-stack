@@ -177,7 +177,11 @@ export interface WalletServices {
   hashToHeader: (hash: string) => Promise<BlockHeader>
 
   /**
-   * @returns whether the locktime value allows the transaction to be mined at the current chain height
+   * @returns whether the locktime value allows the transaction to be mined in the next block.
+   * A transaction whose inputs all have sequence 0xffffffff (an omitted sequence serializes as
+   * that value), and a locktime of 0, are final without reading the chain. Otherwise a height
+   * locktime must be below the next block's height, and a time locktime below the median time
+   * past of the chain tip (BIP113), never the wall clock
    * @param txOrLockTime either a bitcoin locktime value or hex, binary, un-encoded Transaction
    */
   nLockTimeIsFinal: (txOrLockTime: string | number[] | BsvTransaction | number) => Promise<boolean>
