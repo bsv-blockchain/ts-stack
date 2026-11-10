@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-11-04",
+  "lastReviewed": "2026-11-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -230,23 +230,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "TaskCheckNoSends runs its scheduled, unfiltered sweep again. The sweep catches externally broadcast nosend rows that the block-triggered aging schedule defers, but it shared its clock with every run of the task, so block-triggered runs kept postponing it while blocks arrived, and at start it was spent on a run that returned early before the first header. It now keeps its own clock, waits for the first processed header and is not filtered by the aging schedule when a block has also set checkNow.",
+      "migration": "No API, wire or schema migration. A new process sweeps once at its first processed header, then once per triggerMsecs (one day by default)."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "TaskCheckNoSends runs its scheduled, unfiltered sweep again. The sweep catches externally broadcast nosend rows that the block-triggered aging schedule defers, but it shared its clock with every run of the task, so block-triggered runs kept postponing it while blocks arrived, and at start it was spent on a run that returned early before the first header. It now keeps its own clock, waits for the first processed header and is not filtered by the aging schedule when a block has also set checkNow.",
+      "migration": "No API, wire or schema migration. A new process sweeps once at its first processed header, then once per triggerMsecs (one day by default)."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "TaskCheckNoSends runs its scheduled, unfiltered sweep again. The sweep catches externally broadcast nosend rows that the block-triggered aging schedule defers, but it shared its clock with every run of the task, so block-triggered runs kept postponing it while blocks arrived, and at start it was spent on a run that returned early before the first header. It now keeps its own clock, waits for the first processed header and is not filtered by the aging schedule when a block has also set checkNow.",
+      "migration": "No API, wire or schema migration. A new process sweeps once at its first processed header, then once per triggerMsecs (one day by default)."
     },
     {
       "name": "@bsv/webrtpay",

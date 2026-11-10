@@ -4,6 +4,18 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.4 (source candidate)
+
+- `TaskCheckNoSends` runs its scheduled, unfiltered sweep again. The sweep catches
+  externally broadcast `nosend` rows that the block-triggered aging schedule defers, but
+  it shared its clock with every run of the task: each block-triggered run reset it, so
+  while blocks kept arriving it never came due in a long-lived process, and at start it
+  fired before the first header was processed and was spent on a run that returned early.
+  The sweep now keeps its own clock, waits for the first processed header, and is not
+  filtered by the aging schedule when a block has also set `checkNow`. A new process
+  therefore sweeps once at its first processed header, then once per `triggerMsecs`
+  (one day by default); other block-triggered runs keep the aging schedule. No migration.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with

@@ -47,10 +47,13 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * For a wallet with N rows in tier T and tier interval K, this gives
  * roughly N/K rows fired per block instead of N rows fired every K blocks.
  *
- * The scheduled daily cadence (no `checkNow`) is unaffected — it still scans
- * every row regardless of age. That path is the once-per-day fallback that
- * guarantees externally-broadcast `nosend` txs are eventually recognized
- * even if the aging schedule on the checkNow path defers them.
+ * The scheduled daily cadence is unaffected — it still scans every row
+ * regardless of age. That path is the once-per-day fallback that guarantees
+ * externally-broadcast `nosend` txs are eventually recognized even if the
+ * aging schedule on the checkNow path defers them. Its clock is kept apart
+ * from the block-triggered runs (which would otherwise reset it on every
+ * block), it waits until a block header has been processed, and a due sweep
+ * is not filtered when a block has also set `checkNow`.
  */
 export class TaskCheckNoSends extends WalletMonitorTask {
   static readonly taskName = 'CheckNoSends'
@@ -68,11 +71,12 @@ export class TaskCheckNoSends extends WalletMonitorTask {
   }
 
   /**
-   * Aging-schedule constants for the `checkNow` path. Rows below `tier0FreshSkipMsecs`
-   * are never checked via checkNow (batched-tx protection). Rows from tier 0 up
-   * to `tier1EveryBlockMsecs` are checked on every checkNow trigger. Beyond that,
-   * checks happen on `block-height % tierNBlockInterval === 0` cadences with
-   * growing intervals. The scheduled daily cadence (no checkNow) is unaffected.
+   * Aging-schedule constants for block-triggered (`checkNow`) runs. Rows below
+   * `tier0FreshSkipMsecs` are never checked by such a run (batched-tx protection).
+   * Rows from tier 0 up to `tier1EveryBlockMsecs` are checked on every checkNow
+   * trigger. Beyond that, checks happen on `block-height % tierNBlockInterval === 0`
+   * cadences with growing intervals. A due scheduled sweep is unfiltered, even when
+   * a block has also set checkNow.
    */
   static readonly tier0FreshSkipMsecs = 5 * 60 * 1000 // 5 min
   static readonly tier1EveryBlockMsecs = 60 * 60 * 1000 // 1 hr
@@ -109,6 +113,11 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier4BlockInterval === 0
   }
 
+  /** When the last unfiltered sweep started; block-triggered runs do not move it. */
+  private lastSweepMsecsSinceEpoch = 0
+  /** Set by `trigger` when the scheduled sweep is due; consumed by the next `runTask`. */
+  private sweepPending = false
+
   constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneDay * 1
@@ -121,18 +130,30 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    * Normally triggered by checkNow getting set by new block header found event from chaintracks
    */
   trigger(nowMsecsSinceEpoch: number): { run: boolean } {
-    return {
-      run:
-        TaskCheckNoSends.checkNow ||
-        (this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs)
-    }
+    if (this.isSweepDue(nowMsecsSinceEpoch)) this.sweepPending = true
+    return { run: TaskCheckNoSends.checkNow || this.sweepPending }
+  }
+
+  /**
+   * The unfiltered sweep is due once `triggerMsecs` has passed since the last one started. It
+   * needs a chain height, so it waits for the first processed block header rather than being
+   * spent on a run that can only return early.
+   */
+  private isSweepDue(nowMsecsSinceEpoch: number): boolean {
+    return (
+      this.triggerMsecs > 0 &&
+      this.monitor.lastNewHeader !== undefined &&
+      nowMsecsSinceEpoch - this.lastSweepMsecsSinceEpoch > this.triggerMsecs
+    )
   }
 
   async runTask(): Promise<string> {
     let log = ''
     const wasCheckNow = TaskCheckNoSends.checkNow
     const countsAsAttempt = wasCheckNow
+    const sweep = this.sweepPending
     TaskCheckNoSends.checkNow = false
+    this.sweepPending = false
 
     const maxAcceptableHeight = this.monitor.lastNewHeader?.height
     if (maxAcceptableHeight === undefined) {
@@ -140,6 +161,8 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     }
 
     const nowMs = Date.now()
+    if (sweep) this.lastSweepMsecsSinceEpoch = nowMs
+    const applyAgingSchedule = wasCheckNow && !sweep
 
     const limit = 100
     let offset = 0
@@ -152,12 +175,12 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'nosend'\n`
 
-      // On the checkNow (block-triggered) path, apply the aging schedule
-      // — see class docstring. The scheduled daily cadence is unfiltered
-      // so externally-broadcast unmined nosend txs are eventually caught
+      // On a block-triggered run with no scheduled sweep due, apply the aging
+      // schedule — see class docstring. The scheduled sweep is unfiltered so
+      // externally-broadcast unmined nosend txs are eventually caught
       // regardless of age.
       let eligible = reqs
-      if (wasCheckNow) {
+      if (applyAgingSchedule) {
         eligible = reqs.filter(r =>
           TaskCheckNoSends.shouldCheckOnCheckNow(r.created_at, nowMs, maxAcceptableHeight, r.provenTxReqId)
         )
