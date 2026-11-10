@@ -142,6 +142,13 @@ function applyBitailsTransactionResult(
   notes: BitailsPostNoteContext
 ): void {
   if (response.error == null) {
+    if ((response as BitailsPostRawsResult & { code?: string }).code === 'ECONNRESET') {
+      // A reset connection is a transport failure, not a verdict on the transaction.
+      result.status = 'error'
+      result.serviceError = true
+      result.notes!.push({ ...notes.nne(), what: 'postRawsErrorECONNRESET', txid: result.txid })
+      return
+    }
     result.notes!.push({ ...notes.nn(), what: 'postRawsSuccess' })
     return
   }
@@ -157,6 +164,8 @@ function applyBitailsTransactionResult(
     result.competingTxs = undefined
     result.notes!.push({ ...notes.nne(), what: 'postRawsErrorMissingInputs' })
   } else if ((response as BitailsPostRawsResult & { code?: string }).code === 'ECONNRESET') {
+    // A reset connection is a transport failure, not a verdict on the transaction.
+    result.serviceError = true
     result.notes!.push({
       ...notes.nne(),
       what: 'postRawsErrorECONNRESET',

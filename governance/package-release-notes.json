@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-11-04",
+  "lastReviewed": "2026-11-10",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -230,23 +230,23 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "The ARC broadcaster treats HTTP 401 and 403 as service errors, as Arcade does since 2.15.1. An API-key protected ARC answers 401 before it reads the transaction; arc.taal.com and arc-test.taal.com, the default arcUrl on main and test, answer every keyless request that way, so a transaction was recorded as rejected and its inputs released when no other provider accepted it in the same attempt. A failed status read for an extra txid in ARC.postBeef becomes a service error for that txid instead of an exception. WhatsOnChain post answers for 401, 403, 408, an exhausted 429 retry or 5xx, including node-side service failures it relays, are service errors; a relayed node refusal of the transaction keeps its classification. A per-transaction ECONNRESET in a Bitails answer is a service error.",
+      "migration": "No API, wire, configuration or schema migration. Transactions that previously failed on these answers stay queued for retry or fail over to the next provider."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "The ARC broadcaster treats HTTP 401 and 403 as service errors, as Arcade does since 2.15.1. An API-key protected ARC answers 401 before it reads the transaction; arc.taal.com and arc-test.taal.com, the default arcUrl on main and test, answer every keyless request that way, so a transaction was recorded as rejected and its inputs released when no other provider accepted it in the same attempt. A failed status read for an extra txid in ARC.postBeef becomes a service error for that txid instead of an exception. WhatsOnChain post answers for 401, 403, 408, an exhausted 429 retry or 5xx, including node-side service failures it relays, are service errors; a relayed node refusal of the transaction keeps its classification. A per-transaction ECONNRESET in a Bitails answer is a service error.",
+      "migration": "No API, wire, configuration or schema migration. Transactions that previously failed on these answers stay queued for retry or fail over to the next provider."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.15.3",
-      "releaseType": "none",
-      "summary": "Restore ordinary internalization of exactly framed legacy AtomicBEEF envelopes with surplus unrelated branches. The existing strict decoder retains only the declared payment and required dependencies before rerunning the unchanged SDK argument validator. Native proof, Script, remittance ownership and durable receipt checks remain mandatory. Truncated, trailing, missing-subject and incomplete-dependency inputs retain the original errors. SQL receipt admission and storage-manager forwarding use canonical bytes while preserving the other caller arguments.",
-      "migration": "No API, wire or schema migration. Upgrade the wallet host and remote Storage separately. Reconcile the original TXID before retrying a previously rejected import; do not create a replacement payment or rebroadcast a mined one. Published 2.15.3 packages still require separately qualified host and Storage deployments."
+      "releaseType": "patch",
+      "summary": "The ARC broadcaster treats HTTP 401 and 403 as service errors, as Arcade does since 2.15.1. An API-key protected ARC answers 401 before it reads the transaction; arc.taal.com and arc-test.taal.com, the default arcUrl on main and test, answer every keyless request that way, so a transaction was recorded as rejected and its inputs released when no other provider accepted it in the same attempt. A failed status read for an extra txid in ARC.postBeef becomes a service error for that txid instead of an exception. WhatsOnChain post answers for 401, 403, 408, an exhausted 429 retry or 5xx, including node-side service failures it relays, are service errors; a relayed node refusal of the transaction keeps its classification. A per-transaction ECONNRESET in a Bitails answer is a service error.",
+      "migration": "No API, wire, configuration or schema migration. Transactions that previously failed on these answers stay queued for retry or fail over to the next provider."
     },
     {
       "name": "@bsv/webrtpay",
