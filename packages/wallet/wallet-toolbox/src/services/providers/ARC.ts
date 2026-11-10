@@ -75,6 +75,16 @@ export function isArcServiceErrorStatus(status: number | undefined, detail?: str
   )
 }
 
+/**
+ * An API-key protected ARC answers 401 before it reads the transaction: arc.taal.com and
+ * arc-test.taal.com answer "Authentication error: no authorization token provided" without a key
+ * and "Authentication error: authorization key not found" for an unknown one. A 403 from a gateway
+ * refusing a key is decided the same way. Neither says anything about the transaction.
+ */
+function isArcAuthStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403
+}
+
 interface ArcPostNoteContext {
   nn: () => { name: string; when: string }
   nne: () => {
@@ -220,7 +230,16 @@ export class ARC {
         note.detail = responseData.detail
       }
     }
-    result.serviceError = isArcServiceErrorStatus(numericStatus, errorData.detail)
+    // A refused key must be a service error so the wallet fails over or retries instead of
+    // marking the transaction invalid, as Arcade does for the same answers.
+    const authRefused = isArcAuthStatus(numericStatus)
+    if (authRefused) {
+      const reason =
+        this.apiKey != null && this.apiKey !== '' ? 'ARC refused the configured API key' : 'ARC requires an API key'
+      errorData.detail ??= reason
+      note.detail ??= reason
+    }
+    result.serviceError = authRefused || isArcServiceErrorStatus(numericStatus, errorData.detail)
     result.notes!.push(note)
   }
 
@@ -352,7 +371,19 @@ export class ARC {
         notes: []
       }
       // For the extra txids, go back to the service for confirmation...
-      const dr = await this.getTxData(txid)
+      let dr: ArcMinerGetTxData
+      try {
+        dr = await this.getTxData(txid)
+      } catch (error_: unknown) {
+        // A failed status read (a refused key, an outage) is no verdict on this txid.
+        const e = WalletError.fromUnknown(error_)
+        tr.status = 'error'
+        tr.serviceError = true
+        tr.notes!.push({ ...nn(), what: 'postBeefGetTxDataCatch', txid, code: e.code, description: e.description })
+        r.txidResults.push(tr)
+        r.status = 'error'
+        continue
+      }
       if (dr.txid !== txid) {
         tr.status = 'error'
         tr.data = 'internal error'

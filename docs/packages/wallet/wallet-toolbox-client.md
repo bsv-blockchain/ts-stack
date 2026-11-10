@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.15.4'
+last_updated: '2026-11-10'
+last_verified: '2026-11-10'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -15,14 +15,14 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 # @bsv/wallet-toolbox-client
 
-The 2.15.3 source candidate restores ordinary import of exactly framed legacy
-AtomicBEEF with surplus unrelated branches. It retains the declared payment and
-its dependencies, reruns strict SDK argument validation, and preserves native
-proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
-remain rejected. No API, wire or schema migration is required. Upgrade the host
-and remote Storage separately; reconcile and retry the original import instead
-of creating or broadcasting a replacement payment. Source is not publication or
-deployment.
+The 2.15.4 source candidate scores broadcaster answers that judge nothing about
+the transaction as service errors: ARC HTTP 401 and 403 (a keyless request to
+the default arc.taal.com, or a refused key), WhatsOnChain 401, 403, 408,
+exhausted 429 and 5xx answers that relay no node refusal, and a Bitails per-
+transaction connection reset. Such a transaction now stays queued for retry or
+fails over instead of being marked invalid with its inputs released. No API,
+wire, configuration or schema migration is required. Source is not publication
+or deployment.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote

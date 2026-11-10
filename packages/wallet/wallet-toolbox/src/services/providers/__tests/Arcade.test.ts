@@ -479,6 +479,61 @@ describe('Arcade broadcaster', () => {
       expect(r.serviceError).toBe(true)
     })
 
+    test.each([401, 403] as const)(
+      'standard ARC HTTP %i (key refused) → serviceError=true, never an invalid-transaction verdict',
+      async status => {
+        const captured: CapturedRequest[] = []
+        const http = mockHttpClient(
+          {
+            ok: false,
+            status,
+            statusText: status === 401 ? 'Unauthorized' : 'Forbidden',
+            data: { message: 'Authentication error: authorization key not found' }
+          },
+          captured
+        )
+        const arc = new ARC('https://arc.example', { httpClient: http, apiKey: 'refused-key' })
+        const r = await arc.postRawTx(RAW_TX)
+        expect(r.status).toBe('error')
+        expect(r.serviceError).toBe(true)
+        expect(r.doubleSpend).toBeFalsy()
+        expect(r.data).toMatchObject({ status: String(status), detail: 'ARC refused the configured API key' })
+        expect(r.notes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ what: 'postRawTxError', status, detail: 'ARC refused the configured API key' })
+          ])
+        )
+      }
+    )
+
+    test('standard ARC HTTP 401 without a configured key says the endpoint requires one', async () => {
+      // The answer a keyless POST to arc.taal.com gets.
+      const http = mockHttpClient(
+        {
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          data: { message: 'Authentication error: no authorization token provided' }
+        },
+        []
+      )
+      const arc = new ARC('https://arc.example', { httpClient: http })
+      const r = await arc.postRawTx(RAW_TX)
+      expect(r.serviceError).toBe(true)
+      expect(r.data).toMatchObject({ detail: 'ARC requires an API key' })
+    })
+
+    test('standard ARC keeps a server-supplied detail on a refused key', async () => {
+      const http = mockHttpClient(
+        { ok: false, status: 403, statusText: 'Forbidden', data: { detail: 'key not allowed for this route' } },
+        []
+      )
+      const arc = new ARC('https://arc.example', { httpClient: http, apiKey: 'limited-key' })
+      const r = await arc.postRawTx(RAW_TX)
+      expect(r.serviceError).toBe(true)
+      expect(r.data).toMatchObject({ detail: 'key not allowed for this route' })
+    })
+
     test.each([
       'RECEIVED',
       'SENT_TO_NETWORK',
@@ -519,6 +574,67 @@ describe('Arcade broadcaster', () => {
       expect(r.status).toBe('success')
       expect(r.txidResults.find(t => t.txid === extraTxid)?.status).toBe('success')
       expect(captured[1].url).toBe(`https://arc.example/v1/tx/${extraTxid}`)
+    })
+
+    function twoTransactionBeef(): { beef: Beef; primaryTxid: string; extraTxid: string } {
+      const lock = new P2PKH().lock(PrivateKey.fromHex('45'.repeat(32)).toPublicKey().toAddress())
+      const extraTx = new Transaction()
+      extraTx.addOutput({ satoshis: 1, lockingScript: lock })
+      const primaryTx = new Transaction()
+      primaryTx.addOutput({ satoshis: 2, lockingScript: lock })
+      const beef = new Beef()
+      beef.mergeTransaction(extraTx)
+      beef.mergeTransaction(primaryTx)
+      return { beef, primaryTxid: primaryTx.id('hex'), extraTxid: extraTx.id('hex') }
+    }
+
+    test('standard ARC postBeef with a refused key marks every txid a service error instead of throwing', async () => {
+      const { beef, primaryTxid, extraTxid } = twoTransactionBeef()
+      const refused = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        data: { message: 'Authentication error: authorization key not found' }
+      }
+      const http = mockHttpClientSequence([refused, refused], [])
+      const arc = new ARC('https://arc.example', { httpClient: http, apiKey: 'unknown-key' })
+
+      const r = await arc.postBeef(beef, [extraTxid, primaryTxid])
+
+      expect(r.status).toBe('error')
+      expect(r.txidResults).toHaveLength(2)
+      for (const tr of r.txidResults) {
+        expect(tr.status).toBe('error')
+        expect(tr.serviceError).toBe(true)
+        expect(tr.doubleSpend).toBeFalsy()
+      }
+      expect(r.txidResults.find(t => t.txid === extraTxid)?.notes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ what: 'postBeefGetTxDataCatch', txid: extraTxid })])
+      )
+    })
+
+    test('standard ARC postBeef keeps the posted result when only the extra-txid status read is refused', async () => {
+      const { beef, primaryTxid, extraTxid } = twoTransactionBeef()
+      const http = mockHttpClientSequence(
+        [
+          {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            data: { txid: primaryTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' }
+          },
+          { ok: false, status: 403, statusText: 'Forbidden', data: { message: 'Forbidden' } }
+        ],
+        []
+      )
+      const arc = new ARC('https://arc.example', { httpClient: http, apiKey: 'post-only-key' })
+
+      const r = await arc.postBeef(beef, [extraTxid, primaryTxid])
+
+      expect(r.txidResults.find(t => t.txid === primaryTxid)?.status).toBe('success')
+      const extra = r.txidResults.find(t => t.txid === extraTxid)
+      expect(extra?.status).toBe('error')
+      expect(extra?.serviceError).toBe(true)
     })
   })
 
