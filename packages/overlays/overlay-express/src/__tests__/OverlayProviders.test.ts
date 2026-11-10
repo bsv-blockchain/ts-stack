@@ -159,6 +159,39 @@ describe('Overlay transaction providers', () => {
     expect(requestHeaders?.Authorization).toBe('Bearer secret')
   })
 
+  it.each(['SEEN_MULTIPLE_NODES', 'STUMP_PROCESSING'])(
+    'treats an Arcade %s echo of an already-propagated transaction as a successful broadcast',
+    async txStatus => {
+      // A re-submit of a known txid is answered 202 with the stored state (bsv-blockchain/broadcaster
+      // v0.20.0, services/api_server/handlers.go), so an overlay that receives a transaction after the
+      // wallet broadcast it sees whatever state the network has already reached.
+      const fetcher = jest.fn(
+        async () =>
+          new Response(JSON.stringify({ txid: tx.id(), status: 202, txStatus }), { status: 202 })
+      ) as any
+      const arcade = new ArcadeProvider('https://arcade.example/', { fetch: fetcher })
+
+      const response = await arcade.broadcast(tx)
+
+      expect(response).toMatchObject({ status: 'success', txid: tx.id() })
+    }
+  )
+
+  it.each(['PENDING_RETRY', 'UNKNOWN'])(
+    'leaves an Arcade %s answer a non-terminal failure so the next broadcaster is tried',
+    async txStatus => {
+      const fetcher = jest.fn(
+        async () =>
+          new Response(JSON.stringify({ txid: tx.id(), status: 202, txStatus }), { status: 202 })
+      ) as any
+      const arcade = new ArcadeProvider('https://arcade.example/', { fetch: fetcher })
+
+      const response = await arcade.broadcast(tx)
+
+      expect(response).toMatchObject({ status: 'error', more: { terminal: false } })
+    }
+  )
+
   it('snapshots provider credentials and custom headers before asynchronous use', async () => {
     const fetcher = jest.fn(
       async () =>
