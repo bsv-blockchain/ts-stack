@@ -43,7 +43,8 @@
     "examples",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

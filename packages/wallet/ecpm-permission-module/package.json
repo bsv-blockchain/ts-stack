@@ -25,7 +25,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",

@@ -5,7 +5,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { LICENSE_FILE, NOTICE_FILE, REPOSITORY_ROOT } from './package-license-policy.mjs'
+import {
+  LICENSE_FILE,
+  NOTICE_FILE,
+  PATENTS_FILE,
+  REPOSITORY_ROOT
+} from './package-license-policy.mjs'
 import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.mjs'
 
 const registry = JSON.parse(
@@ -17,6 +22,7 @@ const supplyChainPolicy = JSON.parse(
 const packages = registry.projects.filter(project => project.release === 'npm-oidc')
 const expectedLicenseSize = fs.statSync(path.join(REPOSITORY_ROOT, LICENSE_FILE)).size
 const expectedNoticeSize = fs.statSync(path.join(REPOSITORY_ROOT, NOTICE_FILE)).size
+const expectedPatentsSize = fs.statSync(path.join(REPOSITORY_ROOT, PATENTS_FILE)).size
 const execFileAsync = promisify(execFile)
 
 async function verifyPackage(project) {
@@ -70,6 +76,15 @@ async function verifyPackage(project) {
         `expected ${expectedNoticeSize}`
     )
   }
+  const patents = packed.files?.filter(file => file.path === PATENTS_FILE) ?? []
+  if (patents.length !== 1) {
+    errors.push(`${project.path} tarball must contain exactly one root ${PATENTS_FILE}`)
+  } else if (patents[0].size !== expectedPatentsSize) {
+    errors.push(
+      `${project.path} tarball ${PATENTS_FILE} has size ${patents[0].size}, ` +
+        `expected ${expectedPatentsSize}`
+    )
+  }
   for (const requiredFile of expectedThirdPartyFilesForPackage(project.name)) {
     const matches = packed.files?.filter(file => file.path === requiredFile) ?? []
     const sourcePath = path.join(projectDirectory, requiredFile)
@@ -115,6 +130,7 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Verified ${packages.length} public package tarballs include the canonical ` +
-      `${LICENSE_FILE}, ${NOTICE_FILE} and every scoped third-party notice payload.`
+      `${LICENSE_FILE}, ${NOTICE_FILE}, ${PATENTS_FILE} and every scoped third-party ` +
+      'notice payload.'
   )
 }

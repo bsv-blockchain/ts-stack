@@ -297,7 +297,7 @@ function writeDistributionFiles(registry) {
       )
     }
   }
-  for (const file of ['LICENSE', 'NOTICE']) {
+  for (const file of ['LICENSE', 'NOTICE', 'PATENTS']) {
     fs.copyFileSync(path.join(DOCS_SITE_ROOT, file), path.join(DIST_DIRECTORY, file))
   }
   fs.writeFileSync(

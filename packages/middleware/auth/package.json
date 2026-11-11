@@ -27,7 +27,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "repository": {
     "type": "git",

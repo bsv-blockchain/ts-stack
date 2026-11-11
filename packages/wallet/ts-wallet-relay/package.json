@@ -63,7 +63,8 @@
     "template",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "node build.mjs && tsc -p tsconfig.build.json --emitDeclarationOnly && node scripts/copy-cjs-types.mjs",
