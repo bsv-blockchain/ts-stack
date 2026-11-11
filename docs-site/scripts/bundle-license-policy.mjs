@@ -220,7 +220,7 @@ export function renderBundledNotice(registry) {
     '# Third-Party Notices for the TS Stack Documentation Site',
     '',
     'The TS Stack documentation and first-party site code are provided under the',
-    'Open BSV License Version 6 in `LICENSE.txt`. The deployed static site also',
+    'Apache License, Version 2.0 in `LICENSE`. The deployed static site also',
     'bundles the components below. Their own terms and notices remain applicable.',
     '',
     'This inventory is derived from the client build source maps and separately',
@@ -297,10 +297,9 @@ function writeDistributionFiles(registry) {
       )
     }
   }
-  fs.copyFileSync(
-    path.join(DOCS_SITE_ROOT, 'LICENSE.txt'),
-    path.join(DIST_DIRECTORY, 'LICENSE.txt')
-  )
+  for (const file of ['LICENSE', 'NOTICE']) {
+    fs.copyFileSync(path.join(DOCS_SITE_ROOT, file), path.join(DIST_DIRECTORY, file))
+  }
   fs.writeFileSync(
     path.join(DIST_DIRECTORY, 'THIRD_PARTY_NOTICES.md'),
     renderBundledNotice(registry)

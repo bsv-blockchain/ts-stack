@@ -14,7 +14,8 @@
   "files": [
     "out/src",
     "src",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -28,7 +29,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic#readme",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.3.0",
     "@bsv/payment-express-middleware": "^2.1.11",

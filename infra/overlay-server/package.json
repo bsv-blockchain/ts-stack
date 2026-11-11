@@ -19,7 +19,7 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "infra/overlay-server"
   },
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "BSV Association",
   "type": "module",
   "main": "index.js",

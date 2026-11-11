@@ -24,7 +24,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -48,7 +49,7 @@
     "BSV"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "@bsv/templates": "workspace:^"
   },

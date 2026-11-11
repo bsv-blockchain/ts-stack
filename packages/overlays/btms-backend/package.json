@@ -10,7 +10,8 @@
     "dist",
     "src",
     "mod.ts",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {
@@ -36,7 +37,7 @@
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@jest/globals": "^30.5.1",
     "@types/jest": "^30.0.0",

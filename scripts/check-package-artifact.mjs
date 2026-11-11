@@ -61,7 +61,8 @@ function isDeclarationFile(file) {
 function requiredFileErrors(files, packageName) {
   const requiredFiles = [
     'package.json',
-    'LICENSE.txt',
+    'LICENSE',
+    'NOTICE',
     ...expectedThirdPartyFilesForPackage(packageName)
   ]
   return requiredFiles.flatMap(requiredFile =>

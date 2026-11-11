@@ -367,7 +367,7 @@ function documentationOnlyProjectFile(projectPath, file) {
   return (
     relative.endsWith('.md') ||
     relative === 'LICENSE' ||
-    relative === 'LICENSE.txt' ||
+    relative === 'NOTICE' ||
     relative.startsWith('docs/')
   )
 }

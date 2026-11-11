@@ -435,7 +435,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.deepEqual(policy.scanGate.severities, ['HIGH', 'CRITICAL'])
   assert.equal(policy.scanGate.ignoreUnfixed, false)
   assert.equal(policy.licensePolicy.requireDeclaredLicense, true)
-  assert.equal(policy.licensePolicy.internalLicense, 'Open BSV License Version 6')
+  assert.equal(policy.licensePolicy.internalLicense, 'Apache-2.0')
   assert.deepEqual(policy.attestations.predicates, [
     'https://slsa.dev/provenance/v1',
     'https://cyclonedx.org/bom'

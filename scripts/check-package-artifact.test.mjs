@@ -30,7 +30,8 @@ test('packed artifact policy accepts a minimal compiled package', () => {
         name: manifest.name,
         version: manifest.version,
         files: [
-          { path: 'LICENSE.txt' },
+          { path: 'LICENSE' },
+          { path: 'NOTICE' },
           { path: 'README.md' },
           { path: 'dist/index.js' },
           { path: 'dist/index.d.ts' },
@@ -49,8 +50,8 @@ test('packed artifact policy rejects source, tests, caches, locks, and identity 
       name: '@bsv/wrong',
       version: '9.9.9',
       files: [
-        { path: 'LICENSE.txt' },
-        { path: 'LICENSE.txt' },
+        { path: 'LICENSE' },
+        { path: 'LICENSE' },
         { path: 'src/index.ts' },
         { path: 'dist/index.test.js' },
         { path: 'dist/tsconfig.tsbuildinfo' },
@@ -61,7 +62,8 @@ test('packed artifact policy rejects source, tests, caches, locks, and identity 
     manifest
   )
 
-  assert.ok(errors.some(error => error.includes('exactly one root LICENSE.txt')))
+  assert.ok(errors.some(error => error.includes('exactly one root LICENSE')))
+  assert.ok(errors.some(error => error.includes('exactly one root NOTICE')))
   assert.ok(errors.some(error => error.includes('root README')))
   assert.ok(errors.some(error => error.includes('uncompiled TypeScript')))
   assert.ok(errors.some(error => error.includes('test artifact')))
@@ -73,7 +75,8 @@ test('packed artifact policy rejects source, tests, caches, locks, and identity 
 
 test('packed artifact policy permits only explicitly allowlisted scaffold source', () => {
   const files = [
-    { path: 'LICENSE.txt' },
+    { path: 'LICENSE' },
+    { path: 'NOTICE' },
     { path: 'README.md' },
     { path: 'dist/index.js' },
     { path: 'dist/index.d.ts' },

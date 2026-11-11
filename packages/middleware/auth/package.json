@@ -26,7 +26,8 @@
   },
   "files": [
     "dist",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
@@ -53,7 +54,7 @@
     "signature"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "commonjs",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

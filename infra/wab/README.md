@@ -744,7 +744,7 @@ To contribute:
 
 ## License
 
-This project is available under the [Open BSV License Version 6](./LICENSE.txt).
+This project is available under the [Apache License 2.0](./LICENSE).
 
 ## Development watcher security maintenance
 

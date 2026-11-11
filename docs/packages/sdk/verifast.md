@@ -60,8 +60,8 @@ for routing, network, batch, resource, and UMD details.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/verifast/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/verifast/LICENSE).
 
 The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
 result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
