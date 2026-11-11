@@ -31,7 +31,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "directories": {
     "test": "tests"

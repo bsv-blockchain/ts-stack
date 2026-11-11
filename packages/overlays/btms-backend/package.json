@@ -11,7 +11,8 @@
     "src",
     "mod.ts",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "exports": {
     ".": {

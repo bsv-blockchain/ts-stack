@@ -28,7 +28,12 @@ with SHA-256
 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
 The repository-root
 [`NOTICE`](https://github.com/bsv-blockchain/ts-stack/blob/main/NOTICE)
-carries the BSV Association copyright notice.
+carries the BSV Association copyright notice. The repository-root
+[`PATENTS`](https://github.com/bsv-blockchain/ts-stack/blob/main/PATENTS)
+states that the license applies to copyright only, that BSV Association holds
+no patent rights, and that it will not assert patent rights against users of
+the software. It has
+SHA-256 `02988c67da2b43a9c2a566df2f3ff1376e7fa3eaed3562fa983d12f78a8cd8e0`.
 
 ## Package convention
 
@@ -37,9 +42,10 @@ Every directory containing a `package.json` must:
 - declare `"author": "BSV Association"`, the Association's current public
   identity;
 - declare `"license": "Apache-2.0"`;
-- contain `LICENSE` and `NOTICE` with bytes identical to the root files;
-- include `LICENSE` and `NOTICE` exactly once when the package uses a `files`
-  allowlist;
+- contain `LICENSE`, `NOTICE` and `PATENTS` with bytes identical to the root
+  files;
+- include `LICENSE`, `NOTICE` and `PATENTS` exactly once when the package uses
+  a `files` allowlist;
 - avoid alternate first-party names such as `LICENSE.txt`, `LICENSE.md`, or
   `license.md`; and
 - repeat the same declaration in the root package entry of a colocated
@@ -152,7 +158,7 @@ Before publishing:
 1. run `pnpm license:check`;
 2. run `pnpm license:release-check` and resolve every recorded clearance;
 3. dry-pack every public package with lifecycle scripts disabled;
-4. confirm each tarball contains exact `LICENSE`, `NOTICE`,
+4. confirm each tarball contains exact `LICENSE`, `NOTICE`, `PATENTS`,
    `THIRD_PARTY_NOTICES.md`, and scoped `LICENSES/` payloads;
 5. verify browser bundle banners, VeriFast WASM companions, container notice
    paths, CycloneDX components, and `licenses.json`;

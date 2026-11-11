@@ -24,7 +24,8 @@
     "!dist/**/*.tsbuildinfo",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsc",

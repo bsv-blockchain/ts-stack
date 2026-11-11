@@ -63,6 +63,7 @@ function requiredFileErrors(files, packageName) {
     'package.json',
     'LICENSE',
     'NOTICE',
+    'PATENTS',
     ...expectedThirdPartyFilesForPackage(packageName)
   ]
   return requiredFiles.flatMap(requiredFile =>

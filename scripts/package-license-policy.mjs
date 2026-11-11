@@ -11,10 +11,13 @@ export const REPOSITORY_ROOT = path.resolve(SCRIPT_DIRECTORY, '..')
 export const LICENSE_DECLARATION = 'Apache-2.0'
 export const LICENSE_FILE = 'LICENSE'
 export const NOTICE_FILE = 'NOTICE'
+export const PATENTS_FILE = 'PATENTS'
 export const LICENSE_NAME = 'Apache License, Version 2.0'
 export const OCI_LICENSE_REFERENCE = 'Apache-2.0'
 export const EXPECTED_LICENSE_SHA256 =
   'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
+export const EXPECTED_PATENTS_SHA256 =
+  '02988c67da2b43a9c2a566df2f3ff1376e7fa3eaed3562fa983d12f78a8cd8e0'
 
 const IGNORED_DIRECTORIES = new Set([
   '.cache',
@@ -75,18 +78,21 @@ function sha256(value) {
 function validateCanonicalLicense(root) {
   const canonicalPath = path.join(root, LICENSE_FILE)
   const noticePath = path.join(root, NOTICE_FILE)
-  if (!fs.existsSync(canonicalPath) || !fs.existsSync(noticePath)) {
+  const patentsPath = path.join(root, PATENTS_FILE)
+  if ([canonicalPath, noticePath, patentsPath].some(file => !fs.existsSync(file))) {
     return {
-      errors: [LICENSE_FILE, NOTICE_FILE]
+      errors: [LICENSE_FILE, NOTICE_FILE, PATENTS_FILE]
         .filter(file => !fs.existsSync(path.join(root, file)))
         .map(file => `${file} is missing from the repository root`),
       canonical: null,
-      notice: null
+      notice: null,
+      patents: null
     }
   }
 
   const canonical = fs.readFileSync(canonicalPath)
   const notice = fs.readFileSync(noticePath)
+  const patents = fs.readFileSync(patentsPath)
   const actualHash = sha256(canonical)
   const errors = []
   if (actualHash !== EXPECTED_LICENSE_SHA256) {
@@ -95,7 +101,14 @@ function validateCanonicalLicense(root) {
         `text (${EXPECTED_LICENSE_SHA256}); received ${actualHash}`
     )
   }
-  return { errors, canonical, notice }
+  const patentsHash = sha256(patents)
+  if (patentsHash !== EXPECTED_PATENTS_SHA256) {
+    errors.push(
+      `${PATENTS_FILE} must be the approved patent statement ` +
+        `(${EXPECTED_PATENTS_SHA256}); received ${patentsHash}`
+    )
+  }
+  return { errors, canonical, notice, patents }
 }
 
 function normalizeFilesAllowlist(files) {
@@ -103,10 +116,12 @@ function normalizeFilesAllowlist(files) {
   return [
     ...files.filter(
       entry =>
-        typeof entry !== 'string' || (!LICENSE_ENTRY_PATTERN.test(entry) && entry !== NOTICE_FILE)
+        typeof entry !== 'string' ||
+        (!LICENSE_ENTRY_PATTERN.test(entry) && entry !== NOTICE_FILE && entry !== PATENTS_FILE)
     ),
     LICENSE_FILE,
-    NOTICE_FILE
+    NOTICE_FILE,
+    PATENTS_FILE
   ]
 }
 
@@ -124,10 +139,11 @@ function synchronizeManifest(manifestPath) {
   writeJson(manifestPath, manifest)
 }
 
-function synchronizeLicenseFiles(directory, root, canonical, notice) {
+function synchronizeLicenseFiles(directory, root, canonical, notice, patents) {
   if (directory !== root) {
     fs.writeFileSync(path.join(directory, LICENSE_FILE), canonical)
     fs.writeFileSync(path.join(directory, NOTICE_FILE), notice)
+    fs.writeFileSync(path.join(directory, PATENTS_FILE), patents)
   }
   for (const legacyFile of LEGACY_LICENSE_FILES) {
     const legacyPath = path.join(directory, legacyFile)
@@ -148,13 +164,13 @@ function synchronizePackageLock(directory, root) {
 }
 
 export function synchronizePackageLicenses(root = REPOSITORY_ROOT) {
-  const { errors, canonical, notice } = validateCanonicalLicense(root)
+  const { errors, canonical, notice, patents } = validateCanonicalLicense(root)
   if (errors.length > 0) throw new Error(errors.join('\n'))
 
   for (const manifestPath of discoverPackageManifests(root)) {
     const directory = path.dirname(manifestPath)
     synchronizeManifest(manifestPath)
-    synchronizeLicenseFiles(directory, root, canonical, notice)
+    synchronizeLicenseFiles(directory, root, canonical, notice, patents)
     synchronizePackageLock(directory, root)
   }
 }
@@ -171,15 +187,18 @@ function validateFilesAllowlist(project, manifest) {
     entry => typeof entry === 'string' && LICENSE_ENTRY_PATTERN.test(entry)
   )
   const noticeEntries = manifest.files.filter(entry => entry === NOTICE_FILE)
+  const patentsEntries = manifest.files.filter(entry => entry === PATENTS_FILE)
   if (
     licenseEntries.length === 1 &&
     licenseEntries[0] === LICENSE_FILE &&
-    noticeEntries.length === 1
+    noticeEntries.length === 1 &&
+    patentsEntries.length === 1
   ) {
     return []
   }
   return [
-    `${project} files allowlist must contain exactly ${LICENSE_FILE} and ${NOTICE_FILE} ` +
+    `${project} files allowlist must contain exactly ${LICENSE_FILE}, ${NOTICE_FILE} ` +
+      `and ${PATENTS_FILE} ` +
       'and no legacy license filename'
   ]
 }
@@ -191,10 +210,11 @@ function validateCopy(project, directory, file, expected) {
   return [`${project}/${file} does not match the repository root ${file}`]
 }
 
-function validateLicenseCopy(project, directory, canonical, notice) {
+function validateLicenseCopy(project, directory, canonical, notice, patents) {
   return [
     ...validateCopy(project, directory, LICENSE_FILE, canonical),
-    ...validateCopy(project, directory, NOTICE_FILE, notice)
+    ...validateCopy(project, directory, NOTICE_FILE, notice),
+    ...validateCopy(project, directory, PATENTS_FILE, patents)
   ]
 }
 
@@ -216,7 +236,7 @@ function validatePackageLock(directory, root) {
 }
 
 export function validatePackageLicenses(root = REPOSITORY_ROOT) {
-  const { errors, canonical, notice } = validateCanonicalLicense(root)
+  const { errors, canonical, notice, patents } = validateCanonicalLicense(root)
   if (!canonical) return errors
 
   for (const manifestPath of discoverPackageManifests(root)) {
@@ -226,7 +246,7 @@ export function validatePackageLicenses(root = REPOSITORY_ROOT) {
     errors.push(
       ...validateManifestDeclaration(project, manifest),
       ...validateFilesAllowlist(project, manifest),
-      ...validateLicenseCopy(project, directory, canonical, notice),
+      ...validateLicenseCopy(project, directory, canonical, notice, patents),
       ...validateLegacyFiles(project, directory),
       ...validatePackageLock(directory, root)
     )

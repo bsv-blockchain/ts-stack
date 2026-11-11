@@ -7,11 +7,13 @@ import path from 'node:path'
 import {
   discoverPackageManifests,
   EXPECTED_LICENSE_SHA256,
+  EXPECTED_PATENTS_SHA256,
   LICENSE_DECLARATION,
   LICENSE_FILE,
   LICENSE_NAME,
   NOTICE_FILE,
   OCI_LICENSE_REFERENCE,
+  PATENTS_FILE,
   REPOSITORY_ROOT,
   synchronizePackageLicenses,
   validatePackageLicenses
@@ -33,7 +35,7 @@ test('license discovery excludes generated mutation copies but retains authored 
   )
 })
 
-test('all package projects use the exact Apache License 2.0 and the root NOTICE', () => {
+test('all package projects use the exact Apache License 2.0, the root NOTICE and PATENTS', () => {
   assert.equal(LICENSE_NAME, 'Apache License, Version 2.0')
   assert.equal(
     EXPECTED_LICENSE_SHA256,
@@ -41,6 +43,11 @@ test('all package projects use the exact Apache License 2.0 and the root NOTICE'
   )
   assert.equal(LICENSE_FILE, 'LICENSE')
   assert.equal(NOTICE_FILE, 'NOTICE')
+  assert.equal(PATENTS_FILE, 'PATENTS')
+  assert.equal(
+    EXPECTED_PATENTS_SHA256,
+    '02988c67da2b43a9c2a566df2f3ff1376e7fa3eaed3562fa983d12f78a8cd8e0'
+  )
   assert.equal(LICENSE_DECLARATION, 'Apache-2.0')
   assert.equal(OCI_LICENSE_REFERENCE, 'Apache-2.0')
   assert.equal(discoverPackageManifests().length, 57)
@@ -52,6 +59,7 @@ test('license synchronization repairs manifest, lockfile, copy, and filename dri
   t.after(() => fs.rmSync(fixture, { recursive: true, force: true }))
   fs.copyFileSync(path.join(REPOSITORY_ROOT, LICENSE_FILE), path.join(fixture, LICENSE_FILE))
   fs.copyFileSync(path.join(REPOSITORY_ROOT, NOTICE_FILE), path.join(fixture, NOTICE_FILE))
+  fs.copyFileSync(path.join(REPOSITORY_ROOT, PATENTS_FILE), path.join(fixture, PATENTS_FILE))
   fs.writeFileSync(
     path.join(fixture, 'package.json'),
     `${JSON.stringify({ name: 'fixture-root', private: true, license: LICENSE_DECLARATION }, null, 2)}\n`
@@ -96,11 +104,17 @@ test('license synchronization repairs manifest, lockfile, copy, and filename dri
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(child, 'package.json'), 'utf8')).files, [
     'dist',
     LICENSE_FILE,
-    NOTICE_FILE
+    NOTICE_FILE,
+    PATENTS_FILE
   ])
   assert.ok(
     fs
       .readFileSync(path.join(child, NOTICE_FILE))
       .equals(fs.readFileSync(path.join(fixture, NOTICE_FILE)))
+  )
+  assert.ok(
+    fs
+      .readFileSync(path.join(child, PATENTS_FILE))
+      .equals(fs.readFileSync(path.join(fixture, PATENTS_FILE)))
   )
 })
