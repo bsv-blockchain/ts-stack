@@ -1,8 +1,12 @@
 # 2.16.0 unpublished integration candidate
 
-Raise default local retained-view lifetime from five to thirty minutes for real
-bulk reconciliation. Explicit lifetimes and the existing one-hour maximum retain
+Raise default local retained-view lifetime from five minutes to one hour for real
+bulk reconciliation. Promote up to sixteen changes per existing bounded journal
+step instead of one, reducing remote promotion round trips. Explicit lifetimes and the existing one-hour maximum retain
 their expiry enforcement. Existing remote archive negotiation remains explicit.
+Raise the default pre-authentication IP allowance from 300 to 3,000 requests per
+minute so an ordinary multi-step handoff can complete without artificial throttling.
+Explicit overrides, identity limits and concurrency admission remain enforced.
 
 Raise the conservative raw-frame allocation estimate to the existing 16 MiB
 working allowance. Padded per-cell estimates no longer reject valid populated

@@ -16,7 +16,7 @@ export const snapshotJournalCopyLimits: Readonly<SnapshotJournalDestinationLimit
   maximumProvenanceBytes: 17179869184,
   maximumRows: 256,
   maximumPayloadBytes: 262144,
-  maximumChanges: 1,
+  maximumChanges: 16,
   maximumAllocationBytes: 16777216
 })
 

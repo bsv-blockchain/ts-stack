@@ -74,9 +74,15 @@ async function fixture(full = false) {
         if (active !== target) throw new Error('Actual target manager changed')
         return await operation()
       })
-    const { url } = await source.serve(),
-      client = new StorageClient(source.wallet, url, { serverIdentityKey: source.serverIdentityKey })
-    return { source, target, manager, admission, client, close }
+    const { url, server } = await source.serve()
+    const rateRefusals: number[] = []
+    server.server.on('request', (_request, response) => {
+      response.on('finish', () => {
+        if (response.statusCode === 429) rateRefusals.push(response.statusCode)
+      })
+    })
+    const client = new StorageClient(source.wallet, url, { serverIdentityKey: source.serverIdentityKey })
+    return { source, target, manager, admission, client, rateRefusals, close }
   } catch (error) {
     await close()
     throw error
@@ -119,6 +125,8 @@ test('actual HTTP artifact feeds a target-owned receiver, survives replacement, 
   try {
     const user = (await f.source.storage.findOrInsertUser(f.source.identityKey)).user
     const original = await f.source.storage.findOrInsertTxLabel(user.userId, 'DATA original label')
+    const batchLabels = Array.from({ length: 33 }, (_, index) => `DATA batch label ${index}`)
+    for (const label of batchLabels) await f.source.storage.findOrInsertTxLabel(user.userId, label)
     archive = await f.client.openSnapshotJournalArchive(f.source.identityKey)
     if (archive === undefined) throw new Error('Actual journal artifact unavailable')
     const first = await KnexSnapshotJournalDataDestination.begin(
@@ -131,6 +139,9 @@ test('actual HTTP artifact feeds a target-owned receiver, survives replacement, 
     const checkpoint = await copy(archive, first.destination, first.checkpoint)
     expect(checkpoint.phase).toBe('acknowledged')
     expect(await f.target.findTxLabels({ partial: { label: 'DATA original label' } })).toHaveLength(1)
+    expect((await f.target.findTxLabels({ partial: {} })).map(row => row.label)).toEqual(
+      expect.arrayContaining(batchLabels)
+    )
     const recovered = await KnexSnapshotJournalDataDestination.begin(
       f.target,
       f.source.identityKey,
@@ -1528,6 +1539,7 @@ test('wallet manager completes an authenticated HTTP primary handoff in both dir
       expect(await storage.findTxLabels({ partial: { label: 'actual HTTP source metadata' } })).toHaveLength(1)
       expect(await storage.findTxLabels({ partial: { label: 'actual original target metadata' } })).toHaveLength(1)
     }
+    expect(f.rateRefusals).toEqual([])
   } finally {
     await f.close()
   }

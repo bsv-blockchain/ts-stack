@@ -1660,8 +1660,8 @@ const server = new StorageServer(storage, {
   sessionManager,
   // Optional: exact trusted proxy chain. Omit for direct-socket IPs.
   trustProxy: 1,
-  // Per-IP before auth (default 300/minute).
-  preAuthRateLimit: { limit: 300, windowMs: 60_000 },
+  // Per-IP before auth (default 3,000/minute).
+  preAuthRateLimit: { limit: 3_000, windowMs: 60_000 },
   // Per-identity before payment/RPC work (default 1,000/minute).
   rateLimit: { limit: 1_000, windowMs: 60_000 },
   // Bound database/cursor work caused by list and sync offsets.

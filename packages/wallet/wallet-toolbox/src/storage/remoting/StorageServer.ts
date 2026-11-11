@@ -262,7 +262,7 @@ export interface WalletStorageServerOptions {
    */
   rateLimit?: Partial<RateLimitOptions>
   /**
-   * Pre-authentication IP rate limiting. Defaults to 300 requests per minute.
+   * Pre-authentication IP rate limiting. Defaults to 3,000 requests per minute.
    * Use a shared store when multiple server processes or replicas must enforce
    * one aggregate limit.
    */
@@ -528,7 +528,7 @@ export class StorageServer {
     this.app.use(
       rateLimit(
         rateLimitOptions(
-          { windowMs: 60_000, limit: 300 },
+          { windowMs: 60_000, limit: 3000 },
           {
             skip: (req: Request) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
             ...this.preAuthRateLimitOptions

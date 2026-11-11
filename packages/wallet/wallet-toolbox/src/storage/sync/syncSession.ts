@@ -20,7 +20,7 @@ import { commitSyncAdmission } from './commitSyncAdmission'
 export interface SyncSessionOptions {
   /** Cancellation waits for an in-flight commit acknowledgement; it never rolls back an acknowledged page. */
   signal?: AbortSignal
-  /** Local snapshot retention, default thirty minutes and at most one hour. Expiry requires a new view. */
+  /** Local snapshot retention, default one hour and at most one hour. Expiry requires a new view. */
   snapshotLifetimeMs?: number
   /** Prefer separately negotiated authenticated field artifacts for ordinary
    * pulls. Existing row/legacy negotiation remains the default and fallback. */
