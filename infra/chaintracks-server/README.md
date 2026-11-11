@@ -557,7 +557,7 @@ Contributions welcome! Please:
 
 ## 📄 License
 
-[Open BSV License Version 6](./LICENSE.txt)
+[Apache License 2.0](./LICENSE)
 
 ## 🔗 Resources
 

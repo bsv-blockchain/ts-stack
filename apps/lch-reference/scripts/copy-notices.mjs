@@ -1,7 +1,7 @@
 import { cp, mkdir } from 'node:fs/promises'
 
 await mkdir(new URL('../dist/licenses/', import.meta.url), { recursive: true })
-for (const name of ['LICENSE.txt', 'THIRD_PARTY_NOTICES.md']) {
+for (const name of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
   await cp(
     new URL(`../${name}`, import.meta.url),
     new URL(`../dist/licenses/${name}`, import.meta.url)

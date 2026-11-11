@@ -205,8 +205,8 @@ operation and should be reserved for intentionally public events.
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
@@ -227,7 +227,7 @@ pnpm pack:check
 
 `pack:check` validates the exact npm tarball with `publint`, strict ESM and
 CommonJS type resolution, and clean consumer installations. The package uses
-the Open BSV License Version 6; the repository license controls ensure the
+the Apache License 2.0; the repository license controls ensure the
 manifest, included license, and packed artifact remain in sync.
 
 ## SDK4 hotfix peer requirement

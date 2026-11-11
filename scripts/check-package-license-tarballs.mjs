@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { LICENSE_FILE, REPOSITORY_ROOT } from './package-license-policy.mjs'
+import { LICENSE_FILE, NOTICE_FILE, REPOSITORY_ROOT } from './package-license-policy.mjs'
 import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.mjs'
 
 const registry = JSON.parse(
@@ -16,6 +16,7 @@ const supplyChainPolicy = JSON.parse(
 )
 const packages = registry.projects.filter(project => project.release === 'npm-oidc')
 const expectedLicenseSize = fs.statSync(path.join(REPOSITORY_ROOT, LICENSE_FILE)).size
+const expectedNoticeSize = fs.statSync(path.join(REPOSITORY_ROOT, NOTICE_FILE)).size
 const execFileAsync = promisify(execFile)
 
 async function verifyPackage(project) {
@@ -58,6 +59,15 @@ async function verifyPackage(project) {
     errors.push(
       `${project.path} tarball ${LICENSE_FILE} has size ${licenses[0].size}, ` +
         `expected ${expectedLicenseSize}`
+    )
+  }
+  const notices = packed.files?.filter(file => file.path === NOTICE_FILE) ?? []
+  if (notices.length !== 1) {
+    errors.push(`${project.path} tarball must contain exactly one root ${NOTICE_FILE}`)
+  } else if (notices[0].size !== expectedNoticeSize) {
+    errors.push(
+      `${project.path} tarball ${NOTICE_FILE} has size ${notices[0].size}, ` +
+        `expected ${expectedNoticeSize}`
     )
   }
   for (const requiredFile of expectedThirdPartyFilesForPackage(project.name)) {
@@ -105,6 +115,6 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Verified ${packages.length} public package tarballs include the canonical ` +
-      `${LICENSE_FILE} and every scoped third-party notice payload.`
+      `${LICENSE_FILE}, ${NOTICE_FILE} and every scoped third-party notice payload.`
   )
 }

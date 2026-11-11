@@ -350,7 +350,7 @@ ESM consumer.
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0 — see [LICENSE](./LICENSE).
 
 ## UORA v3 reader compatibility
 

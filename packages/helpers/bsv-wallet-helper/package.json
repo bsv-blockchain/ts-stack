@@ -26,7 +26,8 @@
   },
   "files": [
     "dist",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -54,7 +55,7 @@
     "ordinals"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "commonjs",
   "dependencies": {
     "@bsv/wallet-toolbox-client": "workspace:^"

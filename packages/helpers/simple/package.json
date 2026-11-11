@@ -87,7 +87,7 @@
     "certification"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "@bsv/message-box-client": "workspace:^",
     "@bsv/wallet-toolbox": "workspace:^",
@@ -109,7 +109,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],

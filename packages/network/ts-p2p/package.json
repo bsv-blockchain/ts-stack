@@ -21,7 +21,8 @@
   "files": [
     "dist/**/*",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -76,7 +77,7 @@
     "pubsub",
     "bsv"
   ],
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22"
   },

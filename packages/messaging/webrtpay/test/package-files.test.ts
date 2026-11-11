@@ -37,7 +37,7 @@ describe('files the README links to', () => {
 
   it('exist and are published with the package', () => {
     const links = relativeLinks(readFileSync(join(ROOT, 'README.md'), 'utf8'))
-    expect(links).toEqual(expect.arrayContaining(['docs/protocol.md', 'LICENSE.txt']))
+    expect(links).toEqual(expect.arrayContaining(['docs/protocol.md', 'LICENSE']))
     expect(links.filter(path => !existsSync(join(ROOT, path)))).toEqual([])
     expect(links.filter(path => !published(path))).toEqual([])
   })

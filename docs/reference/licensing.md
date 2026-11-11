@@ -2,9 +2,9 @@
 id: licensing-policy
 title: 'Licensing Policy'
 kind: reference
-version: '2.2.0'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '3.0.0'
+last_updated: '2026-11-11'
+last_verified: '2026-11-11'
 review_cadence_days: 90
 status: stable
 tags: [reference, licensing, packages, releases]
@@ -12,7 +12,7 @@ tags: [reference, licensing, packages, releases]
 
 # Licensing Policy
 
-Current TS Stack first-party contributions use the Open BSV License Version 6.
+Current TS Stack first-party contributions use the Apache License 2.0.
 Historical first-party code remains subject to every prior grant that applied
 when it was published; those grants are preserved and scoped through
 `governance/license-continuity.json`. This rule applies to public packages,
@@ -21,11 +21,14 @@ documentation tooling, and code generators. It does not relicense incorporated
 third-party material or extinguish a prior grant.
 
 The repository-root
-[`LICENSE.txt`](https://github.com/bsv-blockchain/ts-stack/blob/main/LICENSE.txt)
-is the canonical first-party text. It is an exact copy of the current
-[BSV Association license published by Teranode](https://github.com/bsv-blockchain/teranode/blob/main/LICENSE),
+[`LICENSE`](https://github.com/bsv-blockchain/ts-stack/blob/main/LICENSE)
+is the canonical first-party text. It is an exact copy of the
+[Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt),
 with SHA-256
-`bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0`.
+`cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
+The repository-root
+[`NOTICE`](https://github.com/bsv-blockchain/ts-stack/blob/main/NOTICE)
+carries the BSV Association copyright notice.
 
 ## Package convention
 
@@ -33,18 +36,18 @@ Every directory containing a `package.json` must:
 
 - declare `"author": "BSV Association"`, the Association's current public
   identity;
-- declare `"license": "SEE LICENSE IN LICENSE.txt"`;
-- contain `LICENSE.txt` with bytes identical to the canonical root file;
-- include `LICENSE.txt` exactly once when the package uses a `files` allowlist;
-- avoid alternate first-party names such as `LICENSE`, `LICENSE.md`, or
+- declare `"license": "Apache-2.0"`;
+- contain `LICENSE` and `NOTICE` with bytes identical to the root files;
+- include `LICENSE` and `NOTICE` exactly once when the package uses a `files`
+  allowlist;
+- avoid alternate first-party names such as `LICENSE.txt`, `LICENSE.md`, or
   `license.md`; and
 - repeat the same declaration in the root package entry of a colocated
   `package-lock.json`.
 
-Open BSV License is not an SPDX-listed identifier, so npm manifests point to
-the bundled first-party license text instead of inventing an SPDX expression.
-Container metadata uses the scoped identifier
-`LicenseRef-Open-BSV-License-6` and points to its full notice archive.
+`Apache-2.0` is the SPDX identifier, so npm manifests, SBOM components, and
+container metadata use it directly. Container images also point to their full
+notice archive.
 Older Association names remain only where they form part of an exact historical
 copyright or license record. They must not be rewritten in those records or
 used as current package authorship.
@@ -57,8 +60,8 @@ into the deployed documentation site are separately pinned in
 `governance/docs-site-bundled-materials.json`. Generated
 `THIRD_PARTY_NOTICES.md` and `LICENSES/` payloads accompany every affected npm
 package, UMD bundle, WASM package, container, and static-site deployment. The
-Open BSV terms apply only to TS Stack's protectable first-party contributions
-to those mixed works.
+Apache License 2.0 applies only to TS Stack's protectable first-party
+contributions to those mixed works.
 
 ## Incorporated material
 
@@ -86,8 +89,8 @@ bundle are excluded.
 
 Adding MIT, ISC, BSD, Apache, Boost, or other permissively licensed portions
 does not require changing all of TS Stack to MIT. Those licenses continue to
-govern the identified portions; Open BSV Version 6 continues to govern the
-separable first-party portions. A blanket repository relicense must never be
+govern the identified portions; the Apache License 2.0 governs the separable
+first-party portions. A blanket repository relicense must never be
 used as a substitute for preserving third-party notices or proving the right to
 relicense a contribution.
 
@@ -149,7 +152,7 @@ Before publishing:
 1. run `pnpm license:check`;
 2. run `pnpm license:release-check` and resolve every recorded clearance;
 3. dry-pack every public package with lifecycle scripts disabled;
-4. confirm each tarball contains exact `LICENSE.txt`,
+4. confirm each tarball contains exact `LICENSE`, `NOTICE`,
    `THIRD_PARTY_NOTICES.md`, and scoped `LICENSES/` payloads;
 5. verify browser bundle banners, VeriFast WASM companions, container notice
    paths, CycloneDX components, and `licenses.json`;

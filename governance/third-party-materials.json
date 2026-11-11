@@ -3,8 +3,8 @@
   "lastReviewed": "2026-08-27",
   "owner": "ts-stack-maintainers",
   "policy": {
-    "firstPartyLicense": "LicenseRef-Open-BSV-License-6",
-    "canonicalLicenseFile": "LICENSE.txt",
+    "firstPartyLicense": "Apache-2.0",
+    "canonicalLicenseFile": "LICENSE",
     "noticeFile": "THIRD_PARTY_NOTICES.md",
     "licensesDirectory": "LICENSES",
     "releaseRequiresAllClearances": true,
