@@ -1,5 +1,10 @@
 # 2.16.0 unpublished integration candidate
 
+Raise the conservative raw-frame allocation estimate to the existing 16 MiB
+working allowance. Padded per-cell estimates no longer reject valid populated
+pages that fit the actual encoded-frame bound. No retry or page-splitting layer,
+wire/schema migration, ownership or integrity-check change.
+
 Negotiate an optional journal frame/prefix pair read to reduce HTTP round trips.
 Both original packets share the existing 1 MiB page budget and retain independent
 receipt hashes, request ownership, expiry and cancellation checks. Peers without

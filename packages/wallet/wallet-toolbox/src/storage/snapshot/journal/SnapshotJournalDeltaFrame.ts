@@ -197,7 +197,10 @@ export function encodeSnapshotJournalDeltaFrame(
     binaryFields = 0
   const charge = (amount: number): void => {
     budget += amount
-    if (!Number.isSafeInteger(budget) || budget > SNAPSHOT_JOURNAL_DELTA_FRAME_BYTES) invalid()
+    // This is a conservative working-allocation estimate (including padded
+    // cells), not encoded wire bytes. Match the existing 16 MiB working allowance;
+    // the exact encoded frame size is checked separately below.
+    if (!Number.isSafeInteger(budget) || budget > 16777216) invalid()
   }
   if (after !== undefined) charge(6 * brc38Utf8ByteLength(after.exactText))
   const parts: Uint8Array[] = []

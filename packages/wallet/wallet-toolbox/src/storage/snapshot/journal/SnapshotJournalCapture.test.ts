@@ -1077,3 +1077,47 @@ test('MySQL capture configures both reserved pools before transactions, commits 
     await f.close()
   }
 })
+
+test('valid Unicode pages use the working allowance without unnecessary splitting', async () => {
+  const f = await fixture()
+  let source: SnapshotJournalSource | undefined
+  try {
+    const { user } = await f.storage.findOrInsertUser(identity)
+    const labels = Array.from({ length: 256 }, (_, i) => '界'.repeat(140) + String(i))
+    for (const label of labels) await f.storage.findOrInsertTxLabel(user.userId, label)
+    source = await f.storage.openSnapshotJournalSource(identity, request)
+    const seen: string[] = []
+    let after: import('./SnapshotJournalTypes').SnapshotJournalPosition | undefined
+    let complete = false
+    let pages = 0
+    while (!complete && pages < 10) {
+      const result = await source.readDeltaPage(
+        {
+          bootstrap: true,
+          stream: 'scope',
+          tableId: 3,
+          low: snapshotJournalRevision('0'),
+          maximumRows: 256,
+          maximumBytes: 1048576,
+          ...(after === undefined ? {} : { after })
+        },
+        async () => {}
+      )
+      if (pages === 0) expect(result.page.examined).toBe(256)
+      seen.push(...result.page.changes.flatMap(change => (change.present ? [change.row.label as string] : [])))
+      after = result.page.after
+      complete = result.page.complete
+      pages++
+    }
+    expect(complete).toBe(true)
+    expect(pages).toBeGreaterThan(1)
+    for (const label of labels) expect(seen.filter(value => value === label)).toHaveLength(1)
+    expect(new Set(seen).size).toBe(seen.length)
+  } finally {
+    try {
+      await source?.close()
+    } finally {
+      await f.close()
+    }
+  }
+})
