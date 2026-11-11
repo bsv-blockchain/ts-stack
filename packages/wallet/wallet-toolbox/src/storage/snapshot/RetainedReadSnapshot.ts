@@ -5,7 +5,7 @@ import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_e
 
 /** Local database view only. This is not a remote export or authorization token. */
 export interface RetainedReadSnapshotOptions {
-  /** Total lifetime, including connection acquisition. Defaults to five minutes; at most one hour. */
+  /** Total lifetime, including connection acquisition. Defaults to thirty minutes; at most one hour. */
   lifetimeMs?: number
   /** Stops admission and discards late results; physical database work must drain before release. */
   signal?: AbortSignal
@@ -56,7 +56,7 @@ export function retainReadSnapshot(
   establishView: (trx: TrxToken) => Promise<void>,
   options: RetainedReadSnapshotOptions = {}
 ): RetainedReadSnapshotLifetime {
-  const lifetimeMs = options.lifetimeMs ?? 300_000
+  const lifetimeMs = options.lifetimeMs ?? 1_800_000
   if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs < 1 || lifetimeMs > 3_600_000) {
     throw new WERR_INVALID_PARAMETER('lifetimeMs', 'an integer from 1 to 3600000')
   }

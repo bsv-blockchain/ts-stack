@@ -1,5 +1,9 @@
 # 2.16.0 unpublished integration candidate
 
+Raise default local retained-view lifetime from five to thirty minutes for real
+bulk reconciliation. Explicit lifetimes and the existing one-hour maximum retain
+their expiry enforcement. Existing remote archive negotiation remains explicit.
+
 Raise the conservative raw-frame allocation estimate to the existing 16 MiB
 working allowance. Padded per-cell estimates no longer reject valid populated
 pages that fit the actual encoded-frame bound. No retry or page-splitting layer,

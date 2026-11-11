@@ -296,7 +296,7 @@ test.each([1, 3_600_000, undefined])(
     const start = Date.now()
     const f = fixture({ lifetimeMs })
     const view = await f.lifetime.opened
-    expect(view.expiresAt).toBe(start + (lifetimeMs ?? 300_000))
+    expect(view.expiresAt).toBe(start + (lifetimeMs ?? 1_800_000))
     expect(view.isOpen).toBe(true)
     await view.close()
     expect(jest.getTimerCount()).toBe(0)
