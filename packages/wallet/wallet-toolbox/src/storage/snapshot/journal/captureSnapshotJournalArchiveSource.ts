@@ -16,10 +16,8 @@ import {
 } from './SnapshotJournalArchiveBinding'
 import {
   encodeSnapshotJournalArchiveFrame,
-  decodeSnapshotJournalArchivePacket,
   encodeSnapshotJournalArchiveIdentities,
-  encodeSnapshotJournalArchiveIdentityGroups,
-  type SnapshotJournalArchiveIdentityGroup,
+  snapshotJournalIdentityPacketWriter,
   snapshotJournalArchiveEncoding
 } from './SnapshotJournalArchivePacket'
 import { encodeSnapshotJournalDeltaFrame } from './SnapshotJournalDeltaFrame'
@@ -124,52 +122,11 @@ export async function captureSnapshotJournalArchiveSource(
             )
           })
         } else {
-          let groups: SnapshotJournalArchiveIdentityGroup[] = [],
-            encoded: Uint8Array | undefined,
-            groupDigest: string | undefined
-          const flush = (): Promise<void> => {
-            if (encoded === undefined) throw new TypeError('No actual journal identity prefix to flush')
-            const bytes = encoded
-            return append(stream.table, bytes, 0, false).then(() => {
-              groups = []
-              encoded = undefined
-            })
-          }
-          captured = await source.readArchiveDeltaPage(request, (digest, changeIndex, identities) => {
-            if (groupDigest !== undefined && groupDigest !== digest)
-              throw new TypeError('Journal frame digest changed within prefixes')
-            groupDigest = digest
-            const group: SnapshotJournalArchiveIdentityGroup = { changeIndex, identities }
-            try {
-              const candidate = [...groups, group],
-                next = encodeSnapshotJournalArchiveIdentityGroups(
-                  context,
-                  digest,
-                  candidate,
-                  binding.journal.receipt.highWater
-                )
-              // Own every bounded map/cell before returning to the producer.
-              const owned = decodeSnapshotJournalArchivePacket(next, context, binding.journal.receipt.highWater)
-              if (owned.kind !== 'identity-groups') throw new TypeError('Expected bounded journal identity groups')
-              groups = [...owned.groups]
-              encoded = next
-            } catch (error) {
-              if (!(error instanceof SnapshotResourceLimitError) || groups.length === 0) throw error
-              return flush().then(() => {
-                const next = encodeSnapshotJournalArchiveIdentityGroups(
-                    context,
-                    digest,
-                    [group],
-                    binding.journal.receipt.highWater
-                  ),
-                  owned = decodeSnapshotJournalArchivePacket(next, context, binding.journal.receipt.highWater)
-                if (owned.kind !== 'identity-groups') throw new TypeError('Expected bounded journal identity groups')
-                groups = [...owned.groups]
-                encoded = next
-              })
-            }
-          })
-          if (encoded !== undefined) await flush()
+          const prefixes = snapshotJournalIdentityPacketWriter(context, binding.journal.receipt.highWater, bytes =>
+            append(stream.table, bytes, 0, false)
+          )
+          captured = await source.readArchiveDeltaPage(request, prefixes.write)
+          await prefixes.flush()
         }
         active()
         const frame = encodeSnapshotJournalDeltaFrame(captured.page, context)

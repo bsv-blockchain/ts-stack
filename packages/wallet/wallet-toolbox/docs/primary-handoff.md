@@ -167,6 +167,12 @@ operators may still supply explicit rate limits and shared stores. Deployments
 with tighter limits should pace actual requests, including authentication
 handshakes, within their configured allowance. The actual HTTP round-trip
 regression checks both durable destination ACKs and zero HTTP throttles.
+Direct local-source DATA uploads reuse the same bounded identity-group packets
+as archive capture. Each group retains its change index and frame hash; callback
+maps and cells are owned before asynchronous flushing. Prefixes flush before
+their frame and retain the original128-identity/oneMiB packet limits. Grouping
+cannot advance a financial ACK or replace an actual source/current-data fence.
+
 The ordinary `binaryRequests` flag does not redefine these separately negotiated
 compact control RPCs or the mandatory binary codec of version-one transfer parts.
 Disable optional server capabilities during a mixed deployment if every serving

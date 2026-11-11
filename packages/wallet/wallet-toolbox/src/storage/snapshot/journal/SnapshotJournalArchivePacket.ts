@@ -194,6 +194,58 @@ export function encodeSnapshotJournalArchiveIdentityGroups(
   return envelope({ version: 1, kind: 'identity-groups', ...bound, frameDigest, groups })
 }
 
+/** Share the existing bounded identity-group envelope between archive capture
+ * and direct DATA upload. Own callback cells before awaiting a packet flush. */
+export function snapshotJournalIdentityPacketWriter(
+  context: SnapshotJournalDeltaFrameContext,
+  highWater: SnapshotJournalRevision,
+  append: (bytes: Uint8Array) => Promise<void>
+) {
+  let groups: SnapshotJournalArchiveIdentityGroup[] = [],
+    encoded: Uint8Array | undefined,
+    frameDigest: string | undefined
+  const flush = async (): Promise<void> => {
+    if (encoded === undefined) return
+    await append(encoded)
+    groups = []
+    encoded = undefined
+  }
+  return {
+    flush,
+    write: async (
+      digest: string,
+      changeIndex: number,
+      identities: ReadonlyMap<string, SnapshotJournalSourceIdentity>
+    ): Promise<void> => {
+      if (frameDigest !== undefined && frameDigest !== digest)
+        throw new TypeError('Journal frame digest changed within prefixes')
+      frameDigest = digest
+      const single = encodeSnapshotJournalArchiveIdentityGroups(
+          context,
+          digest,
+          [{ changeIndex, identities }],
+          highWater
+        ),
+        owned = decodeSnapshotJournalArchivePacket(single, context, highWater)
+      if (owned.kind !== 'identity-groups') throw new TypeError('Expected bounded journal identity groups')
+      const group = owned.groups[0]
+      if (groups.length === 128) await flush()
+      if (groups.length !== 0) {
+        try {
+          encoded = encodeSnapshotJournalArchiveIdentityGroups(context, digest, [...groups, group], highWater)
+          groups.push(group)
+          return
+        } catch (error) {
+          if (!(error instanceof SnapshotResourceLimitError)) throw error
+          await flush()
+        }
+      }
+      groups = [group]
+      encoded = single
+    }
+  }
+}
+
 export function encodeSnapshotJournalArchiveFrame(
   inputContext: SnapshotJournalDeltaFrameContext,
   page: SnapshotJournalDeltaPage

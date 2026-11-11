@@ -9,7 +9,7 @@ import {
   type SnapshotJournalArchiveBinding
 } from './SnapshotJournalArchiveBinding'
 import {
-  encodeSnapshotJournalArchiveIdentities,
+  snapshotJournalIdentityPacketWriter,
   encodeSnapshotJournalArchiveFrame,
   decodeSnapshotJournalArchivePacket
 } from './SnapshotJournalArchivePacket'
@@ -52,6 +52,9 @@ export async function* runSnapshotJournalSourceDataReconciliation(
           if (expected.phase !== 'intake' || stream === undefined)
             throw new WERR_INVALID_OPERATION('Invalid actual journal DATA intake stream')
           const context = { stream: stream.stream, tableId: stream.tableId }
+          const prefixes = snapshotJournalIdentityPacketWriter(context, binding.journal.receipt.highWater, bytes =>
+            awaitVoidFromSync(() => destination.stagePacket(expected, bytes))
+          )
           const captured = await (source.readArchiveDeltaPage?.bind(source) ?? source.readDeltaPage.bind(source))(
             {
               ...(binding.journal.bootstrap ? { bootstrap: true as const } : {}),
@@ -61,20 +64,9 @@ export async function* runSnapshotJournalSourceDataReconciliation(
               maximumRows: limits.maximumRows,
               maximumBytes: limits.maximumPayloadBytes
             },
-            (digest, index, identities) =>
-              awaitVoidFromSync(() =>
-                destination.stagePacket(
-                  expected,
-                  encodeSnapshotJournalArchiveIdentities(
-                    context,
-                    digest,
-                    index,
-                    identities,
-                    binding.journal.receipt.highWater
-                  )
-                )
-              )
+            prefixes.write
           )
+          await prefixes.flush()
           const bytes = encodeSnapshotJournalArchiveFrame(context, captured.page),
             verified = decodeSnapshotJournalArchivePacket(bytes, context, binding.journal.receipt.highWater)
           if (verified.kind !== 'frame' || verified.frameDigest !== captured.frameDigest)

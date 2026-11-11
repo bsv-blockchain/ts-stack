@@ -3,6 +3,7 @@ import {
   encodeSnapshotJournalArchiveFrame,
   encodeSnapshotJournalArchiveIdentities,
   encodeSnapshotJournalArchiveIdentityGroups,
+  snapshotJournalIdentityPacketWriter,
   decodeSnapshotJournalArchivePacket
 } from './SnapshotJournalArchivePacket'
 import {
@@ -179,4 +180,30 @@ test('grouped prefixes preserve change boundaries and exact maps within one fixe
     )
   }))
   expect(() => encodeSnapshotJournalArchiveIdentityGroups(context, '88'.repeat(32), tooMany, high)).toThrow('bound')
+})
+
+test('the shared prefix writer owns callback cells and flushes at the existing128-identity boundary', async () => {
+  const packets: Uint8Array[] = [],
+    writer = snapshotJournalIdentityPacketWriter(context, high, async bytes => {
+      packets.push(bytes)
+    })
+  for (let changeIndex = 0; changeIndex < 129; changeIndex++) {
+    const value = identity(),
+      map = new Map([['3:4', value]])
+    await writer.write('88'.repeat(32), changeIndex, map)
+    map.clear()
+    Object.assign(value, { naturalIdentity: 'aa'.repeat(32) })
+    Object.assign(value.naturalKey, { label: 'changed after callback' })
+  }
+  await writer.flush()
+  expect(packets).toHaveLength(2)
+  const decoded = packets.map(bytes => decodeSnapshotJournalArchivePacket(bytes, context, high))
+  const groups = decoded.flatMap(packet => {
+    if (packet.kind !== 'identity-groups') throw new Error('Expected original grouped prefix format')
+    return packet.groups
+  })
+  expect(groups.map(group => group.changeIndex)).toEqual(Array.from({ length: 129 }, (_, index) => index))
+  expect(groups.every(group => group.identities.size === 1 && group.identities.get('3:4')?.incomingId === 4)).toBe(true)
+  expect(groups.map(group => group.identities.get('3:4'))).toEqual(Array.from({ length: 129 }, () => identity()))
+  await expect(writer.write('99'.repeat(32), 0, new Map())).rejects.toThrow('digest changed')
 })

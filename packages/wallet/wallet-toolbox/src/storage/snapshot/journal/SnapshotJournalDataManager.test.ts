@@ -1,3 +1,5 @@
+import { decodeSnapshotJournalArchivePacket } from './SnapshotJournalArchivePacket'
+import { snapshotJournalArchiveStreams } from './SnapshotJournalArchiveBinding'
 import { KnexSnapshotArchiveStore } from '../archive/KnexSnapshotArchiveStore'
 import { snapshotJournalDataManagerFixture as fixture } from '../../../../test/utils/snapshotJournalDataManagerFixture'
 import { StorageClient } from '../../remoting/StorageClient'
@@ -67,12 +69,16 @@ test.each([StorageClient, StorageMobile])(
     try {
       const { user } = await f.storage.findOrInsertUser(f.remote.identityKey)
       await f.storage.findOrInsertTxLabel(user.userId, 'direct retained source DATA')
+      const labels = Array.from({ length: 129 }, (_, index) => `direct grouped label ${index}`)
+      for (const label of labels) await f.storage.findOrInsertTxLabel(user.userId, label)
       const client = new Client(f.remote.wallet, f.served.url, { serverIdentityKey: f.remote.serverIdentityKey })
       source = await f.storage.openCurrentSnapshotJournalSource(f.remote.identityKey)
       const actual = source,
         binding = snapshotJournalDataSourceBinding(actual, undefined, false, await actual.readContentRevision?.())
       const fence = jest.spyOn(actual, 'withCommitFence'),
         currentFence = jest.spyOn(actual, 'withCurrentDataFence')
+      let prefixPackets = 0,
+        prefixChanges = 0
       let last: SnapshotJournalReconciliationProgress | undefined
       for await (const progress of runSnapshotJournalSourceDataReconciliation(
         actual,
@@ -80,6 +86,20 @@ test.each([StorageClient, StorageMobile])(
         async () => {
           const destination = await client.openSnapshotJournalDataDestination(f.remote.identityKey, binding)
           if (destination === undefined) throw new Error('Actual DATA destination unavailable')
+          const stage = destination.stagePacket.bind(destination)
+          destination.stagePacket = async (checkpoint, bytes) => {
+            const stream = snapshotJournalArchiveStreams[checkpoint.streamIndex]
+            const packet = decodeSnapshotJournalArchivePacket(
+              bytes,
+              { stream: stream.stream, tableId: stream.tableId },
+              binding.journal.receipt.highWater
+            )
+            if (packet.kind === 'identity-groups') {
+              prefixPackets++
+              prefixChanges += packet.groups.length
+            }
+            return await stage(checkpoint, bytes)
+          }
           return destination
         },
         journalCopyLimits()
@@ -88,6 +108,20 @@ test.each([StorageClient, StorageMobile])(
       expect(last?.state).toBe('complete')
       expect(last?.checkpoint.phase).toBe('acknowledged')
       expect(await f.remote.storage.findTxLabels({ partial: { label: 'direct retained source DATA' } })).toHaveLength(1)
+      expect((await f.remote.storage.findTxLabels({ partial: {} })).map(row => row.label)).toEqual(
+        expect.arrayContaining(labels)
+      )
+      expect(prefixChanges).toBeGreaterThanOrEqual(130)
+      expect(prefixPackets).toBeLessThan(10)
+      console.log(
+        JSON.stringify({
+          groupedUpload: true,
+          client: Client.name,
+          prefixPackets,
+          prefixChanges,
+          labels: labels.length + 1
+        })
+      )
       expect(fence).not.toHaveBeenCalled()
       expect(currentFence).not.toHaveBeenCalled()
       expect(actual.isOpen).toBe(false)

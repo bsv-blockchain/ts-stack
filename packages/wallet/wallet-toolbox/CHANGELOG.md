@@ -1,5 +1,11 @@
 # 2.16.0 unpublished integration candidate
 
+Reuse the existing bounded identity-group packet writer for direct local-to-remote
+journal uploads. Small per-change notifications share up to 128 identities/one
+MiB per packet, as archive capture already does. Callback cells are detached
+before asynchronous flushing. Wire format, financial ACKs and source fences
+remain unchanged; no new retry protocol or migration.
+
 Raise default local retained-view lifetime from five minutes to one hour for real
 bulk reconciliation. Promote up to sixteen changes per existing bounded journal
 step instead of one, reducing remote promotion round trips. Explicit lifetimes and the existing one-hour maximum retain
