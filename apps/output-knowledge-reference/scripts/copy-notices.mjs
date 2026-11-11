@@ -5,7 +5,7 @@ await Promise.all(
     const directory = new URL(`../${output}/licenses/`, import.meta.url)
     await mkdir(directory, { recursive: true })
     await Promise.all(
-      ['LICENSE.txt', 'THIRD_PARTY_NOTICES.md'].map(name =>
+      ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'].map(name =>
         cp(new URL(`../${name}`, import.meta.url), new URL(name, directory))
       )
     )
