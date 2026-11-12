@@ -394,6 +394,55 @@ describe('validateCreateActionInput', () => {
     expect(result.unlockingScript).toBeUndefined()
   })
 
+  it('accepts unlockingScriptLength of 1', () => {
+    const result = validateCreateActionInput({
+      ...validBase,
+      unlockingScriptLength: 1
+    })
+    expect(result.unlockingScriptLength).toBe(1)
+    expect(result.unlockingScript).toBeUndefined()
+  })
+
+  it('accepts a one-byte unlockingScript and derives length 1', () => {
+    const result = validateCreateActionInput({
+      ...validBase,
+      unlockingScript: '51'
+    })
+    expect(result.unlockingScript).toBe('51')
+    expect(result.unlockingScriptLength).toBe(1)
+  })
+
+  it('throws WERR_INVALID_PARAMETER when unlockingScript is omitted and unlockingScriptLength is 0', () => {
+    expect(() =>
+      validateCreateActionInput({
+        ...validBase,
+        unlockingScriptLength: 0
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateCreateActionInput({
+        ...validBase,
+        unlockingScriptLength: 0
+      })
+    ).toThrow('The unlockingScriptLength parameter must be at least 1 length.')
+  })
+
+  it('refuses an empty unlockingScript as a hexadecimal string, including when length is 0', () => {
+    expect(() =>
+      validateCreateActionInput({
+        ...validBase,
+        unlockingScript: ''
+      })
+    ).toThrow('The unlockingScript parameter must be hexadecimal string.')
+    expect(() =>
+      validateCreateActionInput({
+        ...validBase,
+        unlockingScript: '',
+        unlockingScriptLength: 0
+      })
+    ).toThrow('The unlockingScript parameter must be hexadecimal string.')
+  })
+
   it('throws when neither unlockingScript nor unlockingScriptLength is provided', () => {
     expect(() => validateCreateActionInput({ ...validBase })).toThrow(WERR_INVALID_PARAMETER)
   })

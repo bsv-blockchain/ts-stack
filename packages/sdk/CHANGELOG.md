@@ -277,6 +277,14 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### createAction unlockingScriptLength (4.0.2 patch)
+
+- Refuse a `createAction` input that omits `unlockingScript` and sets
+  `unlockingScriptLength` to 0. The field is a BRC-100 `PositiveInteger`
+  (minimum 1). Lengths of 1 and above remain accepted.
+- An empty `unlockingScript` is still refused as a hexadecimal string, before
+  the length check. No wire, storage, or schema migration.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
