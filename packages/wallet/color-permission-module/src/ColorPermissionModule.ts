@@ -222,11 +222,7 @@ function mergeSource(into: Beef, from: Beef, outpoint: string): void {
   into.mergeBeef(from.toBinaryAtomic(txid))
 }
 
-/**
- * The caller's `tags` without any tag of the suffix tag form, plus a new suffix tag: every output
- * the module files carries exactly one, the module's, and the module finds the output's
- * transaction by it.
- */
+/** The caller's `tags` without any tag of the suffix tag form, plus a new suffix tag. */
 function withSuffixTag(tags: readonly string[] | undefined): string[] {
   return [
     ...new Set([...(tags ?? []).filter(tag => !isDerivationSuffixTag(tag)), derivationSuffixTag()])
@@ -2604,10 +2600,9 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /**
    * The selected inputs' source transactions, listed by the suffix tag each input's row carries.
-   * Rows filed while the tag was the hash of the derivation suffix may share it with other
-   * outputs paid to the same suffix, so matching rows are paged within the first result's count
-   * and only selected sources are retained. Counts must be stable and rows unique throughout this
-   * bounded traversal.
+   * Several rows may carry the same tag, so matching rows are paged within the first result's
+   * count and only selected sources are retained. Counts must be stable and rows unique
+   * throughout this bounded traversal.
    */
   protected async sourceTransactions(
     basket: string,

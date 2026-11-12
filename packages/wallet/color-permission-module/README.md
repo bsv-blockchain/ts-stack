@@ -70,16 +70,13 @@ the manager's `getVersion` string.
   the source transactions of the inputs it selects in `inputBEEF`, merged with
   any `inputBEEF` the caller gave. Every output the module files (token
   change, owned outputs, receipts, deploys and handoff splits) carries the tag
-  `p color <hex>`: 32 random bytes as lowercase hex, drawn for each output. Before
-  0.2.1 the value was the SHA-256 of the UTF-8 bytes of the custody's derivation
-  suffix; a suffix may be reused across outputs, and a shared tag made the source
-  lookup return every output sharing it. Rows filed then keep their value and are
-  read by it. A caller-supplied tag of this form is dropped, so each output
-  carries only the module's own; other `p color ` tags are kept. The module reads the
+  `p color <hex>`: 32 random bytes as lowercase hex, drawn for each output. A
+  caller-supplied tag of this form is dropped, so each output carries only the
+  module's own; other `p color ` tags are kept. The module reads the
   transactions of the inputs it selects by their tags (`tagQueryMode: 'any'`),
   normally with one `listOutputs` per asset basket and `limit` the number of
-  selected inputs, capped at 10,000 per page. Rows filed before 0.2.1 that share a
-  suffix share their tag. When more matching rows exist, the module pages within the initial
+  selected inputs, capped at 10,000 per page. Several rows may carry the same
+  tag. When more matching rows exist, the module pages within the initial
   nonnegative safe-integer `totalOutputs` count and stops once every selected source
   is found; a changed count, duplicate row,
   oversized page, stalled traversal or missing selected output fails the call.

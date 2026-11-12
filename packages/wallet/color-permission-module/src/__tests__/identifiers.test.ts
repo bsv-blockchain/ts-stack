@@ -137,7 +137,7 @@ describe('derivationSuffixTag', () => {
     expect(tag).toHaveLength(72)
     expect(derivationSuffixTag()).not.toBe(tag)
     expect(isDerivationSuffixTag(tag)).toBe(true)
-    // A row filed while the value was the SHA-256 of the derivation suffix has the same form.
+    // Any 32-byte hex value has the form, such as the SHA-256 of a derivation suffix.
     const hashed = `p color ${toHex(sha256(toArray('c3VmZml4c3VmZml4c3VmZg==', 'utf8')))}`
     expect(isDerivationSuffixTag(hashed)).toBe(true)
     expect(isDerivationSuffixTag('p color')).toBe(false)

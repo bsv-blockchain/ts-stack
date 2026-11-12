@@ -1271,8 +1271,7 @@ describe('ColorPermissionModule', () => {
 
     it('pages past nonselected same-tag outputs without merging or crediting them', async () => {
       // A suffix tag is an index, not an ownership or amount assertion. A matching unselected
-      // output may be legitimate (rows filed while the tag was the hash of the derivation suffix
-      // share it when they share a suffix) or merely retagged.
+      // output may be legitimate (several rows may carry the same tag) or merely retagged.
       let selected: Transaction
       let intruder: Transaction
       do {

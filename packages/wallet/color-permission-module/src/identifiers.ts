@@ -201,14 +201,8 @@ export const DISCOVERY_TOPIC = 'tm_color'
 const SUFFIX_TAG = /^p color [0-9a-f]{64}$/
 
 /**
- * A new tag for one output the module files: `p color ` and 32 random bytes as lowercase hex,
- * drawn for each output. The module lists the output's transaction by it.
- *
- * The name is kept from when the value was the SHA-256 of the UTF-8 bytes of the custody's
- * derivation suffix; rows filed then keep that value and are read the same way. The value is no
- * longer derived from the suffix: a suffix may be reused across outputs, and a shared tag made the
- * source lookup return every output sharing it. A row's tag is always read back from the row,
- * never recomputed.
+ * The tag filed on a managed output: `p color ` and 32 random bytes as lowercase hex, drawn for
+ * each output the module files. The module lists the output's transaction by it.
  */
 export function derivationSuffixTag(): string {
   return `${COLOR_BASKET_NAMESPACE} ${toHex(Random(32))}`
