@@ -1243,6 +1243,45 @@ describe('ColorPermissionModule', () => {
       expect(beefListings().map(({ tags }) => tags)).toEqual([[tag]])
     })
 
+    it('drops a caller output tag on a receipt and lists it by the module’s own', async () => {
+      const callerTag = `p color output ${'ab'.repeat(32)}`
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 300n)
+      provider.admit(assetId, tx, 0)
+      const received = await module.onRequest({
+        method: 'internalizeAction',
+        originator: APP,
+        args: {
+          tx: tx.toAtomicBEEF(),
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance: {
+                basket: assetBasket(assetId, 'value'),
+                customInstructions,
+                tags: [callerTag, 'app tag']
+              }
+            }
+          ],
+          description: 'Receive tokens'
+        }
+      })
+      await expect(
+        wallet.internalizeAction(received.args as InternalizeActionArgs)
+      ).resolves.toEqual({ accepted: true })
+      const stored = wallet.outputs.get(outpointOf(tx))!.tags!
+      const outputTags = stored.filter(tag => OUTPUT_TAG_FORM.test(tag))
+      expect(outputTags).toHaveLength(1)
+      expect(outputTags[0]).not.toBe(callerTag)
+      expect(stored).toEqual(['app tag', outputTags[0]])
+      wallet.listOutputsCalls.length = 0
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(tx)])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[outputTags[0]]])
+    })
+
     it('pages past nonselected same-tag outputs without merging or crediting them', async () => {
       // An output tag is an index, not an ownership or amount assertion. A matching unselected
       // output may be legitimate (rows filed before 0.3.0 that share a suffix share their legacy

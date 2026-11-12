@@ -71,7 +71,8 @@ the manager's `getVersion` string.
   any `inputBEEF` the caller gave. Every output the module files (token
   change, owned outputs, receipts, deploys and handoff splits) carries the output
   tag `p color output <hex>`: 32 random bytes as lowercase hex, drawn for each
-  output. Outputs filed before 0.3.0 carry instead the legacy tag `p color <hex>`,
+  output. A caller-supplied tag of that form is dropped, so each output carries
+  only the module's own. Outputs filed before 0.3.0 carry instead the legacy tag `p color <hex>`,
   the lowercase hex of the SHA-256 of the UTF-8 bytes of the custody's derivation
   suffix. A suffix may be reused across outputs, so that tag could be shared by
   many outputs and the source lookup returned all of them; the module no longer

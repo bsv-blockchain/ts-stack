@@ -55,6 +55,7 @@ import {
   colorTopic,
   DISCOVERY_TOPIC,
   isModuleOutputTag,
+  isOutputTag,
   ISSUE,
   newOutputTag,
   outpointString,
@@ -223,9 +224,13 @@ function mergeSource(into: Beef, from: Beef, outpoint: string): void {
   into.mergeBeef(from.toBinaryAtomic(txid))
 }
 
-/** The caller's `tags` with a new output tag added: every output the module files carries one. */
+/**
+ * The caller's `tags` without any output tag of its own, plus a new output tag: every output the
+ * module files carries exactly one, the module's. A caller's legacy-form tag is kept; it is never
+ * the lookup key, because `outputTagIn` takes the output tag first.
+ */
 function withOutputTag(tags: readonly string[] | undefined): string[] {
-  return [...new Set([...(tags ?? []), newOutputTag()])]
+  return [...new Set([...(tags ?? []).filter(tag => !isOutputTag(tag)), newOutputTag()])]
 }
 
 /** The BEEF a listOutputs result returns, empty when it returns none. */
