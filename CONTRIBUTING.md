@@ -296,7 +296,7 @@ make it mergeable.
 The only approved Sonar budget is
 [PR569's scoped policy](./docs/reviews/sonar-pr569-budget.md), registered in
 [`governance/sonar-pr569-budget.json`](./governance/sonar-pr569-budget.json).
-For that exact repository/PR/head branch/base, until `2026-10-24T23:59:59Z`,
+For that exact repository/PR/head branch/base, until `2026-11-19T23:59:59Z`,
 maintainability A and duplication ≤6% replace the zero-maintainability-findings
 requirement. All findings and both original/scoped verdicts remain visible.
 Bugs, vulnerabilities, reliability/security impacts (including mixed CODE_SMELL

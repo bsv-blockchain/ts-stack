@@ -77,34 +77,22 @@ function workflowJobBlocks(workflow) {
   }))
 }
 
-test('installed engine regressions run unconditionally after frozen installation and before build reuse', () => {
+test('mutation planning and engine controls stay in the explicit background audit', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
-  const policy = workflowJobBlocks(workflow).find(job => job.name === 'policy').source
-  const steps = policy.split(/\n {6}- /)
-  const installed = steps.findIndex(step =>
-    step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
+  const background = readFileSync(
+    new URL('../.github/workflows/mutation-tests.yml', import.meta.url),
+    'utf8'
   )
-  const engine = steps.findIndex(step =>
-    step.startsWith('name: Test installed mutation engine controls\n')
-  )
-  const rebuild = steps.findIndex(step =>
-    step.startsWith('name: Rebuild the audited workspace build tool\n')
-  )
-  const reuse = steps.findIndex(step => step.startsWith('uses: actions/download-artifact@'))
-  assert.ok(installed >= 0 && engine > installed && rebuild > engine && reuse > engine)
+  assert.doesNotMatch(workflow, /mutation-partitions(?:-engine)?\.(?:background|integration)\.mjs/)
   assert.match(
-    steps[engine],
-    /run: node --test scripts\/mutation-partitions-engine\.integration\.mjs(?:\n|$)/
+    background,
+    /node --test scripts\/mutation-execution-batches\.background\.mjs scripts\/mutation-partitions\.background\.mjs scripts\/mutation-partitions-engine\.integration\.mjs/
   )
-  assert.doesNotMatch(steps[engine], /(?:if:|continue-on-error:)/)
-  assert.equal(
-    workflow.match(/node --test scripts\/mutation-partitions-engine\.integration\.mjs/g)?.length,
-    1
+  assert.doesNotMatch(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    /mutation-partitions\.background\.mjs/
   )
-  const health = workflowJobBlocks(workflow).find(job => job.name === 'repository-health').source
-  assert.match(health, /node --test scripts\/\*\.test\.mjs/)
-  assert.doesNotMatch(health, /mutation-partitions-engine\.integration/)
-  assert.match(health, /pnpm install --frozen-lockfile --ignore-scripts --filter/)
+  assert.throws(() => readFileSync(new URL('./mutation-partitions.test.mjs', import.meta.url)))
 })
 
 test('repository health installs real locked wallet compiler dependencies before config regressions', () => {

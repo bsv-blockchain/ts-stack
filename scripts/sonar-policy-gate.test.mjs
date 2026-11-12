@@ -255,7 +255,7 @@ test('every out-of-scope Actions context keeps the original strict gate', async 
 })
 
 test('expired approval automatically invokes the original strict gate', async () => {
-  for (const at of ['2026-10-24T23:59:59Z', '2026-10-25T00:00:00Z']) {
+  for (const at of ['2026-11-19T23:59:59Z', '2026-11-20T00:00:00Z']) {
     const f = fixture()
     f.dependencies.now = () => Date.parse(at)
     await assert.rejects(run(f), /zero-findings gate failed/)
@@ -815,7 +815,7 @@ for (const [name, change] of [
 
 for (const now of [
   Date.parse('2026-10-19T18:27:59Z'),
-  Date.parse('2026-10-24T23:59:59Z'),
+  Date.parse('2026-11-19T23:59:59Z'),
   Number.NaN
 ])
   test(`reviewed permissions fail outside their authorization window: ${now}`, () => {

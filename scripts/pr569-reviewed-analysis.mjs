@@ -12,7 +12,7 @@ const APPROVED = {
   branch: 'codex/wallet-sync-interop-reliability',
   base: 'main',
   approvedAt: '2026-10-19T18:28:00Z',
-  expiresAt: '2026-10-24T23:59:59Z',
+  expiresAt: '2026-11-19T23:59:59Z',
   findings: [
     {
       analyzer: 'CodeQL',

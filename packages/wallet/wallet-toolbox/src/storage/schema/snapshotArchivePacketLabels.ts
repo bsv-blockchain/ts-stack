@@ -52,6 +52,8 @@ export async function widenSnapshotArchivePacketLabels(knex: Knex): Promise<void
     throw new Error('Snapshot archive packet label widening did not preserve its character contract')
 }
 
-export async function refuseSnapshotArchivePacketLabelDowngrade(): Promise<void> {
-  throw new Error('Snapshot archive packet labels require forward recovery; narrowing could truncate stored artifacts')
+export function refuseSnapshotArchivePacketLabelDowngrade(): Promise<void> {
+  return Promise.reject(
+    new Error('Snapshot archive packet labels require forward recovery; narrowing could truncate stored artifacts')
+  )
 }

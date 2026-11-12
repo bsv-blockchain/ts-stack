@@ -13,7 +13,7 @@ export const SONAR_BUDGET = Object.freeze({
   pullRequest: 569,
   branch: 'codex/wallet-sync-interop-reliability',
   base: 'main',
-  expiresAt: '2026-10-24T23:59:59Z',
+  expiresAt: '2026-11-19T23:59:59Z',
   maintainabilityRating: 1,
   maximumDuplicationPercent: 6,
   unresolvedBugs: 0,

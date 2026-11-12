@@ -25,7 +25,7 @@ also recorded in the repository-health exceptions registry. The only eligible
 context is repository `bsv-blockchain/ts-stack`, Sonar project
 `bsv-blockchain_ts-stack`, PR569, same-repository head branch
 `codex/wallet-sync-interop-reliability`, base `main`, before
-`2026-10-24T23:59:59Z`. At expiry the original strict policy applies; a new
+`2026-11-19T23:59:59Z`. At expiry the original strict policy applies; a new
 explicit maintainer approval and reviewed implementation are needed to extend
 it. This is an authorization window, separate from advisory review reminders.
 
@@ -104,9 +104,20 @@ The separately reviewed PR569 analysis operations in
 are the sole additional exception: CodeQL353 intentional private JSON evidence
 storage and two exact Sonar S2612 required public artifact permissions. Owner
 BraydenLangley reviewed the operator-delegated decision on October 19. Exact
-alert identities and SHA-256 source checks apply only to PR569 before October 24
+alert identities and SHA-256 source checks apply only to PR569 before November 19
 at 23:59:59 UTC. The Sonar inventory and original failed verdict remain visible;
 reviewed permission keys are reported separately. Their original security C
 metric is covered only when both exact findings are present; all other
 security ratings and findings retain strict enforcement. Every other finding, metric,
 platform and merge gate remains required. Changed source requires fresh review.
+
+
+## November 11 bounded renewal
+
+Maintainer ty-everett explicitly renewed the unchanged PR569-only budget and the
+three exact previously reviewed analysis exceptions through November 19 at
+23:59:59 UTC after reviewing the prepared network-ops proposal. Original reviewer,
+review date, finding identities and source hashes remain preserved. This renewal
+adds no finding or threshold waiver. Exact-head analysis on 86d4c2c6ca97 had zero
+active bugs, zero hotspots, maintainability A and duplication 4.9%; the separate
+S7503 async refusal finding is corrected rather than excepted.

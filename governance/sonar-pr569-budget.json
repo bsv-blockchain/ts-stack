@@ -6,7 +6,7 @@
   "pullRequest": 569,
   "branch": "codex/wallet-sync-interop-reliability",
   "base": "main",
-  "expiresAt": "2026-10-24T23:59:59Z",
+  "expiresAt": "2026-11-19T23:59:59Z",
   "maintainabilityRating": 1,
   "maximumDuplicationPercent": 6,
   "unresolvedBugs": 0,
@@ -21,5 +21,12 @@
     "docs/reviews/sonar-pr569-budget.md",
     "https://github.com/bsv-blockchain/ts-stack/pull/569"
   ],
-  "reviewBy": "2026-10-24"
+  "reviewBy": "2026-11-19",
+  "renewal": {
+    "approvedBy": "ty-everett",
+    "approvedOn": "2026-11-11",
+    "expiresAt": "2026-11-19T23:59:59Z",
+    "approval": "Maintainer explicitly approved the prepared bounded renewal in the private operator task: same thresholds, same three source-bound findings, no other waiver.",
+    "evidence": "network-ops/docs/systems/ts-stack-pr569-analysis-renewal-2026-11-11.md"
+  }
 }

@@ -8263,3 +8263,13 @@ composition, bounded reservations and physical shutdown. This is working-tree
 feedback, not final-source mutation or hosted qualification. Complete local
 qualification remains required before the user's second review checkpoint; the
 repository's exact-head remote merge/analyzer gates remain required afterward.
+
+
+### PR569 foreground admission follow-up — November 11, 2026
+
+Mutation execution-plan and installed-engine controls now run only in the existing
+explicit background audit. The partition control file is preserved as
+`scripts/mutation-partitions.background.mjs`; the complete installed-engine
+regressions remain unchanged. Neither source-plan freshness nor mutation tooling
+can prevent ordinary repository health or policy jobs from running. Product,
+coverage, native platform routing, security and result-gate checks remain in CI.
