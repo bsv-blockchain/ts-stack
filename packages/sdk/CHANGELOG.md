@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
 
+## Plain HTTP 400 wallet errors
+
+`HTTPWalletJSON` still deserializes typed `isError` envelopes, including
+`WERR_REVIEW_ACTIONS`, `WERR_INVALID_PARAMETER`, and `WERR_INSUFFICIENT_FUNDS`.
+An HTTP 400 JSON object without `isError` and with a string `message` of at most
+4096 UTF-8 bytes now throws an `Error` whose message includes that text and
+`HTTP status 400`. A string `name` and `code` of at most 128 characters
+are copied onto the error. Blank, non-string, or oversized
+messages, non-400 statuses, and `isError` envelopes keep their existing errors.
+No wire or call migration is required.
+
 ## Legacy certificate compatibility (4.0.0 candidate)
 
 - Restore existing certificate listing, discovery, proof, relinquishment, signature

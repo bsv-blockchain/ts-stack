@@ -31,7 +31,12 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 28)
+  assert.equal(overrides.length, 30)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'follow-redirects@1.16.1')?.value,
+    '1.16.2'
+  )
+  assert.equal(overrides.find(entry => entry.selector === 'joi@18.2.9')?.value, '18.3.1')
   assert.deepEqual(
     overrides.filter(entry => entry.selector === 'nodemon'),
     []

@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: '4.0.1'
 npm: '@bsv/sdk'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+last_updated: '2026-11-02'
+last_verified: '2026-11-02'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -24,6 +24,14 @@ default encoding preserves deployed SDK2/3 bytes and numeric balances. The
 explicitly selected and acknowledged spendability extension from #674 remains
 available. No separate profile for the defective 4.0.0 layout is introduced.
 This candidate is not publication.
+
+`HTTPWalletJSON` keeps typed `isError` envelopes, including `WERR_REVIEW_ACTIONS`.
+An HTTP 400 JSON object without `isError` and with a string `message` of at most
+4096 UTF-8 bytes throws an `Error` that includes that message and `HTTP status 400`.
+A string `name` and `code` of at most 128 characters are copied onto the
+error. Blank, non-string, or oversized messages, and every
+non-400 status, keep the generic status error. No call or wire migration is
+required.
 
 The isolated SDK3 retirement candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
