@@ -24,14 +24,16 @@
     "wasm",
     "worker"
   ],
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "main": "dist/cjs/mod.cjs",
   "module": "dist/mod.js",
   "types": "dist/mod.d.ts",
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],

@@ -296,7 +296,7 @@ artifact, functional or production readiness.
 
 ## License
 
-This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+This package is released under the [Apache License 2.0](./LICENSE).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 browser build.

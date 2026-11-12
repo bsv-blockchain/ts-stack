@@ -21,7 +21,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -61,7 +63,7 @@
     "./package.json": "./package.json"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@bsv/auth-express-middleware": "workspace:^",
     "@bsv/sdk": "workspace:^",

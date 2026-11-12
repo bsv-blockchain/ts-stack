@@ -172,8 +172,8 @@ for remote storage setup and supported runtime assumptions.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE).
 
 ## Faucet output authorization
 

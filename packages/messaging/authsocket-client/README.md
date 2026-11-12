@@ -148,7 +148,7 @@ sentinel. Malformed, oversized, or reserved-name frames are not dispatched.
 
 ## License
 
-TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party material is under the [Apache License 2.0](./LICENSE).
 The UMD bundle incorporates separately licensed SDK material; keep
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
 with the bundle.

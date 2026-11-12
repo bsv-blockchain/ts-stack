@@ -14,7 +14,8 @@ info:
 
     Source of truth: /docs/BRCs/payments/0029.md
   license:
-    name: Open BSV Licence
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 defaultContentType: application/json
 

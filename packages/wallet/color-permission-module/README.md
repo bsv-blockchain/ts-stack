@@ -327,4 +327,4 @@ pnpm --filter @bsv/color-permission-module test:coverage
 
 ## License
 
-Open BSV License version 6. See `LICENSE.txt`.
+Apache License 2.0. See `LICENSE`.

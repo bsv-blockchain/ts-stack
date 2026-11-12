@@ -89,7 +89,7 @@ Pull requests and releases enforce, as applicable:
 - pack-once npm candidates, CycloneDX SBOMs, vulnerability/license scans,
   GitHub attestations, npm OIDC provenance, and registry digest
   reconciliation; and
-- uniform Open BSV License Version 6 checks across package and image artifacts.
+- uniform Apache License 2.0 checks across package and image artifacts.
 
 Coverage-guided fuzzing, remaining manual/browser/performance review, and the
 final QA hardening campaign are deliberately tracked as unfinished in
