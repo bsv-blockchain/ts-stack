@@ -14,7 +14,7 @@ import {
   deployAsset,
   FakeProvider,
   FakeWallet,
-  OUTPUT_TAG_FORM,
+  SUFFIX_TAG_FORM,
   tokenPayment
 } from './fixtures.js'
 import {
@@ -106,12 +106,12 @@ describe('receipts with profiles registered', () => {
     walletCalls = 0
   })
 
-  it('profile-free receipts gain only a new output tag', async () => {
+  it('profile-free receipts gain only their suffix tag', async () => {
     const { assetId } = await deployAsset(new FakeWallet(), provider, 1000n)
     const paid = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
     provider.admit(assetId, paid.tx, 0)
     const args = receiptArgs(paid, assetId, ['color_offline'])
-    const outputTag = expect.stringMatching(OUTPUT_TAG_FORM)
+    const suffixTag = expect.stringMatching(SUFFIX_TAG_FORM)
     const { args: forwarded } = await createModule(wallet, provider).onRequest({
       method: 'internalizeAction',
       args,
@@ -124,19 +124,19 @@ describe('receipts with profiles registered', () => {
           ...args.outputs[0],
           insertionRemittance: {
             ...args.outputs[0].insertionRemittance,
-            tags: ['color_offline', outputTag]
+            tags: ['color_offline', suffixTag]
           }
         }
       ]
     })
 
     // With profiles registered, a profile-free asset forwards the 5-member custody without color_
-    // tags, with a new output tag.
+    // tags, with its suffix tag.
     const viaProfiles = await receive(moduleWith(), args)
     expect(viaProfiles.outputs[0].insertionRemittance).toEqual({
       basket: assetBasket(assetId, 'value'),
       customInstructions: paid.customInstructions,
-      tags: [outputTag]
+      tags: [suffixTag]
     })
     expect(store.writes).toEqual([`color.v1.deploy.${assetId}`])
   })
@@ -150,7 +150,7 @@ describe('receipts with profiles registered', () => {
     const forwarded = await receive(moduleWith(), args)
     expect(forwarded.outputs[0].insertionRemittance?.tags).toEqual([
       'mine',
-      expect.stringMatching(OUTPUT_TAG_FORM)
+      expect.stringMatching(SUFFIX_TAG_FORM)
     ])
     expect(args.outputs[0].insertionRemittance?.tags).toEqual(tags)
   })
@@ -375,7 +375,7 @@ describe('admitReceipt', () => {
     const forwarded = await receive(issuerModule(), args)
     expect(forwarded.outputs[0].insertionRemittance?.tags).toEqual([
       'mine',
-      expect.stringMatching(OUTPUT_TAG_FORM)
+      expect.stringMatching(SUFFIX_TAG_FORM)
     ])
     expect(provider.calls.spendability).toBe(0)
     expect(provider.calls.submit).toBe(0)
@@ -404,7 +404,7 @@ describe('admitReceipt', () => {
     const { txid, args } = await issuerReceipt(['color_state_reserved', 'mine'])
     const forwarded = await receive(issuerModule(), args)
     const tags = forwarded.outputs[0].insertionRemittance?.tags
-    expect(tags).toEqual(['mine', expect.stringMatching(OUTPUT_TAG_FORM), 'color_offline'])
+    expect(tags).toEqual(['mine', expect.stringMatching(SUFFIX_TAG_FORM), 'color_offline'])
     expect(wallet.outputs.get(`${txid}.0`)?.tags).toEqual(tags)
     expect(store.writes.filter(key => key.startsWith('color.v1.settled.'))).toEqual([])
   })

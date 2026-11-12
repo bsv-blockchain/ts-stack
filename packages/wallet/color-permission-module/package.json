@@ -1,6 +1,6 @@
 {
   "name": "@bsv/color-permission-module",
-  "version": "0.3.0",
+  "version": "0.2.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

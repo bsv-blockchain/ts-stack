@@ -30,9 +30,9 @@ import {
   assetBasket,
   COLOR_KEY_ID,
   colorProtocolID,
+  derivationSuffixTag,
   DISCOVERY_TOPIC,
-  ISSUE,
-  newOutputTag
+  ISSUE
 } from '../identifiers.js'
 import { readAnyTokenOutput, readProfiledTokenOutput } from '../tokenOutputs.js'
 
@@ -448,7 +448,7 @@ export async function deployAsset(
     0,
     assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
     JSON.stringify({ version: 1, assetId: ISSUE, ...custody }),
-    [newOutputTag()]
+    [derivationSuffixTag()]
   )
   return { assetId, tx }
 }
@@ -526,21 +526,21 @@ export async function tokenPayment(
   return { tx, customInstructions: JSON.stringify(custody) }
 }
 
-/** The form of the output tag the module files on each output. */
-export const OUTPUT_TAG_FORM = /^p color output [0-9a-f]{64}$/
+/** The form of the suffix tag the module files on each output. */
+export const SUFFIX_TAG_FORM = /^p color [0-9a-f]{64}$/
 
 /**
- * The legacy tag of an output filed before 0.3.0: `p color ` and the SHA-256 of the UTF-8 bytes of
- * its derivation suffix. The module no longer files it but still reads it.
+ * The suffix tag value of a row filed while it was the SHA-256 of the UTF-8 bytes of the
+ * derivation suffix. The module no longer files it, and reads such rows by their stored tag.
  */
-export function legacySuffixTag(derivationSuffix: string): string {
+export function suffixHashTag(derivationSuffix: string): string {
   return `p color ${toHex(sha256(toArray(derivationSuffix, 'utf8')))}`
 }
 
 /**
  * Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts, each
- * carrying `payload`, filed with a new output tag, with the legacy suffix tag of a row filed before
- * 0.3.0 (`'legacy'`), or untagged as filed before suffix tags (`false`).
+ * carrying `payload`, filed with a new suffix tag, with the hash of its derivation suffix as an
+ * earlier version filed it (`'hash'`), or untagged as filed before suffix tags (`false`).
  */
 export async function holdTokens(
   holder: FakeWallet,
@@ -548,7 +548,7 @@ export async function holdTokens(
   assetId: string,
   amounts: bigint[],
   payload?: number[],
-  tagged: boolean | 'legacy' = true
+  tagged: boolean | 'hash' = true
 ): Promise<Transaction[]> {
   const sender = new FakeWallet()
   const txs: Transaction[] = []
@@ -561,10 +561,10 @@ export async function holdTokens(
       0,
       assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
       customInstructions,
-      tagged === 'legacy'
-        ? [legacySuffixTag(derivationSuffix)]
+      tagged === 'hash'
+        ? [suffixHashTag(derivationSuffix)]
         : tagged
-          ? [newOutputTag()]
+          ? [derivationSuffixTag()]
           : undefined
     )
     txs.push(tx)

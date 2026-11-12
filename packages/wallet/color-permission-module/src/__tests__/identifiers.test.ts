@@ -5,12 +5,9 @@ import {
   assetBasket,
   assetTag,
   colorProtocolID,
-  isLegacySuffixTag,
-  isModuleOutputTag,
-  isOutputTag,
+  derivationSuffixTag,
+  isDerivationSuffixTag,
   ISSUE,
-  newOutputTag,
-  outputTagIn,
   parseAssetBasket,
   parseBalanceSelector,
   parseColorProtocolID,
@@ -133,33 +130,17 @@ describe('BRC-207 identifiers', () => {
   })
 })
 
-describe('output tags', () => {
-  const legacy = `p color ${toHex(sha256(toArray('c3VmZml4c3VmZml4c3VmZg==', 'utf8')))}`
-
-  it('a new output tag is `p color output ` and 32 random bytes as lowercase hex', () => {
-    const tag = newOutputTag()
-    expect(tag).toMatch(/^p color output [0-9a-f]{64}$/)
-    expect(tag).toHaveLength(79)
-    expect(newOutputTag()).not.toBe(tag)
-    expect(isOutputTag(tag)).toBe(true)
-    expect(isLegacySuffixTag(tag)).toBe(false)
-    expect(isModuleOutputTag(tag)).toBe(true)
-  })
-
-  it('recognizes the legacy suffix tag of an output filed before 0.3.0', () => {
-    expect(isLegacySuffixTag(legacy)).toBe(true)
-    expect(isOutputTag(legacy)).toBe(false)
-    expect(isModuleOutputTag(legacy)).toBe(true)
-    for (const tag of ['p color', 'p color assets', `p color output ${'AB'.repeat(32)}`]) {
-      expect(isModuleOutputTag(tag)).toBe(false)
-    }
-  })
-
-  it('reads a row by its output tag, else by its legacy suffix tag', () => {
-    const tag = newOutputTag()
-    expect(outputTagIn([legacy, 'app', tag])).toBe(tag)
-    expect(outputTagIn(['app', legacy])).toBe(legacy)
-    expect(outputTagIn(['app'])).toBeUndefined()
-    expect(outputTagIn(undefined)).toBeUndefined()
+describe('derivationSuffixTag', () => {
+  it('is `p color ` and 32 random bytes as lowercase hex, 72 characters, new for each call', () => {
+    const tag = derivationSuffixTag()
+    expect(tag).toMatch(/^p color [0-9a-f]{64}$/)
+    expect(tag).toHaveLength(72)
+    expect(derivationSuffixTag()).not.toBe(tag)
+    expect(isDerivationSuffixTag(tag)).toBe(true)
+    // A row filed while the value was the SHA-256 of the derivation suffix has the same form.
+    const hashed = `p color ${toHex(sha256(toArray('c3VmZml4c3VmZml4c3VmZg==', 'utf8')))}`
+    expect(isDerivationSuffixTag(hashed)).toBe(true)
+    expect(isDerivationSuffixTag('p color')).toBe(false)
+    expect(isDerivationSuffixTag('p color assets')).toBe(false)
   })
 })

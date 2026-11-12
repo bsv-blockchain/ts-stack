@@ -31,8 +31,7 @@ import {
   COLOR_KEY_ID,
   colorProtocolID,
   colorTopic,
-  newOutputTag,
-  outputTagIn
+  isDerivationSuffixTag
 } from '../identifiers.js'
 import {
   createModule,
@@ -41,9 +40,9 @@ import {
   FakeWallet,
   holdTokens,
   legacyDeploy,
-  legacySuffixTag,
-  OUTPUT_TAG_FORM,
   remittanceString,
+  SUFFIX_TAG_FORM,
+  suffixHashTag,
   tokenPayment,
   validInput
 } from './fixtures.js'
@@ -864,10 +863,10 @@ describe('ColorPermissionModule', () => {
     })
   })
 
-  describe('output tags on filed outputs', () => {
-    const outputTag = expect.stringMatching(OUTPUT_TAG_FORM)
+  describe('suffix tags on filed outputs', () => {
+    const suffixTag = expect.stringMatching(SUFFIX_TAG_FORM)
 
-    it('tags token change with a new output tag only', async () => {
+    it('tags token change with a new suffix tag', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
       const funded = (
         await module.onRequest({
@@ -883,10 +882,10 @@ describe('ColorPermissionModule', () => {
       ).args as CreateActionArgs
       const change = funded.outputs![1]
       expect(change.basket).toBe(assetBasket(assetId, 'value'))
-      expect(change.tags).toEqual([outputTag])
+      expect(change.tags).toEqual([suffixTag])
     })
 
-    it('tags a receipt with a new output tag only', async () => {
+    it('tags a receipt with a new suffix tag', async () => {
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 50n)
       provider.admit(assetId, tx, 0)
       const received = (
@@ -910,7 +909,7 @@ describe('ColorPermissionModule', () => {
           originator: APP
         })
       ).args as InternalizeActionArgs
-      expect(received.outputs[0].insertionRemittance?.tags).toEqual(['app tag', outputTag])
+      expect(received.outputs[0].insertionRemittance?.tags).toEqual(['app tag', suffixTag])
     })
 
     it('tags both outputs of a handoff split', async () => {
@@ -928,7 +927,7 @@ describe('ColorPermissionModule', () => {
       })
       const split = created[0].outputs!
       expect(split).toHaveLength(2)
-      for (const output of split) expect(output.tags).toEqual([outputTag])
+      for (const output of split) expect(output.tags).toEqual([suffixTag])
       expect(split[0].tags![0]).not.toBe(split[1].tags![0])
     })
   })
@@ -956,9 +955,9 @@ describe('ColorPermissionModule', () => {
         .txs.map(tx => tx.txid)
         .sort()
 
-    /** The tag the output's stored row is listed by. */
+    /** The suffix tag the output's stored row carries. */
     const tagOf = (tx: Transaction): string =>
-      outputTagIn(wallet.outputs.get(outpointOf(tx))!.tags)!
+      wallet.outputs.get(outpointOf(tx))!.tags!.find(isDerivationSuffixTag)!
 
     it('supplies the selected inputs’ transactions with their proofs and nothing else', async () => {
       const [, selected] = await holdTokens(wallet, provider, assetId, [60n, 300n])
@@ -992,7 +991,7 @@ describe('ColorPermissionModule', () => {
           includeCustomInstructions
         }))
 
-    it('reads the selected inputs of one basket in one listing by their output tags', async () => {
+    it('reads the selected inputs of one basket in one listing by their suffix tags', async () => {
       const [, first, second] = await holdTokens(wallet, provider, assetId, [60n, 300n, 200n, 20n])
       const output = await recipientOutput(wallet, new FakeWallet(), assetId, 400n)
       wallet.listOutputsCalls.length = 0
@@ -1047,7 +1046,7 @@ describe('ColorPermissionModule', () => {
       )
     })
 
-    it('gives receipts with a shared suffix distinct output tags and lists only the spent one', async () => {
+    it('gives receipts with a shared suffix distinct tags and lists only the spent one', async () => {
       const sender = new FakeWallet()
       async function payment(amount: bigint, prefix: string) {
         const { tx, customInstructions } = await tokenPayment(sender, wallet, assetId, amount)
@@ -1104,7 +1103,7 @@ describe('ColorPermissionModule', () => {
         ).resolves.toEqual({ accepted: true })
       }
       const tags = [small, tiny, large].map(({ tx }) => wallet.outputs.get(outpointOf(tx))!.tags)
-      for (const stored of tags) expect(stored).toEqual([expect.stringMatching(OUTPUT_TAG_FORM)])
+      for (const stored of tags) expect(stored).toEqual([expect.stringMatching(SUFFIX_TAG_FORM)])
       expect(new Set(tags.map(stored => stored![0])).size).toBe(3)
       const listOutputs = wallet.listOutputs.bind(wallet)
       const sourceListings: ListOutputsResult[] = []
@@ -1160,7 +1159,7 @@ describe('ColorPermissionModule', () => {
           outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
         })
       ).rejects.toThrow(
-        `BRC-207: token output ${outpointOf(untagged)} was filed without its output tag and is not spendable through the module`
+        `BRC-207: token output ${outpointOf(untagged)} was filed without its suffix tag and is not spendable through the module`
       )
     })
 
@@ -1200,9 +1199,9 @@ describe('ColorPermissionModule', () => {
       expect(prompts).toEqual([])
     })
 
-    it('lists a selected output by the tag its row carries, whatever its value', async () => {
+    it('lists a selected output by the suffix tag it carries, whatever its value', async () => {
       const [retagged] = await holdTokens(wallet, provider, assetId, [300n, 200n])
-      const tag = legacySuffixTag('another suffix')
+      const tag = suffixHashTag('another suffix')
       wallet.outputs.get(outpointOf(retagged))!.tags = [tag]
       const funded = await fund({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
@@ -1212,39 +1211,27 @@ describe('ColorPermissionModule', () => {
       expect(listing?.tags).toEqual([tag])
     })
 
-    it('spends a row filed before 0.3.0 by its legacy suffix tag and files its change with an output tag', async () => {
-      const [legacy] = await holdTokens(wallet, provider, assetId, [300n], undefined, 'legacy')
+    it('spends a row filed with the hash of its suffix by its stored tag', async () => {
+      const [hashed] = await holdTokens(wallet, provider, assetId, [300n], undefined, 'hash')
       const { derivationSuffix } = JSON.parse(
-        wallet.outputs.get(outpointOf(legacy))!.customInstructions!
+        wallet.outputs.get(outpointOf(hashed))!.customInstructions!
       ) as { derivationSuffix: string }
-      expect(wallet.outputs.get(outpointOf(legacy))!.tags).toEqual([
-        legacySuffixTag(derivationSuffix)
-      ])
+      const stored = suffixHashTag(derivationSuffix)
+      expect(wallet.outputs.get(outpointOf(hashed))!.tags).toEqual([stored])
       wallet.listOutputsCalls.length = 0
       const funded = await fund({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
       })
-      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(legacy)])
-      expect(beefListings().map(({ tags }) => tags)).toEqual([[legacySuffixTag(derivationSuffix)]])
-      expect(txids(funded.inputBEEF)).toEqual([legacy.id('hex'), sourceOf(legacy).id('hex')].sort())
-      expect(funded.outputs!.at(-1)!.tags).toEqual([expect.stringMatching(OUTPUT_TAG_FORM)])
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(hashed)])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[stored]])
+      expect(txids(funded.inputBEEF)).toEqual([hashed.id('hex'), sourceOf(hashed).id('hex')].sort())
+      const change = funded.outputs!.at(-1)!.tags!
+      expect(change).toEqual([expect.stringMatching(SUFFIX_TAG_FORM)])
+      expect(change[0]).not.toBe(stored)
     })
 
-    it('lists a row carrying both tag forms by its output tag', async () => {
-      const [both] = await holdTokens(wallet, provider, assetId, [300n], undefined, 'legacy')
-      const tag = newOutputTag()
-      const stored = wallet.outputs.get(outpointOf(both))!
-      stored.tags = [...stored.tags!, tag]
-      wallet.listOutputsCalls.length = 0
-      const funded = await fund({
-        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
-      })
-      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(both)])
-      expect(beefListings().map(({ tags }) => tags)).toEqual([[tag]])
-    })
-
-    it('drops a caller output tag on a receipt and lists it by the module’s own', async () => {
-      const callerTag = `p color output ${'ab'.repeat(32)}`
+    it('drops a caller tag of the suffix tag form on a receipt and lists it by the module’s own', async () => {
+      const callerTag = `p color ${'ab'.repeat(32)}`
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 300n)
       provider.admit(assetId, tx, 0)
       const received = await module.onRequest({
@@ -1259,7 +1246,7 @@ describe('ColorPermissionModule', () => {
               insertionRemittance: {
                 basket: assetBasket(assetId, 'value'),
                 customInstructions,
-                tags: [callerTag, 'app tag']
+                tags: [callerTag, 'app tag', 'p color note']
               }
             }
           ],
@@ -1270,22 +1257,22 @@ describe('ColorPermissionModule', () => {
         wallet.internalizeAction(received.args as InternalizeActionArgs)
       ).resolves.toEqual({ accepted: true })
       const stored = wallet.outputs.get(outpointOf(tx))!.tags!
-      const outputTags = stored.filter(tag => OUTPUT_TAG_FORM.test(tag))
-      expect(outputTags).toHaveLength(1)
-      expect(outputTags[0]).not.toBe(callerTag)
-      expect(stored).toEqual(['app tag', outputTags[0]])
+      const suffixTags = stored.filter(isDerivationSuffixTag)
+      expect(suffixTags).toHaveLength(1)
+      expect(suffixTags[0]).not.toBe(callerTag)
+      expect(stored).toEqual(['app tag', 'p color note', suffixTags[0]])
       wallet.listOutputsCalls.length = 0
       const funded = await fund({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
       })
       expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(tx)])
-      expect(beefListings().map(({ tags }) => tags)).toEqual([[outputTags[0]]])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[suffixTags[0]]])
     })
 
     it('pages past nonselected same-tag outputs without merging or crediting them', async () => {
-      // An output tag is an index, not an ownership or amount assertion. A matching unselected
-      // output may be legitimate (rows filed before 0.3.0 that share a suffix share their legacy
-      // tag) or merely retagged.
+      // A suffix tag is an index, not an ownership or amount assertion. A matching unselected
+      // output may be legitimate (rows filed while the tag was the hash of the derivation suffix
+      // share it when they share a suffix) or merely retagged.
       let selected: Transaction
       let intruder: Transaction
       do {

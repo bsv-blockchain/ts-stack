@@ -198,48 +198,25 @@ export function parseBalanceSelector(
 /** The shared deployment discovery topic. */
 export const DISCOVERY_TOPIC = 'tm_color'
 
-/** Prefix of the output tag. */
-const OUTPUT_TAG_PREFIX = `${COLOR_BASKET_NAMESPACE} output `
-
-const OUTPUT_TAG = /^p color output [0-9a-f]{64}$/
+const SUFFIX_TAG = /^p color [0-9a-f]{64}$/
 
 /**
- * Legacy tag, read only and never filed. Outputs filed before 0.3.0 carry `p color ` and the
- * lowercase hex of the SHA-256 of the UTF-8 bytes of the custody's derivation suffix. A suffix may
- * be reused across outputs, so that tag could be shared by many outputs and the source lookup
- * returned all of them. Such rows are still read.
+ * A new tag for one output the module files: `p color ` and 32 random bytes as lowercase hex,
+ * drawn for each output. The module lists the output's transaction by it.
+ *
+ * The name is kept from when the value was the SHA-256 of the UTF-8 bytes of the custody's
+ * derivation suffix; rows filed then keep that value and are read the same way. The value is no
+ * longer derived from the suffix: a suffix may be reused across outputs, and a shared tag made the
+ * source lookup return every output sharing it. A row's tag is always read back from the row,
+ * never recomputed.
  */
-const LEGACY_SUFFIX_TAG = /^p color [0-9a-f]{64}$/
-
-/**
- * A new output tag: `p color output ` and 32 random bytes as lowercase hex, drawn for each output
- * the module files. The module lists an output's transaction by it.
- */
-export function newOutputTag(): string {
-  return `${OUTPUT_TAG_PREFIX}${toHex(Random(32))}`
+export function derivationSuffixTag(): string {
+  return `${COLOR_BASKET_NAMESPACE} ${toHex(Random(32))}`
 }
 
-/** Whether a tag is an output tag. */
-export function isOutputTag(tag: string): boolean {
-  return OUTPUT_TAG.test(tag)
-}
-
-/** Whether a tag is the legacy derivation suffix tag of an output filed before 0.3.0. */
-export function isLegacySuffixTag(tag: string): boolean {
-  return LEGACY_SUFFIX_TAG.test(tag)
-}
-
-/** Whether a tag is the module's own index tag, in either form. */
-export function isModuleOutputTag(tag: string): boolean {
-  return isOutputTag(tag) || isLegacySuffixTag(tag)
-}
-
-/**
- * The tag a stored row is listed by: its output tag, or, for a row filed before 0.3.0 that has
- * none, its legacy derivation suffix tag. Undefined when it carries neither.
- */
-export function outputTagIn(tags: readonly string[] | undefined): string | undefined {
-  return tags?.find(isOutputTag) ?? tags?.find(isLegacySuffixTag)
+/** Whether a tag is a derivation suffix tag. */
+export function isDerivationSuffixTag(tag: string): boolean {
+  return SUFFIX_TAG.test(tag)
 }
 
 export function colorTopic(assetId: string): string {
