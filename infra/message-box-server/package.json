@@ -38,7 +38,7 @@
   },
   "keywords": [],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "description": "",
   "devDependencies": {
     "@bsv/message-box-client": "^2.7.0",

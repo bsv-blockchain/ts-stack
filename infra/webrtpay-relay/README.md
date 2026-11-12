@@ -86,5 +86,5 @@ HOST=127.0.0.1 npm run dev
 
 ## License
 
-The Open BSV License Version 6 in [`LICENSE.txt`](LICENSE.txt) applies.
+The Apache License 2.0 in [`LICENSE`](LICENSE) applies.
 Third-party material is listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

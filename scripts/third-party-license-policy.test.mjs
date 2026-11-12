@@ -22,7 +22,7 @@ function fixture() {
   fs.writeFileSync(path.join(root, 'packages/example/src/index.ts'), 'export const value = 1\n')
   fs.writeFileSync(
     path.join(root, 'packages/example/package.json'),
-    `${JSON.stringify({ name: '@fixture/example', files: ['dist', 'LICENSE.txt'] }, null, 2)}\n`
+    `${JSON.stringify({ name: '@fixture/example', files: ['dist', 'LICENSE', 'NOTICE'] }, null, 2)}\n`
   )
   const continuity = {
     schemaVersion: 1,
@@ -69,7 +69,7 @@ function fixture() {
   const registry = {
     schemaVersion: 1,
     policy: {
-      firstPartyLicense: 'LicenseRef-Open-BSV-License-6',
+      firstPartyLicense: 'Apache-2.0',
       noticeFile: 'THIRD_PARTY_NOTICES.md',
       licensesDirectory: 'LICENSES',
       releaseRequiresAllClearances: true,
