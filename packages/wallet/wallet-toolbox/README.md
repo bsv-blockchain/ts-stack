@@ -434,7 +434,9 @@ const knex = makeKnex({ client: 'pg', connection: { host, port, user, password, 
 const storage = new StorageKnex({ ...StorageKnex.defaultOptions(), chain: 'main', knex })
 ```
 
-`ChaintracksStorageKnex` and `adminStats` do not support Postgres.
+`ChaintracksStorageKnex` and `adminStats` do not support Postgres. Snapshot
+auxiliary migrations, including packet-label rollback, remain no-ops on Postgres;
+SQLite and MySQL retain their forward-recovery downgrade safeguards.
 
 ## Overview
 

@@ -282,7 +282,7 @@ export class KnexMigrations implements MigrationSource<string> {
     migrations[SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION] = {
       config: { transaction: false },
       up: forSnapshotSqlDialect(widenSnapshotArchivePacketLabels),
-      down: refuseSnapshotArchivePacketLabelDowngrade
+      down: forSnapshotSqlDialect(refuseSnapshotArchivePacketLabelDowngrade)
     }
 
     migrations[SNAPSHOT_SYNC_MIGRATION] = {

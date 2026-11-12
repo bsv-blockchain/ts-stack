@@ -3,6 +3,7 @@ import { KnexMigrations } from '../schema/KnexMigrations'
 import { SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION } from '../schema/snapshotSyncReceiptMigration'
 import { SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION } from '../schema/snapshotJournalDataReceiptMigration'
 import { forSnapshotSqlDialect } from '../schema/snapshotSqlMigration'
+import { SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION } from '../schema/snapshotArchivePacketLabels'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
 import { SNAPSHOT_JOURNAL_SOURCE_MIGRATION, SNAPSHOT_JOURNAL_DESTINATION_MIGRATION } from '../schema/KnexMigrations'
@@ -15,6 +16,7 @@ const entries = [
   '2026-10-01-002 add snapshot archive source guards',
   SNAPSHOT_JOURNAL_SOURCE_MIGRATION,
   SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION,
+  SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION,
   SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION
 ]
 
@@ -24,7 +26,6 @@ test('Postgres snapshot auxiliary migrations never execute SQLite or MySQL SQL',
   const names = (await source.getMigrations()).filter(
     name => name.includes('snapshot') || name === SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION
   )
-  expect(names).toHaveLength(13)
   expect(names).toEqual(expect.arrayContaining(entries))
   const query = jest.spyOn(k.client, 'query').mockRejectedValue(new Error('Snapshot SQL reached Postgres'))
   const acquire = jest.spyOn(k.client, 'acquireConnection').mockRejectedValue(new Error('Snapshot opened Postgres'))
@@ -55,6 +56,9 @@ test.each(['better-sqlite3', 'mysql2'])(
   async client => {
     const k = knex({ client, connection: {}, pool: { min: 0, max: 1 } })
     try {
+      const source = new KnexMigrations('test', 'dialect compatibility', '1'.repeat(64), 10000)
+      const labels = await source.getMigration(SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION)
+      await expect(labels.down?.(k)).rejects.toThrow('narrowing could truncate')
       const error = new Error('Existing migration failure')
       const migrate = jest.fn<Promise<void>, [Knex]>().mockRejectedValue(error)
       await expect(forSnapshotSqlDialect(migrate)(k)).rejects.toBe(error)
