@@ -16,7 +16,7 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "infra/webrtpay-relay"
   },
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "BSV Association",
   "type": "module",
   "main": "dist/index.js",

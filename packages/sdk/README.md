@@ -831,7 +831,7 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party material is under the [Apache License 2.0](./LICENSE).
 Incorporated material remains under the separate terms identified in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md), with complete texts in
 [LICENSES/](./LICENSES/). Keep all three payloads with source and binary distributions.

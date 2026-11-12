@@ -1342,7 +1342,7 @@ current checkpoint status rather than treating one fixture as full qualification
 
 ## License
 
-See the package-local [LICENSE.txt](./LICENSE.txt) and
+See the package-local [LICENSE](./LICENSE) and
 [third-party notices](./THIRD_PARTY_NOTICES.md) for distribution terms.
 
 ## Atomic private proposal channel storage

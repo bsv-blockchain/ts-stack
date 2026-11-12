@@ -34,7 +34,9 @@
     "docs/",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -44,7 +46,7 @@
     "directory": "packages/wallet/wallet-toolbox"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "keywords": [
     "bsv",
     "babbage",

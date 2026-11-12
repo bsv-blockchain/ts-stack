@@ -128,7 +128,7 @@ before updating its date; do not bulk-advance unrelated verification dates.
 
 The package README contract covers every public package and requires registry
 consumers to be able to identify, install, exercise, and license it. Package
-artifact checks separately prove that each README and `LICENSE.txt` ships in
+artifact checks separately prove that each README and `LICENSE` ships in
 the exact tarball. Every public package also has one current page under
 `docs/packages`; the policy rejects missing or duplicate pages, stale versions,
 retired source repositories, point-in-time source commits presented as current

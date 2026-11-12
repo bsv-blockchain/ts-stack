@@ -141,7 +141,7 @@ const did = wallet.getDID()
 
 ## License
 
-TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party changes are under the [Apache License 2.0](./LICENSE).
 The identified pre-monorepo source remains MIT-licensed; see
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 

@@ -108,7 +108,7 @@ Pull requests and issues are welcome! Please open an issue to discuss any major 
 
 ## License
 
-[Open BSV License Version 6](./LICENSE.txt)
+[Apache License 2.0](./LICENSE)
 
 ## Mandala state adapter compatibility
 

@@ -70,8 +70,13 @@ for (const project of publicPackages) {
   if (!/^## License\s*$/im.test(readme)) {
     failures.push(failure(project, 'needs a License section'))
   }
-  if (!readme.includes('LICENSE.txt')) {
-    failures.push(failure(project, 'must link its package-local LICENSE.txt'))
+  const licenseFile = policy.publicPackageReadme.requiredLicenseFile
+  if (
+    ![`(./${licenseFile})`, `(${licenseFile})`, `\`${licenseFile}\``].some(ref =>
+      readme.includes(ref)
+    )
+  ) {
+    failures.push(failure(project, `must link its package-local ${licenseFile}`))
   }
   await readFile(licensePath, 'utf8')
 }
