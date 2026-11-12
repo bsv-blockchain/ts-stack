@@ -195,6 +195,21 @@ function validateStringArrayOption(
   }
 }
 
+function validateNameList(value: unknown, name: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${name} requires a non-empty array of strings`)
+  }
+  for (let index = 0; index < value.length; index++) {
+    if (typeof value[index] !== 'string' || value[index].length === 0) {
+      throw new TypeError(`${name}[${index}] must be a non-empty string`)
+    }
+  }
+}
+
+function mergeNames(existing: string[] | undefined, added: string[]): string[] {
+  return [...new Set([...(existing ?? []), ...added])]
+}
+
 export function isHexPublicKey(value: string): boolean {
   return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130)
 }
@@ -326,6 +341,16 @@ export class InputBuilder {
   }
 
   /**
+   * Adds transaction-level labels (convenience proxy to TransactionTemplate).
+   *
+   * @param values - Label names
+   * @returns The parent TransactionBuilder for transaction-level chaining
+   */
+  labels(values: string[]): TransactionBuilder {
+    return this.parent.labels(values)
+  }
+
+  /**
    * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
    *
    * @param params - Build parameters (optional)
@@ -398,6 +423,19 @@ export class OutputBuilder {
       throw new Error('customInstructions requires a non-empty string')
     }
     this.outputConfig.customInstructions = value
+    return this
+  }
+
+  /**
+   * Adds tags to THIS output only, for lookup with wallet.listOutputs({ basket, tags }).
+   * Repeated calls add to the existing tags; duplicates are dropped.
+   *
+   * @param values - Tag names
+   * @returns This OutputBuilder for further output configuration
+   */
+  tags(values: string[]): this {
+    validateNameList(values, 'tags')
+    this.outputConfig.tags = mergeNames(this.outputConfig.tags, values)
     return this
   }
 
@@ -504,6 +542,16 @@ export class OutputBuilder {
   }
 
   /**
+   * Adds transaction-level labels (convenience proxy to TransactionTemplate).
+   *
+   * @param values - Label names
+   * @returns The parent TransactionBuilder for transaction-level chaining
+   */
+  labels(values: string[]): TransactionBuilder {
+    return this.parent.labels(values)
+  }
+
+  /**
    * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
    *
    * @param params - Build parameters (optional)
@@ -538,6 +586,7 @@ export class TransactionBuilder {
   private readonly inputs: InputConfig[] = []
   private readonly outputs: OutputConfig[] = []
   private transactionOptions: CreateActionOptions = {}
+  private _labels: string[] = []
 
   /**
    * Creates a new TransactionBuilder.
@@ -598,6 +647,19 @@ export class TransactionBuilder {
     validateStringArrayOption(opts.sendWith, 'sendWith', 'hex txid', validateTxid)
 
     this.transactionOptions = { ...this.transactionOptions, ...opts }
+    return this
+  }
+
+  /**
+   * Adds transaction-level labels, for lookup with wallet.listActions({ labels }).
+   * Repeated calls add to the existing labels; duplicates are dropped.
+   *
+   * @param values - Label names
+   * @returns This TransactionBuilder for further chaining
+   */
+  labels(values: string[]): this {
+    validateNameList(values, 'labels')
+    this._labels = mergeNames(this._labels, values)
     return this
   }
 
@@ -944,6 +1006,7 @@ export class TransactionBuilder {
       output.customInstructions = customInstructions
     }
     if (config.basket != null && config.basket !== '') output.basket = config.basket
+    if (config.tags != null && config.tags.length > 0) output.tags = config.tags
     return output
   }
 
@@ -1241,6 +1304,7 @@ export class TransactionBuilder {
       ...(inputBEEF != null && { inputBEEF }),
       ...(inputArtifacts.actionInputs.length > 0 && { inputs: inputArtifacts.actionInputs }),
       ...(outputArtifacts.actionOutputs.length > 0 && { outputs: outputArtifacts.actionOutputs }),
+      ...(this._labels.length > 0 && { labels: this._labels }),
       options: { ...this.transactionOptions }
     }
 
