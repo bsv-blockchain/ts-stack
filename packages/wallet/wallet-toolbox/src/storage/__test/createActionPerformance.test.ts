@@ -293,6 +293,7 @@ describe('createAction funding performance', () => {
       feeModel: ctx.activeStorage.feeModel,
       telemetry: { sink: { capture: event => void events.push(event) } }
     })
+    storage.setServices(ctx.activeStorage.getServices())
     await storage.makeAvailable()
 
     await storage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000, false))

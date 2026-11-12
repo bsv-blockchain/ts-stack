@@ -6,6 +6,8 @@ import { WalletStorageManager } from '../../WalletStorageManager'
 import { snapshotHttpFixture } from '../../../../test/utils/snapshotArchiveHttpFixtures'
 import { openRemoteSnapshot } from './openRemoteSnapshot'
 
+// Full round trips include two authenticated copies and retain HTTP pacing.
+// Allow coverage/CI overhead without changing provider deadlines or rate limits.
 async function closeFixtures(fixtures: Array<Awaited<ReturnType<typeof snapshotHttpFixture>> | undefined>) {
   const results = await Promise.allSettled(fixtures.map(fixture => fixture?.close()))
   const failures = results.filter(x => x.status === 'rejected').map(x => x.reason)
@@ -105,7 +107,7 @@ test.each([
       await closeFixtures([source, target])
     }
   },
-  120000
+  300000
 )
 
 test('TTN remote source hands primary to a direct local Knex target and back within HTTP limits', async () => {
@@ -166,4 +168,4 @@ test('TTN remote source hands primary to a direct local Knex target and back wit
     globalThis.fetch = originalFetch
     await closeFixtures([source, target])
   }
-}, 120000)
+}, 300000)
