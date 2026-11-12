@@ -4,6 +4,7 @@ import type { ProjectManifest } from './config/project-manifest.js'
 import { configSchema, isFieldVisible } from './config/schema.js'
 import type { ConfigField, FieldOption } from './config/schema.js'
 import { seedDraft, resolveDraft } from './config/draft.js'
+import { formatPulledNotice } from './config/requires.js'
 import type { ConfigDraft, SeededDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
 
@@ -20,6 +21,18 @@ export type ConfigProvider = (ctx: {
   existing: ProjectManifest | null
   flags: ConfigDraft
 }) => Promise<ProjectConfig>
+
+/** Prints one notice line; the terminal uses `p.log.info`. */
+export type Info = (message: string) => void
+
+// the hint names what the option brings along, from the schema's requires; a role-scoped one names
+// its role, so the hint holds whatever the layout
+function withRequiresHint(option: FieldOption): FieldOption {
+  if (option.requires === undefined || option.requires.length === 0) return option
+  const names = option.requires.map(r => (typeof r === 'string' ? r : `${r.id} (${r.role})`))
+  const requires = `Requires ${names.join(', ')}.`
+  return { ...option, hint: option.hint === undefined ? requires : `${option.hint} ${requires}` }
+}
 
 /** Options offered for `field` in `mode`; the `--ui` page offers the same per mode. */
 export function optionsFor(
@@ -42,9 +55,7 @@ export function optionsFor(
       // new mode: defaultSelected base capabilities are always included (floor) → don't offer them as toggles
       ids = all.filter(c => c.defaultSelected !== true).map(c => c.id)
     }
-    return all
-      .filter(c => ids.includes(c.id))
-      .map(c => ({ value: c.id, label: c.title, hint: c.description }))
+    return (field.options ?? []).filter(o => ids.includes(o.value)).map(withRequiresHint)
   }
   return field.options ?? []
 }
@@ -72,7 +83,8 @@ async function promptField(
 
 export async function runPrompts(
   ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
-  ask: Ask
+  ask: Ask,
+  info: Info = () => {}
 ): Promise<ProjectConfig> {
   const draft = seedDraft(ctx.existing, ctx.flags)
   // one prompt at a time, in schema order: later fields' visibility depends on earlier answers
@@ -82,7 +94,10 @@ export async function runPrompts(
       (previous, field) => previous.then(() => promptField(field, draft, ctx.existing, ask)),
       Promise.resolve()
     )
-  return resolveDraft(draft)
+  const config = resolveDraft(draft)
+  // only a run that resolved announces what it adds
+  for (const line of formatPulledNotice(config.pulled ?? [])) info(line)
+  return config
 }
 
 export const interactiveConfigPrompt: ConfigProvider = async ctx => {
@@ -119,7 +134,7 @@ export const interactiveConfigPrompt: ConfigProvider = async ctx => {
     }
     return res
   }
-  const config = await runPrompts(ctx, ask)
+  const config = await runPrompts(ctx, ask, message => p.log.info(message))
   p.outro('Done')
   return config
 }

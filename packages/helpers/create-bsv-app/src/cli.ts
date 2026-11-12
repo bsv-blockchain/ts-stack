@@ -2,12 +2,21 @@ import { basename, resolve } from 'node:path'
 import type { ProjectConfig, PackageManager } from './config/model.js'
 import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
 import { detectExistingProject } from './config/detect.js'
-import { resolveConfigFromFile } from './config/file.js'
+import { readConfigFile } from './config/file.js'
 import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
-import { applyConfig, type RunResult } from './pipeline.js'
-import { ConfigError, requestedCapabilityIds, resolveBsvDir } from './config/validate.js'
+import { applyConfig, formatDependencyChanges, type RunResult } from './pipeline.js'
+import {
+  ConfigError,
+  formatConfigError,
+  requestedCapabilityIds,
+  resolveBsvDir,
+  resolveConfig,
+  resolveDir,
+  resolveMode
+} from './config/validate.js'
+import { formatPulledNotice } from './config/requires.js'
 import { getStarter } from './starters.js'
 
 export type StartUi = (opts: {
@@ -184,20 +193,51 @@ function flagsWithDefaultName(
   return mode === 'new' ? withDefaultName(args.draft, targetDir) : { ...args.draft }
 }
 
+/**
+ * The `--file` door. In add mode, every key the file leaves unset comes from the project's
+ * manifest, through `seedDraft` as for the other doors, and its capabilities are merged into the
+ * recorded ones; keys the file sets win. Only a manifest counts, since `--file` is the way round a
+ * layout that detection cannot infer.
+ */
+function resolveFileConfig(file: string, args: CliArgs): ProjectConfig {
+  const input = readConfigFile(file)
+  const opts = { overrideMode: args.draft.mode }
+  if (input === null || typeof input !== 'object' || Array.isArray(input))
+    return resolveConfig(input, opts) // throws the governed error
+  const raw = input as Record<string, unknown>
+  const manifest =
+    resolveMode(raw, opts.overrideMode) === 'add'
+      ? readValidManifest(args.dir ?? resolveDir(raw))
+      : null
+  if (manifest === null) return resolveConfig(raw, opts)
+  const seeded = draftToConfigInput(
+    seedDraft(manifest, { mode: 'add', capabilities: requestedCapabilityIds(raw) })
+  )
+  const fromManifest = Object.fromEntries(
+    Object.entries(seeded).filter(([key, value]) => value !== undefined && !(key in raw))
+  )
+  return resolveConfig({ ...raw, ...fromManifest, capabilities: seeded.capabilities }, opts)
+}
+
 async function resolveCliConfig(
   args: CliArgs,
   targetDir: string,
   provider?: ConfigProvider
 ): Promise<ProjectConfig> {
-  if (args.file !== undefined) {
-    return resolveConfigFromFile(args.file, { overrideMode: args.draft.mode })
-  }
+  if (args.file !== undefined) return resolveFileConfig(args.file, args)
 
   const existing = existingProject(targetDir)
   if (args.yes)
     return resolveDraft(seedDraft(existing, flagsWithDefaultName(args, existing, targetDir)))
   if (provider === undefined) throw new Error('interactive run requires a config provider')
   return await provider({ existing, flags: args.draft })
+}
+
+/** Pulled-notice lines for the run summary; prompts and `--ui` show them before generating. */
+export function summaryNotice(argv: string[], result: RunResult): string[] {
+  const args = parseArgs(argv)
+  const prompted = !args.yes && args.file === undefined
+  return args.ui || prompted ? [] : formatPulledNotice(result.pulled)
 }
 
 export async function run(
@@ -236,4 +276,68 @@ export async function run(
   const config = await resolveCliConfig(args, initialTargetDir, provider)
   const targetDir = args.dir ?? config.dir
   return applyConfig(config, targetDir, { runCommand: deps?.runCommand, force: args.force })
+}
+
+/** Where main() prints, and the run it calls; tests replace them. */
+export interface MainIo {
+  log: (line: string) => void
+  error: (line: string) => void
+  run: typeof run
+}
+
+const DEFAULT_IO: MainIo = {
+  log: line => console.log(line),
+  error: line => console.error(line),
+  run
+}
+
+/** The whole CLI: runs `argv`, prints the summary, and resolves to the process exit code. */
+export async function main(
+  argv: string[],
+  provider?: ConfigProvider,
+  io: MainIo = DEFAULT_IO
+): Promise<number> {
+  const { log } = io
+  if (argv.includes('--help') || argv.includes('-h')) {
+    log(CLI_HELP)
+    return 0
+  }
+  try {
+    const res = await io.run(argv, provider)
+    const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
+    log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
+    for (const line of summaryNotice(argv, res)) log(line)
+    if (res.dependencyChanges.length > 0) {
+      log('\nDependency ranges:')
+      for (const line of formatDependencyChanges(res.dependencyChanges)) log(`  ${line}`)
+    }
+    if (res.installed === false) {
+      log(
+        '\nDependencies were not installed. Run your package manager install command before starting.'
+      )
+    } else if (res.installed === true) {
+      log('\nDependencies installed.')
+    }
+    if (getStarter(res.starter ?? '')?.kind === 'repository') {
+      log(
+        `\nNext:\n  cd ${res.targetDir}\n  Follow the starter README for its development commands.`
+      )
+    } else {
+      log(`\nNext:\n  cd ${res.targetDir}\n  ${res.packageManager ?? 'npm'} run dev`)
+    }
+    log(
+      '\nSee the generated README/AGENTS.md when present and bsv-scaffold.json for exact provenance.'
+    )
+    return 0
+  } catch (err) {
+    io.error(formatConfigError(err))
+    return 1
+  }
+}
+
+/** Runs main() for the bin and sets process.exitCode from it. */
+export function start(argv: string[], provider?: ConfigProvider): void {
+  void main(argv, provider).then(code => {
+    process.exitCode = code
+  })
 }

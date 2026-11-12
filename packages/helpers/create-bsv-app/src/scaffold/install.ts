@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PackageManager, ProjectConfig } from '../config/model.js'
+import { layoutOf, targetFolder } from '../config/model.js'
+import { layoutHasRole } from '../engine.js'
 import type { RunCommand } from './base-scaffolder.js'
 import { getStarter } from '../starters.js'
 
@@ -18,8 +20,11 @@ export function installProject(
   runCommand: RunCommand
 ): string[] {
   if (!config.install) return []
-  const candidates = [config.targets.client, config.targets.server]
-    .filter((path): path is string => path !== undefined)
+  // recorded targets, plus the layout's own ones at their default folders when none are recorded
+  const layout = layoutOf(config.stack)
+  const candidates = (['client', 'server'] as const)
+    .filter(t => config.targets[t] !== undefined || layoutHasRole(layout, t))
+    .map(t => targetFolder(config, t))
     .map(path => (path === '' ? targetDir : join(targetDir, path)))
   if (
     getStarter(config.starter)?.kind === 'repository' &&

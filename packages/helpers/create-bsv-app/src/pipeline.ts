@@ -1,4 +1,5 @@
-import type { ProjectConfig } from './config/model.js'
+import type { ProjectConfig, PulledCapability } from './config/model.js'
+import { layoutOf } from './config/model.js'
 import type { TargetKey, WriteResult } from './engine.js'
 import { writeFiles, planPlacement } from './engine.js'
 import { resolveCapabilities } from './registry.js'
@@ -9,7 +10,7 @@ import {
   MANIFEST_FILE
 } from './config/project-manifest.js'
 import { scaffoldNewProject } from './scaffold/new-project.js'
-import { applyCapabilityDeps } from './scaffold/package-json.js'
+import { applyCapabilityDeps, type DependencyChange } from './scaffold/package-json.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import { defaultRunCommand } from './scaffold/run-command.js'
 import { installProject } from './scaffold/install.js'
@@ -19,6 +20,9 @@ export interface RunResult {
   deps: Record<TargetKey, Record<string, string>>
   written: string[]
   skipped: string[]
+  dependencyChanges: DependencyChange[]
+  /** Capabilities added because a selected one requires them. */
+  pulled: PulledCapability[]
   installed?: boolean
   packageManager?: ProjectConfig['packageManager']
   starter?: string
@@ -28,8 +32,11 @@ export function addCapabilities(
   config: ProjectConfig,
   targetDir: string,
   opts: { force: boolean; runCommand?: RunCommand }
-): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
-  const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
+): {
+  deps: Record<TargetKey, Record<string, string>>
+  dependencyChanges: DependencyChange[]
+} & WriteResult {
+  const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
@@ -38,11 +45,15 @@ export function addCapabilities(
     targetDir,
     { force: true }
   )
-  writeProjectManifest(targetDir, manifestFromConfig(config))
-  applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  writeProjectManifest(targetDir, {
+    ...manifestFromConfig(config),
+    capabilities: caps.map(c => c.id)
+  })
+  const dependencyChanges = applyCapabilityDeps(targetDir, config, placement.deps)
   installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return {
     deps: placement.deps,
+    dependencyChanges,
     written: [...util.written, ...glue.written, ...agents.written, MANIFEST_FILE],
     skipped: util.skipped
   }
@@ -60,6 +71,8 @@ export function applyConfig(
       deps: r.deps,
       written: r.written,
       skipped: [],
+      dependencyChanges: r.dependencyChanges,
+      pulled: config.pulled ?? [],
       installed: config.install,
       packageManager: config.packageManager,
       starter: config.starter
@@ -74,8 +87,29 @@ export function applyConfig(
     deps: r.deps,
     written: r.written,
     skipped: r.skipped,
+    dependencyChanges: r.dependencyChanges,
+    pulled: config.pulled ?? [],
     installed: config.install,
     packageManager: config.packageManager,
     starter: config.starter
   }
+}
+
+const MANUAL_FIX: Record<NonNullable<DependencyChange['reason']>, string> = {
+  devDependency: 'it is a devDependency, move it to dependencies manually',
+  unparseable: 'check it manually',
+  majorUpgrade: 'check it manually (major upgrade)'
+}
+
+function manualFix(change: DependencyChange): string {
+  return MANUAL_FIX[change.reason ?? 'unparseable']
+}
+
+/** One human-readable line per dependency change, for the CLI. */
+export function formatDependencyChanges(changes: DependencyChange[]): string[] {
+  return changes.map(c =>
+    c.action === 'raised'
+      ? `${c.target}: ${c.name} ${c.from} → ${c.to}`
+      : `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${manualFix(c)}`
+  )
 }
