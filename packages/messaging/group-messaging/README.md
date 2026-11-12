@@ -357,7 +357,7 @@ npm run doc
 
 ## License
 
-Licensed under the Open BSV License Version 6; see [LICENSE.txt](./LICENSE.txt).
+Licensed under the Apache License 2.0; see [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

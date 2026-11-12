@@ -621,7 +621,7 @@ See [API.md](./API.md) for full parameter and method documentation.
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## Heartbeat tolerance and close diagnostics
 

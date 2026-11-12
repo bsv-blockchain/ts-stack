@@ -179,7 +179,7 @@ package behavior and the standard differ, the standard is authoritative.
 
 ## License
 
-Open BSV License v6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

@@ -384,7 +384,7 @@ For overlay deployment, see the `@bsv/btms-backend` package.
 
 ## License
 
-Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

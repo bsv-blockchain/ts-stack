@@ -176,7 +176,7 @@ jobs:
             --mode test)
           echo "dependent-test-packages=$DEPENDENT_TEST_PACKAGES" >> "$GITHUB_OUTPUT"
           # The application package's serial suite outlasts one shard's
-          # timeout, so it runs as six duration-balanced Jest shards beside
+          # timeout, so it runs as ten duration-balanced Jest shards beside
           # the planned ones.
           DEPENDENT_TEST_ORDINARY=$(jq -c 'map(select(. != "@bsv/output-knowledge"))' <<<"$DEPENDENT_TEST_PACKAGES")
           DEPENDENT_TEST_MATRIX=$(node scripts/ci-shard-plan.mjs \
@@ -187,7 +187,7 @@ jobs:
             {include: ((if ($all | map(select(. != "@bsv/output-knowledge")) | length) > 0 then
               [.include[] | . + {application:0}]
               else [] end) + (if $all | index("@bsv/output-knowledge") then
-              [range(1;7) as $shard | {shard:$shard,total:6,application:$shard,packages:["@bsv/output-knowledge"]}]
+              [range(1;11) as $shard | {shard:$shard,total:10,application:$shard,packages:["@bsv/output-knowledge"]}]
               else [] end))}' <<<"$DEPENDENT_TEST_MATRIX")
           echo "dependent-test-matrix=$DEPENDENT_TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
@@ -200,7 +200,7 @@ jobs:
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
           # Packages run serially inside a shard, so plan shards from measured
           # durations rather than package count. The application package runs
-          # in its own six duration-balanced complete-union shards instead.
+          # in its own ten duration-balanced complete-union shards instead.
           COVERAGE_OTHER_ORDINARY=$(jq -c 'map(select(. != "@bsv/output-knowledge"))' <<<"$COVERAGE_OTHER_PACKAGES")
           COVERAGE_OTHER_MATRIX=$(node scripts/ci-shard-plan.mjs \
             --packages-json "$COVERAGE_OTHER_ORDINARY" \
@@ -210,7 +210,7 @@ jobs:
             {include: ((if ($all | map(select(. != "@bsv/output-knowledge")) | length) > 0 then
               [.include[] | . + {id:("packages-" + (.shard | tostring)),application:0}]
               else [] end) + (if $all | index("@bsv/output-knowledge") then
-              [range(1;7) as $shard | {id:("application-" + ($shard | tostring)),shard:$shard,total:6,application:$shard,packages:[]}]
+              [range(1;11) as $shard | {id:("application-" + ($shard | tostring)),shard:$shard,total:10,application:$shard,packages:[]}]
               else [] end))}' <<<"$COVERAGE_OTHER_MATRIX")
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \

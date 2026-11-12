@@ -92,7 +92,7 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     const dockerfile = readRepositoryFile(`${component.path}/Dockerfile`)
     assert.match(
       dockerfile,
-      /COPY LICENSE\.txt THIRD_PARTY_NOTICES\.md \/usr\/share\/licenses\/ts-stack\//
+      /COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES\.md \/usr\/share\/licenses\/ts-stack\//
     )
     assert.match(dockerfile, /COPY LICENSES \/usr\/share\/licenses\/ts-stack\/LICENSES/)
     assert.match(
@@ -315,5 +315,7 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   }
 
   assert.deepEqual(trackedPythonBytecode, [])
-  assert.ok(existsSync(join(REPOSITORY_ROOT, 'LICENSE.txt')))
+  assert.ok(existsSync(join(REPOSITORY_ROOT, 'LICENSE')))
+  assert.ok(existsSync(join(REPOSITORY_ROOT, 'NOTICE')))
+  assert.ok(existsSync(join(REPOSITORY_ROOT, 'PATENTS')))
 })

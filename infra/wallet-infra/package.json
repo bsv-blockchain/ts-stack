@@ -12,7 +12,7 @@
   "type": "module",
   "description": "UTXO Management Server",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
@@ -34,7 +34,9 @@
   "files": [
     "out/src",
     "src",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],

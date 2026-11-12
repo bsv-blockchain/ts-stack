@@ -311,7 +311,7 @@ preserving existing wallet data, certificate bytes and contact history.
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 See the [coordinated migration map](../../../docs/guides/identity-did-vc-migration.md) for retired serial-DID and copied-proof APIs.
 

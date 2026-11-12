@@ -12,8 +12,10 @@ import { pathToFileURL } from 'node:url'
 import { createCommandRunner } from './lib/command-runner.mjs'
 import {
   EXPECTED_LICENSE_SHA256,
+  LICENSE_DECLARATION,
   LICENSE_FILE,
-  LICENSE_VERSION,
+  LICENSE_NAME,
+  NOTICE_FILE,
   REPOSITORY_ROOT
 } from './package-license-policy.mjs'
 import {
@@ -339,6 +341,7 @@ function validatePackResult(packResult, project) {
   const files = packResult.files?.map(file => file.path) ?? []
   for (const required of [
     LICENSE_FILE,
+    NOTICE_FILE,
     'package.json',
     ...expectedThirdPartyFilesForPackage(project.name)
   ]) {
@@ -568,7 +571,7 @@ function normalizeRootComponent(component, record, manifest) {
     licenses: [
       {
         license: {
-          name: `Open BSV License Version ${LICENSE_VERSION}`
+          id: LICENSE_DECLARATION
         }
       }
     ],
@@ -604,7 +607,7 @@ function normalizeGovernedComponentLicenses(components, governedNames, internalL
     governedNames.has(component.name)
       ? {
           ...component,
-          licenses: [{ license: { name: internalLicense } }]
+          licenses: [{ license: { id: internalLicense } }]
         }
       : component
   )
@@ -705,7 +708,7 @@ async function generatePackageSbom(
     const licenseDigest = sha256(await fs.readFile(path.join(packageDirectory, LICENSE_FILE)))
     if (licenseDigest !== EXPECTED_LICENSE_SHA256) {
       throw new Error(
-        `${record.project.name} tarball does not contain the canonical Open BSV license`
+        `${record.project.name} tarball does not contain the canonical ${LICENSE_NAME}`
       )
     }
 
@@ -1221,7 +1224,7 @@ async function verifyPackageArtifact(item, context) {
   const packedManifest = parseJson(packedManifestSource, `${item.tarball} package manifest`)
   validatePackedManifest(item, packedManifest)
   if (sha256(Buffer.from(packedLicense)) !== EXPECTED_LICENSE_SHA256) {
-    throw new Error(`${item.tarball} does not contain the canonical Open BSV license`)
+    throw new Error(`${item.tarball} does not contain the canonical ${LICENSE_NAME}`)
   }
 
   const sbomPath = resolveArtifactPath(releaseRoot, item.sbom)

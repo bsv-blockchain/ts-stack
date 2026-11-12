@@ -16,7 +16,7 @@
     "test": "node --test notifier.test.js"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "@bsv/sdk": "^4.0.1",
     "@google-cloud/storage": "^8.1.0",

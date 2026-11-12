@@ -14,7 +14,7 @@
     "faucet",
     "transactions"
   ],
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "BSV Association",
   "type": "module",
   "bin": {
@@ -55,7 +55,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
