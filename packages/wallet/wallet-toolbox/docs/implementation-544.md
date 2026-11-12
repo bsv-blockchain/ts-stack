@@ -107,4 +107,9 @@ The complete extended native recovery/fault matrix remains available through
 manual CI with `extended-wallet-qualification`; its cases and receipt validation
 are preserved. Coverage percentages and bundle byte targets inform review without
 preventing selected functional tests from running. Native worker admission follows
-the supported Node24.11+ floor at module ABI137 and records the actual runtime.
+the original Node24.18+ floor at module ABI137 and records the actual runtime.
+
+The eight ordinary lanes can run concurrently. The default orchestration guard is
+60 minutes to cover setup, tests, coverage and cleanup; individual protocol and
+receiver deadlines retain their own enforcement. Root-copy checks precede long
+database recovery probes so an installer startup failure is reported promptly.

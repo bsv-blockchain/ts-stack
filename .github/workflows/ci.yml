@@ -1112,14 +1112,14 @@ jobs:
     # Include bounded native provisioning and dependency installation overhead.
     # Full merge contracts each keep their own one-hour admission; proof lanes40m.
     # Authenticated public-entry lanes retain1200s owners/1230s cases plus setup.
-    timeout-minutes: ${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 40 }}
+    timeout-minutes: ${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 60 }}
     env:
       NODE_OPTIONS: --max-old-space-size=1536
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.prepare.outputs.wallet-test-matrix) }}
     services:
       # The Knex storage suites also run against Postgres (RUNPOSTGRES).
@@ -1150,6 +1150,30 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Deliver the exactly pinned qualified native test executable
+        run: bash scripts/provision-wallet-native-tests.sh
+      - name: Qualify the original privileged native root-copy fixtures
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 3
+        run: |
+          native_node="$(command -v node)"
+          jest_entry="$(node -p "require.resolve('jest/bin/jest')")"
+          mkdir -p coverage/native-root-copy
+          sudo --preserve-env=TS_STACK_NATIVE_TEST_EXECUTABLE env CI=true NODE_OPTIONS=--max-old-space-size=1536 \
+            "$native_node" "$jest_entry" --coverage --coverageDirectory=coverage/native-root-copy \
+            --runInBand --watchman=false --testPathIgnorePatterns=man.test.ts --runTestsByPath \
+            src/storage/portable/native/RootNativeCopyContracts.test.cjs \
+            --json --outputFile="$GITHUB_WORKSPACE/native-root-copy-result.json"
+          cd "$GITHUB_WORKSPACE"
+          node scripts/wallet-native-root-copy-ci.mjs < native-root-copy-result.json
+          sudo "$native_node" scripts/normalize-lcov-paths.mjs \
+            packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
+            packages/wallet/wallet-toolbox
+          mkdir -p .coverage-output
+          cp packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
+            .coverage-output/wallet-native-root-copy.lcov.info
+          cp native-root-copy-result.json .coverage-output/native-root-copy-result.json
       - name: Verify native snapshot crash recovery
         if: matrix.id == 'shard-1'
         working-directory: packages/wallet/wallet-toolbox
@@ -1183,30 +1207,6 @@ jobs:
       - name: Deliver the pinned native browser for the serial browser cases
         if: matrix.id == 'shard-4'
         run: node scripts/provision-wallet-native-browser.mjs
-      - name: Deliver the exactly pinned qualified native test executable
-        run: bash scripts/provision-wallet-native-tests.sh
-      - name: Qualify the original privileged native root-copy fixtures
-        if: matrix.id == 'shard-1'
-        working-directory: packages/wallet/wallet-toolbox
-        timeout-minutes: 3
-        run: |
-          native_node="$(command -v node)"
-          jest_entry="$(node -p "require.resolve('jest/bin/jest')")"
-          mkdir -p coverage/native-root-copy
-          sudo --preserve-env=TS_STACK_NATIVE_TEST_EXECUTABLE env CI=true NODE_OPTIONS=--max-old-space-size=1536 \
-            "$native_node" "$jest_entry" --coverage --coverageDirectory=coverage/native-root-copy \
-            --runInBand --watchman=false --testPathIgnorePatterns=man.test.ts --runTestsByPath \
-            src/storage/portable/native/RootNativeCopyContracts.test.cjs \
-            --json --outputFile="$GITHUB_WORKSPACE/native-root-copy-result.json"
-          cd "$GITHUB_WORKSPACE"
-          node scripts/wallet-native-root-copy-ci.mjs < native-root-copy-result.json
-          sudo "$native_node" scripts/normalize-lcov-paths.mjs \
-            packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
-            packages/wallet/wallet-toolbox
-          mkdir -p .coverage-output
-          cp packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
-            .coverage-output/wallet-native-root-copy.lcov.info
-          cp native-root-copy-result.json .coverage-output/native-root-copy-result.json
       - name: Preserve native component delivery evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

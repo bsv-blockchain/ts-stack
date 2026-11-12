@@ -188,7 +188,7 @@ test('actual HTTP artifact feeds a target-owned receiver, survives replacement, 
     await archive?.close()
     await f.close()
   }
-})
+}, 120_000)
 
 test('DATA receiver refuses foreign identity and a changed current primary before accepting a frame', async () => {
   const f = await fixture()

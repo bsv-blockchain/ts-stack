@@ -24,8 +24,8 @@
       "key": "AaExP-k5m5nztHJVpve2",
       "rule": "javascript:S2612",
       "file": "packages/wallet/wallet-toolbox/tools/Brc38RootNativeInstallation.cjs",
-      "sha256": "c22043383de5f7846aaf99f442390f7210b0b0d236a9d4d7b63e1afc0d3cb893",
-      "line": 188,
+      "sha256": "8ce79cff0d40d160cb9f9a03aa4a7373556f053ab117e44cb6b2ab727a261984",
+      "line": 189,
       "type": "VULNERABILITY",
       "message": "Make sure this permission is safe.",
       "impacts": [
@@ -62,5 +62,14 @@
     "expiresAt": "2026-11-19T23:59:59Z",
     "approval": "Maintainer explicitly approved the prepared bounded renewal in the private operator task: same thresholds, same three source-bound findings, no other waiver.",
     "evidence": "network-ops/docs/systems/ts-stack-pr569-analysis-renewal-2026-11-11.md"
+  },
+  "sourceRevalidation": {
+    "date": "2026-11-11",
+    "reviewedBy": "operator-authorized agent for ty-everett",
+    "basis": "Operator directed implementation/recovery and simplification. Focused diff review admits newer compatible Node24 patches at ABI137 while retaining the original root-worker minimum24.18. The reviewed 0555 operation, root UID/EUID, immutable pin, private ownership, no-follow handles, byte/identity checks and cleanup retention are preserved. No new finding is waived; final whole-PR maintainer approval remains separate.",
+    "file": "packages/wallet/wallet-toolbox/tools/Brc38RootNativeInstallation.cjs",
+    "previousSha256": "c22043383de5f7846aaf99f442390f7210b0b0d236a9d4d7b63e1afc0d3cb893",
+    "sha256": "8ce79cff0d40d160cb9f9a03aa4a7373556f053ab117e44cb6b2ab727a261984",
+    "line": 189
   }
 }

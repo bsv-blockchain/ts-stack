@@ -584,7 +584,7 @@ function assertNativeWalletJob(wallet) {
   assert.doesNotMatch(wallet, /continue-on-error/)
   assert.match(
     wallet,
-    /^ {4}strategy:\n {6}fail-fast: false\n {6}max-parallel: 3\n {6}matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.wallet-test-matrix\) \}\}\n {4}services:$/m
+    /^ {4}strategy:\n {6}fail-fast: false\n {6}max-parallel: 8\n {6}matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.wallet-test-matrix\) \}\}\n {4}services:$/m
   )
   assert.match(wallet, /node-version: 24\.22\.1/)
   assert.match(wallet, /run: bash scripts\/provision-wallet-native-tests\.sh/)

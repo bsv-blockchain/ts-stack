@@ -92,7 +92,7 @@ test('ordinary wallet discovery removes only the two complete mandatory native f
   const job = workflow.jobs['coverage-wallet']
   assert.equal(
     job['timeout-minutes'],
-    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 40 }}"
+    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 60 }}"
   )
   const step = job.steps.find(
     value =>
@@ -166,15 +166,15 @@ test('ordinary wallet discovery removes only the two complete mandatory native f
   }
 })
 
-test('the complete browser inventory runs serially inside original shard-4 with no job or budget increase', async () => {
+test('the complete browser inventory runs serially inside shard-4 with its assertions and per-worker memory bound', async () => {
   const { parse } = await import('yaml')
   const workflow = parse(readFileSync(join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8'))
   const job = workflow.jobs['coverage-wallet']
   assert.equal(
     job['timeout-minutes'],
-    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 40 }}"
+    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 60 }}"
   )
-  assert.equal(job.strategy['max-parallel'], 3)
+  assert.equal(job.strategy['max-parallel'], 8)
   assert.equal(job.env.NODE_OPTIONS, '--max-old-space-size=1536')
   assert.notEqual(job['continue-on-error'], true)
   const hash = value => createHash('sha256').update(value).digest('hex')
@@ -300,9 +300,9 @@ test('native integrity routing removes only its original fullfile and requires t
   const job = workflow.jobs['coverage-wallet']
   assert.equal(
     job['timeout-minutes'],
-    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 40 }}"
+    "${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 60 }}"
   )
-  assert.equal(job.strategy['max-parallel'], 3)
+  assert.equal(job.strategy['max-parallel'], 8)
   assert.equal(job.env.NODE_OPTIONS, '--max-old-space-size=1536')
   const step = job.steps.find(value => value.env?.WALLET_SHARD !== undefined)
   const file = 'src/storage/portable/Brc38NativeComposedIntegrityContractsNode.test.ts'

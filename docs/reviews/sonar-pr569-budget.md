@@ -121,3 +121,14 @@ review date, finding identities and source hashes remain preserved. This renewal
 adds no finding or threshold waiver. Exact-head analysis on 86d4c2c6ca97 had zero
 active bugs, zero hotspots, maintainability A and duplication 4.9%; the separate
 S7503 async refusal finding is corrected rather than excepted.
+
+
+## November 11 root-copy worker compatibility review
+
+The operator-authorized agent revalidated the root-copy source binding after a
+focused Node-version admission correction. Newer compatible Node24 patches at ABI137 replace
+the stale exact24.18 worker condition while retaining its original24.18 minimum. The intentional 0555 operation and its
+root UID/EUID, static image pin, descriptor/path identity, no-follow, hash, flush
+and retained-cleanup checks are unchanged. The registry records the previous and
+current source hashes and exact permission line. This changes no finding, mode,
+threshold or expiry and does not claim whole-PR maintainer approval.

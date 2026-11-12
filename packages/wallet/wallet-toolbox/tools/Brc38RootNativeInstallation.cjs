@@ -9,6 +9,7 @@ const crypto = require('node:crypto')
 const { assertNativeCandidateTarget } = require('../src/storage/portable/native/source_recipe.cjs')
 const { NativeCandidateBuildCleanupError } = require('./Brc38NativeCandidateBuild.cjs')
 const retained = new Set()
+const supportsNativeWorkerNode = version => typeof version === 'string' && /^v24\.\d+\.\d+$/.test(version) && Number(version.split('.')[1]) >= 18
 
 function parseDarwinInstallationArguments(args) {
   if (args.length !== 2 || args[0] !== '--source') throw new Error('Usage: --source /absolute/native-candidate')
@@ -29,12 +30,12 @@ function planDarwinInstallationHost(platform, architecture, node, abi, uid, euid
   if (
     platform !== 'darwin' ||
     !['arm64', 'x64'].includes(architecture) ||
-    node !== 'v24.18.0' ||
+    !supportsNativeWorkerNode(node) ||
     abi !== '137' ||
     uid !== 0 ||
     euid !== 0
   )
-    throw new Error('Darwin native installation requires its actual root Node24.18.0 ABI137 worker')
+    throw new Error('Darwin native installation requires its actual root Node24.18.0 ABI137 worker or a compatible later Node24 patch')
   return Object.freeze({ platform, architecture, nodeVersion: node, nodeABI: abi, uid, euid })
 }
 /** Path comparison DATA. Actual callers separately select the static registry. */
@@ -102,7 +103,7 @@ async function copyPinnedRootOwnedExecutable(source, directory) {
   if (retained.size !== 0) throw new Error('Original root native installation descriptors remain retained')
   if (
     !['linux', 'darwin'].includes(process.platform) ||
-    process.version !== 'v24.18.0' ||
+    !supportsNativeWorkerNode(process.version) ||
     process.versions.modules !== '137' ||
     process.getuid?.() !== 0 ||
     process.geteuid?.() !== 0

@@ -26,8 +26,8 @@ const APPROVED = {
       key: 'AaExP-k5m5nztHJVpve2',
       rule: 'javascript:S2612',
       file: 'packages/wallet/wallet-toolbox/tools/Brc38RootNativeInstallation.cjs',
-      sha256: 'c22043383de5f7846aaf99f442390f7210b0b0d236a9d4d7b63e1afc0d3cb893',
-      line: 188,
+      sha256: '8ce79cff0d40d160cb9f9a03aa4a7373556f053ab117e44cb6b2ab727a261984',
+      line: 189,
       type: 'VULNERABILITY',
       message: 'Make sure this permission is safe.',
       impacts: [

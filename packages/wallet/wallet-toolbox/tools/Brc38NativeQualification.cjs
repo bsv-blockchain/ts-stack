@@ -196,11 +196,12 @@ async function writeQualificationRecord(filename, record) {
   if (failed) throw failure
 }
 
-// Node patch releases retain the admitted module ABI. Match the package's
-// supported Node24 floor rather than rejecting an ABI-compatible CI update.
+// Node patch releases retain the admitted module ABI. Keep the original
+// qualification worker's Node24.18 floor and admit compatible later patches.
 function supportsNativeWorkerNode(nodeVersion) {
+  if (typeof nodeVersion !== 'string') return false
   const match = /^v24\.(\d+)\.\d+$/.exec(nodeVersion)
-  return match !== null && Number(match[1]) >= 11
+  return match !== null && Number(match[1]) >= 18
 }
 
 /** Pure worker-target DATA. Callers cannot pass this plan to admit a host.
@@ -212,7 +213,7 @@ function planLinuxQualificationHost(platform, architecture, nodeVersion, nodeABI
     !supportsNativeWorkerNode(nodeVersion) ||
     nodeABI !== '137'
   )
-    throw new Error('Native qualification requires its admitted Linux ARM64/x64 Node24.11+ ABI137 worker')
+    throw new Error('Native qualification requires its admitted Linux ARM64/x64 Node24.18.0 ABI137 worker or a compatible later Node24 patch')
   return Object.freeze({
     platform,
     architecture,
@@ -237,7 +238,7 @@ function planUnixBootstrapHost(platform, architecture, nodeVersion, nodeABI) {
     !supportsNativeWorkerNode(nodeVersion) ||
     nodeABI !== '137'
   )
-    throw new Error('Native bootstrap requires its controlled Unix ARM64/x64 Node24.11+ ABI137 worker')
+    throw new Error('Native bootstrap requires its controlled Unix ARM64/x64 Node24.18.0 ABI137 worker or a compatible later Node24 patch')
   return Object.freeze({ platform, architecture, nodeVersion, nodeABI, launchMechanism: 'private-darwin-build-path' })
 }
 

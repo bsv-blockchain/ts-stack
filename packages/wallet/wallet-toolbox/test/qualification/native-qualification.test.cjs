@@ -157,16 +157,36 @@ test('compatibility CLI cohort-file reader binds metadata and bytes to one descr
 })
 
 
-test.each(['v24.11.0', 'v24.18.0', 'v24.22.1'])('native worker accepts supported Node24 patch %s at ABI137', version => {
+test.each(['v24.18.0', 'v24.22.1'])('native worker accepts supported Node24 patch %s at ABI137', version => {
   for (const architecture of ['arm64', 'x64']) {
     expect(planLinuxQualificationHost('linux', architecture, version, '137').nodeVersion).toBe(version)
     expect(planUnixBootstrapHost('darwin', architecture, version, '137').nodeVersion).toBe(version)
   }
 })
 test.each([
-  ['v24.10.0', '137'], ['v22.22.0', '137'], ['v25.0.0', '137'],
+  ['v24.11.0', '137'], ['v24.10.0', '137'], ['v22.22.0', '137'], ['v25.0.0', '137'],
   ['v24.22.1', '136'], ['v24.22.1-unknown', '137']
 ])('native worker refuses unsupported version/ABI %s/%s', (version, abi) => {
   expect(() => planLinuxQualificationHost('linux', 'arm64', version, abi)).toThrow()
   expect(() => planUnixBootstrapHost('darwin', 'arm64', version, abi)).toThrow()
+})
+
+
+const { planDarwinInstallationHost } = require('../../tools/Brc38RootNativeInstallation.cjs')
+test.each(['v24.18.0', 'v24.22.1'])('root installation planner accepts supported Node24 patch %s with root ABI137', version => {
+  expect(planDarwinInstallationHost('darwin', 'arm64', version, '137', 0, 0).nodeVersion).toBe(version)
+})
+test.each([
+  ['v24.11.0', '137', 0, 0], ['v24.10.0', '137', 0, 0], ['v25.0.0', '137', 0, 0],
+  ['v24.22.1', '138', 0, 0], ['v24.22.1', '137', 501, 0], ['v24.22.1', '137', 0, 501]
+])('root installation planner retains version, ABI and root-role refusals %s/%s/%s/%s', (version, abi, uid, euid) => {
+  expect(() => planDarwinInstallationHost('darwin', 'arm64', version, abi, uid, euid)).toThrow()
+})
+
+
+test('version planning refuses caller-controlled coercion before admission', () => {
+  const version = { toString: jest.fn(() => 'v24.22.1') }
+  expect(() => planLinuxQualificationHost('linux', 'arm64', version, '137')).toThrow()
+  expect(() => planDarwinInstallationHost('darwin', 'arm64', version, '137', 0, 0)).toThrow()
+  expect(version.toString).not.toHaveBeenCalled()
 })
