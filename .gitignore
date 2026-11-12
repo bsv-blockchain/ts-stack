@@ -45,3 +45,6 @@ docs-site/src/manifest.json
 # so these are unused leftovers that only inflate Dependabot's alert count.
 # Kept out so they don't regenerate.
 packages/**/package-lock.json
+
+# Complete raw Sonar policy evidence is retained by CI artifacts.
+.sonar-policy/

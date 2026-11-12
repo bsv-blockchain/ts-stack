@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync, promiseFromSync, mapAwaitFromSync } from '../../../utility/promiseFromSync'
 import { Chain } from '../../../sdk/types'
 import { asString } from '../../../utility/utilityHelpers.noBuffer'
 import { BaseBlockHeader, BlockHeader } from './Api/BlockHeaderApi'
@@ -114,7 +115,7 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     const fetchImpl = options.fetch ?? fetch
     if (typeof fetchImpl !== 'function') throw new Error('fetch must be a function.')
     // Call fetch with no receiver: browsers refuse it on anything but the window.
-    this.fetcher = async (input, init) => await fetchImpl(input, init)
+    this.fetcher = (input, init) => awaitFromSync(() => fetchImpl(input, init))
     this.requestTimeoutMsecs = options.requestTimeoutMsecs ?? 30000
     this.reconnectWaitMsecs = options.reconnectWaitMsecs ?? 1000
     this.reconnectWaitMaxMsecs = options.reconnectWaitMaxMsecs ?? 60000
@@ -157,27 +158,35 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     }
   }
 
-  async currentHeight(): Promise<number> {
-    return await this.getPresentHeight()
+  currentHeight(): Promise<number> {
+    return awaitFromSync(() => this.getPresentHeight())
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
-    const h = await this.findHeaderForHeight(height)
-    return h != null && root === asString(h.merkleRoot)
+  isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    return mapAwaitFromSync(
+      () => this.findHeaderForHeight(height),
+      h => {
+        return h != null && root === asString(h.merkleRoot)
+      }
+    )
   }
 
-  async getChain(): Promise<Chain> {
-    const value = await this.getJson('/network')
-    const network =
-      typeof value === 'string' ? value : this.readExactRecord(value, ['network'], 'network response').network
-    if (typeof network !== 'string' || network.length > 64) {
-      throw new Error('ChainTracks upstream returned an invalid network.')
-    }
-    const actual = this.normalizeChain(network)
-    if (actual !== this.chain) {
-      throw new Error(`ChainTracks upstream network '${actual}' does not match configured chain '${this.chain}'.`)
-    }
-    return actual
+  getChain(): Promise<Chain> {
+    return mapAwaitFromSync(
+      () => this.getJson('/network'),
+      value => {
+        const network =
+          typeof value === 'string' ? value : this.readExactRecord(value, ['network'], 'network response').network
+        if (typeof network !== 'string' || network.length > 64) {
+          throw new Error('ChainTracks upstream returned an invalid network.')
+        }
+        const actual = this.normalizeChain(network)
+        if (actual !== this.chain) {
+          throw new Error(`ChainTracks upstream network '${actual}' does not match configured chain '${this.chain}'.`)
+        }
+        return actual
+      }
+    )
   }
 
   async getInfo(): Promise<ChaintracksInfoApi> {
@@ -193,10 +202,15 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     }
   }
 
-  async getPresentHeight(): Promise<number> {
-    const value = await this.getJson('/height')
-    const height = typeof value === 'number' ? value : this.readExactRecord(value, ['height'], 'height response').height
-    return this.validateHeight(height, 'upstream height')
+  getPresentHeight(): Promise<number> {
+    return mapAwaitFromSync(
+      () => this.getJson('/height'),
+      value => {
+        const height =
+          typeof value === 'number' ? value : this.readExactRecord(value, ['height'], 'height response').height
+        return this.validateHeight(height, 'upstream height')
+      }
+    )
   }
 
   async getHeaders(height: number, count: number): Promise<string> {
@@ -253,16 +267,18 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     return header
   }
 
-  async addHeader(_header: BaseBlockHeader): Promise<void> {
-    throw new Error('GoChaintracksServiceClient.addHeader is not supported by the remote v2 API.')
+  addHeader(_header: BaseBlockHeader): Promise<void> {
+    return promiseFromSync(() => {
+      throw new Error('GoChaintracksServiceClient.addHeader is not supported by the remote v2 API.')
+    })
   }
 
-  async startListening(): Promise<void> {
-    await this.getPresentHeight()
+  startListening(): Promise<void> {
+    return awaitVoidFromSync(() => this.getPresentHeight())
   }
 
-  async listening(): Promise<void> {
-    await this.getPresentHeight()
+  listening(): Promise<void> {
+    return awaitVoidFromSync(() => this.getPresentHeight())
   }
 
   async isListening(): Promise<boolean> {
@@ -274,14 +290,16 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     }
   }
 
-  async isSynchronized(): Promise<boolean> {
-    return await this.isListening()
+  isSynchronized(): Promise<boolean> {
+    return awaitFromSync(() => this.isListening())
   }
 
-  async subscribeHeaders(listener: HeaderListener): Promise<string> {
-    this.validateListener(listener)
-    return this.subscribe('header', '/tip/stream', payload => {
-      listener(this.validateRemoteHeader(payload, 'tip stream event'))
+  subscribeHeaders(listener: HeaderListener): Promise<string> {
+    return promiseFromSync(() => {
+      this.validateListener(listener)
+      return this.subscribe('header', '/tip/stream', payload => {
+        listener(this.validateRemoteHeader(payload, 'tip stream event'))
+      })
     })
   }
 
@@ -423,28 +441,30 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     return true
   }
 
-  private async subscribe(
+  private subscribe(
     type: SseSubscription['type'],
     path: string,
     onPayload: (payload: unknown, signal: AbortSignal) => void | Promise<void>
   ): Promise<string> {
-    if (this.subscriptions.size >= GoChaintracksServiceClient.MAX_SUBSCRIPTIONS) {
-      throw new Error('ChainTracks subscription capacity has been reached.')
-    }
-    if (!Number.isSafeInteger(this.nextSubscriptionId) || this.nextSubscriptionId < 1) {
-      throw new Error('ChainTracks subscription id space has been exhausted.')
-    }
-    const id = `${type}-${this.nextSubscriptionId++}`
-    const abort = new AbortController()
-    const done = this.runSseWithReconnect(path, abort.signal, onPayload)
-    this.subscriptions.set(id, { id, type, abort, done })
-    done
-      .catch(() => {})
-      .finally(() => {
-        const active = this.subscriptions.get(id)
-        if (active?.abort === abort) this.subscriptions.delete(id)
-      })
-    return id
+    return promiseFromSync(() => {
+      if (this.subscriptions.size >= GoChaintracksServiceClient.MAX_SUBSCRIPTIONS) {
+        throw new Error('ChainTracks subscription capacity has been reached.')
+      }
+      if (!Number.isSafeInteger(this.nextSubscriptionId) || this.nextSubscriptionId < 1) {
+        throw new Error('ChainTracks subscription id space has been exhausted.')
+      }
+      const id = `${type}-${this.nextSubscriptionId++}`
+      const abort = new AbortController()
+      const done = this.runSseWithReconnect(path, abort.signal, onPayload)
+      this.subscriptions.set(id, { id, type, abort, done })
+      done
+        .catch(() => {})
+        .finally(() => {
+          const active = this.subscriptions.get(id)
+          if (active?.abort === abort) this.subscriptions.delete(id)
+        })
+      return id
+    })
   }
 
   private async runSseWithReconnect(
@@ -661,19 +681,23 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     )
   }
 
-  private async getBinary(path: string, expectedMaximum: number): Promise<Uint8Array> {
-    const maximum = Math.min(this.maxBinaryResponseBytes, expectedMaximum)
-    return await this.consumeWithTimeout(
-      this.url(path),
-      { headers: { Accept: 'application/octet-stream' } },
-      async (response, signal) => {
-        if (!response.ok) {
-          await response.body?.cancel().catch(() => {})
-          throw new Error(`GET ${this.url(path)} failed ${response.status} ${safeDiagnostic(response.statusText, 128)}`)
+  private getBinary(path: string, expectedMaximum: number): Promise<Uint8Array> {
+    return awaitFromSync(() => {
+      const maximum = Math.min(this.maxBinaryResponseBytes, expectedMaximum)
+      return this.consumeWithTimeout(
+        this.url(path),
+        { headers: { Accept: 'application/octet-stream' } },
+        async (response, signal) => {
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => {})
+            throw new Error(
+              `GET ${this.url(path)} failed ${response.status} ${safeDiagnostic(response.statusText, 128)}`
+            )
+          }
+          return await this.readBoundedBody(response, maximum, signal)
         }
-        return await this.readBoundedBody(response, maximum, signal)
-      }
-    )
+      )
+    })
   }
 
   private async consumeWithTimeout<T>(
@@ -744,37 +768,39 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     return result
   }
 
-  private async readStreamChunk(
+  private readStreamChunk(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     signal: AbortSignal,
     idleTimeoutMsecs?: number
   ): Promise<ReadableStreamReadResult<Uint8Array>> {
-    if (signal.aborted) throw this.abortError()
-    return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
-      let settled = false
-      let timeout: ReturnType<typeof setTimeout> | undefined
-      const finish = (
-        action: typeof resolve | typeof reject,
-        value: ReadableStreamReadResult<Uint8Array> | Error
-      ): void => {
-        if (settled) return
-        settled = true
-        if (timeout != null) clearTimeout(timeout)
-        signal.removeEventListener('abort', onAbort)
-        ;(action as (value: never) => void)(value as never)
-      }
-      const onAbort = () => finish(reject, this.abortError())
-      signal.addEventListener('abort', onAbort, { once: true })
-      if (idleTimeoutMsecs != null) {
-        timeout = setTimeout(
-          () => finish(reject, new Error('ChainTracks upstream stream exceeded its idle timeout.')),
-          idleTimeoutMsecs
+    return awaitFromSync(() => {
+      if (signal.aborted) throw this.abortError()
+      return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        let settled = false
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        const finish = (
+          action: typeof resolve | typeof reject,
+          value: ReadableStreamReadResult<Uint8Array> | Error
+        ): void => {
+          if (settled) return
+          settled = true
+          if (timeout != null) clearTimeout(timeout)
+          signal.removeEventListener('abort', onAbort)
+          ;(action as (value: never) => void)(value as never)
+        }
+        const onAbort = () => finish(reject, this.abortError())
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (idleTimeoutMsecs != null) {
+          timeout = setTimeout(
+            () => finish(reject, new Error('ChainTracks upstream stream exceeded its idle timeout.')),
+            idleTimeoutMsecs
+          )
+        }
+        reader.read().then(
+          result => finish(resolve, result),
+          error => finish(reject, error instanceof Error ? error : new Error(String(error)))
         )
-      }
-      reader.read().then(
-        result => finish(resolve, result),
-        error => finish(reject, error instanceof Error ? error : new Error(String(error)))
-      )
+      })
     })
   }
 

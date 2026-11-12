@@ -1,11 +1,20 @@
+import { promiseFromSync, awaitFromSync, awaitVoidFromSync } from '../../utility/promiseFromSync'
+import { WalletError } from '../../sdk/WalletError'
+import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
+import { StorageReqWrite } from '../../storage/StorageReqWrite'
 import { ProvenTxReqTerminalStatus, ReqHistoryNote } from '../../sdk/types'
 import { EntityProvenTx } from '../../storage/schema/entities'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
 import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient'
 import { Monitor } from '../Monitor'
-import { WalletMonitorTask } from './WalletMonitorTask'
+import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
-import { failPendingDescendants, quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
+import {
+  quarantineReqInputs,
+  applyCapturedTerminalFailure,
+  failPendingDescendants,
+  failCapturedPendingDescendants
+} from '../../storage/methods/reconcileFailedTransactionInputs'
 import { classifyArcadeRejection, type ArcadeRejectionClassification } from '../../services/providers/arcadeStatus'
 import { safeDiagnostic } from '../../services/chaintracker/chaintracks/util/safeDiagnostic'
 import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
@@ -75,17 +84,20 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       arcApiKey: arcadeApiKey,
       lastEventId,
       EventSourceClass,
-      onEvent: async event =>
-        await new Promise<void>((acknowledge, reject) => {
-          // ArcSSEClient waits for this promise before dispatching the next
-          // event. Keep an independent one-item bound in case a replacement
-          // client violates that contract.
-          if (this.pendingEvents.length > 0) {
-            reject(new Error('Arcade SSE monitor event capacity was exceeded.'))
-            return
-          }
-          this.pendingEvents.push({ event: { ...event }, acknowledge, reject })
-        }),
+      onEvent: event =>
+        awaitFromSync(
+          () =>
+            new Promise<void>((acknowledge, reject) => {
+              // ArcSSEClient waits for this promise before dispatching the next
+              // event. Keep an independent one-item bound in case a replacement
+              // client violates that contract.
+              if (this.pendingEvents.length > 0) {
+                reject(new Error('Arcade SSE monitor event capacity was exceeded.'))
+                return
+              }
+              this.pendingEvents.push({ event: { ...event }, acknowledge, reject })
+            })
+        ),
       onError: err => {
         void this.logSetupEvent(`SSE error: ${safeDiagnostic(err)}`)
       }
@@ -175,7 +187,16 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         ...(event.extraInfo != null && event.extraInfo !== '' ? { extraInfo: event.extraInfo.slice(0, 512) } : {})
       }
 
-      log += await this.applyStatusEvent(req, event, note)
+      try {
+        const writes = await captureMonitorReqWrite(this, [req.txid], true)
+        await writes?.assertCurrent()
+        log += await this.applyStatusEvent(req, event, note, writes)
+      } catch (error) {
+        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+        // The current primary polls/reconciles durable requests independently.
+        // An inactive profile must not block the service-wide SSE stream.
+        log += `  req ${req.id} deferred to its current primary; no financial completion acknowledged\n`
+      }
     }
 
     this.monitor.callOnTransactionStatusChanged(event.txid, event.txStatus)
@@ -183,45 +204,81 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return log
   }
 
+  private async record(
+    req: EntityProvenTxReq,
+    writes: StorageReqWrite | undefined,
+    apply: (current: EntityProvenTxReq) => void | false
+  ): Promise<void> {
+    if (writes == null) {
+      if (apply(req) !== false) await req.updateStorageDynamicProperties(this.storage)
+    } else if (!(await writes.request(req, current => promiseFromSync(() => apply(current))))) {
+      throw new WERR_NOT_ACTIVE('SSE observation lost its captured primary profiles')
+    }
+  }
+
   private canRecoverTerminalRequest(req: EntityProvenTxReq, event: ArcSSEEvent): boolean {
     const confirmedStatuses = ['MINED', 'IMMUTABLE']
     return (req.status === 'invalid' || req.status === 'doubleSpend') && confirmedStatuses.includes(event.txStatus)
   }
 
-  private async applyStatusEvent(req: EntityProvenTxReq, event: ArcSSEEvent, note: ArcadeStatusNote): Promise<string> {
+  private async applyStatusEvent(
+    req: EntityProvenTxReq,
+    event: ArcSSEEvent,
+    note: ArcadeStatusNote,
+    writes?: StorageReqWrite
+  ): Promise<string> {
     switch (event.txStatus) {
       case 'SENT_TO_NETWORK':
       case 'ACCEPTED_BY_NETWORK':
       case 'SEEN_ON_NETWORK':
       case 'SEEN_MULTIPLE_NODES':
-        return await this.applyAcceptedStatus(req, note)
+        return await this.applyAcceptedStatus(req, note, writes)
       case 'MINED':
       case 'IMMUTABLE':
-        return await this.applyMinedStatus(req, note)
+        return await this.applyMinedStatus(req, note, writes)
       case 'DOUBLE_SPEND_ATTEMPTED':
       case 'SEEN_IN_ORPHAN_MEMPOOL':
-        return await this.applyDoubleSpendStatus(req, event, note)
+        return await this.applyDoubleSpendStatus(req, event, note, writes)
       case 'REJECTED':
-        return await this.applyRejectedStatus(req, event, note)
+        return await this.applyRejectedStatus(req, event, note, writes)
       case 'RECEIVED':
       case 'PENDING_RETRY':
       case 'STUMP_PROCESSING':
       case 'UNKNOWN':
-        req.addHistoryNote(note)
-        await req.updateStorageDynamicProperties(this.storage)
+        await this.record(req, writes, current => {
+          current.addHistoryNote(note)
+        })
         return `  req ${req.id} ${event.txStatus} recorded; awaiting resolution\n`
       default:
         return `  req ${req.id} unhandled status: ${event.txStatus}\n`
     }
   }
 
-  private async applyAcceptedStatus(req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
+  private async applyAcceptedStatus(
+    req: EntityProvenTxReq,
+    note: ArcadeStatusNote,
+    writes?: StorageReqWrite
+  ): Promise<string> {
     if (!['unsent', 'sending', 'callback'].includes(req.status)) return ''
 
-    if (req.notify.transactionIds != null) {
-      await this.storage.runAsStorageProvider(async sp => {
-        await sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven')
+    if (writes != null) {
+      let accepted = false
+      await this.record(req, writes, current => {
+        if (!['unsent', 'sending', 'callback'].includes(current.status)) return false
+        current.status = 'unmined'
+        current.wasBroadcast = true
+        current.notified = false
+        current.addHistoryNote(note)
+        accepted = true
       })
+      if (accepted) await writes.status(req, 'unproven')
+      return `  req ${req.id} => ${req.status}\n`
+    }
+
+    if (req.notify.transactionIds != null) {
+      await this.storage.runAsStorageProvider(sp =>
+        awaitVoidFromSync(() => sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven'))
+      )
     }
 
     req.status = 'unmined'
@@ -231,18 +288,24 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return `  req ${req.id} => unmined\n`
   }
 
-  private async applyMinedStatus(req: EntityProvenTxReq, note: ArcadeStatusNote): Promise<string> {
-    req.addHistoryNote(note)
-    await req.updateStorageDynamicProperties(this.storage)
-    return await this.fetchProofFromServices(req)
+  private async applyMinedStatus(
+    req: EntityProvenTxReq,
+    note: ArcadeStatusNote,
+    writes?: StorageReqWrite
+  ): Promise<string> {
+    await this.record(req, writes, current => {
+      current.addHistoryNote(note)
+    })
+    return await this.fetchProofFromServices(req, writes)
   }
 
-  private async applyDoubleSpendStatus(
+  private applyDoubleSpendStatus(
     req: EntityProvenTxReq,
     event: ArcSSEEvent,
-    note: ArcadeStatusNote
+    note: ArcadeStatusNote,
+    writes?: StorageReqWrite
   ): Promise<string> {
-    return await this.applyTerminalFailure(req, note, classifyArcadeRejection(event))
+    return awaitFromSync(() => this.applyTerminalFailure(req, note, classifyArcadeRejection(event), writes))
   }
 
   private classifyRejection(event: ArcSSEEvent): ArcadeRejectionClassification {
@@ -252,26 +315,59 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   private async applyRejectedStatus(
     req: EntityProvenTxReq,
     event: ArcSSEEvent,
-    note: ArcadeStatusNote
+    note: ArcadeStatusNote,
+    writes?: StorageReqWrite
   ): Promise<string> {
     const classification = this.classifyRejection(event)
     if (!classification.terminal) {
-      req.addHistoryNote({
-        ...note,
-        what: 'arcSSERejectionPending',
-        reason: classification.reason
+      await this.record(req, writes, current => {
+        current.addHistoryNote({ ...note, what: 'arcSSERejectionPending', reason: classification.reason })
       })
-      await req.updateStorageDynamicProperties(this.storage)
       return `  req ${req.id} rejection recorded; awaiting resolution\n`
     }
-    return await this.applyTerminalFailure(req, note, classification)
+    return await this.applyTerminalFailure(req, note, classification, writes)
   }
 
   private async applyTerminalFailure(
     req: EntityProvenTxReq,
     note: ArcadeStatusNote,
-    classification: ArcadeRejectionClassification
+    classification: ArcadeRejectionClassification,
+    writes?: StorageReqWrite
   ): Promise<string> {
+    if (writes != null) {
+      let terminal = false
+      await this.record(req, writes, current => {
+        if (current.status === 'completed' || current.provenTxId != null) return false
+        current.status = classification.reqStatus
+        current.notified = false
+        current.addHistoryNote({
+          ...note,
+          what: 'arcSSETerminalRejection',
+          reason: classification.reason,
+          inputConflict: classification.inputConflict
+        })
+        terminal = true
+      })
+      if (!terminal) return `  req ${req.id} retained advanced proof state\n`
+      const provider = await this.storage.runAsStorageProvider(sp => promiseFromSync(() => sp))
+      const quarantined = await applyCapturedTerminalFailure(req, provider, writes, classification.inputConflict, [], {
+        extraInfo: note.extraInfo
+      })
+      if (classification.inputConflict)
+        await this.record(req, writes, current => {
+          current.addHistoryNote({
+            when: new Date().toISOString(),
+            what: 'arcSSEInputQuarantine',
+            checked: quarantined.checked,
+            confirmed: quarantined.staleConfirmed,
+            ...(quarantined.staleOutpoints.length ? { outpoints: quarantined.staleOutpoints.join(',') } : {})
+          })
+        })
+      const descendants = await failCapturedPendingDescendants([req.txid], provider, writes)
+      for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
+      return `  req ${req.id} => ${req.status}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n`
+    }
+
     let quarantined = { checked: 0, staleConfirmed: 0, staleOutpoints: [] as string[] }
     let descendants: string[] = []
     await this.storage.runAsStorageProvider(async sp => {
@@ -312,11 +408,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
    * Arcade is first when configured, but the shared provider path validates the
    * proof against the wallet chaintracker before a ProvenTx is persisted.
    */
-  private async fetchProofFromServices(req: EntityProvenTxReq): Promise<string> {
+  private async fetchProofFromServices(req: EntityProvenTxReq, writes?: StorageReqWrite): Promise<string> {
     const txid = req.txid
     let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from configured services\n`
 
     try {
+      // The event's original capture spans note persistence and proof lookup.
+      await writes?.assertCurrent()
       const proof = await getCanonicalMerklePath(
         this.monitor.services,
         this.monitor.chaintracksWithEvents || this.monitor.chaintracks,
@@ -334,29 +432,41 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         return log
       }
 
-      await req.refreshFromStorage(this.storage)
+      if (writes != null) {
+        const observation = req.toApi()
+        await this.record(req, writes, current => {
+          current.mergeHistory(observation, undefined, true)
+        })
+      } else await req.refreshFromStorage(this.storage)
       const { provenTxReqId, status, attempts, history } = req.toApi()
       const { index, height, blockHash, merklePath, merkleRoot } = ptx.toApi()
-      const r = await this.storage.runAsStorageProvider(async sp => {
-        return await sp.updateProvenTxReqWithNewProvenTx({
-          provenTxReqId,
-          status,
-          txid,
-          attempts,
-          history,
-          index,
-          height,
-          blockHash,
-          merklePath,
-          merkleRoot
-        })
-      })
+      const args = {
+        provenTxReqId,
+        status,
+        txid,
+        attempts,
+        history,
+        index,
+        height,
+        blockHash,
+        merklePath,
+        merkleRoot
+      }
+      const complete = async (sp: import('../../storage/StorageProvider').StorageProvider) =>
+        writes == null
+          ? await sp.updateProvenTxReqWithNewProvenTx(args)
+          : await sp.updateProvenTxReqWithNewProvenTx(args, undefined, writes)
+      const r =
+        writes?.preparesOutsideManager === true
+          ? await writes.prepare(complete)
+          : await this.storage.runAsStorageProvider(complete)
+
       req.status = r.status
       req.apiHistory = r.history
       req.provenTxId = r.provenTxId
       if (r.notify != null) req.apiNotify = r.notify
       req.notified = r.notified ?? true
-      await req.updateStorageDynamicProperties(this.storage)
+      if (writes == null) await req.updateStorageDynamicProperties(this.storage)
 
       this.monitor.callOnProvenTransaction({
         txid,
@@ -371,8 +481,9 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     } catch (err: unknown) {
       const msg = safeDiagnostic(err)
       log += `    error fetching proof: ${msg}\n`
-      req.addHistoryNote({ when: new Date().toISOString(), what: 'arcProofError', error: msg })
-      await req.updateStorageDynamicProperties(this.storage)
+      await this.record(req, writes, current => {
+        current.addHistoryNote({ when: new Date().toISOString(), what: 'arcProofError', error: msg })
+      })
     }
 
     return log

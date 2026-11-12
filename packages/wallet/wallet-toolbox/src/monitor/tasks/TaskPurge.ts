@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import { PurgeParams } from '../../sdk/WalletStorage.interfaces'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
@@ -36,10 +37,14 @@ export class TaskPurge extends WalletMonitorTask {
    * Set to true to trigger running this task
    */
   private static checkNowRequested = false
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public params: TaskPurgeParams,
     public triggerMsecs = 0
@@ -47,7 +52,7 @@ export class TaskPurge extends WalletMonitorTask {
     super(monitor, TaskPurge.taskName)
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskPurge.checkNow ||
@@ -55,13 +60,11 @@ export class TaskPurge extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     TaskPurge.checkNow = false
 
-    const r = await this.storage.runAsStorageProvider(async sp => {
-      return await sp.purgeData(this.params)
-    })
+    const r = await this.storage.runAsStorageProvider(sp => awaitFromSync(() => sp.purgeData(this.params)))
 
     if (r.count > 0) log = `${r.count} records updated or deleted.\n${r.log}`
 

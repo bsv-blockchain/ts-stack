@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import { CWIStyleWalletManager, UMPTokenInteractor } from './CWIStyleWalletManager'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { numericTotalOutputs } from './utility/numericTotalOutputs'
@@ -540,11 +541,12 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
               }
             },
             {
-              ...(completeBoundAction.outputAuthorizationVersion === 1
+              ...(Reflect.get(completeBoundAction, 'outputAuthorizationVersion') === 1
                 ? { authorizeAdditionalOutputs: getActionOutputAuthorizations }
                 : {}),
               inputSigners: {
-                [outpoint]: async (transaction, inputIndex) => await faucetRedeemUnlocker.sign(transaction, inputIndex)
+                [outpoint]: (transaction, inputIndex) =>
+                  awaitFromSync(() => faucetRedeemUnlocker.sign(transaction, inputIndex))
               },
               outputSatoshisRanges: {
                 0: {
@@ -897,15 +899,20 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     }
   }
 
-  private async finalizePendingPhoneChange(currentPresentationKey: string, pending: PendingPhoneChange): Promise<void> {
-    const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
-      changeId: pending.changeId,
-      presentationKey: currentPresentationKey,
-      newPresentationKey: pending.presentationKey
-    })
-    if (finalized.success !== true || finalized.changeId !== pending.changeId) {
-      throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
-    }
+  private finalizePendingPhoneChange(currentPresentationKey: string, pending: PendingPhoneChange): Promise<void> {
+    return mapAwaitFromSync(
+      () =>
+        this.phoneChange<WABPhoneChangeCommit>('finalize', {
+          changeId: pending.changeId,
+          presentationKey: currentPresentationKey,
+          newPresentationKey: pending.presentationKey
+        }),
+      finalized => {
+        if (finalized.success !== true || finalized.changeId !== pending.changeId) {
+          throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
+        }
+      }
+    )
   }
 
   /**
@@ -1003,12 +1010,17 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     super.destroy()
   }
 
-  private async phoneChange<T extends WABOperationResponse>(phase: string, body: unknown): Promise<T> {
-    const response = await this.wabClient.transport.request<unknown>(`/auth/phone-change/${phase}`, {
-      operation: 'phone-change',
-      body
-    })
-    return validateWABOperationResponse(response, `phone-change-${phase}`) as T
+  private phoneChange<T extends WABOperationResponse>(phase: string, body: unknown): Promise<T> {
+    return mapAwaitFromSync(
+      () =>
+        this.wabClient.transport.request<unknown>(`/auth/phone-change/${phase}`, {
+          operation: 'phone-change',
+          body
+        }),
+      response => {
+        return validateWABOperationResponse(response, `phone-change-${phase}`) as T
+      }
+    )
   }
 
   private inferAccountStatus(

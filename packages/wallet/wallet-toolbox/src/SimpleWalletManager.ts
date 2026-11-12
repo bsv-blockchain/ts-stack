@@ -1,3 +1,4 @@
+import { promiseFromSync, awaitFromSync } from './utility/promiseFromSync'
 import {
   WalletInterface,
   OriginatorDomainNameStringUnder250Bytes,
@@ -308,9 +309,11 @@ export class SimpleWalletManager implements WalletInterface {
    * @param originator The originator domain, which must not be the admin originator.
    * @throws If not authenticated, or if the originator is the admin.
    */
-  async isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
-    this.ensureCanCall(originator)
-    return { authenticated: true }
+  isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      this.ensureCanCall(originator)
+      return { authenticated: true }
+    })
   }
 
   /**
@@ -334,203 +337,231 @@ export class SimpleWalletManager implements WalletInterface {
     return { authenticated: true }
   }
 
-  async getPublicKey(
+  getPublicKey(
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.getPublicKey(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.getPublicKey(args, originator)
+    })
   }
 
-  async revealCounterpartyKeyLinkage(
+  revealCounterpartyKeyLinkage(
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    })
   }
 
-  async revealSpecificKeyLinkage(
+  revealSpecificKeyLinkage(
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.revealSpecificKeyLinkage(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.revealSpecificKeyLinkage(args, originator)
+    })
   }
 
-  async encrypt(
-    args: WalletEncryptArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<WalletEncryptResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.encrypt(args, originator)
+  encrypt(args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletEncryptResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.encrypt(args, originator)
+    })
   }
 
-  async decrypt(
-    args: WalletDecryptArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<WalletDecryptResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.decrypt(args, originator)
+  decrypt(args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletDecryptResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.decrypt(args, originator)
+    })
   }
 
-  async createHmac(
-    args: CreateHmacArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<CreateHmacResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.createHmac(args, originator)
+  createHmac(args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<CreateHmacResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.createHmac(args, originator)
+    })
   }
 
-  async verifyHmac(
-    args: VerifyHmacArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<VerifyHmacResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.verifyHmac(args, originator)
+  verifyHmac(args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<VerifyHmacResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.verifyHmac(args, originator)
+    })
   }
 
-  async createSignature(
+  createSignature(
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.createSignature(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.createSignature(args, originator)
+    })
   }
 
-  async verifySignature(
+  verifySignature(
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.verifySignature(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.verifySignature(args, originator)
+    })
   }
 
-  async createAction(
+  createAction(
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.createAction(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.createAction(args, originator)
+    })
   }
 
-  async signAction(
-    args: SignActionArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<SignActionResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.signAction(args, originator)
+  signAction(args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<SignActionResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.signAction(args, originator)
+    })
   }
 
-  async abortAction(
-    args: AbortActionArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<AbortActionResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.abortAction(args, originator)
+  abortAction(args: AbortActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AbortActionResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.abortAction(args, originator)
+    })
   }
 
-  async listActions(
-    args: ListActionsArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<ListActionsResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.listActions(args, originator)
+  listActions(args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListActionsResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.listActions(args, originator)
+    })
   }
 
-  async internalizeAction(
+  internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.internalizeAction(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.internalizeAction(args, originator)
+    })
   }
 
-  async listOutputs(
-    args: ListOutputsArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<ListOutputsResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.listOutputs(args, originator)
+  listOutputs(args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListOutputsResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.listOutputs(args, originator)
+    })
   }
 
-  async relinquishOutput(
+  relinquishOutput(
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.relinquishOutput(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.relinquishOutput(args, originator)
+    })
   }
 
-  async acquireCertificate(
+  acquireCertificate(
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.acquireCertificate(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.acquireCertificate(args, originator)
+    })
   }
 
-  async listCertificates(
+  listCertificates(
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.listCertificates(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.listCertificates(args, originator)
+    })
   }
 
-  async proveCertificate(
+  proveCertificate(
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.proveCertificate(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.proveCertificate(args, originator)
+    })
   }
 
-  async relinquishCertificate(
+  relinquishCertificate(
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.relinquishCertificate(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.relinquishCertificate(args, originator)
+    })
   }
 
-  async discoverByIdentityKey(
+  discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.discoverByIdentityKey(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.discoverByIdentityKey(args, originator)
+    })
   }
 
-  async discoverByAttributes(
+  discoverByAttributes(
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.discoverByAttributes(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.discoverByAttributes(args, originator)
+    })
   }
 
-  async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.getHeight({}, originator)
+  getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.getHeight({}, originator)
+    })
   }
 
-  async getHeaderForHeight(
+  getHeaderForHeight(
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.getHeaderForHeight(args, originator)
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.getHeaderForHeight(args, originator)
+    })
   }
 
-  async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.getNetwork({}, originator)
+  getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.getNetwork({}, originator)
+    })
   }
 
-  async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    this.ensureCanCall(originator)
-    return await this.underlying!.getVersion({}, originator)
+  getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+    return awaitFromSync(() => {
+      this.ensureCanCall(originator)
+      return this.underlying!.getVersion({}, originator)
+    })
   }
 
   /**

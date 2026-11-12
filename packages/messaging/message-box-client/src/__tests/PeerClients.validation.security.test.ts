@@ -1,4 +1,4 @@
-import { PrivateKey, type WalletInterface } from '@bsv/sdk'
+import { PrivateKey, PublicKey, P2PKH, Transaction, type WalletInterface } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import { PeerPayClient } from '../PeerPayClient.js'
 import { PeerTokenClient } from '../PeerTokenClient.js'
@@ -157,6 +157,63 @@ describe('peer payment boundary validation', () => {
       expect.objectContaining({ messageId: 'live-payment', sender: identityA })
     )
   })
+
+  it.each(['AQID', [1, 2, 3], { 0: 1, 1: 2, 2: 3 }])(
+    'normalizes BRC-29 and deployed byte representations across list and live paths %#',
+    async transaction => {
+      const incoming = message({ ...paymentToken, transaction })
+      jest.spyOn(client, 'listMessages').mockResolvedValue([incoming])
+      expect((await client.listIncomingPayments())[0].token.transaction).toEqual([1, 2, 3])
+      const listen = jest.spyOn(client, 'listenForLiveMessages').mockResolvedValue()
+      const onPayment = jest.fn()
+      await client.listenForLivePayments({ onPayment })
+      listen.mock.calls[0][0].onMessage(incoming)
+      expect(onPayment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: expect.objectContaining({ transaction: [1, 2, 3] })
+        })
+      )
+    }
+  )
+
+  it('reloads a base64 Atomic BEEF and validates the actual payment before internalization', async () => {
+    const tx = new Transaction()
+    tx.addOutput({
+      satoshis: 1,
+      lockingScript: new P2PKH().lock(PublicKey.fromString(identityA).toHash())
+    })
+    const bytes = tx.toAtomicBEEF()
+    jest
+      .spyOn(client, 'listMessagesLite')
+      .mockResolvedValue([
+        message({ ...paymentToken, transaction: Buffer.from(bytes).toString('base64') })
+      ])
+    mockWallet.internalizeAction = jest.fn().mockResolvedValue({ accepted: true })
+    const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+    await client.acceptPayment({ messageId: 'message-1', sender: identityA, token: paymentToken })
+    expect(mockWallet.internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({ tx: bytes }),
+      undefined
+    )
+    expect(acknowledge).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['AR==', 'AQJ=', ' AQID', 'AQID\n', '-_8=', 'AQI', ''])(
+    'retains invalid base64 %j without wallet or acknowledgement work',
+    async transaction => {
+      jest
+        .spyOn(client, 'listMessagesLite')
+        .mockResolvedValue([message({ ...paymentToken, transaction })])
+      mockWallet.internalizeAction = jest.fn()
+      const acknowledge = jest.spyOn(client, 'acknowledgeMessage')
+      await expect(
+        client.acceptPayment({ messageId: 'message-1', sender: identityA, token: paymentToken })
+      ).rejects.toThrow('not present exactly once')
+      expect(mockWallet.getPublicKey).not.toHaveBeenCalled()
+      expect(mockWallet.internalizeAction).not.toHaveBeenCalled()
+      expect(acknowledge).not.toHaveBeenCalled()
+    }
+  )
 
   it('bounds every payment collection before parsing attacker-controlled rows', async () => {
     const oversized = Array.from({ length: 1_001 }, () => message(paymentToken))

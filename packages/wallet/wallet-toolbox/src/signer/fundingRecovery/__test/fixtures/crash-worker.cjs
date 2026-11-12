@@ -51,13 +51,13 @@ process.once('message', async input => {
       const hook = await retain(...args)
       if (input.stage === 'intent-after-commit') await hold(input.stage)
       const commit = hook.commit.bind(hook)
-      hook.commit = async run => {
+      hook.commit = async (run, capturedWrite) => {
         if (input.mode === 'race') {
           const proceed = new Promise(resolve => process.once('message', resolve))
           process.send({ event: 'boundary', stage: 'ready-to-credit' })
           await proceed
         }
-        const value = await commit(run)
+        const value = await commit(run, capturedWrite)
         if (input.stage === 'receipt-after-commit') await hold(input.stage)
         return value
       }

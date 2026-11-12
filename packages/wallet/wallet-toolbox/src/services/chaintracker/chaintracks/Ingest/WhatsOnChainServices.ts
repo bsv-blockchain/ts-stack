@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 import { convertWocToBlockHeaderHex, WhatsOnChain, WocChainInfo, WocHeader } from '../../../providers/WhatsOnChain'
@@ -237,7 +238,7 @@ export class WhatsOnChainServices {
       timeout: this.options.timeout,
       userAgent: this.options.userAgent,
       enableCache: this.options.enableCache,
-      requestGate: async () => await this.waitForRateLimit()
+      requestGate: () => awaitFromSync(() => this.waitForRateLimit())
     }
     this.chain = this.options.chain
     const chainInfoMsecs = WhatsOnChainServices.chainInfoMsecs as unknown as Record<Chain, number>
@@ -245,9 +246,13 @@ export class WhatsOnChainServices {
     this.woc = new WhatsOnChain(this.chain, config)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
-    const header = await this.woc.getBlockHeaderByHash(hash)
-    return header
+  getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+    return mapAwaitFromSync(
+      () => this.woc.getBlockHeaderByHash(hash),
+      header => {
+        return header
+      }
+    )
   }
 
   async getChainInfo(): Promise<WocChainInfo> {

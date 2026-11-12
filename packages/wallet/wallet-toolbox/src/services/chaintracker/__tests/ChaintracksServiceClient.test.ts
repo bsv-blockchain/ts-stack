@@ -54,7 +54,7 @@ describe('ChaintracksServiceClient tests', () => {
     const client = makeClient('main')
     const r = await client.findHeaderForHeight(877595)
     expect(r?.hash).toBe('00000000000000000b010edee7422c59ec9131742e35f3e0d5837d710b961406')
-    expect(await client.findHeaderForHeight(999999999)).toBeUndefined(undefined)
+    expect(await client.findHeaderForHeight(999999999)).toBeUndefined()
   })
 
   test('1 testNet findHeaderForHeight', async () => {
@@ -62,7 +62,7 @@ describe('ChaintracksServiceClient tests', () => {
     const client = makeClient('test')
     const r = await client.findHeaderForHeight(1651723)
     expect(r?.hash).toBe('0000000049686fe721f70614c89df146e410240f838b8f3ef8e6471c6dfdd153')
-    expect(await client.findHeaderForHeight(999999999)).toBeUndefined(undefined)
+    expect(await client.findHeaderForHeight(999999999)).toBeUndefined()
   })
 
   test('2 mainNet findHeaderForBlockHash', async () => {

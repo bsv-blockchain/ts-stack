@@ -23,7 +23,7 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
   const CHANGE_SCRIPT = '76a914aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa88ac'
 
   // Minimal manager instance; the underlying wallet is never called by the method under test.
-  const underlyingWallet: never = Object.create(null)
+  const underlyingWallet = Object.create(null) as ConstructorParameters<typeof WalletPermissionsManager>[0]
   const wpm: {
     verifyRequestedOutputsPresent: (
       tx: Transaction,

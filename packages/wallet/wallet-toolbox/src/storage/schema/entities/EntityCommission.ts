@@ -3,8 +3,26 @@ import { arraysEqual, verifyId, verifyOneOrNone } from '../../../utility/utility
 import { TableCommission } from '../tables/TableCommission'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
+/** Existing commissions retain their original transaction/value/script. Only
+ * a newer redemption state merges; payload descriptors carry no authority. */
+export type CommissionMergeRow<Binary, Text = string> = Omit<TableCommission, 'lockingScript' | 'keyOffset'> & {
+  lockingScript: Binary
+  keyOffset: Text
+}
+export function planCommissionMerge<Binary, Text = string>(
+  current: CommissionMergeRow<Binary, Text>,
+  incoming: CommissionMergeRow<Binary, Text>
+): CommissionMergeRow<Binary, Text> | undefined {
+  if (!(incoming.updated_at > current.updated_at)) return undefined
+  return {
+    ...current,
+    isRedeemed: incoming.isRedeemed,
+    updated_at: new Date(Math.max(incoming.updated_at.getTime(), current.updated_at.getTime()))
+  }
+}
+
 export class EntityCommission extends EntityBase<TableCommission> {
-  constructor (api?: TableCommission) {
+  constructor(api?: TableCommission) {
     const now = new Date()
     super(
       api || {
@@ -21,115 +39,115 @@ export class EntityCommission extends EntityBase<TableCommission> {
     )
   }
 
-  override updateApi (): void {
+  override updateApi(): void {
     /* nothing needed yet... */
   }
 
-  get commissionId () {
+  get commissionId() {
     return this.api.commissionId
   }
 
-  set commissionId (v: number) {
+  set commissionId(v: number) {
     this.api.commissionId = v
   }
 
-  get created_at () {
+  get created_at() {
     return this.api.created_at
   }
 
-  set created_at (v: Date) {
+  set created_at(v: Date) {
     this.api.created_at = v
   }
 
-  get updated_at () {
+  get updated_at() {
     return this.api.updated_at
   }
 
-  set updated_at (v: Date) {
+  set updated_at(v: Date) {
     this.api.updated_at = v
   }
 
-  get transactionId () {
+  get transactionId() {
     return this.api.transactionId
   }
 
-  set transactionId (v: number) {
+  set transactionId(v: number) {
     this.api.transactionId = v
   }
 
-  get userId () {
+  get userId() {
     return this.api.userId
   }
 
-  set userId (v: number) {
+  set userId(v: number) {
     this.api.userId = v
   }
 
-  get isRedeemed () {
+  get isRedeemed() {
     return this.api.isRedeemed
   }
 
-  set isRedeemed (v: boolean) {
+  set isRedeemed(v: boolean) {
     this.api.isRedeemed = v
   }
 
-  get keyOffset () {
+  get keyOffset() {
     return this.api.keyOffset
   }
 
-  set keyOffset (v: string) {
+  set keyOffset(v: string) {
     this.api.keyOffset = v
   }
 
-  get lockingScript () {
+  get lockingScript() {
     return this.api.lockingScript
   }
 
-  set lockingScript (v: number[]) {
+  set lockingScript(v: number[]) {
     this.api.lockingScript = v
   }
 
-  get satoshis () {
+  get satoshis() {
     return this.api.satoshis
   }
 
-  set satoshis (v: number) {
+  set satoshis(v: number) {
     this.api.satoshis = v
   }
 
-  override get id (): number {
+  override get id(): number {
     return this.api.commissionId
   }
 
-  override set id (v: number) {
+  override set id(v: number) {
     this.api.commissionId = v
   }
 
-  override get entityName (): string {
+  override get entityName(): string {
     return 'commission'
   }
 
-  override get entityTable (): string {
+  override get entityTable(): string {
     return 'commissions'
   }
 
-  override equals (ei: TableCommission, syncMap?: SyncMap | undefined): boolean {
+  override equals(ei: TableCommission, syncMap?: SyncMap | undefined): boolean {
     return (
       this.isRedeemed === ei.isRedeemed &&
-      this.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
+      this.transactionId === (syncMap != null ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
       this.keyOffset === ei.keyOffset &&
       arraysEqual(this.lockingScript, ei.lockingScript) &&
       this.satoshis === ei.satoshis
     )
   }
 
-  static async mergeFind (
+  static async mergeFind(
     storage: EntityStorage,
     userId: number,
     ei: TableCommission,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean, eo: EntityCommission, eiId: number }> {
+  ): Promise<{ found: boolean; eo: EntityCommission; eiId: number }> {
     const transactionId = syncMap.transaction.idMap[ei.transactionId]
     const ef = verifyOneOrNone(await storage.findCommissions({ partial: { transactionId, userId }, trx }))
     return {
@@ -139,27 +157,24 @@ export class EntityCommission extends EntityBase<TableCommission> {
     }
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     if (this.transactionId) this.transactionId = syncMap.transaction.idMap[this.transactionId]
     this.userId = userId
     this.commissionId = 0
     this.commissionId = await storage.insertCommission(this.toApi(), trx)
   }
 
-  override async mergeExisting (
+  override async mergeExisting(
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableCommission,
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    let wasMerged = false
-    if (ei.updated_at > this.updated_at) {
-      this.isRedeemed = ei.isRedeemed
-      this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
-      await storage.updateCommission(this.id, this.toApi(), trx)
-      wasMerged = true
-    }
-    return wasMerged
+    const planned = planCommissionMerge(this.api, ei)
+    if (planned === undefined) return false
+    Object.assign(this.api, planned)
+    await storage.updateCommission(this.id, this.toApi(), trx)
+    return true
   }
 }

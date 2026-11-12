@@ -1,3 +1,7 @@
+# 4.1.0 unpublished integration candidate
+
+Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
+
 # CHANGELOG for `@bsv/sdk`
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
@@ -394,6 +398,32 @@ replay, payment authorization, wire change or consumer migration is introduced.
   non-spendable records too. New module balance queries carry only decimal text.
 - Migration: TypeScript that compares or adds `totalOutputs` must first check
   `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
+- Version the new exported payment transport/error/payload APIs as part of the
+  4.0.0 source candidate after immutable published 3.2.1. No publication occurs
+  through this source change.
+
+- Reduce authenticated large-payload preparation overhead with one-pass byte validation/copy and value-only array snapshots; preserve byte checks, wire formats, limits and deadlines. No migration is required.
+
+### 4.0.0 candidate — prepared BRC-118 payments and recipient interoperability
+
+- Preserve native body serialization and inferred Content-Type on ordinary HTTP
+  fallback, including cached unauthenticated peers; retain owned payment bytes.
+
+- Negotiate bounded multipart payments, preserving original payload bytes and exact
+  signed boundary parameters while retaining nonempty non-multipart signature preimages.
+- Prepare the real payment and request before broadcast; submit once, reuse the
+  transaction across retries, abort refused reservations where supported, and
+  retain typed context for cancellation, size refusal and uncertain outcomes.
+- Pair zero-length byte request normalization with auth middleware 2.3.0: both
+  use the BRC-104 `-1` sentinel, including the existing Express raw-parser path.
+  Empty-byte clients/receivers that used length `0` need a coordinated upgrade;
+  nonempty request preimages are unchanged.
+- Derive the recipient's own BRC-29 child key on settlement receipt.
+- Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
+  adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
+### Fixed (3.2.1)
 
 - Add `canonicalOutputJSONWithDirectRecords`, an opt-in canonical text emitter
   that freshly checks records and arrays with the existing canonical bytes,

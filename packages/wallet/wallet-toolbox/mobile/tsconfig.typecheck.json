@@ -6,6 +6,7 @@
     "declarationMap": false,
     "incremental": false,
     "noEmit": true,
+    "module": "esnext",
     "types": ["node", "vitest/globals"]
   },
   "files": [],

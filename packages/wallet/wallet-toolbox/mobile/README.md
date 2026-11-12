@@ -20,6 +20,59 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Resumable synchronization (2.15 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Negotiated remote snapshot destinations release the manager queue
+while the authenticated server owns its atomic transaction; legacy providers
+retain serialized execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+Ordinary replica merge and coherent archive capture are separate APIs. A
+replica checkpoint is never substituted for the source archive's original
+sync-state rows. Existing BRC-38/39 formats remain unchanged.
+
+## Provisional delivery budget
+
+The held #569 branch uses provisional artifact allowances based on the complete retained-feature builds. Metro measured 2,765,570 / 729,495 / 558,373 bytes (raw / gzip / Brotli); a 15% allowance sets ceilings of 3,013,000 / 776,250 / 586,500 bytes. The reproducible Hermes build measured 6,116,798 / 2,575,349 / 1,985,367 bytes, about 18.5–20.3% above its original limits. A separate 25% allowance sets Hermes ceilings of 6,368,750 / 2,675,000 / 2,093,750 bytes, leaving about 4–5.5% headroom.
+
+`platform-budget.json` retains the original baselines, measured source and job, owner, earliest review date, and removal conditions. Review follows full implementation, validation, feature completion, and goal achievement. These artifact allowances apply the operator's direction to use measured, judicious limits and are separate from the earlier browser allowance. They do not change exports, dependencies, compiler settings, source maps, licenses, runtime memory, native or production limits, or negative controls. Passing an artifact budget does not qualify mobile behavior or physical devices. Earlier failed samples remain failed evidence.
+
+## Readiness artifact optimization
+
+The readiness build compacts internal code while retaining function/class names,
+properties, debugger statements, licenses and complete source maps. Internal
+JSON, IndexedDB and wallet modules have separate private chunks; the package's
+public entry points and conditional exports stay the same. The build includes
+only the used Noble Argon2id fallback and its dependencies, with the same pinned
+implementation and algorithm parameters. SDK imports select only used categories
+through the SDK's declared public exports. A private re-export module preserves
+the original SDK types, constructors and namespace objects, including the SDK overlay-name validators, patterns and byte bound; the marked primitive
+curve setup stays eager. Real ESM and CommonJS imports check every re-export
+against the peer SDK. SDK and IndexedDB implementations remain external. Shared
+Promise/await forwarding reduces duplicated generated
+state machines without changing immediate work, suspension order or rejection
+objects.
+
+The platform gate also decrypts a fixed public BRC-39 fixture through fresh
+installed ESM and CommonJS consumers with WebAssembly disabled, and refuses a
+modified authentication tag. The fixture was produced with hash-wasm and Node
+AES-GCM independently of the JavaScript fallback; its legacy KDF values do not
+change encryption defaults. Original Metro/Hermes ceilings and reproducibility,
+composition and source-map checks remain required. Measurements from earlier
+failed experiments do not qualify the final source.
+
+The strict Node 24.18 readiness gate measures Metro at **2,694,126 / 711,462 /
+546,585** bytes and Hermes at **5,947,886 / 2,551,787 / 1,971,944** bytes
+(raw / gzip / Brotli), within all six existing ceilings. Both independent Hermes
+builds produce identical bytes. This artifact result does not establish physical
+device qualification.
+
 ## Local recovery capability boundary
 
 The coordinated 2.15.0 source candidate preserves this wrapper's existing APIs
@@ -71,9 +124,30 @@ Test the independent key and data recovery paths on a replacement device.
 Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
 [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
 [recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
-Portable helpers require a concrete local `StorageProvider`; a remote client
-is not one. Qualify the local-copy path and device memory limits before adding
-export/import UI.
+The unpublished 2.15 candidate exports the same snapshot and journal
+contracts as the client build. Its `StorageClient` uses the shared authenticated
+remote archive and negotiated remote snapshot-destination implementations.
+These bind every handle/checkpoint to one identity, network and source, with
+finite expiry and transfer limits. Unsupported servers retain their serialized
+protocol; they never advertise a partial archive as complete.
+
+This package does not install an IndexedDB or native SQLite provider on a mobile
+device. A host native provider must implement and qualify the negotiated
+contracts; a remote client is not a local `StorageProvider`. The portable
+streaming interfaces and optional asynchronous Argon2id backend are exported
+without a Node dependency. A Hermes host must supply a ready interoperable
+native backend for strict streaming encryption; Web Worker availability is a
+host capability, not a mobile assumption.
+
+`DeviceBackupController` shares only device backup preferences and destination
+catalogue IDs. It verifies each profile's identity/network independently and
+never shares primary selection or recovery checkpoints. Call `suspend()` on
+backgrounding, await original in-flight acknowledgement/cleanup, then `resume()`
+on foregrounding. The host owns foreground cadence and atomic preference
+storage; constructing the controller starts no timer. Native suspension,
+disk-pressure and physical device validation remain outstanding.
+See the [implementation map](../docs/implementation-544.md) and
+[device lifecycle example](../examples/deviceBackup.ts).
 
 ## Large wallet records
 
@@ -101,6 +175,10 @@ The package publishes:
 - explicit `react-native`, `import`, and `require` export conditions.
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
+
+The Hermes probe uses a stable relative input filename and verifies identical
+bytecode from two independent build directories. Source maps and debug data are
+retained; random temporary paths must not affect the unchanged size budgets.
 
 ### Password derivation without WebAssembly
 
@@ -226,6 +304,40 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
 
+### 2.15 candidate size review and integration history
+
+The September 28 integration with current main measures Metro **2,401,423 /
+619,596 / 468,551** bytes and Hermes **4,646,003 / 1,969,117 / 1,532,602**
+bytes (raw/gzip/Brotli), within every retained ceiling. Native module composition,
+source maps and Hermes compilation pass.
+
+The reviewed Hermes Brotli ceiling increases from 1,520,000 to 1,675,000 bytes
+for bounded resumable sync, proof recovery and prepared BRC-118 payment transport.
+The integrated candidate retains main’s subsequently reviewed Metro ceilings
+and Hermes raw/gzip ceilings, plus this candidate’s 1,675,000-byte Hermes
+Brotli ceiling. No production dependency,
+minifier configuration, public export, source-map or compression setting changes
+accompany this budget adjustment.
+
+The September 24 candidate, before current-main integration, measured with
+official Node 24.18.0:
+
+| Artifact | Raw bytes | gzip bytes | Brotli bytes |
+| -------- | --------: | ---------: | -----------: |
+| Metro    | 2,377,408 |    609,909 |      463,868 |
+| Hermes   | 4,619,927 |  1,955,135 |    1,523,206 |
+
+The approved Hermes Brotli ceiling gives 9.97% headroom after the final forwarding
+and normalization refinements. Retaining the explicitly reviewed 1,675,000-byte ceiling
+is the rationale for this small difference from the normal 10% margin.
+For comparison, [upstream SDK 2.8.3 validation](https://github.com/bsv-blockchain/ts-stack/actions/runs/35948047970)
+measured Metro at 2,360,475 / 602,505 / 458,183 bytes and Hermes at
+4,609,755 / 1,931,907 / 1,500,120 bytes. The gate continues to inspect the installed
+module graph, reject Node-only modules, validate maps and compile Hermes bytecode.
+A matching-input cross-platform check produced identical Hermes bytes on Linux
+x86_64 and macOS ARM, including reproduction across independent build directories.
+These measurements describe this candidate fixture, not an application-size guarantee.
+
 The reviewed 2.14.2 identity candidate `b088c1bef` measures Metro **2,379,919 / 612,262 /
 462,261** bytes and Hermes **4,629,563 / 1,943,675 / 1,510,174** bytes
 (raw/gzip/Brotli). Compared with the preceding unpublished 2.14.2 candidate,
@@ -244,6 +356,66 @@ The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 mobile build.
 
+The unpublished candidate exports version-one retained snapshot, packed row,
+field reader and durable sync checkpoint contracts. Provider capabilities are
+negotiated independently; importing their types does not enable a backend.
+`syncToWriterResumable` and `syncFromReaderResumable` yield between bounded
+commits when both adapters support the operation and preserve the exclusive
+fallback for older providers.
+
+The browser package's `StorageIdb` has an explicit packed version-one adapter;
+`StorageIdb` is not exported by this mobile entrypoint. Passing
+`packed` in `StorageIdbOptions` selects a separate schema-version-7 namespace;
+it never converts or replaces the default version-6 wallet. Packed providers
+implement retained MVCC snapshots, bounded field extents and durable local
+merge/checkpoint commits. `readPackedStoragePage` also reads bounded pages from
+legacy databases, but those pages alone do not form a retained snapshot.
+Logical retention quotas bound records and bytes; they are not browser disk or
+process-memory measurements. Keep identity and network explicit for each
+profile and preserve the legacy database until a separately qualified migration
+has succeeded.
+
+The mobile `StorageClient` negotiates the authenticated single-user archive reader through
+`getSnapshotArchiveTransport(identityKey)`. Its `getSnapshotSync()` source
+adapter opens immutable, expiring remote views for ordinary resumable copies to
+compatible local destinations. Each view retains the original source settings,
+user and all thirteen standard tables, including original sync-state rows.
+Those original sync states are archive provenance; a replica's destination
+checkpoint is separate. `snapshotArchives: false`, old peers and unsupported
+server configurations decline the source capability. A migrated server separately
+advertises `snapshotSyncDestination` for bounded, authenticated full-row merge
+pages. The manager releases its queue after dispatch; the server atomically
+commits entity effects, ID mappings and the durable checkpoint under fresh
+session and primary fences. Replies are limited to 16 KiB. Pages admit at most 128 rows and 10,000,000
+charged allocation bytes, intersected with caller limits. Frames above the
+512 KiB inline ceiling use the existing durable transfer store with 256 KiB
+parts and a 16 MiB total frame ceiling. The staged result, entity effects, maps
+and checkpoint commit in one original SQL transaction. One page remains in
+flight under one 30-second I/O deadline across its upload and commit. A timeout does not establish whether the server committed: observe its
+durable checkpoint before recovery. Old or disabled destination peers retain
+the exclusive compatibility path. Rows that exceed the negotiated page/frame budget refuse; remote field
+extents are not advertised by this protocol. Staging retains the original source
+expiry, and authenticated cleanup remains available after expiry. A failed
+release retains its concrete original transfer cleanup for retry.
+Raw archive frames use storage-key ordering and must not be presented directly
+as canonical BRC-38 output.
+
+Portable exports include `createBrc38Stream`, `openBrc38IdbSource` and bounded
+BRC-39 browser processing. The browser import entrypoints
+`previewAuthenticatedBrc39BrowserImport`, `restoreAuthenticatedBrc39BrowserInactive`
+and `publishAuthenticatedBrc39BrowserProfile` authenticate the complete original
+envelope, verify semantic/proof closure and use isolated staging with durable
+recovery state. Preview is data, not an activation grant; publication preserves
+original primary and sync values as provenance. The IDB implementation requires
+an actual IndexedDB host and explicit resource policies. The Node native SQLite
+controller has a separate entrypoint and runtime contract.
+
+These are working-source implementation contracts, not release or physical
+platform acceptance claims. Browser/native/mobile suspension, disk pressure,
+packed-consumer compatibility, independent format vectors and performance
+qualification remain required before downstream adoption. See the
+[wallet sync and migration guide](../../../../docs/guides/wallet-sync-reliability.md).
+
 ## WAB faucet fee compatibility
 
 Version 2.14.6 carries the local signer's independently validated fee/change
@@ -256,7 +428,7 @@ SDK3 migration and the unchanged signup retry/reconciliation limitations.
 
 ## Pre-construction conflict recovery
 
-The 2.14.7 candidate preserves remote storage's empty attempted-TXID sentinel
+The held 2.15.0 candidate preserves remote storage's empty attempted-TXID sentinel
 only for a bounded double-spend review before transaction construction. It does
 not authorize a retry. Applications must verify complete competing transactions
 against the requested explicit inputs, synchronize the accepted winner, then

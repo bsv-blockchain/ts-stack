@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { Chain } from '../../../../sdk'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 import { BulkIngestorBaseOptions } from '../Api/BulkIngestorApi'
@@ -90,10 +91,14 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
     }
   }
 
-  override async getPresentHeight(): Promise<number | undefined> {
-    const presentHeight = await this.woc.getChainTipHeight()
-    // this.log(`presentHeight=${presentHeight}`)
-    return presentHeight
+  override getPresentHeight(): Promise<number | undefined> {
+    return mapAwaitFromSync(
+      () => this.woc.getChainTipHeight(),
+      presentHeight => {
+        // this.log(`presentHeight=${presentHeight}`)
+        return presentHeight
+      }
+    )
   }
 
   async fetchHeaders(

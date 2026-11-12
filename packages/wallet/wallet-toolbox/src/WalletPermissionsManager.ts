@@ -1,3 +1,4 @@
+import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import { validateCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import {
   WalletInterface,
@@ -967,7 +968,7 @@ export class WalletPermissionsManager implements WalletInterface {
             }
             return { args: req.args }
           },
-          onResponse: async res => res
+          onResponse: res => promiseFromSync(() => res)
         }
       }
     }
@@ -1010,13 +1011,15 @@ export class WalletPermissionsManager implements WalletInterface {
     const request = { method, args, originator }
     if (module.handleRequest != null) {
       let nextCalled = false
-      return (await module.handleRequest(request, async transformedArgs => {
-        if (nextCalled) {
-          throw new Error(`P-module p ${schemeID} called its underlying wallet operation more than once`)
-        }
-        nextCalled = true
-        return await underlyingCall(transformedArgs, originator)
-      })) as T
+      return (await module.handleRequest(request, transformedArgs =>
+        awaitFromSync(() => {
+          if (nextCalled) {
+            throw new Error(`P-module p ${schemeID} called its underlying wallet operation more than once`)
+          }
+          nextCalled = true
+          return underlyingCall(transformedArgs, originator)
+        })
+      )) as T
     }
 
     // Transform request with module
@@ -1172,6 +1175,16 @@ export class WalletPermissionsManager implements WalletInterface {
    * @param handler   A function that handles the event
    * @returns         A numeric ID you can use to unbind later
    */
+  public bindCallback<Event extends keyof WalletPermissionsManagerCallbacks>(
+    eventName: Event,
+    handler: NonNullable<WalletPermissionsManagerCallbacks[Event]>[number]
+  ): number
+  // Retain the existing broad signature for callers with dynamic events or
+  // explicitly supplied legacy handler unions. Runtime dispatch is unchanged.
+  public bindCallback(
+    eventName: keyof WalletPermissionsManagerCallbacks,
+    handler: PermissionEventHandler | GroupedPermissionEventHandler | CounterpartyPermissionEventHandler
+  ): number
   public bindCallback(
     eventName: keyof WalletPermissionsManagerCallbacks,
     handler: PermissionEventHandler | GroupedPermissionEventHandler | CounterpartyPermissionEventHandler
@@ -1232,7 +1245,7 @@ export class WalletPermissionsManager implements WalletInterface {
                   'permission.callback_index': callbackIndex
                 }
               },
-              async () => await cb(param)
+              () => awaitFromSync(() => cb(param))
             )
           } else {
             await cb(param)
@@ -1334,22 +1347,24 @@ export class WalletPermissionsManager implements WalletInterface {
    *
    * @param requestID    requestID identifying which request to deny
    */
-  public async denyPermission(requestID: string): Promise<void> {
-    // 1) Identify the matching requests
-    const matching = this.activeRequests.get(requestID)
-    if (matching == null) {
-      throw new Error('Request ID not found.')
-    }
+  public denyPermission(requestID: string): Promise<void> {
+    return promiseFromSync(() => {
+      // 1) Identify the matching requests
+      const matching = this.activeRequests.get(requestID)
+      if (matching == null) {
+        throw new Error('Request ID not found.')
+      }
 
-    // 2) Reject all matching requests, deleting the entry
-    // Denials carry the canonical machine-readable code so applications can
-    // distinguish user denial from other failures (matches denyActiveRequest).
-    const err: Error & { code?: string } = new Error('Permission denied.')
-    err.code = 'ERR_PERMISSION_DENIED'
-    for (const x of matching.pending) {
-      x.reject(err)
-    }
-    this.activeRequests.delete(requestID)
+      // 2) Reject all matching requests, deleting the entry
+      // Denials carry the canonical machine-readable code so applications can
+      // distinguish user denial from other failures (matches denyActiveRequest).
+      const err: Error & { code?: string } = new Error('Permission denied.')
+      err.code = 'ERR_PERMISSION_DENIED'
+      for (const x of matching.pending) {
+        x.reject(err)
+      }
+      this.activeRequests.delete(requestID)
+    })
   }
 
   /**
@@ -1520,19 +1535,23 @@ export class WalletPermissionsManager implements WalletInterface {
     for (const request of [...created, ...renewed]) this.markRecentGrant(request)
   }
 
-  public async denyGroupedPermission(requestID: string): Promise<void> {
-    this.denyActiveRequest(requestID)
+  public denyGroupedPermission(requestID: string): Promise<void> {
+    return promiseFromSync(() => {
+      this.denyActiveRequest(requestID)
+    })
   }
 
-  public async dismissGroupedPermission(requestID: string): Promise<void> {
-    const matching = this.activeRequests.get(requestID)
-    if (matching == null) {
-      throw new Error('Request ID not found.')
-    }
-    for (const p of matching.pending) {
-      p.resolve(true)
-    }
-    this.activeRequests.delete(requestID)
+  public dismissGroupedPermission(requestID: string): Promise<void> {
+    return promiseFromSync(() => {
+      const matching = this.activeRequests.get(requestID)
+      if (matching == null) {
+        throw new Error('Request ID not found.')
+      }
+      for (const p of matching.pending) {
+        p.resolve(true)
+      }
+      this.activeRequests.delete(requestID)
+    })
   }
 
   public async grantCounterpartyPermission(params: {
@@ -1614,8 +1633,10 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  public async denyCounterpartyPermission(requestID: string): Promise<void> {
-    this.denyActiveRequest(requestID)
+  public denyCounterpartyPermission(requestID: string): Promise<void> {
+    return promiseFromSync(() => {
+      this.denyActiveRequest(requestID)
+    })
   }
 
   /* ---------------------------------------------------------------------
@@ -2198,52 +2219,64 @@ export class WalletPermissionsManager implements WalletInterface {
         const token = await this.findSpendingToken(normalized, lookupValues)
         return token != null ? undefined : groupPermissions.spendingAuthorization
       })(),
-      (async () => {
-        const protocolChecks = await Promise.all(
-          (groupPermissions.protocolPermissions || []).map(async p => {
-            if (p.counterparty === '') return null
-            const [level] = p.protocolID || [0]
-            if (level === 2 && (p.counterparty === undefined || p.counterparty === null)) {
-              return null
-            }
-            const hasPerm = await this.hasProtocolPermission({
-              originator,
-              privileged: false,
-              protocolID: p.protocolID,
-              counterparty: p.counterparty ?? 'self'
-            })
-            return hasPerm ? null : p
-          })
-        )
-        return protocolChecks.filter(Boolean) as any
-      })(),
-      (async () => {
-        const basketChecks = await Promise.all(
-          (groupPermissions.basketAccess || []).map(async b => {
-            const hasAccess = await this.hasBasketAccess({
-              originator,
-              basket: b.basket
-            })
-            return hasAccess ? null : b
-          })
-        )
-        return basketChecks.filter(Boolean) as any
-      })(),
-      (async () => {
-        const certChecks = await Promise.all(
-          (groupPermissions.certificateAccess || []).map(async c => {
-            const hasAccess = await this.hasCertificateAccess({
-              originator,
-              privileged: false,
-              verifier: c.verifierPublicKey,
-              certType: c.type,
-              fields: c.fields
-            })
-            return hasAccess ? null : c
-          })
-        )
-        return certChecks.filter(Boolean) as any
-      })()
+      (() =>
+        mapAwaitFromSync(
+          () =>
+            Promise.all(
+              (groupPermissions.protocolPermissions || []).map(async p => {
+                if (p.counterparty === '') return null
+                const [level] = p.protocolID || [0]
+                if (level === 2 && (p.counterparty === undefined || p.counterparty === null)) {
+                  return null
+                }
+                const hasPerm = await this.hasProtocolPermission({
+                  originator,
+                  privileged: false,
+                  protocolID: p.protocolID,
+                  counterparty: p.counterparty ?? 'self'
+                })
+                return hasPerm ? null : p
+              })
+            ),
+          protocolChecks => {
+            return protocolChecks.filter(Boolean) as any
+          }
+        ))(),
+      (() =>
+        mapAwaitFromSync(
+          () =>
+            Promise.all(
+              (groupPermissions.basketAccess || []).map(async b => {
+                const hasAccess = await this.hasBasketAccess({
+                  originator,
+                  basket: b.basket
+                })
+                return hasAccess ? null : b
+              })
+            ),
+          basketChecks => {
+            return basketChecks.filter(Boolean) as any
+          }
+        ))(),
+      (() =>
+        mapAwaitFromSync(
+          () =>
+            Promise.all(
+              (groupPermissions.certificateAccess || []).map(async c => {
+                const hasAccess = await this.hasCertificateAccess({
+                  originator,
+                  privileged: false,
+                  verifier: c.verifierPublicKey,
+                  certType: c.type,
+                  fields: c.fields
+                })
+                return hasAccess ? null : c
+              })
+            ),
+          certChecks => {
+            return certChecks.filter(Boolean) as any
+          }
+        ))()
     ])
 
     if (spendingAuthorization != null) {
@@ -2352,15 +2385,20 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const protocolChecks = await Promise.all(
-      counterpartyPermissions.protocols.map(async p => {
-        const hasPerm = await this.hasProtocolPermission({
-          originator,
-          privileged: false,
-          protocolID: [2, p.protocolName],
-          counterparty
-        })
-        return hasPerm ? null : p
-      })
+      counterpartyPermissions.protocols.map(p =>
+        mapAwaitFromSync(
+          () =>
+            this.hasProtocolPermission({
+              originator,
+              privileged: false,
+              protocolID: [2, p.protocolName],
+              counterparty
+            }),
+          hasPerm => {
+            return hasPerm ? null : p
+          }
+        )
+      )
     )
     const protocolsToRequest: CounterpartyPermissions['protocols'] = protocolChecks.filter(Boolean) as any
 
@@ -2488,21 +2526,26 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const protocolChecks = await Promise.all(
-      manifestLevel2ForThisPeer.map(async p => {
-        const hasPerm = await this.hasProtocolPermission({
-          originator,
-          privileged,
-          protocolID: p.protocolID,
-          counterparty: p.counterparty
-        })
-        return hasPerm
-          ? null
-          : {
+      manifestLevel2ForThisPeer.map(p =>
+        mapAwaitFromSync(
+          () =>
+            this.hasProtocolPermission({
+              originator,
+              privileged,
               protocolID: p.protocolID,
-              counterparty: p.counterparty,
-              description: p.description
-            }
-      })
+              counterparty: p.counterparty
+            }),
+          hasPerm => {
+            return hasPerm
+              ? null
+              : {
+                  protocolID: p.protocolID,
+                  counterparty: p.counterparty,
+                  description: p.description
+                }
+          }
+        )
+      )
     )
     permissionsToRequest.protocolPermissions = protocolChecks.filter(Boolean) as any
 
@@ -2526,7 +2569,7 @@ export class WalletPermissionsManager implements WalletInterface {
       release = resolve
     })
 
-    const currentTail = safePriorTail.then(async () => await gate)
+    const currentTail = safePriorTail.then(() => awaitFromSync(() => gate))
     this.groupedPermissionFlowTail.set(originator, currentTail)
 
     await safePriorTail
@@ -2706,15 +2749,18 @@ export class WalletPermissionsManager implements WalletInterface {
           'permission.renewal': r.renewal === true
         }
       },
-      async span => {
-        const result = await this.requestPermissionFlowCore(r, span.context)
-        span.end({
-          attributes: {
-            'permission.granted': result
+      span =>
+        mapAwaitFromSync(
+          () => this.requestPermissionFlowCore(r, span.context),
+          result => {
+            span.end({
+              attributes: {
+                'permission.granted': result
+              }
+            })
+            return result
           }
-        })
-        return result
-      }
+        )
     )
   }
 
@@ -2764,10 +2810,12 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /** Appends to an existing request queue and waits for resolution. */
-  private async piggybackOnExistingQueue(key: string): Promise<boolean> {
-    const q = this.activeRequests.get(key)!
-    return await new Promise<boolean>((resolve, reject) => {
-      q.pending.push({ resolve, reject })
+  private piggybackOnExistingQueue(key: string): Promise<boolean> {
+    return awaitFromSync(() => {
+      const q = this.activeRequests.get(key)!
+      return new Promise<boolean>((resolve, reject) => {
+        q.pending.push({ resolve, reject })
+      })
     })
   }
 
@@ -2778,9 +2826,9 @@ export class WalletPermissionsManager implements WalletInterface {
 
     let groupResult: boolean | null
     if (this.config.seekGroupedPermission) {
-      groupResult = await this.withGroupedPermissionFlowLock(preparedRequest.originator, async () => {
-        return await this.maybeRequestGroupedPermissions(preparedRequest)
-      })
+      groupResult = await this.withGroupedPermissionFlowLock(preparedRequest.originator, () =>
+        awaitFromSync(() => this.maybeRequestGroupedPermissions(preparedRequest))
+      )
     } else {
       groupResult = await this.maybeRequestGroupedPermissions(preparedRequest)
     }
@@ -3519,7 +3567,7 @@ export class WalletPermissionsManager implements WalletInterface {
         results[idx] = await fn(items[idx])
       }
     }
-    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => await worker()))
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => awaitFromSync(() => worker())))
     return results
   }
 
@@ -3597,10 +3645,8 @@ export class WalletPermissionsManager implements WalletInterface {
       items,
       CHUNK,
       async chunk => {
-        const built = await this.mapWithConcurrency(
-          chunk,
-          8,
-          async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
+        const built = await this.mapWithConcurrency(chunk, 8, c =>
+          awaitFromSync(() => this.buildPermissionOutput(c.request, c.expiry, c.amount))
         )
         await this.completePermissionTokenAction({
           description: `Grant ${built.length} permissions`,
@@ -3622,10 +3668,8 @@ export class WalletPermissionsManager implements WalletInterface {
       items,
       CHUNK,
       async chunk => {
-        const built = await this.mapWithConcurrency(
-          chunk,
-          8,
-          async c => await this.buildPermissionOutput(c.request, c.expiry, c.amount)
+        const built = await this.mapWithConcurrency(chunk, 8, c =>
+          awaitFromSync(() => this.buildPermissionOutput(c.request, c.expiry, c.amount))
         )
 
         const inputBeef = new Beef()
@@ -3675,7 +3719,7 @@ export class WalletPermissionsManager implements WalletInterface {
         1,
         LockingScript.fromHex(token.outputScript)
       )
-      inputSigners[outpoint] = async (transaction, inputIndex) => await unlocker.sign(transaction, inputIndex)
+      inputSigners[outpoint] = (transaction, inputIndex) => awaitFromSync(() => unlocker.sign(transaction, inputIndex))
     }
     return inputSigners
   }
@@ -4299,8 +4343,8 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  public async revokePermissions(oldTokens: PermissionToken[]): Promise<PermissionToken[]> {
-    return await this.revokePermissionTokensBestEffort(oldTokens)
+  public revokePermissions(oldTokens: PermissionToken[]): Promise<PermissionToken[]> {
+    return awaitFromSync(() => this.revokePermissionTokensBestEffort(oldTokens))
   }
 
   public async revokeAllForOriginator(
@@ -4344,11 +4388,17 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.revokePermissions(deduped)
   }
 
-  private async revokePermissionTokensBestEffort(items: PermissionToken[]): Promise<PermissionToken[]> {
-    const CHUNK = 15
-    return await this.runBestEffortBatches(items, CHUNK, async chunk => {
-      await this.revokePermissionTokensChunk(chunk)
-      return chunk
+  private revokePermissionTokensBestEffort(items: PermissionToken[]): Promise<PermissionToken[]> {
+    return awaitFromSync(() => {
+      const CHUNK = 15
+      return this.runBestEffortBatches(items, CHUNK, chunk =>
+        mapAwaitFromSync(
+          () => this.revokePermissionTokensChunk(chunk),
+          () => {
+            return chunk
+          }
+        )
+      )
     })
   }
 
@@ -5378,9 +5428,8 @@ export class WalletPermissionsManager implements WalletInterface {
       'relinquishOutput',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.relinquishOutput(transformedArgs as RelinquishOutputArgs, originator)
-      }
+      transformedArgs =>
+        awaitFromSync(() => this.underlying.relinquishOutput(transformedArgs as RelinquishOutputArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5407,9 +5456,8 @@ export class WalletPermissionsManager implements WalletInterface {
         'getPublicKey',
         requestArgs,
         originator!,
-        async transformedArgs => {
-          return await this.underlying.getPublicKey(transformedArgs as GetPublicKeyArgs, originator)
-        }
+        transformedArgs =>
+          awaitFromSync(() => this.underlying.getPublicKey(transformedArgs as GetPublicKeyArgs, originator))
       )
       if (pModuleResult !== null) {
         return pModuleResult
@@ -5484,9 +5532,7 @@ export class WalletPermissionsManager implements WalletInterface {
       'encrypt',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.encrypt(transformedArgs as WalletEncryptArgs, originator)
-      }
+      transformedArgs => awaitFromSync(() => this.underlying.encrypt(transformedArgs as WalletEncryptArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5510,9 +5556,7 @@ export class WalletPermissionsManager implements WalletInterface {
       'decrypt',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.decrypt(transformedArgs as WalletDecryptArgs, originator)
-      }
+      transformedArgs => awaitFromSync(() => this.underlying.decrypt(transformedArgs as WalletDecryptArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5538,9 +5582,7 @@ export class WalletPermissionsManager implements WalletInterface {
       'createHmac',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.createHmac(transformedArgs as CreateHmacArgs, originator)
-      }
+      transformedArgs => awaitFromSync(() => this.underlying.createHmac(transformedArgs as CreateHmacArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5566,9 +5608,7 @@ export class WalletPermissionsManager implements WalletInterface {
       'verifyHmac',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.verifyHmac(transformedArgs as VerifyHmacArgs, originator)
-      }
+      transformedArgs => awaitFromSync(() => this.underlying.verifyHmac(transformedArgs as VerifyHmacArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5594,9 +5634,8 @@ export class WalletPermissionsManager implements WalletInterface {
       'createSignature',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.createSignature(transformedArgs as CreateSignatureArgs, originator)
-      }
+      transformedArgs =>
+        awaitFromSync(() => this.underlying.createSignature(transformedArgs as CreateSignatureArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5622,9 +5661,8 @@ export class WalletPermissionsManager implements WalletInterface {
       'verifySignature',
       requestArgs,
       originator!,
-      async transformedArgs => {
-        return await this.underlying.verifySignature(transformedArgs as VerifySignatureArgs, originator)
-      }
+      transformedArgs =>
+        awaitFromSync(() => this.underlying.verifySignature(transformedArgs as VerifySignatureArgs, originator))
     )
     if (pModuleResult !== null) {
       return pModuleResult
@@ -5745,10 +5783,10 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.underlying.discoverByAttributes(...args)
   }
 
-  public async isAuthenticated(
+  public isAuthenticated(
     ...args: Parameters<WalletInterface['isAuthenticated']>
   ): ReturnType<WalletInterface['isAuthenticated']> {
-    return await this.underlying.isAuthenticated(...args)
+    return awaitFromSync(() => this.underlying.isAuthenticated(...args))
   }
 
   public async waitForAuthentication(
@@ -5801,20 +5839,18 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.underlying.waitForAuthentication(...args)
   }
 
-  public async getHeight(...args: Parameters<WalletInterface['getHeight']>): ReturnType<WalletInterface['getHeight']> {
-    return await this.underlying.getHeight(...args)
+  public getHeight(...args: Parameters<WalletInterface['getHeight']>): ReturnType<WalletInterface['getHeight']> {
+    return awaitFromSync(() => this.underlying.getHeight(...args))
   }
 
-  public async getHeaderForHeight(
+  public getHeaderForHeight(
     ...args: Parameters<WalletInterface['getHeaderForHeight']>
   ): ReturnType<WalletInterface['getHeaderForHeight']> {
-    return await this.underlying.getHeaderForHeight(...args)
+    return awaitFromSync(() => this.underlying.getHeaderForHeight(...args))
   }
 
-  public async getNetwork(
-    ...args: Parameters<WalletInterface['getNetwork']>
-  ): ReturnType<WalletInterface['getNetwork']> {
-    return await this.underlying.getNetwork(...args)
+  public getNetwork(...args: Parameters<WalletInterface['getNetwork']>): ReturnType<WalletInterface['getNetwork']> {
+    return awaitFromSync(() => this.underlying.getNetwork(...args))
   }
 
   /**
@@ -5824,7 +5860,7 @@ export class WalletPermissionsManager implements WalletInterface {
   public async getVersion(
     ...args: Parameters<WalletInterface['getVersion']>
   ): ReturnType<WalletInterface['getVersion']> {
-    const result = await this.underlying.getVersion(...args)
+    const result = await awaitFromSync(() => this.underlying.getVersion(...args))
     return {
       ...result,
       version: withBrc205Capabilities(result.version, this.config.permissionModules ?? {})
@@ -5902,16 +5938,19 @@ export class WalletPermissionsManager implements WalletInterface {
       {
         component: 'wallet-permissions'
       },
-      async span => {
-        const result = await this.hasRecentOrPendingGrantCore(cacheKey)
-        span.end({
-          attributes: {
-            'permission.cache_hit': result,
-            'permission.mint_in_flight': this.mintsInFlight.has(cacheKey)
+      span =>
+        mapAwaitFromSync(
+          () => this.hasRecentOrPendingGrantCore(cacheKey),
+          result => {
+            span.end({
+              attributes: {
+                'permission.cache_hit': result,
+                'permission.mint_in_flight': this.mintsInFlight.has(cacheKey)
+              }
+            })
+            return result
           }
-        })
-        return result
-      }
+        )
     )
   }
 

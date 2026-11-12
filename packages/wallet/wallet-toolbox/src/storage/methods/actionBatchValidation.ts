@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 import { validateCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, Script, Transaction } from '@bsv/sdk'
 import { SHA256 } from '@bsv/sdk/primitives/Hash'
@@ -23,30 +24,32 @@ export interface ValidatedBatchAction {
   externalInputBeef: Uint8Array
 }
 
-async function resolveManifestBytes(
+function resolveManifestBytes(
   blobs: ReadonlyMap<string, TableActionBatchBlob>,
   inline: number[] | Uint8Array | undefined,
   digest: string | undefined,
   name: string,
   chunkDigests?: string[]
 ): Promise<Uint8Array> {
-  if (inline != null) {
-    const bytes = asUint8Array(inline)
-    if (digest != null && actionBatchBlobDigest(bytes) !== digest) {
-      throw new WERR_INVALID_PARAMETER(name, 'match digest')
+  return promiseFromSync(() => {
+    if (inline != null) {
+      const bytes = asUint8Array(inline)
+      if (digest != null && actionBatchBlobDigest(bytes) !== digest) {
+        throw new WERR_INVALID_PARAMETER(name, 'match digest')
+      }
+      return bytes
     }
-    return bytes
-  }
-  if (digest == null) throw new WERR_INVALID_PARAMETER(name, 'inline bytes or digest')
-  if (chunkDigests != null) {
-    return resolveChunkedManifestBytes(blobs, chunkDigests, digest, name)
-  }
-  const blob = blobs.get(digest)
-  if (blob == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${digest}`)
-  if (actionBatchBlobDigest(blob.bytes) !== digest) {
-    throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${digest}`)
-  }
-  return blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
+    if (digest == null) throw new WERR_INVALID_PARAMETER(name, 'inline bytes or digest')
+    if (chunkDigests != null) {
+      return resolveChunkedManifestBytes(blobs, chunkDigests, digest, name)
+    }
+    const blob = blobs.get(digest)
+    if (blob == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${digest}`)
+    if (actionBatchBlobDigest(blob.bytes) !== digest) {
+      throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${digest}`)
+    }
+    return blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
+  })
 }
 
 function allocateManifestBytes(totalBytes: number, name: string): Uint8Array {

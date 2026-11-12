@@ -1,9 +1,14 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
+import { StorageReqWrite } from '../../storage/StorageReqWrite'
+import { WalletError } from '../../sdk/WalletError'
 import { Transaction } from '@bsv/sdk'
 import { StatusForTxidResult } from '../../sdk/WalletServices.interfaces'
 import { EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import {
+  applyCapturedTerminalFailure,
   failPendingDescendants,
+  failCapturedPendingDescendants,
   quarantineReqInputs,
   quarantineReqInputsFromFailedParents
 } from '../../storage/methods/reconcileFailedTransactionInputs'
@@ -17,7 +22,7 @@ import {
   optionalMonitorInteger,
   requireMonitorInteger
 } from '../monitorValidation'
-import { WalletMonitorTask } from './WalletMonitorTask'
+import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 
 const REVIEW_STATUSES = ['callback', 'unmined', 'sending', 'unknown', 'unconfirmed'] as const
 
@@ -113,8 +118,23 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     const createdBefore = new Date(Date.now() - this.minAgeMinutes * 60 * 1000)
     const reqs = await this.findReqsToReview(checkpoint)
     const eligible = reqs.filter(req => req.created_at <= createdBefore)
+    const captures = new Map<number, StorageReqWrite | undefined>()
+    const inactive = new Set<number>()
+    for (const req of eligible) {
+      try {
+        const writes = await captureMonitorReqWrite(this, [req.txid], true)
+        await writes?.assertCurrent()
+        captures.set(req.provenTxReqId, writes)
+      } catch (error) {
+        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+        inactive.add(req.provenTxReqId)
+      }
+    }
+    const observable = eligible.filter(req => !inactive.has(req.provenTxReqId))
     const provider =
-      eligible.length === 0 ? undefined : await this.monitor.services.getStatusForTxids(eligible.map(req => req.txid))
+      observable.length === 0
+        ? undefined
+        : await this.monitor.services.getStatusForTxids(observable.map(req => req.txid))
     const results = new Map(provider?.results.map(result => [result.txid, result]) ?? [])
 
     let reconciled = 0
@@ -123,7 +143,7 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     const retained: TableProvenTxReq[] = []
     for (const req of reqs) {
       const result = results.get(req.txid)
-      if (req.created_at > createdBefore) {
+      if (req.created_at > createdBefore || inactive.has(req.provenTxReqId)) {
         retained.push(req)
         continue
       }
@@ -131,7 +151,8 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
         req,
         provider?.status === 'success' ? result : undefined,
         provider?.status === 'success' ? provider.name : undefined,
-        createdBefore
+        createdBefore,
+        captures.get(req.provenTxReqId)
       )
       if (!applied) {
         retained.push(req)
@@ -196,8 +217,11 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     reqApi: TableProvenTxReq,
     providerResult: StatusForTxidResult | undefined,
     providerName: string | undefined,
-    createdBefore: Date
+    createdBefore: Date,
+    writes?: StorageReqWrite
   ): Promise<AppliedTerminalVerdict | undefined> {
+    if (writes != null)
+      return await this.applyCapturedTerminalVerdict(reqApi, providerResult, providerName, createdBefore, writes)
     let applied: AppliedTerminalVerdict | undefined
     await this.storage.runAsStorageProvider(async sp => {
       await sp.transaction(async trx => {
@@ -262,6 +286,74 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
       for (const txid of applied.descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
     }
     return applied
+  }
+
+  private async applyCapturedTerminalVerdict(
+    reqApi: TableProvenTxReq,
+    providerResult: StatusForTxidResult | undefined,
+    providerName: string | undefined,
+    createdBefore: Date,
+    writes: StorageReqWrite
+  ): Promise<AppliedTerminalVerdict | undefined> {
+    const provider = await this.storage.runAsStorageProvider(sp => promiseFromSync(() => sp))
+    writes.assertProvider(provider)
+    const req = new EntityProvenTxReq(reqApi)
+    let plan: { result: StatusForTxidResult; parents: string[] } | undefined
+    const recorded = await writes.request(req, async (current, trx) => {
+      if (
+        !REVIEW_STATUSES.includes(current.status as (typeof REVIEW_STATUSES)[number]) ||
+        current.created_at > createdBefore
+      )
+        return false
+      const parents = await this.findFailedLocalParentTxids(current, provider, trx)
+      const result =
+        providerResult?.terminal === true
+          ? providerResult
+          : providerResult?.status === 'known' || providerResult?.status === 'mined'
+            ? undefined
+            : this.failedParentVerdict(current.txid, parents)
+      if (result == null) return false
+      current.status = result.inputConflict === true ? 'doubleSpend' : 'invalid'
+      current.notified = false
+      current.addHistoryNote({
+        when: new Date().toISOString(),
+        what: 'proactiveTerminalReconciliation',
+        provider: providerResult?.terminal === true ? (providerName ?? 'transaction-status-provider') : 'local-storage',
+        providerStatus: result.providerStatus,
+        statusCode: result.statusCode,
+        description: result.description,
+        inputConflict: result.inputConflict === true,
+        competingTxs: result.competingTxs?.join(',')
+      })
+      plan = { result, parents }
+    })
+    if (!recorded || plan == null) return undefined
+    const { result, parents } = plan
+    const quarantined = await applyCapturedTerminalFailure(
+      req,
+      provider,
+      writes,
+      result.inputConflict === true,
+      parents,
+      { extraInfo: result.description }
+    )
+    if (result.inputConflict === true || parents.length)
+      await writes.request(req, current => {
+        return promiseFromSync(() => {
+          current.addHistoryNote({
+            when: new Date().toISOString(),
+            what: result.inputConflict === true ? 'proactiveInputQuarantine' : 'proactiveFailedParentQuarantine',
+            checked: quarantined.checked,
+            confirmed: quarantined.staleConfirmed,
+            ...(parents.length ? { parentTxids: parents.join(',') } : {}),
+            ...(quarantined.staleOutpoints.length ? { outpoints: quarantined.staleOutpoints.join(',') } : {})
+          })
+        })
+      })
+    this.monitor.callOnTransactionStatusChanged(reqApi.txid, result.providerStatus ?? 'REJECTED')
+    const descendants = await failCapturedPendingDescendants([req.txid], provider, writes)
+    for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
+    return { result, descendants }
   }
 
   private async findFailedLocalParentTxids(

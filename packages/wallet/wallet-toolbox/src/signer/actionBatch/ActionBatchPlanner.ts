@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 import {
   type ValidCreateActionArgs,
   type ValidCreateActionInput,
@@ -258,26 +259,28 @@ async function planFunding(
     maxMigrationInputs: policy.migrationInputsPerAction,
     randomVals: args.randomVals
   }
-  const allocate = async (
+  const allocate = (
     targetSatoshis: number,
     exactSatoshis?: number
-  ): Promise<GenerateChangeSdkChangeInput | undefined> => {
-    let output = noSend.pop()
-    output ??= selectCanonicalChange(
-      available.filter(candidate => !allocated.has(candidate.outputId)),
-      targetSatoshis,
-      exactSatoshis
-    )
-    if (output == null) return undefined
-    allocated.set(output.outputId, output)
-    return { outputId: output.outputId, satoshis: output.satoshis }
-  }
-  const release = async (outputId: number): Promise<void> => {
-    const output = allocated.get(outputId)
-    if (output == null) return
-    allocated.delete(outputId)
-    if (noSendChange.includes(output)) noSend.push(output)
-  }
+  ): Promise<GenerateChangeSdkChangeInput | undefined> =>
+    promiseFromSync(() => {
+      let output = noSend.pop()
+      output ??= selectCanonicalChange(
+        available.filter(candidate => !allocated.has(candidate.outputId)),
+        targetSatoshis,
+        exactSatoshis
+      )
+      if (output == null) return undefined
+      allocated.set(output.outputId, output)
+      return { outputId: output.outputId, satoshis: output.satoshis }
+    })
+  const release = (outputId: number): Promise<void> =>
+    promiseFromSync(() => {
+      const output = allocated.get(outputId)
+      if (output == null) return
+      allocated.delete(outputId)
+      if (noSendChange.includes(output)) noSend.push(output)
+    })
   let result
   try {
     result = await generateChangeSdk(params, allocate, release, args.logger)

@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.16.0'
+last_updated: '2026-11-09'
+last_verified: '2026-11-09'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -23,6 +23,12 @@ remain rejected. No API, wire or schema migration is required. Upgrade the host
 and remote Storage separately; reconcile and retry the original import instead
 of creating or broadcasting a replacement payment. Source is not publication or
 deployment.
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate exposes resumable sync with atomic IndexedDB page commits and foreground work between pages. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md), including cancellation, inclusive timestamp boundaries and measured native-browser behavior.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
