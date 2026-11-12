@@ -131,13 +131,15 @@ describe('BRC-207 identifiers', () => {
 })
 
 describe('derivationSuffixTag', () => {
-  it('is `p color ` and the SHA-256 of the suffix’s UTF-8 bytes, 72 characters', () => {
-    const suffix = 'c3VmZml4c3VmZml4c3VmZg=='
-    const tag = derivationSuffixTag(suffix)
-    expect(tag).toBe(`p color ${toHex(sha256(toArray(suffix, 'utf8')))}`)
+  it('is `p color ` and 32 random bytes as lowercase hex, 72 characters, new for each call', () => {
+    const tag = derivationSuffixTag()
+    expect(tag).toMatch(/^p color [0-9a-f]{64}$/)
     expect(tag).toHaveLength(72)
-    expect(derivationSuffixTag('x'.repeat(1000))).toHaveLength(72)
+    expect(derivationSuffixTag()).not.toBe(tag)
     expect(isDerivationSuffixTag(tag)).toBe(true)
+    // Any 32-byte hex value has the form, such as the SHA-256 of a derivation suffix.
+    const hashed = `p color ${toHex(sha256(toArray('c3VmZml4c3VmZml4c3VmZg==', 'utf8')))}`
+    expect(isDerivationSuffixTag(hashed)).toBe(true)
     expect(isDerivationSuffixTag('p color')).toBe(false)
     expect(isDerivationSuffixTag('p color assets')).toBe(false)
   })

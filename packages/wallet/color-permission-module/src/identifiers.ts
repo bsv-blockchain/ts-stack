@@ -1,5 +1,5 @@
 import { PublicKey, type WalletProtocol } from '@bsv/sdk'
-import { sha256 } from '@bsv/sdk/primitives/Hash'
+import Random from '@bsv/sdk/primitives/Random'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 
 /** Asset selector for a deploy output's key derivation before its asset ID exists. */
@@ -201,12 +201,11 @@ export const DISCOVERY_TOPIC = 'tm_color'
 const SUFFIX_TAG = /^p color [0-9a-f]{64}$/
 
 /**
- * The tag filed on a managed output: `p color ` and the lowercase hex of the SHA-256 of the UTF-8
- * bytes of its custody's derivation suffix. It has a fixed length whatever the suffix, and storage
- * keeps nothing of the suffix itself.
+ * The tag filed on a managed output: `p color ` and 32 random bytes as lowercase hex, drawn for
+ * each output the module files. The module lists the output's transaction by it.
  */
-export function derivationSuffixTag(derivationSuffix: string): string {
-  return `${COLOR_BASKET_NAMESPACE} ${toHex(sha256(toArray(derivationSuffix, 'utf8')))}`
+export function derivationSuffixTag(): string {
+  return `${COLOR_BASKET_NAMESPACE} ${toHex(Random(32))}`
 }
 
 /** Whether a tag is a derivation suffix tag. */
