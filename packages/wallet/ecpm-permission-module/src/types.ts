@@ -23,6 +23,7 @@ export interface EcpmAuthorizationRequest {
   privilegedReason?: string
   operation: EcpmOperation
   point: PubKeyHex
+  seekPermission?: boolean
 }
 
 export type EcpmAuthorizationHandler = (
@@ -36,7 +37,7 @@ export interface EcpmPermissionModuleOptions {
   privilegedKeyDeriver?: EcpmPrivilegedKeyDeriver
   /** Required for security levels 1/2 and every privileged request. */
   authorize?: EcpmAuthorizationHandler
-  /** Duration of a successful protocol grant. Defaults to five minutes. */
+  /** Duration of a successful protocol grant. Defaults to five minutes. Set 0 to delegate every check to the trusted host. */
   authorizationTTL?: number
 }
 
