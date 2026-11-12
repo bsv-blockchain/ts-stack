@@ -534,7 +534,8 @@ test('root eviction partitions retain the complete source set, tests and indepen
         'root-eviction-journal',
         'root-eviction-records',
         'root-eviction-codec',
-        'root-eviction-storage'
+        'root-eviction-storage',
+        'root-eviction-service'
       ].includes(name)
         ? { maxTestRunnerReuse: 8 }
         : {})
