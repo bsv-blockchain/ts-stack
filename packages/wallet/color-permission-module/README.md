@@ -69,21 +69,26 @@ the manager's `getVersion` string.
   admitted token inputs and adds token change in `createAction`, and supplies
   the source transactions of the inputs it selects in `inputBEEF`, merged with
   any `inputBEEF` the caller gave. Every output the module files (token
-  change, owned outputs, receipts, deploys and handoff splits) carries the tag
-  `p color <hex>`: the lowercase hex of the SHA-256 of the UTF-8 bytes of its
-  custody's derivation suffix. The tag is 72 characters
-  whatever the suffix, and storage keeps nothing of the suffix itself. The module reads the
+  change, owned outputs, receipts, deploys and handoff splits) carries the output
+  tag `p color output <hex>`: 32 random bytes as lowercase hex, drawn for each
+  output. Outputs filed before 0.3.0 carry instead the legacy tag `p color <hex>`,
+  the lowercase hex of the SHA-256 of the UTF-8 bytes of the custody's derivation
+  suffix. A suffix may be reused across outputs, so that tag could be shared by
+  many outputs and the source lookup returned all of them; the module no longer
+  files it but still reads it. A row is read by its output tag, or by its legacy
+  tag when it has no output tag. Versions before 0.3.0 do not recognize the output
+  tag, so they do not select or spend outputs filed by 0.3.0. The module reads the
   transactions of the inputs it selects by their tags (`tagQueryMode: 'any'`),
   normally with one `listOutputs` per asset basket and `limit` the number of
-  selected inputs, capped at 10,000 per page. Different payments may share a
-  suffix. When more matching rows exist, the module pages within the initial
+  selected inputs, capped at 10,000 per page. Rows filed before 0.3.0 that share a
+  suffix share their legacy tag. When more matching rows exist, the module pages within the initial
   nonnegative safe-integer `totalOutputs` count and stops once every selected source
   is found; a changed count, duplicate row,
   oversized page, stalled traversal or missing selected output fails the call.
   Only selected transactions and their proofs or unproven ancestors are retained;
-  other same-tag outputs are neither spent nor credited. An output without its suffix tag is not selected, and an app-named
-  input without it is refused, so outputs filed without the tag are not spent
-  through the module. Suffix tags are
+  other same-tag outputs are neither spent nor credited. An output with neither tag is not selected, and an app-named
+  input without one is refused, so outputs filed without a tag are not spent
+  through the module. Both tag forms are
   left out of the `p color assets` view and of the balance views' tag filters. A selected output whose transaction
   the wallet does not return in full fails the call, naming the outpoint. The
   module stages its record of each input it signs for (outpoint, script,

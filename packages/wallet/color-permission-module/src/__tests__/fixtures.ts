@@ -20,7 +20,7 @@ import {
   type STEAK,
   type WalletInterface
 } from '@bsv/sdk'
-import { hash160 } from '@bsv/sdk/primitives/Hash'
+import { hash160, sha256 } from '@bsv/sdk/primitives/Hash'
 import Random from '@bsv/sdk/primitives/Random'
 import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
@@ -30,9 +30,9 @@ import {
   assetBasket,
   COLOR_KEY_ID,
   colorProtocolID,
-  derivationSuffixTag,
   DISCOVERY_TOPIC,
-  ISSUE
+  ISSUE,
+  newOutputTag
 } from '../identifiers.js'
 import { readAnyTokenOutput, readProfiledTokenOutput } from '../tokenOutputs.js'
 
@@ -448,7 +448,7 @@ export async function deployAsset(
     0,
     assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
     JSON.stringify({ version: 1, assetId: ISSUE, ...custody }),
-    [derivationSuffixTag(custody.derivationSuffix)]
+    [newOutputTag()]
   )
   return { assetId, tx }
 }
@@ -526,15 +526,21 @@ export async function tokenPayment(
   return { tx, customInstructions: JSON.stringify(custody) }
 }
 
-/** The suffix tag of an output filed with the custody JSON `customInstructions`. */
-export function suffixTagOf(customInstructions: string): string {
-  const { derivationSuffix } = JSON.parse(customInstructions) as { derivationSuffix: string }
-  return derivationSuffixTag(derivationSuffix)
+/** The form of the output tag the module files on each output. */
+export const OUTPUT_TAG_FORM = /^p color output [0-9a-f]{64}$/
+
+/**
+ * The legacy tag of an output filed before 0.3.0: `p color ` and the SHA-256 of the UTF-8 bytes of
+ * its derivation suffix. The module no longer files it but still reads it.
+ */
+export function legacySuffixTag(derivationSuffix: string): string {
+  return `p color ${toHex(sha256(toArray(derivationSuffix, 'utf8')))}`
 }
 
 /**
  * Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts, each
- * carrying `payload`, filed with their suffix tag, or untagged as filed before suffix tags.
+ * carrying `payload`, filed with a new output tag, with the legacy suffix tag of a row filed before
+ * 0.3.0 (`'legacy'`), or untagged as filed before suffix tags (`false`).
  */
 export async function holdTokens(
   holder: FakeWallet,
@@ -542,7 +548,7 @@ export async function holdTokens(
   assetId: string,
   amounts: bigint[],
   payload?: number[],
-  tagged = true
+  tagged: boolean | 'legacy' = true
 ): Promise<Transaction[]> {
   const sender = new FakeWallet()
   const txs: Transaction[] = []
@@ -555,7 +561,11 @@ export async function holdTokens(
       0,
       assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
       customInstructions,
-      tagged ? [derivationSuffixTag(derivationSuffix)] : undefined
+      tagged === 'legacy'
+        ? [legacySuffixTag(derivationSuffix)]
+        : tagged
+          ? [newOutputTag()]
+          : undefined
     )
     txs.push(tx)
   }

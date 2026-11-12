@@ -20,7 +20,7 @@ import {
   FakeProvider,
   FakeWallet,
   holdTokens,
-  suffixTagOf,
+  OUTPUT_TAG_FORM,
   tokenPayment,
   validInput
 } from './fixtures.js'
@@ -286,7 +286,7 @@ describe('color module registered on a WalletPermissionsManager', () => {
       )
     ).resolves.toMatchObject({ accepted: true })
     const stored = wallet.outputs.get(`${tx.id('hex')}.0`)
-    expect(stored?.tags).toEqual([suffixTagOf(customInstructions), 'color_offline'])
+    expect(stored?.tags).toEqual([expect.stringMatching(OUTPUT_TAG_FORM), 'color_offline'])
     expect(stored?.customInstructions?.startsWith('{')).toBe(false)
     expect(await maybeDecryptMetadata(wallet.asWallet(), stored?.customInstructions ?? '')).toBe(
       customInstructions

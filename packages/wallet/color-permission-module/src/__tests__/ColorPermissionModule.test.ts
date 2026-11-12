@@ -31,7 +31,8 @@ import {
   COLOR_KEY_ID,
   colorProtocolID,
   colorTopic,
-  derivationSuffixTag
+  newOutputTag,
+  outputTagIn
 } from '../identifiers.js'
 import {
   createModule,
@@ -40,6 +41,8 @@ import {
   FakeWallet,
   holdTokens,
   legacyDeploy,
+  legacySuffixTag,
+  OUTPUT_TAG_FORM,
   remittanceString,
   tokenPayment,
   validInput
@@ -861,13 +864,10 @@ describe('ColorPermissionModule', () => {
     })
   })
 
-  describe('suffix tags on filed outputs', () => {
-    const tagFor = (customInstructions: string | undefined): string =>
-      derivationSuffixTag(
-        (JSON.parse(customInstructions!) as { derivationSuffix: string }).derivationSuffix
-      )
+  describe('output tags on filed outputs', () => {
+    const outputTag = expect.stringMatching(OUTPUT_TAG_FORM)
 
-    it('tags token change with its derivation suffix', async () => {
+    it('tags token change with a new output tag only', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
       const funded = (
         await module.onRequest({
@@ -883,10 +883,10 @@ describe('ColorPermissionModule', () => {
       ).args as CreateActionArgs
       const change = funded.outputs![1]
       expect(change.basket).toBe(assetBasket(assetId, 'value'))
-      expect(change.tags).toEqual([tagFor(change.customInstructions)])
+      expect(change.tags).toEqual([outputTag])
     })
 
-    it('tags a receipt with its derivation suffix', async () => {
+    it('tags a receipt with a new output tag only', async () => {
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 50n)
       provider.admit(assetId, tx, 0)
       const received = (
@@ -910,10 +910,7 @@ describe('ColorPermissionModule', () => {
           originator: APP
         })
       ).args as InternalizeActionArgs
-      expect(received.outputs[0].insertionRemittance?.tags).toEqual([
-        'app tag',
-        tagFor(customInstructions)
-      ])
+      expect(received.outputs[0].insertionRemittance?.tags).toEqual(['app tag', outputTag])
     })
 
     it('tags both outputs of a handoff split', async () => {
@@ -931,10 +928,8 @@ describe('ColorPermissionModule', () => {
       })
       const split = created[0].outputs!
       expect(split).toHaveLength(2)
-      for (const output of split) {
-        const custody = await maybeDecryptMetadata(wallet.asWallet(), output.customInstructions!)
-        expect(output.tags).toEqual([tagFor(custody)])
-      }
+      for (const output of split) expect(output.tags).toEqual([outputTag])
+      expect(split[0].tags![0]).not.toBe(split[1].tags![0])
     })
   })
 
@@ -961,12 +956,9 @@ describe('ColorPermissionModule', () => {
         .txs.map(tx => tx.txid)
         .sort()
 
-    const tagOf = (tx: Transaction): string => {
-      const { derivationSuffix } = JSON.parse(
-        wallet.outputs.get(outpointOf(tx))!.customInstructions!
-      ) as { derivationSuffix: string }
-      return derivationSuffixTag(derivationSuffix)
-    }
+    /** The tag the output's stored row is listed by. */
+    const tagOf = (tx: Transaction): string =>
+      outputTagIn(wallet.outputs.get(outpointOf(tx))!.tags)!
 
     it('supplies the selected inputs’ transactions with their proofs and nothing else', async () => {
       const [, selected] = await holdTokens(wallet, provider, assetId, [60n, 300n])
@@ -1000,7 +992,7 @@ describe('ColorPermissionModule', () => {
           includeCustomInstructions
         }))
 
-    it('reads the selected inputs of one basket in one listing by their suffix tags', async () => {
+    it('reads the selected inputs of one basket in one listing by their output tags', async () => {
       const [, first, second] = await holdTokens(wallet, provider, assetId, [60n, 300n, 200n, 20n])
       const output = await recipientOutput(wallet, new FakeWallet(), assetId, 400n)
       wallet.listOutputsCalls.length = 0
@@ -1055,7 +1047,7 @@ describe('ColorPermissionModule', () => {
       )
     })
 
-    it('spends verified receipts with a shared suffix and different payment prefixes', async () => {
+    it('gives receipts with a shared suffix distinct output tags and lists only the spent one', async () => {
       const sender = new FakeWallet()
       async function payment(amount: bigint, prefix: string) {
         const { tx, customInstructions } = await tokenPayment(sender, wallet, assetId, amount)
@@ -1077,12 +1069,17 @@ describe('ColorPermissionModule', () => {
         return { tx, custody }
       }
       const small = await payment(100n, 'AQ==')
+      const tiny = await payment(50n, 'Ag==')
       let large = await payment(300n, 'Aw==')
-      // Put the unselected receipt before the selected one in the wallet's canonical order.
-      for (let nonce = 0; large.tx.id('hex') < small.tx.id('hex'); nonce++) {
+      // Put the unselected receipts before the selected one in the wallet's canonical order.
+      for (
+        let nonce = 0;
+        large.tx.id('hex') < small.tx.id('hex') || large.tx.id('hex') < tiny.tx.id('hex');
+        nonce++
+      ) {
         large = await payment(300n, `payment${nonce}`)
       }
-      for (const { tx, custody } of [small, large]) {
+      for (const { tx, custody } of [small, tiny, large]) {
         provider.admit(assetId, tx, 0)
         const received = await module.onRequest({
           method: 'internalizeAction',
@@ -1106,11 +1103,25 @@ describe('ColorPermissionModule', () => {
           wallet.internalizeAction(received.args as InternalizeActionArgs)
         ).resolves.toEqual({ accepted: true })
       }
-      expect(tagOf(small.tx)).toBe(tagOf(large.tx))
+      const tags = [small, tiny, large].map(({ tx }) => wallet.outputs.get(outpointOf(tx))!.tags)
+      for (const stored of tags) expect(stored).toEqual([expect.stringMatching(OUTPUT_TAG_FORM)])
+      expect(new Set(tags.map(stored => stored![0])).size).toBe(3)
+      const listOutputs = wallet.listOutputs.bind(wallet)
+      const sourceListings: ListOutputsResult[] = []
+      wallet.listOutputs = async args => {
+        const result = await listOutputs(args)
+        if (args.include === 'entire transactions') sourceListings.push(result)
+        return result
+      }
       const funded = await fund({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 200n)]
       })
+      wallet.listOutputs = listOutputs
       expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(large.tx)])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[tagOf(large.tx)]])
+      expect(
+        sourceListings.map(({ totalOutputs, outputs }) => [totalOutputs, outputs.length])
+      ).toEqual([[1, 1]])
       expect(txids(funded.inputBEEF)).toEqual(
         [large.tx.id('hex'), sourceOf(large.tx).id('hex')].sort()
       )
@@ -1149,7 +1160,7 @@ describe('ColorPermissionModule', () => {
           outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
         })
       ).rejects.toThrow(
-        `BRC-207: token output ${outpointOf(untagged)} was filed without its suffix tag and is not spendable through the module`
+        `BRC-207: token output ${outpointOf(untagged)} was filed without its output tag and is not spendable through the module`
       )
     })
 
@@ -1189,9 +1200,9 @@ describe('ColorPermissionModule', () => {
       expect(prompts).toEqual([])
     })
 
-    it('lists a selected output by the suffix tag it carries, whatever its value', async () => {
+    it('lists a selected output by the tag its row carries, whatever its value', async () => {
       const [retagged] = await holdTokens(wallet, provider, assetId, [300n, 200n])
-      const tag = derivationSuffixTag('another suffix')
+      const tag = legacySuffixTag('another suffix')
       wallet.outputs.get(outpointOf(retagged))!.tags = [tag]
       const funded = await fund({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
@@ -1201,9 +1212,41 @@ describe('ColorPermissionModule', () => {
       expect(listing?.tags).toEqual([tag])
     })
 
+    it('spends a row filed before 0.3.0 by its legacy suffix tag and files its change with an output tag', async () => {
+      const [legacy] = await holdTokens(wallet, provider, assetId, [300n], undefined, 'legacy')
+      const { derivationSuffix } = JSON.parse(
+        wallet.outputs.get(outpointOf(legacy))!.customInstructions!
+      ) as { derivationSuffix: string }
+      expect(wallet.outputs.get(outpointOf(legacy))!.tags).toEqual([
+        legacySuffixTag(derivationSuffix)
+      ])
+      wallet.listOutputsCalls.length = 0
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(legacy)])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[legacySuffixTag(derivationSuffix)]])
+      expect(txids(funded.inputBEEF)).toEqual([legacy.id('hex'), sourceOf(legacy).id('hex')].sort())
+      expect(funded.outputs!.at(-1)!.tags).toEqual([expect.stringMatching(OUTPUT_TAG_FORM)])
+    })
+
+    it('lists a row carrying both tag forms by its output tag', async () => {
+      const [both] = await holdTokens(wallet, provider, assetId, [300n], undefined, 'legacy')
+      const tag = newOutputTag()
+      const stored = wallet.outputs.get(outpointOf(both))!
+      stored.tags = [...stored.tags!, tag]
+      wallet.listOutputsCalls.length = 0
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(both)])
+      expect(beefListings().map(({ tags }) => tags)).toEqual([[tag]])
+    })
+
     it('pages past nonselected same-tag outputs without merging or crediting them', async () => {
-      // A suffix tag is an index, not an ownership or amount assertion. A matching unselected
-      // output may be legitimate (different payments can share a suffix) or merely retagged.
+      // An output tag is an index, not an ownership or amount assertion. A matching unselected
+      // output may be legitimate (rows filed before 0.3.0 that share a suffix share their legacy
+      // tag) or merely retagged.
       let selected: Transaction
       let intruder: Transaction
       do {

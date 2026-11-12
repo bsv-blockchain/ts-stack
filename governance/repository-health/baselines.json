@@ -334,6 +334,6 @@
     "@bsv/wallet-toolbox-mobile": "2.15.3",
     "@bsv/wallet-toolbox": "2.15.3",
     "@bsv/output-knowledge": "0.1.0",
-    "@bsv/color-permission-module": "0.2.0"
+    "@bsv/color-permission-module": "0.3.0"
   }
 }

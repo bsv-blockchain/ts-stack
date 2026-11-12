@@ -53,11 +53,12 @@ import {
   COLOR_OFFLINE_TAG,
   colorProtocolID,
   colorTopic,
-  derivationSuffixTag,
-  isDerivationSuffixTag,
   DISCOVERY_TOPIC,
+  isModuleOutputTag,
   ISSUE,
+  newOutputTag,
   outpointString,
+  outputTagIn,
   parseAssetBasket,
   parseAssetId,
   parseAssetSelector,
@@ -171,8 +172,8 @@ export interface ManagedInput extends SourceOutput {
   role: TokenRole
   amount: bigint
   custody: Custody
-  /** The suffix tag the output carries; the module lists its transaction by it. */
-  suffixTag: string
+  /** The output tag the row carries (or its legacy suffix tag); its transaction is listed by it. */
+  outputTag: string
   /** The source transaction as BEEF, when the module made it (a handoff split). */
   sourceBEEF?: BEEF
 }
@@ -222,22 +223,9 @@ function mergeSource(into: Beef, from: Beef, outpoint: string): void {
   into.mergeBeef(from.toBinaryAtomic(txid))
 }
 
-/** The tag every output the module files carries: the module finds an output's transaction by it. */
-function suffixTagOf(custody: { derivationSuffix: string }): string {
-  return derivationSuffixTag(custody.derivationSuffix)
-}
-
-/** `tags` with the custody's suffix tag added. */
-function withSuffixTag(
-  tags: readonly string[] | undefined,
-  custody: { derivationSuffix: string }
-): string[] {
-  return [...new Set([...(tags ?? []), suffixTagOf(custody)])]
-}
-
-/** The suffix tag among a listed output's tags, by which its transaction is listed. */
-function suffixTagIn(tags: readonly string[] | undefined): string | undefined {
-  return tags?.find(isDerivationSuffixTag)
+/** The caller's `tags` with a new output tag added: every output the module files carries one. */
+function withOutputTag(tags: readonly string[] | undefined): string[] {
+  return [...new Set([...(tags ?? []), newOutputTag()])]
 }
 
 /** The BEEF a listOutputs result returns, empty when it returns none. */
@@ -340,7 +328,7 @@ interface LocatedReceipt extends ParsedReceipt {
 
 /**
  * The internalize arguments the wallet gets: each checked receipt's insertion carries the
- * 5-member custody JSON, the caller's tags without `color_*` and its derivation suffix tag, plus
+ * 5-member custody JSON, the caller's tags without `color_*` and a new output tag, plus
  * `color_offline` when its output was admitted as `pending`; other outputs pass unchanged.
  */
 function forwardedReceipts(
@@ -358,9 +346,8 @@ function forwardedReceipts(
           : forwarded.get(output.insertionRemittance)
       if (receipt === undefined) return output
       const { tags: callerTags, ...insertion } = receipt.remittance
-      const tags = withSuffixTag(
-        (callerTags ?? []).filter(tag => !tag.startsWith(COLOR_TAG_PREFIX)),
-        receipt.custody
+      const tags = withOutputTag(
+        (callerTags ?? []).filter(tag => !tag.startsWith(COLOR_TAG_PREFIX))
       )
       if (pending.has(receipt.outputIndex)) tags.push(COLOR_OFFLINE_TAG)
       return {
@@ -1053,17 +1040,17 @@ function inventoryState(record: InventoryRecord): InventoryState {
 }
 
 /**
- * An output's stored tags without state tags or suffix tags (the suffix tag is the module's own
- * index into the basket; apps see the stored tags without it). With profiles registered
- * (`settled` is then the set of txids `markSettled` recorded), the stored `color_offline` tag is
- * dropped once its transaction is settled, so a lost store shows the coin offline again (fail
- * safe).
+ * An output's stored tags without state tags or the module's output tags in either form (the
+ * output tag is the module's own index into the basket; apps see the stored tags without it). With
+ * profiles registered (`settled` is then the set of txids `markSettled` recorded), the stored
+ * `color_offline` tag is dropped once its transaction is settled, so a lost store shows the coin
+ * offline again (fail safe).
  */
 function storedViewTags(output: WalletOutput, settled?: ReadonlySet<string>): string[] {
   const hidden =
     settled?.has(parseOutpoint(output.outpoint).txid) === true ? COLOR_OFFLINE_TAG : undefined
   return (output.tags ?? []).filter(
-    tag => !tag.startsWith(STATE_TAG_PREFIX) && !isDerivationSuffixTag(tag) && tag !== hidden
+    tag => !tag.startsWith(STATE_TAG_PREFIX) && !isModuleOutputTag(tag) && tag !== hidden
   )
 }
 
@@ -1092,7 +1079,7 @@ export function tryReadTokenOutput(
   }
 }
 
-/** A record with its stored tags, less suffix tags, and the computed state tag in place of any stored one. */
+/** A record with its stored tags, less output tags, and the computed state tag in place of any stored one. */
 function inventoryView(record: InventoryRecord, settled?: ReadonlySet<string>): InventoryView {
   const state = inventoryState(record)
   const tags = [...storedViewTags(record.output, settled), `${STATE_TAG_PREFIX}${state}`]
@@ -1353,8 +1340,8 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /**
    * Verifies every `p color` receipt and returns the arguments to forward to the wallet, each
-   * receipt tagged with its derivation suffix. Without profiles the caller must already have
-   * submitted the transaction, and only the suffix tags are added. With profiles, see
+   * receipt tagged with a new output tag. Without profiles the caller must already have
+   * submitted the transaction, and only the output tags are added. With profiles, see
    * `internalizeProfiled`.
    */
   protected async internalizeAction(
@@ -1372,8 +1359,8 @@ export class ColorPermissionModule implements PermissionsModule {
     await this.assertCompletedTransaction(tx)
     const tags = new Map<number, string[]>()
     await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
-      const custody = await this.verifyReceipt(tx, outputIndex, remittance, originator)
-      tags.set(outputIndex, withSuffixTag(remittance.tags, custody))
+      await this.verifyReceipt(tx, outputIndex, remittance, originator)
+      tags.set(outputIndex, withOutputTag(remittance.tags))
     })
     return {
       ...args,
@@ -2056,12 +2043,12 @@ export class ColorPermissionModule implements PermissionsModule {
     const untagged = await this.managedInput(output, originator)
     if (untagged === undefined)
       throw new Error('BRC-207: an explicit p color input is not a managed token output')
-    const suffixTag = suffixTagIn(output.tags)
-    if (suffixTag === undefined)
+    const outputTag = outputTagIn(output.tags)
+    if (outputTag === undefined)
       throw new Error(
-        `BRC-207: token output ${untagged.outpoint} was filed without its suffix tag and is not spendable through the module`
+        `BRC-207: token output ${untagged.outpoint} was filed without its output tag and is not spendable through the module`
       )
-    const managed: ManagedInput = { ...untagged, suffixTag }
+    const managed: ManagedInput = { ...untagged, outputTag }
     await this.assertSupportedAsset(managed.assetId)
     explicit.tokens.push(this.read(managed.lockingScript, parseOutpoint(managed.outpoint))!)
     if (
@@ -2269,7 +2256,7 @@ export class ColorPermissionModule implements PermissionsModule {
         custodyInstructions(custodyOf(remittance)),
         originator
       ),
-      tags: withSuffixTag(output.tags, remittance)
+      tags: withOutputTag(output.tags)
     }
   }
 
@@ -2291,7 +2278,7 @@ export class ColorPermissionModule implements PermissionsModule {
       ...output,
       basket,
       customInstructions: custodyInstructions(custodyOf(remittance)),
-      tags: withSuffixTag(output.tags, remittance)
+      tags: withOutputTag(output.tags)
     }
   }
 
@@ -2606,9 +2593,11 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * The selected inputs' source transactions, listed by suffix tag. Distinct payments may reuse a
-   * suffix, so matching rows are paged within the first result's count and only selected sources
-   * are retained. Counts must be stable and rows unique throughout this bounded traversal.
+   * The selected inputs' source transactions, listed by the tag each input's row carries: its
+   * output tag, or the legacy suffix tag of a row filed before 0.3.0. An output tag names one
+   * output, but a legacy suffix tag may be shared by every output paid to the same suffix, so
+   * matching rows are paged within the first result's count and only selected sources are
+   * retained. Counts must be stable and rows unique throughout this bounded traversal.
    */
   protected async sourceTransactions(
     basket: string,
@@ -2632,7 +2621,7 @@ export class ColorPermissionModule implements PermissionsModule {
     }
     const query: ListOutputsArgs = {
       basket,
-      tags: selected.map(input => input.suffixTag),
+      tags: selected.map(input => input.outputTag),
       tagQueryMode: 'any',
       include: 'entire transactions'
     }
@@ -2687,8 +2676,8 @@ export class ColorPermissionModule implements PermissionsModule {
         this.selected.has(output.outpoint) ||
         this.staged.has(output.outpoint) ||
         output.customInstructions === undefined ||
-        // An output without a suffix tag cannot be fetched by it, so it is not selected.
-        !(output.tags ?? []).some(isDerivationSuffixTag)
+        // An output without an output tag cannot be fetched by it, so it is not selected.
+        outputTagIn(output.tags) === undefined
       )
         return []
       const outpoint = parseOutpoint(output.outpoint)
@@ -2719,9 +2708,9 @@ export class ColorPermissionModule implements PermissionsModule {
         customInstructions,
         originator
       )
-      const suffixTag = suffixTagIn(tags)
-      if (input === undefined || suffixTag === undefined) return undefined
-      return { ...input, suffixTag }
+      const outputTag = outputTagIn(tags)
+      if (input === undefined || outputTag === undefined) return undefined
+      return { ...input, outputTag }
     } catch {
       return undefined
     }
@@ -2731,7 +2720,7 @@ export class ColorPermissionModule implements PermissionsModule {
   protected async managedInput(
     output: WalletOutput,
     originator: string
-  ): Promise<Omit<ManagedInput, 'suffixTag'> | undefined> {
+  ): Promise<Omit<ManagedInput, 'outputTag'> | undefined> {
     const source = this.sourceOutput(output)
     const token = this.read(source.lockingScript, parseOutpoint(output.outpoint))
     if (token === undefined || output.customInstructions === undefined) return undefined
@@ -2743,7 +2732,7 @@ export class ColorPermissionModule implements PermissionsModule {
     output: SourceOutput & { token: TokenOutput },
     customInstructions: string,
     originator: string
-  ): Promise<Omit<ManagedInput, 'suffixTag'> | undefined> {
+  ): Promise<Omit<ManagedInput, 'outputTag'> | undefined> {
     const custody = parseCustody(
       await maybeDecryptMetadata(this.wallet, customInstructions, originator),
       undefined,
@@ -2832,7 +2821,7 @@ export class ColorPermissionModule implements PermissionsModule {
       role: 'value',
       amount,
       custody: exact.custody,
-      suffixTag: suffixTagOf(exact.custody),
+      outputTag: outputTagIn(exact.output.tags)!,
       sourceBEEF: signed.tx
     }
   }
@@ -2859,7 +2848,7 @@ export class ColorPermissionModule implements PermissionsModule {
         satoshis: TOKEN_CARRIER_SATOSHIS,
         basket: assetBasket(assetId, 'value'),
         customInstructions: custodyInstructions(custody),
-        tags: [suffixTagOf(custody)],
+        tags: [newOutputTag()],
         outputDescription: 'BRC-207 token change'
       }
     }
