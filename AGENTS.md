@@ -229,6 +229,13 @@ release. Invalid budget metadata, prohibited dependencies/exports, browser or
 mobile execution failures and other packaging contracts still fail. Runtime
 memory/disk/KDF and protocol integrity limits retain their separate contracts.
 
+Ordinary wallet CI runs its six functional shards and both HTTP latency cases.
+The complete extended native recovery/fault matrix is an explicit manual CI
+selection (`extended-wallet-qualification`), with its original tests and evidence
+checks retained. Missing extended results are not passes and do not block ordinary
+merge/release. Patch-coverage percentages are advisory review measurements; actual
+selected tests, package/platform contracts and security checks remain required.
+
 ### Mutation campaigns are background findings only
 
 Mutation campaigns must never be required before editing, committing, pushing,

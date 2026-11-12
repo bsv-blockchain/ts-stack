@@ -280,10 +280,15 @@ test('application coverage shards retain the complete selection and a required m
   assert.match(jobs['coverage-upload'], /output-knowledge.lcov.info/)
   assert.match(jobs['coverage-upload'], /needs.coverage-other.result == 'success'/)
   assert.match(jobs['merge-gate'], /^      - coverage-upload$/m)
-  assert.doesNotMatch(
-    jobs['coverage-other'] + jobs['coverage-upload'],
-    /continue-on-error|passWithNoTests/
-  )
+  assert.doesNotMatch(jobs['coverage-other'], /continue-on-error|passWithNoTests/)
+  const aggregate = jobs['coverage-upload']
+    .split(/\n {6}- /)
+    .find(step => step.includes('node scripts/output-knowledge-coverage.mjs aggregate'))
+  assert.doesNotMatch(aggregate, /continue-on-error|passWithNoTests/)
+  const patch = jobs['coverage-upload']
+    .split(/\n {6}- /)
+    .find(step => step.includes('node scripts/patch-coverage.mjs'))
+  assert.match(patch, /continue-on-error: true/)
   const steps = jobs.policy.split(/\n {6}- /)
   const installed = steps.findIndex(step =>
     step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')

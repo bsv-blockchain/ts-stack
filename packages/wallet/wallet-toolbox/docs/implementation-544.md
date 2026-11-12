@@ -101,3 +101,10 @@ network-ops dossier records deployed source identity and raw evidence locations.
 Mutation campaigns, exhaustive fault/platform matrices, performance research and
 historical receipt regeneration are follow-up work. A reproduced data-loss,
 authorization or payment defect still blocks release until resolved.
+
+Normal wallet CI selects six ordinary shards and the zero/one-second HTTP cases.
+The complete extended native recovery/fault matrix remains available through
+manual CI with `extended-wallet-qualification`; its cases and receipt validation
+are preserved. Coverage percentages and bundle byte targets inform review without
+preventing selected functional tests from running. Native worker admission follows
+the supported Node24.11+ floor at module ABI137 and records the actual runtime.

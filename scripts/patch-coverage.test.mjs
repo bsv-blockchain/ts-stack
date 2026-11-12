@@ -349,7 +349,7 @@ test('the coverage aggregation job installs its locked compiler before classifyi
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   const section = workflow.split('  coverage-upload:\n')[1].split(/\n  [a-z][a-z-]*:/)[0]
   const bootstrap = section.indexOf('name: Install the locked patch-coverage compiler')
-  const gate = section.indexOf('name: Enforce the repository-owned 90% patch-coverage gate')
+  const gate = section.indexOf('name: Report repository patch coverage against its 90% target')
   assert.ok(bootstrap >= 0 && gate > bootstrap)
   const beforeGate = section.slice(0, gate)
   assert.match(beforeGate, /uses: pnpm\/action-setup@/)

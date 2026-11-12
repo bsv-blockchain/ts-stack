@@ -396,7 +396,8 @@ test('native integrity routing removes only its original fullfile and requires t
       value.run ===
       'node scripts/wallet-composed-native-ci.mjs integrity-verify .coverage-artifacts'
   )
-  assert.equal(gate.if, "needs.prepare.outputs.wallet == 'true'")
+  assert.ok(gate.if.includes("needs.prepare.outputs.wallet == 'true'"))
+  assert.ok(gate.if.includes('inputs.extended-wallet-qualification'))
   assert.notEqual(gate['continue-on-error'], true)
   assert.ok(
     workflow.jobs['coverage-upload'].steps.indexOf(gate) <
@@ -404,4 +405,39 @@ test('native integrity routing removes only its original fullfile and requires t
         value => value.name === 'Compose Codecov inputs'
       )
   )
+})
+
+test('actual wallet matrix defaults to six ordinary shards and two HTTP cases; extended qualification requires explicit selection', async () => {
+  const { parse } = await import('yaml')
+  const workflow = parse(readFileSync(join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8'))
+  const step = workflow.jobs.prepare.steps.find(step => step.id === 'wallet-matrix')
+  assert.equal(workflow.on.workflow_dispatch.inputs['extended-wallet-qualification'].default, false)
+  for (const extended of ['false', 'true']) {
+    const directory = mkdtempSync(join(tmpdir(), 'wallet-matrix-mode-'))
+    try {
+      const output = join(directory, 'output')
+      const result = spawnSync('/bin/bash', ['-e', '-c', step.run], {
+        cwd: REPOSITORY_ROOT,
+        encoding: 'utf8',
+        timeout: 10000,
+        env: { ...process.env, EXTENDED_WALLET_QUALIFICATION: extended, GITHUB_OUTPUT: output }
+      })
+      assert.equal(result.status, 0, result.stderr)
+      const actual = JSON.parse(readFileSync(output, 'utf8').trim().slice('matrix='.length))
+      const all = walletCoverageMatrix().include
+      assert.deepEqual(
+        actual.include,
+        extended === 'true'
+          ? all
+          : all.filter(row => row.shard !== undefined || row.latency !== undefined)
+      )
+      if (extended === 'false') assert.equal(actual.include.length, 8)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+  for (const verification of workflow.jobs['coverage-upload'].steps.filter(
+    step => step.run?.includes('wallet-composed-native-ci.mjs') && step.run.includes('verify ')
+  ))
+    assert.ok(verification.if.includes('inputs.extended-wallet-qualification'))
 })

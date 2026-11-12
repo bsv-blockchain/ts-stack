@@ -3,7 +3,7 @@ const fs = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
 const cp = require('node:child_process')
-const { parseQualificationArguments, qualifyBrc38NativeCandidate } = require('../../tools/Brc38NativeQualification.cjs')
+const { parseQualificationArguments, qualifyBrc38NativeCandidate, planLinuxQualificationHost, planUnixBootstrapHost } = require('../../tools/Brc38NativeQualification.cjs')
 
 test.each(
   [
@@ -154,4 +154,19 @@ test('compatibility CLI cohort-file reader binds metadata and bytes to one descr
     spy.mockRestore()
     await fs.rm(directory, { recursive: true, force: true })
   }
+})
+
+
+test.each(['v24.11.0', 'v24.18.0', 'v24.22.1'])('native worker accepts supported Node24 patch %s at ABI137', version => {
+  for (const architecture of ['arm64', 'x64']) {
+    expect(planLinuxQualificationHost('linux', architecture, version, '137').nodeVersion).toBe(version)
+    expect(planUnixBootstrapHost('darwin', architecture, version, '137').nodeVersion).toBe(version)
+  }
+})
+test.each([
+  ['v24.10.0', '137'], ['v22.22.0', '137'], ['v25.0.0', '137'],
+  ['v24.22.1', '136'], ['v24.22.1-unknown', '137']
+])('native worker refuses unsupported version/ABI %s/%s', (version, abi) => {
+  expect(() => planLinuxQualificationHost('linux', 'arm64', version, abi)).toThrow()
+  expect(() => planUnixBootstrapHost('darwin', 'arm64', version, abi)).toThrow()
 })
