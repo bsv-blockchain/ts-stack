@@ -83,16 +83,18 @@ test('mutation planning and engine controls stay in the explicit background audi
     new URL('../.github/workflows/mutation-tests.yml', import.meta.url),
     'utf8'
   )
-  assert.doesNotMatch(workflow, /mutation-partitions(?:-engine)?\.(?:background|integration)\.mjs/)
-  assert.match(
-    background,
-    /node --test scripts\/mutation-execution-batches\.background\.mjs scripts\/mutation-partitions\.background\.mjs scripts\/mutation-partitions-engine\.integration\.mjs/
+  assert.doesNotMatch(workflow, /background-tests|mutation-partitions-engine\.integration\.mjs/)
+  assert.ok(
+    background.includes(
+      'node --test scripts/background-tests/*.test.mjs scripts/mutation-partitions-engine.integration.mjs'
+    )
   )
-  assert.doesNotMatch(
-    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    /mutation-partitions\.background\.mjs/
-  )
-  assert.throws(() => readFileSync(new URL('./mutation-partitions.test.mjs', import.meta.url)))
+  for (const file of [
+    'mutation-partitions.test.mjs',
+    'mutation-execution-batches.test.mjs',
+    'ci-integration/sdk-auth-partitions.test.mjs'
+  ])
+    assert.throws(() => readFileSync(new URL('./' + file, import.meta.url)))
 })
 
 test('repository health installs real locked wallet compiler dependencies before config regressions', () => {

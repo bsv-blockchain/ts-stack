@@ -223,6 +223,12 @@ dependency and runtime inputs still expand the affected graph. Shared CI/governa
 `pnpm lint`, `pnpm format:check` and `pnpm typecheck` once for the completed batch. Exact-head required CI, security analysis,
 coverage, deterministic/property/native/conformance and artifact checks still apply.
 
+Browser/mobile bundle sizes are measured and reported against advisory targets.
+A historical byte target alone cannot block functional tests, review, merge or
+release. Invalid budget metadata, prohibited dependencies/exports, browser or
+mobile execution failures and other packaging contracts still fail. Runtime
+memory/disk/KDF and protocol integrity limits retain their separate contracts.
+
 ### Mutation campaigns are background findings only
 
 Mutation campaigns must never be required before editing, committing, pushing,

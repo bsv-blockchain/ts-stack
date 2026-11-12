@@ -8269,7 +8269,7 @@ repository's exact-head remote merge/analyzer gates remain required afterward.
 
 Mutation execution-plan and installed-engine controls now run only in the existing
 explicit background audit. The partition control file is preserved as
-`scripts/mutation-partitions.background.mjs`; the complete installed-engine
+`scripts/background-tests/mutation-partitions.test.mjs`; the complete installed-engine
 regressions remain unchanged. Neither source-plan freshness nor mutation tooling
 can prevent ordinary repository health or policy jobs from running. Product,
 coverage, native platform routing, security and result-gate checks remain in CI.

@@ -4,8 +4,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
-import { mutationExecutionMatrix, selectedMutationPartition } from './mutation-partitions.mjs'
+import { buildMutationTargets } from '../../governance/mutation-testing/targets.mjs'
+import { mutationExecutionMatrix, selectedMutationPartition } from '../mutation-partitions.mjs'
 import {
   mutationBuildIdentity,
   encodeMutationJSON,
@@ -15,8 +15,8 @@ import {
   verifyMutationExecutionBatches,
   verifyMutationExecutionIdentity,
   verifySelectedExecution
-} from './mutation-execution-batches.mjs'
-import { REPOSITORY_ROOT } from './repository-health.mjs'
+} from '../mutation-execution-batches.mjs'
+import { REPOSITORY_ROOT } from '../repository-health.mjs'
 
 const matrixFor = count => ({
   include: Array.from({ length: count }, (_, index) => ({

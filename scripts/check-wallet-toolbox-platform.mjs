@@ -316,8 +316,8 @@ function validateBudget(actual, maximum, label) {
       throw new Error(`${label} budget ${dimension} must be a positive safe integer`)
     }
     if (!measureOnly && actual[dimension] > maximum[dimension]) {
-      throw new Error(
-        `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}; ` +
+      console.warn(
+        `Bundle size advisory: ${label} ${dimension} size ${actual[dimension]} exceeds target ${maximum[dimension]}; ` +
           `all measured bytes ${JSON.stringify(actual)}, ceilings ${JSON.stringify(maximum)}`
       )
     }

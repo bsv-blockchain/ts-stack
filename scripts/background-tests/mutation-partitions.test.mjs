@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import test from 'node:test'
 
-import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { buildMutationTargets } from '../../governance/mutation-testing/targets.mjs'
 
 import { createHash } from 'node:crypto'
 
@@ -16,9 +16,9 @@ import {
   parseArguments,
   REPOSITORY_ROOT,
   selectAffectedMutationTargets
-} from './mutation-testing.mjs'
+} from '../mutation-testing.mjs'
 
-import { mutationExecutionBatches } from './mutation-execution-batches.mjs'
+import { mutationExecutionBatches } from '../mutation-execution-batches.mjs'
 
 import {
   partitionMutationTarget,
@@ -33,7 +33,7 @@ import {
   admitSchedulingPlans,
   schedulingTopology,
   semanticMutationStarts
-} from './mutation-partitions.mjs'
+} from '../mutation-partitions.mjs'
 
 const compareSpecifications = (left, right) => left.localeCompare(right)
 
@@ -83,7 +83,7 @@ const sourceLines = (target, specifications) =>
       const file = specification.replace(/:\d+(?:-\d+)?$/, '')
       const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
       const lines = readFileSync(
-        new URL(`../${target.packageDirectory}/${file}`, import.meta.url),
+        new URL(`../../${target.packageDirectory}/${file}`, import.meta.url),
         'utf8'
       ).split('\n').length
       const start = match ? Number(match[1]) : 1

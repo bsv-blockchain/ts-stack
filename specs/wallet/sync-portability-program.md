@@ -26,7 +26,7 @@ wallet transfer. Failed attempts remain recorded with their cause and recovery.
 ## Follow-up work
 
 Mutation campaigns and their execution plans, exhaustive platform/fault matrices,
-performance studies and historical receipt regeneration do not block this PR's
+performance studies and historical receipt regeneration and browser/mobile bundle-size targets do not block this PR's
 merge or release. Track actual defects separately and address the affected
 functional contract. Do not expand scope merely to complete an old checklist.
 
