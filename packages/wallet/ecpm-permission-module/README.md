@@ -38,10 +38,14 @@ const removed = await wallet.getPublicKey({
 })
 ```
 
-For both calls, the module derives the scalar under the canonical namespace
-`p ecpm mental poker deal`. The operation and point are deliberately excluded
-from the BRC-42 invoice so every point uses the same scalar and `remove`
-selects the inverse of the scalar used by `apply`.
+For both calls, the module derives a BRC-42/43 child key under the canonical
+namespace `p ecpm mental poker deal`, then maps it to the multiplication scalar
+by HKDF-SHA256 reduced into `[1, n)`. The child key is used only as HKDF input
+and is never returned, and the scalar is not linear in it: this prevents a
+counterparty who can compute the BRC-42 offset from stripping it off `d·Q` to
+recover the wallet's root ECDH secret. The operation and point are deliberately
+excluded from the derivation identity so every point uses the same scalar and
+`remove` selects the inverse of the scalar used by `apply`.
 
 ## Installation
 

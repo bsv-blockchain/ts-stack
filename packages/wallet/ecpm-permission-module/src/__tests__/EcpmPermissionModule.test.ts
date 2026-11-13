@@ -2,8 +2,10 @@ import {
   BigNumber,
   CachedKeyDeriver,
   Curve,
+  Hash,
   Point,
   PrivateKey,
+  Utils,
   type GetPublicKeyArgs,
   type PubKeyHex
 } from '@bsv/sdk'
@@ -73,7 +75,7 @@ describe('EcpmPermissionModule', () => {
     })
   })
 
-  it('agrees with direct multiplication by the canonical module-derived key', async () => {
+  it('multiplies by the HKDF hash of the canonical key, never the key itself', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(19))
     const module = new EcpmPermissionModule({ keyDeriver })
     const original = point(13)
@@ -82,14 +84,78 @@ describe('EcpmPermissionModule', () => {
       'deck mask',
       'self'
     )
-    const expected = curve.g
-      .mul(new BigNumber(13))
-      .mul(new BigNumber(derived.toHex(), 16))
-      .encode(true, 'hex')
+
+    // Reproduce the module's documented hash-to-scalar: HKDF-SHA256 over the
+    // 32-byte big-endian child key, reduced into [1, n).
+    const ikm = derived.toArray('be', 32) as number[]
+    const prk = Hash.sha256hmac(
+      Array.from(new TextEncoder().encode('BRC-229 p ecpm scalar v1')),
+      ikm
+    )
+    const info = Array.from(new TextEncoder().encode('BRC-229 p ecpm scalar'))
+    const okm: number[] = []
+    let block: number[] = []
+    let counter = 1
+    while (okm.length < 48) {
+      block = Hash.sha256hmac(prk, [...block, ...info, counter & 0xff])
+      okm.push(...block)
+      counter++
+    }
+    const scalar = new BigNumber(okm.slice(0, 48)).umod(curve.n)
+    const basePoint = curve.g.mul(new BigNumber(13))
+    const expected = basePoint.mul(scalar).encode(true, 'hex')
 
     await expect(execute(module, requestArgs(original))).resolves.toEqual({
       publicKey: expected
     })
+
+    // Regression guard (BRC-229 root-secret disclosure): the result MUST NOT be
+    // the point multiplied by the raw BRC-42 child key. Returning a scalar
+    // linear in the child key is exactly what let a counterparty strip the
+    // offset and recover the wallet's root ECDH secret.
+    const rawKeyProduct = basePoint
+      .mul(new BigNumber(derived.toHex(), 16))
+      .encode(true, 'hex')
+    expect(expected).not.toBe(rawKeyProduct)
+  })
+
+  it('does not disclose the root ECDH secret through a counterparty-point apply', async () => {
+    // Regression test for the BRC-229 root-secret disclosure. A caller sets the
+    // ECPM point to a third party's identity key Q and tries to strip the
+    // caller-computable BRC-42 offset `o` from the returned d·Q to recover
+    // root·Q = ECDH(root, Q) — the secret revealCounterpartyKeyLinkage guards.
+    // With the hashed scalar, the strip MUST fail.
+    const curveLocal = new Curve()
+    const root = new PrivateKey(123456789)
+    const identityPub = root.toPublicKey()
+    const keyDeriver = new CachedKeyDeriver(root)
+    const module = new EcpmPermissionModule({ keyDeriver })
+
+    const victim = new PrivateKey(987654321)
+    const Q = victim.toPublicKey()
+    const Qhex = Q.encode(true, 'hex') as PubKeyHex
+    const logical = 'mental poker deal'
+    const keyID = 'deck mask'
+
+    // counterparty 'anyone': shared secret is the wallet's own identity key, so
+    // the attacker can compute the offset from fully public data.
+    const applied = await execute(
+      module,
+      requestArgs(Qhex, 'apply', {
+        protocolID: [0, `p ecpm apply ${Qhex} ${logical}`],
+        keyID,
+        counterparty: 'anyone'
+      })
+    )
+    const dQ = Point.fromString(applied.publicKey)
+    const invoice = `0-p ecpm ${logical}-${keyID}`
+    const offset = new BigNumber(
+      Hash.sha256hmac(identityPub.encode(true), Utils.toArray(invoice, 'utf8'))
+    ).umod(curveLocal.n)
+    const stripped = dQ.add(Q.mul(offset).neg()).encode(true, 'hex')
+    const rootSecret = root.deriveSharedSecret(Q).encode(true, 'hex')
+
+    expect(stripped).not.toBe(rootSecret)
   })
 
   it('accepts the inclusive protocol, key, reason, TTL, and counterparty boundaries', async () => {

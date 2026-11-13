@@ -2,6 +2,7 @@ import type { GetPublicKeyArgs, PubKeyHex } from '@bsv/sdk'
 import BigNumber from '@bsv/sdk/primitives/BigNumber'
 import Curve from '@bsv/sdk/primitives/Curve'
 import Point from '@bsv/sdk/primitives/Point'
+import { sha256hmac } from '@bsv/sdk/primitives/Hash'
 import type {
   PermissionsModule,
   PermissionsModuleNext,
@@ -26,6 +27,20 @@ const MAX_ORIGINATOR_BYTES = 1024
 const ASCII_CONTROL = /[\0-\x1f\x7f]/
 const CURVE = new Curve()
 const UTF8 = new TextEncoder()
+
+// Hash-to-scalar domain separation for the canonical ECPM scalar. The scalar is
+// HKDF-SHA256(child private key) reduced into [1, n), NOT the BRC-42 child
+// private key itself. Returning a scalar linear in the child key would let a
+// counterparty who can compute the BRC-42 offset `o` strip it from `d·Q` and
+// recover the wallet's root ECDH secret `root·Q`; hashing breaks that linearity
+// while preserving commutativity and apply/remove round-trips, because both
+// depend only on the derived scalar being a deterministic function of the same
+// derivation identity. Mirrors BRC-206's "seed is HKDF input, never returned"
+// construction.
+const ECPM_SCALAR_SALT = UTF8.encode('BRC-229 p ecpm scalar v1')
+const ECPM_SCALAR_INFO = UTF8.encode('BRC-229 p ecpm scalar')
+// 48 bytes (384 bits) of OKM keeps the modular-reduction bias below 2^-128.
+const ECPM_SCALAR_OKM_BYTES = 48
 
 function dataRecord(value: unknown, label: string): Record<string, unknown> {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
@@ -121,8 +136,9 @@ export class EcpmPermissionModule implements PermissionsModule {
       parsed.keyID,
       parsed.counterparty
     )
+    const scalar = this.#deriveScalar(derivedKey)
     return {
-      publicKey: this.#multiply(parsed.decodedPoint, derivedKey, parsed.operation)
+      publicKey: this.#multiply(parsed.decodedPoint, scalar, parsed.operation)
     }
   }
 
@@ -310,14 +326,46 @@ export class EcpmPermissionModule implements PermissionsModule {
     return deriver
   }
 
+  /**
+   * Maps the BRC-42/43 child private key to the ECPM multiplication scalar by
+   * HKDF-SHA256, reduced into [1, n). The child key is used only as input keying
+   * material and is never exposed; the returned scalar is not linear in it, so a
+   * counterparty who can compute the BRC-42 offset cannot strip it from `d·Q` to
+   * recover the wallet's root ECDH secret. The mapping is deterministic in the
+   * derivation identity alone, so apply/remove round-trips and multi-wallet
+   * commutativity are preserved.
+   */
+  #deriveScalar(derivedKey: ReturnType<EcpmKeyDeriver['derivePrivateKey']>): BigNumber {
+    // IKM is the 32-byte big-endian child key, fixed width so the same child key
+    // always yields the same scalar regardless of leading zeros.
+    const ikm = derivedKey.toArray('be', 32) as number[]
+    // HKDF-Extract then HKDF-Expand (RFC 5869) with SHA-256.
+    const prk = sha256hmac(ECPM_SCALAR_SALT, ikm)
+    let info: number[] = [...ECPM_SCALAR_INFO]
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const okm: number[] = []
+      let block: number[] = []
+      let counter = 1
+      while (okm.length < ECPM_SCALAR_OKM_BYTES) {
+        block = sha256hmac(prk, [...block, ...info, counter & 0xff])
+        okm.push(...block)
+        counter++
+      }
+      const scalar = new BigNumber(okm.slice(0, ECPM_SCALAR_OKM_BYTES)).umod(CURVE.n)
+      if (!scalar.isZero()) return scalar
+      // Astronomically unlikely; re-expand under a distinct info on a zero result.
+      info = [...ECPM_SCALAR_INFO, attempt + 1]
+    }
+    throw new Error('ECPM: failed to derive a nonzero scalar')
+  }
+
   #multiply(
     point: Point,
-    derivedKey: ReturnType<EcpmKeyDeriver['derivePrivateKey']>,
+    scalar: BigNumber,
     operation: ParsedEcpmRequest['operation']
   ): PubKeyHex {
-    const scalar =
-      operation === 'remove' ? derivedKey.invm(CURVE.n) : new BigNumber(derivedKey.toHex(), 16)
-    const result = point.mul(scalar)
+    const effective = operation === 'remove' ? scalar.invm(CURVE.n) : scalar
+    const result = point.mul(effective)
     if (result.isInfinity()) {
       throw new Error('ECPM: result is the point at infinity')
     }
