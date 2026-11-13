@@ -15,6 +15,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+## LocalKVStore removal patch
+
+The 4.1.1 source candidate makes `LocalKVStore.remove` reject a wallet response
+with a positive `totalOutputs` and an empty page instead of repeatedly querying
+offset zero. The error identifies the key and reported total; rejection releases
+the per-key operation lock. An absent key still returns `[]`, and ordinary
+removal, `set` and `get` are unchanged. No API, wire or stored-data migration is
+required. This source candidate has not been published.
+
 ## GlobalKVStore tag-count compatibility patch
 
 The source candidate restores tag sets larger than 32 entries. Client creation,
