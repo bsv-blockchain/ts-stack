@@ -1,5 +1,14 @@
 # @bsv/wallet-toolbox-mobile
 
+## Coordinated 2.17.0 version
+
+The 2.17.0 source candidate preserves the required version lockstep with the core
+and browser client distributions. The new setup-factory `actionBatchMode` option
+belongs to those distributions; the mobile entry point exports neither `Setup`
+nor `SetupClient`. Existing mobile `Wallet` construction, its `actionBatchMode`
+option and default `auto` behavior remain unchanged. No mobile consumer or storage
+migration is required. Publication is separate from this source candidate.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/wallet-toolbox-mobile)](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/wallet-toolbox-mobile)](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)
 

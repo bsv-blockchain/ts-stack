@@ -1,5 +1,6 @@
 import { Knex, knex as makeKnex } from 'knex'
 import { KeyPairAddress, SetupWallet, SetupWalletClient } from './SetupWallet'
+import { SetupClient } from './SetupClient'
 import {
   BEEF,
   CachedKeyDeriver,
@@ -25,6 +26,7 @@ import { Services } from './services/Services'
 import { Monitor } from './monitor/Monitor'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { Wallet } from './Wallet'
+import type { ActionBatchMode } from './signer/actionBatch/ActionBatchWorkspace'
 import { StorageClient } from './storage/remoting/StorageClient'
 import { StorageKnex } from './storage/StorageKnex'
 import { WalletStorageProvider } from './sdk/WalletStorage.interfaces'
@@ -144,44 +146,17 @@ DEV_KEYS = '{
    * @publicbody
    */
   static async createWallet(args: SetupWalletArgs): Promise<SetupWallet> {
-    const chain = args.env.chain
     args.rootKeyHex ||= args.env.devKeys[args.env.identityKey]
-    const rootKey = PrivateKey.fromHex(args.rootKeyHex)
-    const identityKey = rootKey.toPublicKey().toString()
-    const keyDeriver = new CachedKeyDeriver(rootKey)
-    const storage = new WalletStorageManager(identityKey, args.active, args.backups)
-    if (storage.canMakeAvailable()) await storage.makeAvailable()
-    const serviceOptions = Services.createDefaultOptions(chain)
-    serviceOptions.taalApiKey = args.env.taalApiKey
-
-    // To rely on your own headers service, uncomment the following line, updating the url and apiKey to your own values.
-    // serviceOptions.chaintracks = new BHServiceClient('main', 'https://headers.spv.money', 'fC42F069YJs30FaWBAgikfDFEfIW1j4q')
-
-    const services = new Services(serviceOptions)
-    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, 'default')
-    const monitor = new Monitor(monopts)
-    const privilegedKeyManager =
-      args.privilegedKeyGetter != null ? new PrivilegedKeyManager(args.privilegedKeyGetter) : undefined
-    const wallet = new Wallet({
-      chain,
-      keyDeriver,
-      storage,
-      services,
-      monitor,
-      privilegedKeyManager,
-      scriptVerifier: args.scriptVerifier
+    return await SetupClient.createWallet({
+      chain: args.env.chain,
+      rootKeyHex: args.rootKeyHex,
+      taalApiKey: args.env.taalApiKey,
+      active: args.active,
+      backups: args.backups,
+      privilegedKeyGetter: args.privilegedKeyGetter,
+      scriptVerifier: args.scriptVerifier,
+      actionBatchMode: args.actionBatchMode
     })
-    const r: SetupWallet = {
-      rootKey,
-      identityKey,
-      keyDeriver,
-      chain,
-      storage,
-      services,
-      monitor,
-      wallet
-    }
-    return r
   }
 
   /**
@@ -498,6 +473,8 @@ export interface SetupWalletArgs {
   managedChangePolicy?: ManagedChangePolicyOptions
   /** Optional prepared-BEEF (COOK) rollout controls for Knex storage. */
   preparedBeef?: PreparedBeefOptions
+  /** Optional. Forwarded to `WalletArgs.actionBatchMode`; defaults to `auto`. */
+  actionBatchMode?: ActionBatchMode
 }
 
 /**
