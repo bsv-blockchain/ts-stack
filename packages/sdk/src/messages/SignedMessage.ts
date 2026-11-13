@@ -10,6 +10,10 @@ import {
   MAX_SIGNED_MESSAGE_BYTES,
   MIN_SIGNED_MESSAGE_BYTES
 } from './MessageValidation.js'
+import type {
+  OriginatorDomainNameStringUnder250Bytes,
+  WalletInterface
+} from '../wallet/Wallet.interfaces.js'
 
 const VERSION = '42423301'
 
@@ -51,18 +55,83 @@ export const sign = (message: number[], signer: PrivateKey, verifier?: PublicKey
 }
 
 /**
+ * Signs a message with the BRC-77 message signing protocol through a wallet, for an application
+ * that holds a `WalletInterface` rather than a private key. The wallet derives the same signing
+ * key as {@link sign} (protocol `[2, 'message signing']`, key ID the random 32-byte key ID), so
+ * the result verifies with {@link verify}.
+ * @param message The message to sign
+ * @param wallet The signer's wallet; its identity key is the signer
+ * @param [verifier] The public key of the person who can verify the message. If not provided, anyone will be able to verify the message signature.
+ * @param [originator] The originator passed to the wallet
+ *
+ * @returns The message signature.
+ */
+export const signWithWallet = async (
+  message: number[],
+  wallet: WalletInterface,
+  verifier?: PublicKey,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+): Promise<number[]> => {
+  const plaintext = copyMessageBytes(message, 'Message')
+  const verifierKey = verifier === undefined ? undefined : copyPublicKey(verifier, 'Verifier')
+  const keyID = Random(32)
+  const [{ signature }, { publicKey }] = await Promise.all([
+    wallet.createSignature(
+      {
+        data: plaintext,
+        protocolID: [2, 'message signing'],
+        keyID: toBase64(keyID),
+        counterparty: verifierKey?.toString() ?? 'anyone'
+      },
+      originator
+    ),
+    wallet.getPublicKey({ identityKey: true }, originator)
+  ])
+  return toArray(VERSION, 'hex').concat(
+    PublicKey.fromString(publicKey).encode(true) as number[],
+    verifierKey === undefined ? [0] : (verifierKey.encode(true) as number[]),
+    keyID,
+    signature
+  )
+}
+
+/** Options for {@link verify}. */
+export interface SignedMessageVerifyOptions {
+  /**
+   * The public key (or its hex) that must have signed the message. A valid signature by any
+   * other key verifies as `false`.
+   */
+  expectedSigner?: PublicKey | string
+}
+
+/**
  * Verifies a message using the BRC-77 message signing protocol.
  * @param message The message to verify.
  * @param sig The message signature to be verified.
  * @param [recipient] The private key of the message verifier. This can be omitted if the message is verifiable by anyone.
+ * @param [options] `expectedSigner`: the key that must have signed. Without it, any signer is accepted.
  *
  * @returns True if the message is verified.
  *
  * A valid signature authenticates the exact bytes and intended verifier, not
  * application purpose or freshness. Authorization messages must embed a domain,
- * audience, unique challenge, and expiry and must reject challenge reuse.
+ * audience, unique challenge, and expiry and must reject challenge reuse. Without
+ * `expectedSigner`, it also does not say who signed: the signer is whoever the
+ * signature names.
  */
-export const verify = (message: number[], sig: number[], recipient?: PrivateKey): boolean => {
+export const verify = (
+  message: number[],
+  sig: number[],
+  recipient?: PrivateKey,
+  options?: SignedMessageVerifyOptions
+): boolean => {
+  const expected = options?.expectedSigner
+  const expectedSigner =
+    expected === undefined
+      ? undefined
+      : typeof expected === 'string'
+        ? PublicKey.fromString(expected)
+        : copyPublicKey(expected, 'Expected signer')
   const plaintext = copyMessageBytes(message, 'Message')
   const signatureBytes = copyMessageBytes(
     sig,
@@ -76,6 +145,7 @@ export const verify = (message: number[], sig: number[], recipient?: PrivateKey)
     throw new Error(`Message version mismatch: Expected ${VERSION}, received ${messageVersion}`)
   }
   const signer = PublicKey.fromString(toHex(reader.read(33)))
+  if (expectedSigner !== undefined && signer.toString() !== expectedSigner.toString()) return false
   const [verifierFirst] = reader.read(1)
   let recipientKey: PrivateKey
   if (verifierFirst === 0) {
