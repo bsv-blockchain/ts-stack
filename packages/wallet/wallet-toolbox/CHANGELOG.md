@@ -1,3 +1,12 @@
+# Unreleased
+
+Fix permission-module action spending calculations to use the transformed inputs
+and outputs sent to the wallet. Preserve caller input descriptions by outpoint
+when modules reorder inputs, and output descriptions by their retained metadata,
+so spending-authorization line items retain the correct attribution. Amount
+validation, recipient verification and storage service-charge checks remain
+unchanged. No consumer or data migration is needed.
+
 # 2.16.0 unpublished integration candidate
 
 Reuse the existing bounded identity-group packet writer for direct local-to-remote
