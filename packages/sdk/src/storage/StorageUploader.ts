@@ -180,8 +180,39 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
     }
     declaredBytes = Number(declared)
   }
-  if (response.body == null) throw new Error('Storage provider returned an empty response.')
-  const reader = response.body.getReader()
+  let bytes: Uint8Array
+  if (response.body == null) {
+    // Compatibility for fetch implementations without a WHATWG body stream
+    // (such as React Native's). The declared length was checked above, but the
+    // body is only measured once it has been read.
+    if (typeof response.arrayBuffer !== 'function') {
+      throw new Error('Storage provider returned an empty response.')
+    }
+    bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
+      throw new Error('Storage provider response exceeds the configured size limit.')
+    }
+  } else {
+    bytes = await readBoundedBody(response.body, declaredBytes)
+  }
+  if (declaredBytes !== undefined && bytes.byteLength !== declaredBytes) {
+    throw new Error('Storage provider response differs from its declared length.')
+  }
+  try {
+    return providerRecord(JSON.parse(toUTF8Strict(bytes)))
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Storage provider returned')) {
+      throw error
+    }
+    throw new Error('Storage provider returned malformed JSON.', { cause: error })
+  }
+}
+
+async function readBoundedBody(
+  body: ReadableStream<Uint8Array>,
+  declaredBytes: number | undefined
+): Promise<Uint8Array> {
+  const reader = body.getReader()
   const chunks: Uint8Array[] = []
   let total = 0
   while (true) {
@@ -198,23 +229,13 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
     }
     chunks.push(value)
   }
-  if (declaredBytes !== undefined && total !== declaredBytes) {
-    throw new Error('Storage provider response differs from its declared length.')
-  }
   const bytes = new Uint8Array(total)
   let offset = 0
   for (const chunk of chunks) {
     bytes.set(chunk, offset)
     offset += chunk.length
   }
-  try {
-    return providerRecord(JSON.parse(toUTF8Strict(bytes)))
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Storage provider returned')) {
-      throw error
-    }
-    throw new Error('Storage provider returned malformed JSON.', { cause: error })
-  }
+  return bytes
 }
 
 function validateUploadHeaders(
