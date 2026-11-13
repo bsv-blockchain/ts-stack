@@ -8,10 +8,12 @@ import {
   challenge,
   deriveScalar,
   proveDleq,
+  proveOr,
   proveSchnorr,
   requestDigest,
   streamScalar,
   verifyDleq,
+  verifyOr,
   verifySchnorr
 } from '../sigma.js'
 
@@ -112,5 +114,50 @@ describe('schnorr and dleq proofs', () => {
     )
     expect(verifyDleq(P, H, ctx, [...proof.slice(0, 192), ...filled(32, 0)])).toBe(false)
     expect(verifyDleq(P, H, ctx, [...proof.slice(0, 192), ...filled(32, 255)])).toBe(false)
+  })
+
+  const others = [11, 13, 17].map(k => curve.g.mul(new BigNumber(k)))
+  it.each([
+    [2, 1],
+    [2, 2],
+    [4, 3]
+  ])('ring of %i with the prover at %i verifies', (n, index) => {
+    const ring = others.slice(0, n - 1)
+    ring.splice(index - 1, 0, P)
+    const proof = proveOr(x, ring, index, ctx)
+    expect(proof).toHaveLength(64 * n + 32 * n + 32 * (n - 1))
+    expect(verifyOr(ring, ctx, proof)).toBe(true)
+    expect(proveOr(x, ring, index, ctx)).toEqual(proof)
+  })
+  it('rejects a prover who is not in the ring', () => {
+    expect(verifyOr([others[0], others[1]], ctx, proveOr(x, [P, others[1]], 1, ctx))).toBe(false)
+  })
+  it('every returned scalar is in [1, n)', () => {
+    const proof = proveOr(x, [others[0], P], 2, ctx)
+    for (let o = 128; o < proof.length; o += 32) {
+      const v = new BigNumber(proof.slice(o, o + 32))
+      expect(v.gtn(0) && v.lt(curve.n)).toBe(true)
+    }
+  })
+  it('rejects a ring reordered after proving', () => {
+    expect(verifyOr([P, others[0]], ctx, proveOr(x, [others[0], P], 2, ctx))).toBe(false)
+  })
+  it('or verifier returns false for a wrong length, off-curve R and bad scalars', () => {
+    const ring = [others[0], P]
+    const proof = proveOr(x, ring, 2, ctx)
+    expect(verifyOr(ring, ctx, proof.slice(1))).toBe(false)
+    expect(verifyOr(ring, ctx, [...proof.slice(0, 63), proof[63] ^ 1, ...proof.slice(64)])).toBe(
+      false
+    )
+    expect(
+      verifyOr(ring, ctx, [...proof.slice(0, 128), ...filled(32, 0), ...proof.slice(160)])
+    ).toBe(false)
+    expect(
+      verifyOr(ring, ctx, [...proof.slice(0, 128), ...filled(32, 255), ...proof.slice(160)])
+    ).toBe(false)
+    expect(verifyOr(ring, ctx, [...proof.slice(0, 192), ...filled(32, 0)])).toBe(false)
+  })
+  it('refuses to prove for an out-of-range position', () => {
+    expect(() => proveOr(x, [others[0], P], 3, ctx)).toThrow()
   })
 })

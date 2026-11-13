@@ -140,3 +140,93 @@ export function verifyDleq(P: Point, H: Point, ctx: number[], result: number[]):
   ])
   return curve.g.mul(s).eq(R1.add(P.mul(e))) && H.mul(s).eq(R2.add(P2.mul(e)))
 }
+
+const ringBytes = (ring: Point[]): number[] => ring.flatMap(point64)
+
+/**
+ * One-of-n proof (CDS OR-proof) that the prover knows x for the point at 1-based
+ * `index` of `ring`. `ring[index - 1]` is trusted to be x·G. Result
+ * R_1..R_n || s_1..s_n || e_1..e_(n-1), 64n + 32n + 32(n - 1) bytes.
+ */
+export function proveOr(x: BigNumber, ring: Point[], index: number, ctx: number[]): number[] {
+  const count = ring.length
+  if (count < 2 || count > 8 || !Number.isInteger(index) || index < 1 || index > count) {
+    throw new Error('invalid ring or index')
+  }
+  const points = ringBytes(ring)
+  const q = requestDigest(3, [count, index, ...points], ctx)
+  attempts: for (let a = 0; ; a++) {
+    const e: BigNumber[] = []
+    const s: BigNumber[] = []
+    const R: number[][] = []
+    let sum = new BigNumber(0)
+    for (let j = 1; j <= count; j++) {
+      if (j === index) {
+        e.push(new BigNumber(0))
+        s.push(new BigNumber(0))
+        R.push([])
+        continue
+      }
+      const ej = streamScalar(x, q, a, 2, j)
+      const sj = streamScalar(x, q, a, 3, j)
+      const Rj = curve.g.mul(sj).add(ring[j - 1].mul(ej).neg())
+      if (Rj.isInfinity()) continue attempts
+      e.push(ej)
+      s.push(sj)
+      R.push(point64(Rj))
+      sum = sum.add(ej).umod(n)
+    }
+    const k = streamScalar(x, q, a, 1, index)
+    R[index - 1] = point64(curve.g.mul(k))
+    const total = challenge([...R.flat(), ...points, ...ctx])
+    const ei = total.sub(sum).umod(n)
+    if (ei.isZero()) continue
+    const si = k.add(ei.mul(x)).umod(n)
+    if (si.isZero()) continue
+    e[index - 1] = ei
+    s[index - 1] = si
+    return [...R.flat(), ...s.flatMap(scalar32), ...e.slice(0, count - 1).flatMap(scalar32)]
+  }
+}
+
+/** Verifies a one-of-n result against the ring. Never throws. */
+export function verifyOr(ring: Point[], ctx: number[], result: number[]): boolean {
+  try {
+    const count = ring.length
+    if (count < 2 || count > 8 || result.length !== 64 * count + 32 * count + 32 * (count - 1)) {
+      return false
+    }
+    const R: Point[] = []
+    for (let j = 0; j < count; j++) {
+      const point = readPoint64(result.slice(64 * j, 64 * j + 64))
+      if (point === undefined) return false
+      R.push(point)
+    }
+    const sOffset = 64 * count
+    const eOffset = sOffset + 32 * count
+    const s: BigNumber[] = []
+    for (let j = 0; j < count; j++) {
+      const v = readScalar(result.slice(sOffset + 32 * j, sOffset + 32 * j + 32))
+      if (v === undefined) return false
+      s.push(v)
+    }
+    const e: BigNumber[] = []
+    let sum = new BigNumber(0)
+    for (let j = 0; j < count - 1; j++) {
+      const v = readScalar(result.slice(eOffset + 32 * j, eOffset + 32 * j + 32))
+      if (v === undefined) return false
+      e.push(v)
+      sum = sum.add(v).umod(n)
+    }
+    const total = challenge([...result.slice(0, 64 * count), ...ringBytes(ring), ...ctx])
+    const last = total.sub(sum).umod(n)
+    if (last.isZero()) return false
+    e.push(last)
+    for (let j = 0; j < count; j++) {
+      if (!curve.g.mul(s[j]).eq(R[j].add(ring[j].mul(e[j])))) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
