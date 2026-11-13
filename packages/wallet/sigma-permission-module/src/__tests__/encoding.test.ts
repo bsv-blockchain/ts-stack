@@ -29,6 +29,20 @@ describe('sigma encoding', () => {
     expect(() => parsePoint33(bytes, 'point')).toThrow()
   })
 
+  it('refuses bytes that are not an array of integers from 0 to 255', () => {
+    const shifted = [...G33.slice(0, 32), G33[32] + 256]
+    for (const bytes of [
+      shifted,
+      [...G33.slice(0, 32), -1],
+      [...G33.slice(0, 32), 1.5],
+      [...G33.slice(0, 32), '1'],
+      'abc',
+      null
+    ]) {
+      expect(() => parsePoint33(bytes as number[], 'point')).toThrow(/point must be/)
+    }
+  })
+
   it('pads a scalar to 32 bytes', () => {
     expect(scalar32(new BigNumber(1))).toEqual([...filled(31, 0), 1])
   })

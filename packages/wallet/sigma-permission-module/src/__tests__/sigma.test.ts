@@ -63,6 +63,9 @@ describe('sigma scalar derivation and stream', () => {
     expect(Utils.toHex(scalar32(streamScalar(x, q, 0, 1, 0)))).toBe(
       '109bb891f974d7ea2fc46b98d8c66b891d32221e7ebe1eb1016ec7ba74cee227'
     )
+    expect(Utils.toHex(scalar32(streamScalar(x, q, 1, 1, 0)))).toBe(
+      '6346bc9c75f8641706db2e70bdc1c48088923db023c9350b8c03f307448789ac'
+    )
   })
 })
 
@@ -104,6 +107,17 @@ describe('schnorr and dleq proofs', () => {
   it('dleq rejects a proof whose P2 belongs to another scalar', () => {
     const forged = [...point64(H.mul(new BigNumber(9))), ...proveDleq(x, H, ctx).slice(64)]
     expect(verifyDleq(P, H, ctx, forged)).toBe(false)
+  })
+  it('dleq rejects a result whose first equation holds and whose second does not', () => {
+    const k = new BigNumber(23)
+    const R1 = point64(curve.g.mul(k))
+    const R2 = point64(H.mul(k))
+    const P2 = point64(H.mul(x.addn(1)))
+    const e = challenge([...R1, ...R2, ...point64(P), ...P2, ...point64(H), ...ctx])
+    const s = k.add(e.mul(x)).umod(curve.n)
+    expect(curve.g.mul(s).eq(curve.g.mul(k).add(P.mul(e)))).toBe(true)
+    expect(H.mul(s).eq(H.mul(k).add(H.mul(x.addn(1)).mul(e)))).toBe(false)
+    expect(verifyDleq(P, H, ctx, [...P2, ...R1, ...R2, ...scalar32(s)])).toBe(false)
   })
   it('dleq verifier returns false for a wrong length, off-curve P2 and bad scalars', () => {
     const proof = proveDleq(x, H, ctx)
@@ -157,7 +171,56 @@ describe('schnorr and dleq proofs', () => {
     ).toBe(false)
     expect(verifyOr(ring, ctx, [...proof.slice(0, 192), ...filled(32, 0)])).toBe(false)
   })
+  describe('or rejects one changed s_j or returned e_j, simulated or real', () => {
+    // Ring of three with the prover at 2: branches 1 and 3 are simulated, 2 is real.
+    // Layout: R_1..R_3 (192) || s_1..s_3 (96) || e_1, e_2 (64).
+    const ring = [others[0], P, others[1]]
+    const proof = proveOr(x, ring, 2, ctx)
+    const bump = (start: number): number[] => {
+      const v = new BigNumber(proof.slice(start, start + 32)).addn(1).umod(curve.n)
+      return [...proof.slice(0, start), ...scalar32(v), ...proof.slice(start + 32)]
+    }
+    it('the honest proof verifies', () => {
+      expect(verifyOr(ring, ctx, proof)).toBe(true)
+    })
+    it.each([
+      ['s_1, simulated', 192],
+      ['s_2, real', 224],
+      ['e_1, simulated', 288],
+      ['e_2, real', 320]
+    ])('%s', (_label, start) => {
+      const changed = bump(start)
+      const v = new BigNumber(changed.slice(start, start + 32))
+      expect(v.gtn(0) && v.lt(curve.n)).toBe(true)
+      expect(verifyOr(ring, ctx, changed)).toBe(false)
+    })
+  })
   it('refuses to prove for an out-of-range position', () => {
     expect(() => proveOr(x, [others[0], P], 3, ctx)).toThrow()
+  })
+  it('every verifier returns false for a result that is not an array', () => {
+    const ring = [others[0], P]
+    for (const result of ['abc', null, undefined, 42, { length: 96 }] as never[]) {
+      expect(verifySchnorr(P, ctx, result)).toBe(false)
+      expect(verifyDleq(P, H, ctx, result)).toBe(false)
+      expect(verifyOr(ring, ctx, result)).toBe(false)
+    }
+  })
+  it('every verifier returns false for a result containing a non-byte element', () => {
+    const ring = [others[0], P]
+    const replaceLast = (proof: number[], value: unknown): number[] =>
+      [...proof.slice(0, -1), value] as number[]
+    const schnorr = proveSchnorr(x, ctx)
+    const dleq = proveDleq(x, H, ctx)
+    const or = proveOr(x, ring, 2, ctx)
+    for (const value of [schnorr[95] + 256, -1, 1.5, '1']) {
+      expect(verifySchnorr(P, ctx, replaceLast(schnorr, value))).toBe(false)
+    }
+    for (const value of [dleq[223] + 256, -1, 1.5, '1']) {
+      expect(verifyDleq(P, H, ctx, replaceLast(dleq, value))).toBe(false)
+    }
+    for (const value of [or[or.length - 1] + 256, -1, 1.5, '1']) {
+      expect(verifyOr(ring, ctx, replaceLast(or, value))).toBe(false)
+    }
   })
 })

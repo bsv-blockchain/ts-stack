@@ -13,8 +13,19 @@ const MAX_RING = 8
 const bytesToHex = (bytes: number[]): string =>
   bytes.map(b => b.toString(16).padStart(2, '0')).join('')
 
+/** True for an array whose every index holds an integer from 0 to 255. */
+export function isBytes(value: unknown): value is number[] {
+  if (!Array.isArray(value)) return false
+  for (let i = 0; i < value.length; i++) {
+    const b: unknown = value[i]
+    if (typeof b !== 'number' || !Number.isInteger(b) || b < 0 || b > 255) return false
+  }
+  return true
+}
+
 /** Parses a 33-byte canonical compressed point: on the curve, not the identity. */
 export function parsePoint33(bytes: number[], label: string): Point {
+  if (!isBytes(bytes)) throw new TypeError(`${label} must be an array of integers from 0 to 255`)
   if (bytes.length !== 33) throw new Error(`${label} must be 33 bytes`)
   if (bytes[0] !== 0x02 && bytes[0] !== 0x03) throw new Error(`${label} must be a compressed point`)
   const x = bigIntOf(bytes.slice(1))

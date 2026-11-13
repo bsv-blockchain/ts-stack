@@ -4,7 +4,7 @@ import * as Hash from '@bsv/sdk/primitives/Hash'
 import type PrivateKey from '@bsv/sdk/primitives/PrivateKey'
 import * as Utils from '@bsv/sdk/primitives/utils'
 import Point from '@bsv/sdk/primitives/Point'
-import { point64, scalar32 } from './encoding.js'
+import { isBytes, point64, scalar32 } from './encoding.js'
 
 const curve = new Curve()
 const n = curve.n
@@ -99,12 +99,16 @@ export function proveSchnorr(x: BigNumber, ctx: number[]): number[] {
 
 /** Verifies a Schnorr result against the statement point P. Never throws. */
 export function verifySchnorr(P: Point, ctx: number[], result: number[]): boolean {
-  if (result.length !== 96) return false
-  const R = readPoint64(result.slice(0, 64))
-  const s = readScalar(result.slice(64))
-  if (R === undefined || s === undefined) return false
-  const e = challenge([...result.slice(0, 64), ...point64(P), ...ctx])
-  return curve.g.mul(s).eq(R.add(P.mul(e)))
+  try {
+    if (!isBytes(result) || result.length !== 96) return false
+    const R = readPoint64(result.slice(0, 64))
+    const s = readScalar(result.slice(64))
+    if (R === undefined || s === undefined) return false
+    const e = challenge([...result.slice(0, 64), ...point64(P), ...ctx])
+    return curve.g.mul(s).eq(R.add(P.mul(e)))
+  } catch {
+    return false
+  }
 }
 
 /** Chaum-Pedersen proof that P = x·G and P2 = x·H share x. Result P2 || R1 || R2 || s, 224 bytes. */
@@ -125,20 +129,24 @@ export function proveDleq(x: BigNumber, H: Point, ctx: number[]): number[] {
 
 /** Verifies a DLEQ result against the statement points P and H. Never throws. */
 export function verifyDleq(P: Point, H: Point, ctx: number[], result: number[]): boolean {
-  if (result.length !== 224) return false
-  const P2 = readPoint64(result.slice(0, 64))
-  const R1 = readPoint64(result.slice(64, 128))
-  const R2 = readPoint64(result.slice(128, 192))
-  const s = readScalar(result.slice(192))
-  if (P2 === undefined || R1 === undefined || R2 === undefined || s === undefined) return false
-  const e = challenge([
-    ...result.slice(64, 192),
-    ...point64(P),
-    ...result.slice(0, 64),
-    ...point64(H),
-    ...ctx
-  ])
-  return curve.g.mul(s).eq(R1.add(P.mul(e))) && H.mul(s).eq(R2.add(P2.mul(e)))
+  try {
+    if (!isBytes(result) || result.length !== 224) return false
+    const P2 = readPoint64(result.slice(0, 64))
+    const R1 = readPoint64(result.slice(64, 128))
+    const R2 = readPoint64(result.slice(128, 192))
+    const s = readScalar(result.slice(192))
+    if (P2 === undefined || R1 === undefined || R2 === undefined || s === undefined) return false
+    const e = challenge([
+      ...result.slice(64, 192),
+      ...point64(P),
+      ...result.slice(0, 64),
+      ...point64(H),
+      ...ctx
+    ])
+    return curve.g.mul(s).eq(R1.add(P.mul(e))) && H.mul(s).eq(R2.add(P2.mul(e)))
+  } catch {
+    return false
+  }
 }
 
 const ringBytes = (ring: Point[]): number[] => ring.flatMap(point64)
@@ -193,7 +201,12 @@ export function proveOr(x: BigNumber, ring: Point[], index: number, ctx: number[
 export function verifyOr(ring: Point[], ctx: number[], result: number[]): boolean {
   try {
     const count = ring.length
-    if (count < 2 || count > 8 || result.length !== 64 * count + 32 * count + 32 * (count - 1)) {
+    if (
+      count < 2 ||
+      count > 8 ||
+      !isBytes(result) ||
+      result.length !== 64 * count + 32 * count + 32 * (count - 1)
+    ) {
       return false
     }
     const R: Point[] = []

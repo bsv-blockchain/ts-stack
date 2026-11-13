@@ -237,8 +237,11 @@ export class SigmaPermissionModule implements PermissionsModule {
       }
       parsePoint33(Utils.toArray(counterparty, 'hex'), 'counterparty')
     }
+    if (args.privileged !== undefined && typeof args.privileged !== 'boolean') {
+      throw new TypeError('Sigma: privileged must be a boolean')
+    }
     const privileged = args.privileged === true
-    const privilegedReason = args.privilegedReason as string | undefined
+    const privilegedReason = privileged ? (args.privilegedReason as string | undefined) : undefined
     if (privileged) {
       if (typeof privilegedReason !== 'string') {
         throw new TypeError('Sigma: privilegedReason is required for privileged operations')

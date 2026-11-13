@@ -1,4 +1,4 @@
-import { BigNumber, CachedKeyDeriver, Curve, Hash, PrivateKey, Utils } from '@bsv/sdk'
+import { BigNumber, CachedKeyDeriver, Curve, Hash, KeyDeriver, PrivateKey, Utils } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import {
   createSigmaModule,
@@ -88,21 +88,18 @@ describe('SigmaPermissionModule operations', () => {
     expect(derive).toHaveBeenCalledTimes(4)
   })
 
-  it('scalar isolation: nothing computable from the identity key relates to the statement point', async () => {
-    const root = new PrivateKey(2)
+  it('scalar isolation: the statement point is not the public key of the derived child key', async () => {
     const m = make()
-    const invoice = '0-p sigma example payout-member 1'
-    const o = new BigNumber(
-      Hash.sha256hmac(root.toPublicKey().encode(true) as number[], Utils.toArray(invoice, 'utf8'))
-    )
-    const P = parsePoint33((await call(m, 'key', [], { counterparty: 'anyone' })).ciphertext, 'P')
-    expect(P.add(curve.g.mul(o).neg()).eq(root.toPublicKey())).toBe(false)
-    const xH = parsePoint33(
-      (await call(m, 'key', H33, { counterparty: 'anyone' })).ciphertext,
-      'xH'
-    )
-    const Hp = parsePoint33(H33, 'H')
-    expect(xH.add(Hp.mul(o).neg()).eq(Hp.mul(root))).toBe(false)
+    const deriver = new KeyDeriver(new PrivateKey(2))
+    for (const counterparty of ['self', 'anyone'] as const) {
+      const P = parsePoint33((await call(m, 'key', [], { counterparty })).ciphertext, 'P')
+      const child = deriver.derivePrivateKey(
+        [0, 'p sigma example payout'],
+        'member 1',
+        counterparty
+      )
+      expect(P.eq(child.toPublicKey())).toBe(false)
+    }
   })
 
   it('exports a factory', () => {
@@ -120,7 +117,7 @@ describe('SigmaPermissionModule request validation', () => {
     'createHmac',
     'verifySignature',
     'revealSpecificKeyLinkage'
-  ])('refuses %s under p sigma', async method => {
+  ])('the module refuses %s when a request for it is routed to the module', async method => {
     await expect(
       make().handleRequest(
         {
@@ -160,6 +157,7 @@ describe('SigmaPermissionModule request validation', () => {
     [{ keyID: 'x'.repeat(801) }, /800 bytes/],
     [{ privileged: true }, /privilegedReason/],
     [{ privileged: true, privilegedReason: 'bad' }, /between 5 and 50/],
+    [{ privileged: 'true', privilegedReason: 'Use protected key' }, /privileged must be a boolean/],
     [{ protocolID: [3, 'p sigma key example payout'] }, /invalid protocolID/],
     [{ protocolID: [0, 42] }, /invalid protocolID/],
     [{ protocolID: [0, 'p sigma key example payout', 'x'] }, /protocolID is required/],
@@ -274,7 +272,7 @@ describe('SigmaPermissionModule request validation', () => {
 })
 
 describe('SigmaPermissionModule authorisation', () => {
-  it('does not ask for level 0 requests and never asks before refusing malformed ones', async () => {
+  it('does not ask for level 0 requests', async () => {
     const authorize = jest.fn(async () => true)
     const m = new SigmaPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(8)),
@@ -547,6 +545,19 @@ describe('SigmaPermissionModule privileged requests', () => {
     resolvers[0]!(true)
     resolvers[1]!(true)
     expect((await Promise.all([first, second])).every(o => o.ok)).toBe(true)
+  })
+
+  it('does not pass a privilegedReason to the handler for a request that is not privileged', async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(76)),
+      authorize
+    })
+    await call(m, 'key', [], { ...levelOne('key'), privilegedReason: 'Unchecked reason text' })
+    await call(m, 'key', [], { ...levelOne('key'), privileged: false, privilegedReason: 42 })
+    expect(authorize).toHaveBeenCalledTimes(1)
+    expect(authorize.mock.calls[0]![0].privileged).toBe(false)
+    expect(authorize.mock.calls[0]![0].privilegedReason).toBeUndefined()
   })
 
   it('fails closed when a privileged key provider is missing or invalid', async () => {
