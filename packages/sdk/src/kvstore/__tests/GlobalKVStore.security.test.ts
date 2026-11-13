@@ -84,6 +84,20 @@ describe('GlobalKVStore overlay trust boundary', () => {
     )
   })
 
+  it('rejects an oversized tag field before requesting a funded wallet action', async () => {
+    const wallet = new ProtoWallet(PrivateKey.fromRandom())
+    const createAction = jest.fn()
+    const store = new GlobalKVStore({
+      wallet: Object.assign(wallet, { createAction }) as unknown as WalletInterface
+    })
+    const tags = Array.from({ length: 4096 }, (_, index) => `${index}:`.padEnd(256, 'x'))
+
+    await expect(store.set('large-batch', 'signed value', { tags })).rejects.toThrow(
+      'oversized field'
+    )
+    expect(createAction).not.toHaveBeenCalled()
+  })
+
   it('does not report success when every overlay rejects the transaction', async () => {
     const transaction = await overlayToken('wanted-key')
     const store = new GlobalKVStore({ wallet: {} as WalletInterface })

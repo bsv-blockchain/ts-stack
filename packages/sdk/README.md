@@ -8,6 +8,21 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## GlobalKVStore tag compatibility (4.1.1 patch candidate)
+
+GlobalKVStore has no fixed tag-count cap. A signed token may contain more than
+32 tags, and tag-filter queries preserve the entire supplied array. Each tag
+must remain a unique, non-empty string of at most 256 UTF-8 bytes. Existing
+token field/payload byte bounds, signature verification and controller/locking-key
+binding still apply. Wallet output tags and action labels are separate metadata
+and are unchanged. A non-array tag container raises `TypeError`, an `Error`
+subclass, with the existing diagnostic.
+
+To read or publish larger tag sets, upgrade both the application's SDK and the
+SDK used by the overlay, together with the updated `@bsv/overlay-topics` lookup
+service. Older SDK validators or lookup services may still reject more than
+32 tags. Existing token bytes and stored records do not need rewriting.
+
 ## Optional client timeouts (4.0.1 patch candidate)
 
 `LookupResolverConfig.trackerTimeoutMs` controls each SLAP discovery request;

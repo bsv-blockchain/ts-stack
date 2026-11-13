@@ -17,6 +17,20 @@ Use `@bsv/overlay` 2.6.4 or later to preserve explicitly selected history past
 confirmation. Wallet Toolbox 2.14.6 links that history so an older WAB support
 pin can remain a lineage anchor while a password or token update takes precedence.
 
+## KVStore tag compatibility (2.0.4 patch candidate)
+
+`tm_kvstore` admission and history verification accept signed tokens with more
+than 32 tags when paired with the SDK tag-count compatibility fix. `ls_kvstore`
+accepts complete tag-filter arrays without a fixed count cap for both `all` and
+`any` matching. Tags remain unique, non-empty strings of at most 256 UTF-8 bytes;
+existing token payload, request and pagination bounds remain in force. Other
+topics' query limits are unchanged.
+
+Upgrade the overlay's SDK and this package together, and upgrade client SDKs that
+create or decode these tokens. Installing only one side can leave an older
+32-tag validator in the path. No token re-signing, retagging or database migration
+is needed, and larger historical tag sets retain their full index metadata.
+
 ## DID overlay retirement (2.0 candidate)
 
 The proposed 2.0 release removes `DIDTopicManager`, `createDIDLookupService`,

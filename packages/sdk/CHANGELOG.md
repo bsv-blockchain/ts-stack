@@ -1,3 +1,16 @@
+# 4.1.1 unpublished patch candidate
+
+- A non-array tag container raises TypeError (an Error subclass) with the existing
+  diagnostic; valid tag arrays and other validation errors are unchanged.
+- Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries
+  and signed-token decoding. Larger tag arrays retain every entry.
+- Validate the freshly signed token before requesting a funded wallet action,
+  retaining token-byte-bound refusal before any spend.
+- Retain unique, non-empty strings, the 256-byte UTF-8 per-tag bound, signed-token
+  field/payload bounds and signature/controller checks. Wallet tags/labels are unchanged.
+- Pair client/overlay SDK4.1.1 with Overlay Topics2.0.4; existing stored token bytes
+  and records need no migration. Older validators may still reject larger tag sets.
+
 # 4.1.0 unpublished integration candidate
 
 Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
