@@ -29,6 +29,7 @@ const inRange = (candidate: number[]): BigNumber | undefined => {
 export function deriveScalar(childKey: PrivateKey): BigNumber {
   const prk = Hash.sha256hmac(utf8('p sigma v1'), childKey.toArray('be', 32))
   const info = utf8('p sigma v1 scalar')
+  // j is a single byte, so 256 candidates is the whole space.
   for (let j = 0; j < 256; j++) {
     const candidate = Hash.sha256hmac(prk, [...info, j, 1])
     const x = inRange(candidate)

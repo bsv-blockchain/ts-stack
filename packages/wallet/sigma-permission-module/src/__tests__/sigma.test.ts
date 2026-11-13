@@ -41,4 +41,16 @@ describe('sigma scalar derivation and stream', () => {
   it('requestDigest length-prefixes ctx', () => {
     expect(requestDigest(1, [1], [2, 3])).not.toEqual(requestDigest(1, [1, 2], [3]))
   })
+  // Literals produced independently with node:crypto from the specified layout.
+  it('matches known answers computed with node:crypto', () => {
+    const x = deriveScalar(new PrivateKey(5))
+    expect(Utils.toHex(scalar32(x))).toBe(
+      '5c7314aa3cf073631b2d9f6d9f589863682e924733ca525c03e22d85d36201cd'
+    )
+    const q = requestDigest(1, filled(64, 1), [9])
+    expect(Utils.toHex(q)).toBe('caf33561629551952c149054c03214565b306dfe5cfcd4f24a128e9685769c17')
+    expect(Utils.toHex(scalar32(streamScalar(x, q, 0, 1, 0)))).toBe(
+      '109bb891f974d7ea2fc46b98d8c66b891d32221e7ebe1eb1016ec7ba74cee227'
+    )
+  })
 })
