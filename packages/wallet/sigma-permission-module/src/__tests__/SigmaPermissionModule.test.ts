@@ -143,9 +143,7 @@ describe('SigmaPermissionModule request validation', () => {
     `p sigma schnorr ${'a'.repeat(273)}`,
     `p sigma schnorr ${'a'.repeat(100_000)}`
   ])('refuses the protocol name %s', async name => {
-    await expect(
-      call(make(), 'schnorr', ctx, { protocolID: [0, name.slice(0, 400)] })
-    ).rejects.toThrow()
+    await expect(call(make(), 'schnorr', ctx, { protocolID: [0, name] })).rejects.toThrow()
   })
 
   it('accepts the logical protocol length boundaries', async () => {
@@ -587,5 +585,73 @@ describe('SigmaPermissionModule options', () => {
     expect(
       () => new SigmaPermissionModule({ keyDeriver, authorizationTTL: 24 * 3600 * 1000 })
     ).not.toThrow()
+  })
+})
+
+describe('SigmaPermissionModule boundaries', () => {
+  const ringPoints = (count: number): number[] =>
+    Array.from({ length: count }, (_, i) => point33(10 + i)).flat()
+  const point33 = (k: number): number[] => curve.g.mul(new BigNumber(k)).encode(true) as number[]
+
+  it('refuses an uppercase compressed counterparty without deriving', async () => {
+    const derivePrivateKey = jest.fn<SigmaKeyDeriver['derivePrivateKey']>()
+    const m = new SigmaPermissionModule({ keyDeriver: { derivePrivateKey } })
+    const counterparty = new PrivateKey(41).toPublicKey().toString().toUpperCase()
+    await expect(call(m, 'key', [], { counterparty })).rejects.toThrow(/lowercase/)
+    expect(derivePrivateKey).not.toHaveBeenCalled()
+  })
+
+  it('refuses an absent originator', async () => {
+    await expect(
+      make().handleRequest(
+        {
+          method: 'encrypt',
+          originator: undefined as never,
+          args: { protocolID: [0, 'p sigma key example payout'], keyID: 'k', plaintext: [] }
+        },
+        next
+      )
+    ).rejects.toThrow(/originator is required/)
+  })
+
+  it('reads the plaintext length once, so a growing Proxy array cannot extend the copy', async () => {
+    let reads = 0
+    const plaintext = new Proxy([] as number[], {
+      get(target, prop) {
+        if (prop === 'length') return ++reads === 1 ? 4 : 1_000_000_000
+        if (typeof prop === 'string' && /^\d+$/.test(prop)) return 1
+        return Reflect.get(target, prop)
+      }
+    })
+    expect(Array.isArray(plaintext)).toBe(true)
+    const result = await call(make(), 'schnorr', plaintext)
+    expect(reads).toBe(1)
+    expect(
+      verifySchnorr(
+        parsePoint33((await call(make(), 'key', [])).ciphertext, 'P'),
+        [1, 1, 1, 1],
+        result.ciphertext
+      )
+    ).toBe(true)
+  })
+
+  it('accepts the longest valid protocol name and refuses one more character', async () => {
+    const name = (n: number): string => `p sigma schnorr ${'a'.repeat(n)}`
+    expect(name(272)).toHaveLength(288)
+    const result = await call(make(), 'schnorr', ctx, { protocolID: [0, name(272)] })
+    expect(result.ciphertext).toHaveLength(96)
+    await expect(call(make(), 'schnorr', ctx, { protocolID: [0, name(273)] })).rejects.toThrow()
+  })
+
+  it('accepts the longest valid or plaintext and refuses a 4,097-byte context', async () => {
+    const m = make()
+    const P = parsePoint33((await call(m, 'key', [])).ciphertext, 'P')
+    const bigCtx = Array.from({ length: 4096 }, (_, i) => i % 256)
+    const plaintext = [8, 1, ...ringPoints(7), ...bigCtx]
+    expect(plaintext).toHaveLength(4329)
+    const { ciphertext } = await call(m, 'or', plaintext)
+    const ring = [P, ...Array.from({ length: 7 }, (_, i) => parsePoint33(point33(10 + i), 'o'))]
+    expect(verifyOr(ring, bigCtx, ciphertext)).toBe(true)
+    await expect(call(m, 'or', [...plaintext, 0])).rejects.toThrow()
   })
 })

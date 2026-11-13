@@ -70,9 +70,10 @@ function dataRecord(value: unknown, label: string): Record<string, unknown> {
 
 function copyBytes(value: unknown): number[] {
   if (!Array.isArray(value)) throw new TypeError('Sigma: plaintext must be an array of bytes')
-  if (value.length > MAX_PLAINTEXT_BYTES) throw new Error('Sigma: plaintext is too long')
+  const length = value.length
+  if (length > MAX_PLAINTEXT_BYTES) throw new Error('Sigma: plaintext is too long')
   const bytes: number[] = []
-  for (let i = 0; i < value.length; i++) {
+  for (let i = 0; i < length; i++) {
     const element: unknown = value[i]
     if (typeof element !== 'number' || !Number.isInteger(element) || element < 0 || element > 255) {
       throw new TypeError('Sigma: plaintext must contain only integers from 0 to 255')
