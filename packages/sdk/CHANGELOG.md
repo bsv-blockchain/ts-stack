@@ -281,6 +281,15 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Added: configurable `LivePolicy` endpoint and HTTP client (patch candidate)
+
+- `new LivePolicy(cacheValidityMs, { policyUrl, httpClient })` reads the fee
+  rate from any ARC-compatible `/v1/policy` endpoint, such as the broadcaster
+  in use or a testnet ARC, through an injected `HttpClient`. Both are optional;
+  without them the request goes to GorillaPool's mainnet ARC through
+  `defaultHttpClient()` as before, and `LivePolicy.getInstance()` is unchanged.
+  The URL must be an absolute http(s) URL and the client must have `request()`.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
