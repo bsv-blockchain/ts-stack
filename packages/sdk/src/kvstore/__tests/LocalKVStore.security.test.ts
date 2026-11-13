@@ -148,6 +148,17 @@ describe('LocalKVStore.remove empty page', () => {
     expect(listOutputs).toHaveBeenCalledTimes(1)
   })
 
+  it('releases the key lock after rejecting an inconsistent empty page', async () => {
+    const { wallet, listOutputs } = pageWallet(7)
+    const store = new LocalKVStore(wallet, context, false)
+
+    await expect(store.remove(key)).rejects.toThrow('empty page (offset 0)')
+    listOutputs.mockResolvedValue({ totalOutputs: 0, outputs: [] })
+
+    await expect(store.remove(key)).resolves.toEqual([])
+    expect(listOutputs).toHaveBeenCalledTimes(2)
+  })
+
   it('still returns the default from get when the page is empty under a positive total', async () => {
     const { wallet, listOutputs } = pageWallet(7)
     const store = new LocalKVStore(wallet, context, false)

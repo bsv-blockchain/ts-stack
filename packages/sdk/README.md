@@ -8,6 +8,14 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## LocalKVStore removal (4.1.1 patch candidate)
+
+`LocalKVStore.remove` rejects if the wallet reports a positive `totalOutputs`
+but returns an empty page, instead of repeating the same request indefinitely.
+The error identifies the key, total and offset, and the per-key operation lock
+is released. An absent key still returns `[]`; ordinary removal, `set` and
+`get` retain their behavior. No API, wire or stored-data migration is required.
+
 ## GlobalKVStore tag compatibility (4.1.1 patch candidate)
 
 GlobalKVStore has no fixed tag-count cap. A signed token may contain more than
