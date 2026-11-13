@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.16.0'
-last_updated: '2026-11-09'
-last_verified: '2026-11-09'
+version: '2.17.0'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -14,6 +14,37 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Setup factory action batching
+
+The 2.17.0 source candidate adds optional `actionBatchMode` to the `SetupClient`
+factory arguments. Select `legacy` when your application broadcasts
+its own `noSend` transactions and needs the existing per-action storage path:
+
+```ts
+import { SetupClient, type SetupClientWalletArgs } from '@bsv/wallet-toolbox-client'
+
+declare const options: SetupClientWalletArgs
+const { wallet } = await SetupClient.createWallet({ ...options, actionBatchMode: 'legacy' })
+```
+
+The Node package exposes the same option. Omission keeps `auto`,
+including its existing storage-capability negotiation and fallback. When batching
+is available, related signed `noSend` actions can remain staged until a subsequent
+batch commit. The new option does not recover previously discarded batches or
+change signing, BRC-100 calls or database schemas. Existing consumers need no
+migration; package publication and consumer upgrades are separate steps.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and

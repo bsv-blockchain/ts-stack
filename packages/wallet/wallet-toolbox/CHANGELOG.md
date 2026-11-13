@@ -1,4 +1,15 @@
-# Unreleased
+# 2.17.0 source candidate
+
+- Add optional `actionBatchMode` to Node and browser setup-factory arguments and
+  forward it to the existing Wallet controller. Explicit `legacy` selects
+  per-action persistence for callers that broadcast their own `noSend`
+  transactions; omission keeps `auto` and its existing negotiation and fallback.
+- Preserve root-key selection, active/backup storage, service configuration,
+  privileged-key lookup and script verification when Node `Setup.createWallet`
+  delegates to `SetupClient.createWallet`.
+- Keep core, client and mobile package versions aligned with the existing nested
+  package policy. The mobile entry point does not expose the setup factories;
+  its existing Wallet construction and default action-batch mode remain unchanged.
 
 Fix permission-module action spending calculations to use the transformed inputs
 and outputs sent to the wallet. Preserve caller input descriptions by outpoint
@@ -7,7 +18,12 @@ so spending-authorization line items retain the correct attribution. Amount
 validation, recipient verification and storage service-charge checks remain
 unchanged. No consumer or data migration is needed.
 
-# 2.16.0 unpublished integration candidate
+This is a minor release for the additive public factory option. Existing callers
+need no migration. No wire or schema change is introduced, and previously
+uncommitted in-memory batches are not recovered by selecting a different mode.
+Publication and service or application upgrades remain separate actions.
+
+# 2.16.0 — published 2026-11-13
 
 Reuse the existing bounded identity-group packet writer for direct local-to-remote
 journal uploads. Small per-change notifications share up to 128 identities/one

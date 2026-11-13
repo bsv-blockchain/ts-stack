@@ -1,5 +1,25 @@
 # @bsv/wallet-toolbox-mobile
 
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Coordinated 2.17.0 version
+
+The 2.17.0 source candidate preserves the required version lockstep with the core
+and browser client distributions. The new setup-factory `actionBatchMode` option
+belongs to those distributions; the mobile entry point exports neither `Setup`
+nor `SetupClient`. Existing mobile `Wallet` construction, its `actionBatchMode`
+option and default `auto` behavior remain unchanged. No mobile consumer or storage
+migration is required. Publication is separate from this source candidate.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/wallet-toolbox-mobile)](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/wallet-toolbox-mobile)](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile)
 
