@@ -6,7 +6,7 @@ domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.17.0'
 last_updated: '2026-11-13'
-last_verified: '2026-11-09'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
