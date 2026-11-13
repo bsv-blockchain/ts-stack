@@ -1,3 +1,5 @@
+import { installBrowserArgon2idWorker } from '../installBrowserArgon2idWorker'
+import * as hashWasm from '../hashWasm'
 import {
   readyArgon2idBackend,
   registerArgon2idBackend,
@@ -152,5 +154,81 @@ describe('Argon2idBackend', () => {
     expect(() => validateArgon2idResult('not bytes' as unknown as Uint8Array, 4)).toThrow(
       'Argon2id backend returned a non-byte result'
     )
+  })
+})
+
+// Only rejection is simulated here. Successful KDF/NFC/cancellation and native
+// channel metadata are verified by BrowserArgon2idWorker.native.test.cjs.
+describe('dedicated worker channel rejection', () => {
+  const names = ['postMessage', 'close', 'addEventListener'] as const
+  const originals = new Map<string, PropertyDescriptor | undefined>()
+  const post = jest.fn(),
+    close = jest.fn(),
+    listen = jest.fn()
+  const invalid = [
+    { label: 'nonempty origin', origin: 'https://example.invalid', source: null, isTrusted: true },
+    { label: 'nonnull source', origin: '', source: {}, isTrusted: true },
+    { label: 'synthetic event', origin: '', source: null, isTrusted: false }
+  ]
+  beforeEach(() => {
+    for (const [name, value] of [
+      ['postMessage', post],
+      ['close', close],
+      ['addEventListener', listen]
+    ] as const) {
+      originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
+      Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
+    }
+    post.mockClear()
+    close.mockClear()
+    listen.mockClear()
+  })
+  afterEach(() => {
+    jest.restoreAllMocks()
+    for (const name of names) {
+      const descriptor = originals.get(name)
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else Reflect.deleteProperty(globalThis, name)
+    }
+  })
+  test.each(invalid)('installer rejects $label before a request derivation', async metadata => {
+    const derive = jest.spyOn(hashWasm, 'argon2id').mockResolvedValue(new Uint8Array(32))
+    installBrowserArgon2idWorker({
+      maximumPasswordBytes: 1024,
+      maximumIterations: 7,
+      maximumMemoryKiB: 131072,
+      maximumParallelism: 1,
+      maximumMilliseconds: 30000
+    })
+    await new Promise(resolve => setImmediate(resolve))
+    expect(post).toHaveBeenCalledWith({ type: 'ready', version: 1 }, [])
+    expect(derive).toHaveBeenCalledTimes(1)
+    expect(listen).toHaveBeenCalledWith('message', expect.any(Function), { once: true })
+    const request = {
+      type: 'derive',
+      password: new ArrayBuffer(1),
+      salt: new ArrayBuffer(8),
+      iterations: 1,
+      memorySize: 8,
+      parallelism: 1,
+      hashLength: 32
+    }
+    listen.mock.calls[0][1]({ ...metadata, data: request })
+    await new Promise(resolve => setImmediate(resolve))
+    expect(derive).toHaveBeenCalledTimes(1)
+    expect(post.mock.calls.map(call => call[0])).toEqual([{ type: 'ready', version: 1 }, { type: 'failed' }])
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+  test.each(invalid)('coverage bootstrap rejects $label before installing the KDF', metadata => {
+    jest.isolateModules(() => {
+      const installer = require('../installBrowserArgon2idWorker') as typeof import('../installBrowserArgon2idWorker')
+      const install = jest.spyOn(installer, 'installBrowserArgon2idWorker').mockImplementation(() => {})
+      require('../../../client/test/argon2id-coverage-worker')
+      expect(listen).toHaveBeenCalledWith('message', expect.any(Function), { once: true })
+      listen.mock.calls[0][1]({ ...metadata, data: 'coverage-bootstrap-v1', ports: [{ postMessage: jest.fn() }] })
+      expect(install).not.toHaveBeenCalled()
+      expect(post).not.toHaveBeenCalled()
+      expect(close).toHaveBeenCalledTimes(1)
+    })
   })
 })

@@ -16,6 +16,8 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 # @bsv/message-box-client
 
+The unpublished 2.6 candidate accepts strict bounded base64 transaction bytes at the PeerPay receive boundary, alongside deployed array/byte representations. Outgoing encoding stays unchanged. This does not remove encrypted relay message limits or provide a durable settlement journal.
+
 This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.

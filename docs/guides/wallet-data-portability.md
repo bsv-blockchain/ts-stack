@@ -3,8 +3,8 @@ id: wallet-data-portability
 title: 'BRC-38/39 Wallet Data Portability'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, interoperability, brc38, brc39]
@@ -35,6 +35,61 @@ upgrading. Pending sync work, including
 [#569](https://github.com/bsv-blockchain/ts-stack/pull/569), is not an available
 API contract for this guide.
 
+### Unpublished 2.15 source-capture checkpoint
+
+PR #569 now captures BRC-38 source metadata, user and all standard table reads
+inside one provider read view. SQLite uses one transaction; MySQL explicitly
+requests repeatable-read isolation; IndexedDB uses one readonly transaction
+covering settings and the wallet stores. SQLite WAL permits an independent
+writer during capture. IndexedDB queues overlapping writers until capture ends;
+this checkpoint does not claim bounded foreground write latency for that phase.
+A local MySQL 8.4.11 fixture with independent connections verifies source
+isolation, enforced read-only access, unchanged session defaults and failure
+cleanup. This is not deployed-provider or PXC recovery qualification.
+
+Pass `{ requireSnapshot: true }` to `exportBRC38`, `exportBRC38Json` or the
+`exportBRC39` options to require a coherent source view. Custom `StorageProvider`
+implementations opt in with `supportsReadSnapshot()` and `readSnapshot(callback)`
+and must honor the token on every query. A required but unsupported snapshot
+is refused before table capture. Without that option, old custom providers retain
+the documented caller-quiesced legacy path; it does not gain a snapshot guarantee.
+The callback is for database capture only, without peer I/O or progress handlers.
+Source JSON history omits null/undefined values only for recognized optional
+object properties in a detached copy, retaining false, zero, empty strings and
+every array position. Required values remain subject to validation. A null array
+entry is rejected rather than dropped. The source records are not rewritten.
+
+The candidate also adds a local SQL `openReadSnapshot` lifetime with explicit
+close/cancellation/expiry and one read at a time. It retains a pinned transaction
+across idle periods and occupies a pool connection until physical cleanup.
+IndexedDB and remote clients do not gain this capability. The existing export
+helpers continue to use their scoped capture path; see
+[retained SQL view limits](wallet-sync-reliability.md#retained-local-sql-read-views-unpublished-candidate).
+
+This is an unpublished source candidate. The legacy materialized helpers below
+still allocate the full document/file. The optional streaming entries described
+below provide component limits; remote snapshot handles, durable staged recovery,
+platform adapters and push/backup scheduling remain required parts of the
+[full implementation program](https://github.com/bsv-blockchain/ts-stack/blob/codex/wallet-sync-interop-reliability/specs/wallet/sync-portability-program.md).
+
+### Unpublished bounded streaming entries
+
+The 2.15 candidate adds `@bsv/wallet-toolbox/portable` for bounded canonical value/row projection, the all-thirteen-table BRC-38 encoder and private JSON staging reader, and BRC-39 framing. `@bsv/wallet-toolbox/portable/node` additionally provides `openBrc38KnexSource`, native AES-GCM encryption/decryption and `createBrc39NodeFileQuarantine`. The existing materialized helpers and browser/mobile roots retain their contracts.
+
+Supply explicit row, page, metadata, chunk, archive, password and KDF ceilings. `openBrc38KnexSource` requires a dedicated compatible SQLite/MySQL reader provider and keeps source settings, identity, sync state and all thirteen table streams in one retained read view. A slow consumer occupies that provider until cleanup; use an independent foreground provider. The built-in SQL source validates closure in that same view before and after complete traversal. Host-defined sources must implement their own independent complete semantic/provenance validation and awaited cleanup.
+
+Encryption emits the existing WDAT envelope with canonical Argon2id defaults (7 iterations, 131072 KiB, parallelism 1), fresh 32-byte salt/nonce, NFC password bytes and a 16-byte GCM tag. New exports refuse weaker strength. Decryption admits valid legacy parameter values only within caller-selected work ceilings and supported native nonce lengths; the materialized codec remains available with its existing input contract. Progress and cancellation occur between owned operations; an already running KDF or file/database operation settles before cleanup. Source validation and physical close must succeed before the final encryption tag. Output remains private until the host completes its durable save transaction.
+
+Decryption writes only into isolated quarantine. GCM authentication must precede strict UTF-8 and complete BRC-38 semantic validation. `createBrc39NodeFileQuarantine` uses a caller-owned trusted parent, private 0700/0600 files, bounded serial reads/writes, fsync, content verification and explicit awaited `discard()`. Its `withAuthenticatedChunks` callback is available after validation and closes its reader even on early return. Always discard after the host operation settles. It does not import, activate a profile or provide a durable recovery transaction. `readBrc38JsonStream` likewise accepts authenticated plaintext and awaits one private staging callback at a time; its host validator must check every staged row, unique key, relation, identity, network and original provenance before a result can be used.
+
+The BRC-39 frame returns owned ciphertext buffers, including when input comes from Node Buffers or Buffer subviews. Callers may reuse their input chunks after `accept()` returns; changing emitted bytes does not alter the frame's retained tag or later output.
+
+These entry points bound each component's admitted work and buffers. They do not establish native allocator/RSS/IPC bounds, hard database/WAL/directory quotas, durable occupied-target restore, replicated remote export destinations, or physical mobile qualification. Those remain mandatory in the full #544 program. No pending intermediate API is a released production guarantee.
+
+A selected host Argon2id backend must return a fresh owned 32-byte key buffer
+for each streaming operation. The Node streaming adapter consumes and wipes
+that buffer after success or failure; a backend must not reuse it between calls.
+
 ## Coverage and limits
 
 The implementation exports one `user`, its `sourceStorage` metadata and 13
@@ -50,7 +105,23 @@ profiles, storage-global monitor events, or product data held outside these
 tables. Inventory contacts, permissions, external files and custom signing
 dependencies in your product before describing its backup coverage.
 
-The current helpers read multiple tables and materialize the complete document
+This exclusion also applies to application-owned tables in the **same database**:
+reports, sessions and other custom tables are not discovered or copied by the
+portable helpers. Preserving an output does not preserve its application meaning
+when that meaning exists only in a custom table. Use standard baskets, tags,
+labels and their relationships where their semantics fit; otherwise provide a
+separately versioned application export/import and test its links to restored
+outpoints. Distinguish durable user content from disposable sessions, caches and
+credentials, which must not be copied indiscriminately. A successful wallet
+import must disclose any missing application context.
+
+For an older source wallet, check its installed exports and schema before
+planning a drill. If the required helpers are absent, preserve the original and
+qualify an isolated copy through the supported migration/export path. Record
+both versions; importing a file on the candidate does not prove that an older
+wallet can produce that file unchanged.
+
+The released helpers read multiple tables and materialize the complete document
 and encrypted file in memory. They do not take a database-wide snapshot,
 provide streaming archive I/O, expose an archive progress/cancellation API, or
 promise a coherent view while other writers change the source. Use a stable

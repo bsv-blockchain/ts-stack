@@ -42,7 +42,7 @@ describe('BulkFileDataManager metadata boundaries', () => {
   })
 
   test('rejects missing or accessor-backed metadata without invoking accessors', () => {
-    const missing = file() as Record<string, unknown>
+    const missing: Partial<BulkHeaderFileInfo> = file()
     delete missing.count
     expect(() => normalizeBulkHeaderFileInfo(missing)).toThrow('bulk file count')
 

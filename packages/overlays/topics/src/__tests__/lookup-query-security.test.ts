@@ -8,7 +8,7 @@ import { Bsv21LookupService } from '../bsv21/Bsv21LookupService.js'
 import { Bsv21StorageManager } from '../bsv21/Bsv21StorageManager.js'
 import { BasketMapLookupService } from '../basketmap/BasketMapLookupService.js'
 import { BasketMapStorageManager } from '../basketmap/BasketMapStorageManager.js'
-import { requireTokenId } from '../shared/queryValidation.js'
+import { readStringArray, requireTokenId } from '../shared/queryValidation.js'
 
 const IDENTITY_KEY = `02${'11'.repeat(32)}`
 const CERTIFIER_KEY = `03${'22'.repeat(32)}`
@@ -297,5 +297,30 @@ describe('requireTokenId', () => {
     expect(() => requireTokenId(value, 'metadataTokenId')).toThrow(
       'Invalid lookup query: metadataTokenId must be a token id (<64 lowercase hex>_0)'
     )
+  })
+})
+
+describe('lookup string-array count policy', () => {
+  const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+
+  it('preserves the default count bound for other lookup protocols', () => {
+    expect(() => readStringArray({ tags }, 'tags')).toThrow('1-32 strings')
+    expect(readStringArray({ tags: tags.slice(0, 32) }, 'tags')).toEqual(tags.slice(0, 32))
+  })
+
+  it('allows an explicit no-count-cap policy without dropping tags', () => {
+    expect(readStringArray({ tags }, 'tags', { maxItems: null, maxItemBytes: 256 })).toEqual(tags)
+  })
+
+  it.each([
+    { tags: [] },
+    { tags: [''] },
+    { tags: ['duplicate', 'duplicate'] },
+    { tags: ['é'.repeat(129)] },
+    { tags: [42] }
+  ])('preserves tag shape, uniqueness and byte bounds: $tags', ({ tags: value }) => {
+    expect(() =>
+      readStringArray({ tags: value }, 'tags', { maxItems: null, maxItemBytes: 256 })
+    ).toThrow()
   })
 })

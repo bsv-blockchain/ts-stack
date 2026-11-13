@@ -13,7 +13,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { KeyPairAddress, SetupClientWalletArgs, SetupWallet, SetupWalletClient } from './SetupWallet'
 import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { StorageIdb } from './storage/StorageIdb'
@@ -91,7 +91,7 @@ export abstract class SetupClient {
     rootKeyHex: string
     storageUrl?: string
     privilegedKeyGetter?: () => Promise<PrivateKey>
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<Wallet> {
     const chain = args.chain
     const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`

@@ -14,7 +14,8 @@
     "../src/types/hash-wasm-subpaths.d.ts",
     "test/**/*.ts",
     "tsdown.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "argon2id-worker.ts"
   ],
   "exclude": ["node_modules", "out", "../out", "../mobile/out"]
 }

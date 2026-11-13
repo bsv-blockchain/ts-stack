@@ -55,8 +55,8 @@ describe('ChaintracksClientApi deterministic contract', () => {
     const bulkWoc = options.bulkIngestors.find(
       ingestor => ingestor instanceof BulkIngestorWhatsOnChainCdn
     ) as BulkIngestorWhatsOnChainCdn
-    WhatsOnChainServices.chainInfo[chain] = undefined
-    WhatsOnChainServices.chainInfoTime[chain] = undefined
+    Reflect.set(WhatsOnChainServices.chainInfo, chain, undefined)
+    Reflect.set(WhatsOnChainServices.chainInfoTime, chain, undefined)
     bulkWoc.woc.woc.getChainInfo = async () => ({
       chain,
       blocks: headers.at(-1)!.height,

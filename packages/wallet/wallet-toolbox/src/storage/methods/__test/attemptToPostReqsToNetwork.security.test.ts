@@ -3,10 +3,10 @@ import { classifyBroadcastInputSpendEvidence } from '../attemptToPostReqsToNetwo
 
 function fixture(): { beef: Beef; spend: Transaction; outpoint: string } {
   const source = new Transaction()
-  source.addOutput({ satoshis: 1000, lockingScript: new LockingScript([0x51]) })
+  source.addOutput({ satoshis: 1000, lockingScript: LockingScript.fromBinary([0x51]) })
   const spend = new Transaction()
   spend.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
-  spend.addOutput({ satoshis: 900, lockingScript: new LockingScript([0x51]) })
+  spend.addOutput({ satoshis: 900, lockingScript: LockingScript.fromBinary([0x51]) })
   const beef = new Beef()
   beef.mergeTransaction(source)
   beef.mergeTransaction(spend)

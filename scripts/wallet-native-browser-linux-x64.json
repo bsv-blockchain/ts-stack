@@ -1,0 +1,13 @@
+{
+  "archiveBytes": 198195769,
+  "archiveSha256": "55672d1f392fd3e7b7a08621b6e804e6bcb39d40cf155504abb74b3a021ea8ea",
+  "buildId": "155.0.8059.39",
+  "platform": "linux64",
+  "archiveEntries": 309,
+  "expandedBytes": 416502722,
+  "executableRelativePath": "chrome-linux64/chrome",
+  "executableBytes": 297680200,
+  "executableSha256": "ed05e73a2cdf875326fcfa438b31c71a6a885a353610731dd52090dfc476f778",
+  "url": "https://storage.googleapis.com/chrome-for-testing-public/155.0.8059.39/linux64/chrome-linux64.zip",
+  "deliveryOnly": true
+}

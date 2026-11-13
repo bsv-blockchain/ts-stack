@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import {
   type ValidCreateActionArgs,
   type ValidSignActionArgs,
@@ -35,16 +36,19 @@ export async function signAction(wallet: Wallet, auth: AuthId, args: SignActionA
       component: 'wallet-toolbox',
       carrier: args
     },
-    async span => {
-      const result = await signActionCore(wallet, auth, args, span)
-      span.end({
-        attributes: {
-          'action.has_transaction': result.tx != null,
-          'action.send_result_count': result.sendWithResults?.length ?? 0
+    span =>
+      mapAwaitFromSync(
+        () => signActionCore(wallet, auth, args, span),
+        result => {
+          span.end({
+            attributes: {
+              'action.has_transaction': result.tx != null,
+              'action.send_result_count': result.sendWithResults?.length ?? 0
+            }
+          })
+          return result
         }
-      })
-      return result
-    }
+      )
   )
 }
 
@@ -62,18 +66,15 @@ async function signActionCore(
 
   const vargs = mergePriorOptions(prior.args, args)
 
-  prior.tx = await traceSignActionStep(
-    wallet,
-    'wallet.sign_action.complete_signing',
-    parent,
-    async () => await completeSignedTransaction(prior, vargs.spends, wallet)
+  prior.tx = await traceSignActionStep(wallet, 'wallet.sign_action.complete_signing', parent, () =>
+    awaitFromSync(() => completeSignedTransaction(prior, vargs.spends, wallet))
   )
 
   const { sendWithResults, notDelayedResults } = await traceSignActionStep(
     wallet,
     'wallet.sign_action.process',
     parent,
-    async () => await processAction(prior, wallet, auth, vargs)
+    () => awaitFromSync(() => processAction(prior, wallet, auth, vargs))
   )
 
   const txid = prior.tx.id('hex')
@@ -83,11 +84,8 @@ async function signActionCore(
       : Beef.fromBinaryStrict(prior.dcr.inputBeef)
   beef.mergeTransaction(prior.tx)
 
-  await traceSignActionStep(
-    wallet,
-    'wallet.sign_action.verify_unlock_scripts',
-    parent,
-    async () => await verifyUnlockScripts(txid, beef, wallet.scriptVerifier)
+  await traceSignActionStep(wallet, 'wallet.sign_action.verify_unlock_scripts', parent, () =>
+    awaitFromSync(() => verifyUnlockScripts(txid, beef, wallet.scriptVerifier))
   )
 
   const r: SignActionResultX = {
@@ -97,9 +95,7 @@ async function signActionCore(
     // honoured when createAction returns the transaction and silently dropped when signAction
     // does -- and signAction is the path a wallet takes whenever the user approves a payment
     // before it is signed, which is every BRC-105 payment made from an interactive wallet.
-    tx: vargs.options.returnTXIDOnly
-      ? undefined
-      : serializeResultBeef(beef, txid, prior.args.options.knownTxids),
+    tx: vargs.options.returnTXIDOnly ? undefined : serializeResultBeef(beef, txid, prior.args.options.knownTxids),
     sendWithResults,
     notDelayedResults
   }

@@ -11,6 +11,13 @@ export type ActionBatchPackEncoding = 'identity' | 'gzip' | 'brotli'
 
 /** Internal Wallet Toolbox capabilities. These do not extend the BRC-100 wallet interface. */
 export interface StorageCapabilities {
+  /** Opt-in manager scheduling guarantees; absence retains exclusive access. */
+  storageAccess?: {
+    version: 1
+    concurrentReads: boolean
+    /** Page data and its compare-and-set checkpoint commit in one transaction. */
+    atomicSyncPages: boolean
+  }
   /** Built-in BRC-177 pre-funding, durable expiry, and reclaim support. */
   brc177NoSendExpiry?: {
     version: 1

@@ -1,0 +1,70 @@
+import type { Knex } from 'knex'
+import { Brc38NodeJsonIndex } from './Brc38NodeJsonIndex'
+import { loadBrc38ImportIdMap, type Brc38ImportMapScope } from './Brc38ImportIdMap'
+import { requireBrc38ImportSqliteTransaction } from './Brc38ImportJournalSchema'
+import { requireBrc38StructuredProjectionRead } from './Brc38PublishedStructuredSourceNode'
+import {
+  Brc38StreamedSyncMapProjection,
+  type Brc38StreamedSyncMapProjectionPolicy as Brc38PortableSyncMapProjectionPolicy
+} from './Brc38StreamedSyncMapProjection'
+import type { Brc38StructuredProjectionOwners } from './Brc38StructuredProjectionOwners'
+import type { Brc38StreamedStructured } from './Brc38StructuredJson'
+
+export interface Brc38StreamedSyncMapProjectionPolicy extends Omit<
+  Brc38PortableSyncMapProjectionPolicy,
+  'maximumTemporaryIndexBytes'
+> {
+  readonly privateParent: string
+  readonly maximumTemporaryFileBytes: number
+}
+/** Existing actual native entry point, adapting owned read/index factories to
+ * the portable projection. Export/signature and signed local-ID behavior stay
+ * unchanged. Derived spans/mappings are DATA; current native checks remain. */
+export class Brc38StreamedSyncMapProjectionNode {
+  readonly unmappedIds: number
+  private constructor(private readonly inner: Brc38StreamedSyncMapProjection) {
+    this.unmappedIds = inner.unmappedIds
+  }
+  static async prepare(
+    trx: Knex.Transaction,
+    selectedScope: Brc38ImportMapScope,
+    source: Brc38StreamedStructured,
+    selected: Brc38StreamedSyncMapProjectionPolicy
+  ): Promise<Brc38StreamedSyncMapProjectionNode> {
+    const scope = Object.freeze({ ...selectedScope }),
+      original = Object.freeze({ ...selected }),
+      owners: Brc38StructuredProjectionOwners = Object.freeze({
+        check: () => {
+          requireBrc38ImportSqliteTransaction(trx)
+          requireBrc38StructuredProjectionRead(trx)
+        },
+        openIndex: async (policy: Parameters<Brc38StructuredProjectionOwners['openIndex']>[0]) =>
+          await Brc38NodeJsonIndex.open({
+            ...policy,
+            privateParent: original.privateParent,
+            maximumTemporaryFileBytes: policy.maximumTemporaryIndexBytes
+          }),
+        readMappings: async (
+          entity: Parameters<Brc38StructuredProjectionOwners['readMappings']>[0],
+          values: readonly number[]
+        ) => {
+          const loaded = await loadBrc38ImportIdMap(
+            trx,
+            scope,
+            values.map(incomingId => ({ entity, incomingId, required: false }))
+          )
+          return values.map(id =>
+            Object.hasOwn(loaded.map[entity].idMap, id) ? loaded.map[entity].idMap[id] : undefined
+          )
+        }
+      }),
+      policy = { ...original, maximumTemporaryIndexBytes: original.maximumTemporaryFileBytes }
+    return new Brc38StreamedSyncMapProjectionNode(await Brc38StreamedSyncMapProjection.prepare(owners, source, policy))
+  }
+  chunks(maximumChunkBytes = 65536, selectedAssembly?: Brc38StreamedStructured): AsyncGenerator<Uint8Array> {
+    return this.inner.chunks(maximumChunkBytes, selectedAssembly)
+  }
+  async close(): Promise<void> {
+    await this.inner.close()
+  }
+}
