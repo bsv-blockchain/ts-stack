@@ -39,7 +39,7 @@ artifact that reaches a registry.
 - the reviewed runtime-package pins needed to remediate vulnerabilities still
   present in that immutable base;
 - OCI title, description, the scoped first-party
-  `LicenseRef-Open-BSV-License-6`, documentation metadata, and the stable
+  `Apache-2.0` license, documentation metadata, and the stable
   incorporated-material notice path; and
 - the GHCR or GHCR-plus-Marketplace release route for each component.
 
@@ -133,7 +133,7 @@ Release workflows never rewrite them. A stale or inconsistent lock therefore
 fails `npm ci` before publication instead of silently producing a different
 dependency graph.
 
-Every final image contains `LICENSE.txt`, `THIRD_PARTY_NOTICES.md`, and the
+Every final image contains `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the
 complete incorporated-material archive at `/usr/share/licenses/ts-stack`.
 `org.bsvblockchain.license.notice` identifies the notice path without
 misrepresenting the first-party OCI license label as the only terms in the

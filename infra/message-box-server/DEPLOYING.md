@@ -248,4 +248,4 @@ evidence, and rollback result in the owning operations system.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+See [LICENSE](./LICENSE).

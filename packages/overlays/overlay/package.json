@@ -17,7 +17,9 @@
     "dist",
     "!dist/**/*.tsbuildinfo",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -131,7 +133,7 @@
     "SV"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },

@@ -123,4 +123,4 @@ QR rendering, camera and barcode-scanner integration, animation timing, compress
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0 — see [LICENSE](./LICENSE).

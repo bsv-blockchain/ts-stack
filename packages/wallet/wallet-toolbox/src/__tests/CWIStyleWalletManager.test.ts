@@ -105,7 +105,7 @@ const XOR = (n1: number[], n2: number[]): number[] => {
   if (n1.length !== n2.length) {
     throw new Error('lengths mismatch')
   }
-  const r = Array.from({ length: n1.length })
+  const r = Array.from<number>({ length: n1.length })
   for (let i = 0; i < n1.length; i++) {
     r[i] = n1[i] ^ n2[i]
   }

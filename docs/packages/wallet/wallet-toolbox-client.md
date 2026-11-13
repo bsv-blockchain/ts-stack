@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.4'
-last_updated: '2026-11-09'
-last_verified: '2026-11-09'
+version: '2.17.0'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -15,12 +15,46 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 # @bsv/wallet-toolbox-client
 
-The 2.15.4 source candidate reports `listCertificates` `totalCertificates` as the
-number of matching certificates at every offset. A short page at a non-zero
-offset used to report its own length. A short first page, or a non-empty short
-page, is the rows skipped plus the page. An empty page past the end, and a full
-page, use an unpaged stored count. No API, wire, or schema migration is
-required. Source is not publication or deployment.
+## Certificate pagination
+
+The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
+the size of the matching set at every offset, including full and empty later
+pages in IndexedDB. Non-empty final pages use the skipped rows plus the page;
+other pages count without a page window. User, deletion, type and certifier
+filters and returned certificate fields are unchanged. Upgrade the affected
+local storage package or remote Storage service to receive corrected totals.
+No API, wire or schema migration is required.
+
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Setup factory action batching
+
+The 2.17.0 source candidate adds optional `actionBatchMode` to the `SetupClient`
+factory arguments. Select `legacy` when your application broadcasts
+its own `noSend` transactions and needs the existing per-action storage path:
+
+```ts
+import { SetupClient, type SetupClientWalletArgs } from '@bsv/wallet-toolbox-client'
+
+declare const options: SetupClientWalletArgs
+const { wallet } = await SetupClient.createWallet({ ...options, actionBatchMode: 'legacy' })
+```
+
+The Node package exposes the same option. Omission keeps `auto`,
+including its existing storage-capability negotiation and fallback. When batching
+is available, related signed `noSend` actions can remain staged until a subsequent
+batch commit. The new option does not recover previously discarded batches or
+change signing, BRC-100 calls or database schemas. Existing consumers need no
+migration; package publication and consumer upgrades are separate steps.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and
@@ -30,6 +64,12 @@ remain rejected. No API, wire or schema migration is required. Upgrade the host
 and remote Storage separately; reconcile and retry the original import instead
 of creating or broadcasting a replacement payment. Source is not publication or
 deployment.
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate exposes resumable sync with atomic IndexedDB page commits and foreground work between pages. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md), including cancellation, inclusive timestamp boundaries and measured native-browser behavior.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
@@ -174,8 +214,8 @@ for complete remote and IndexedDB setup.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/client/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/client/LICENSE).
 
 ## Faucet output authorization
 

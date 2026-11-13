@@ -1,3 +1,4 @@
+import type { WABClient } from '../wab-client/WABClient'
 import { CachedKeyDeriver, LockingScript, PrivateKey, RPuzzle, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
 import { WABAccountContinuityError, WalletAuthenticationManager } from '../WalletAuthenticationManager'
 import { CWIStyleWalletManager } from '../CWIStyleWalletManager'
@@ -10,8 +11,13 @@ const existingKey = '22'.repeat(32)
 function subject() {
   const authMethod = { methodType: 'TwilioPhone' }
   const wabClient = {
-    startAuthMethod: jest.fn(async () => ({ success: true })),
-    completeAuthMethod: jest.fn(async () => ({
+    startAuthMethod: jest.fn<ReturnType<WABClient['startAuthMethod']>, Parameters<WABClient['startAuthMethod']>>(
+      async () => ({ success: true })
+    ),
+    completeAuthMethod: jest.fn<
+      ReturnType<WABClient['completeAuthMethod']>,
+      Parameters<WABClient['completeAuthMethod']>
+    >(async () => ({
       success: true,
       presentationKey: temporaryKey,
       accountStatus: 'new-user'

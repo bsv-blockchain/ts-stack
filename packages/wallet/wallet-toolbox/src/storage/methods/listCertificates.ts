@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { type ValidListCertificatesArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { ListCertificatesResult, OriginatorDomainNameStringUnder250Bytes } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
@@ -38,17 +39,22 @@ export async function listCertificates(
     }
     const certs = await storage.findCertificates(findCertsArgs)
     const certsWithFields = await Promise.all(
-      certs.map(async cert => {
-        const fields = await storage.findCertificateFields({
-          partial: { certificateId: cert.certificateId, userId: auth.userId },
-          trx
-        })
-        return {
-          ...cert,
-          fields: Object.fromEntries(fields.map(f => [f.fieldName, f.fieldValue])),
-          masterKeyring: Object.fromEntries(fields.map(f => [f.fieldName, f.masterKey]))
-        }
-      })
+      certs.map(cert =>
+        mapAwaitFromSync(
+          () =>
+            storage.findCertificateFields({
+              partial: { certificateId: cert.certificateId, userId: auth.userId },
+              trx
+            }),
+          fields => {
+            return {
+              ...cert,
+              fields: Object.fromEntries(fields.map(f => [f.fieldName, f.fieldValue])),
+              masterKeyring: Object.fromEntries(fields.map(f => [f.fieldName, f.masterKey]))
+            }
+          }
+        )
+      )
     )
     const r: ListCertificatesResult = {
       totalCertificates: 0,
@@ -69,8 +75,8 @@ export async function listCertificates(
     // A short page has reached the end, so the total is the rows the offset
     // skipped plus this page. An empty page at a non-zero offset only proves
     // the offset is at or past the end, and a full page may continue, so both
-    // use an unpaged stored count. The page window must not be applied to that
-    // count: IndexedDB stops at the limit, and SQL OFFSET drops the aggregate row.
+    // use an unpaged stored count. Clear the page window explicitly so all
+    // storage backends, including IndexedDB, count the full matching set.
     if (r.certificates.length < paged.limit && (r.certificates.length > 0 || offset === 0)) {
       r.totalCertificates = offset + r.certificates.length
     } else {

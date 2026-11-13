@@ -400,6 +400,12 @@ durable recovery completion. See [BASM details](./docs/BRC-136-BASM.md).
 
 ## Development
 
+The Mongo test fixture retains each actual member before startup, including a
+failed lower process whose automatic shutdown is still pending. Cleanup drains
+that owner and every sibling start before retrying a genuine port collision.
+All three real members, the pinned MongoDB version, cache sizes and existing
+startup, setup and cleanup deadlines remain unchanged.
+
 From the repository root:
 
 ```bash
@@ -416,8 +422,8 @@ resolution, and clean ESM/CommonJS consumer projects.
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).

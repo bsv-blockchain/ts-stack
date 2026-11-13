@@ -17,6 +17,10 @@ import {
   UMPTokenLookupError
 } from '../CWIStyleWalletManager'
 
+type LookupErrorExpectation = Partial<Omit<UMPTokenLookupError, 'diagnostics'>> & {
+  diagnostics?: Partial<UMPTokenLookupError['diagnostics']>
+}
+
 function resolverWith(lookup: (host: string) => Promise<{ type: 'output-list'; outputs: [] }>): LookupResolver {
   return new LookupResolver({
     facilitator: { lookup },
@@ -59,7 +63,7 @@ function resolutionWith(outputCount: number, progress: Partial<LookupResolution[
 }
 
 function tokenForPresentationHash(hashByte: number, outpointByte = 'a'): UMPToken {
-  const fields = Array.from({ length: 11 }, () => Array.from({ length: 32 }).fill(1))
+  const fields = Array.from({ length: 11 }, () => Array.from<number>({ length: 32 }).fill(1))
   return {
     passwordSalt: fields[0],
     passwordPresentationPrimary: fields[1],
@@ -67,7 +71,7 @@ function tokenForPresentationHash(hashByte: number, outpointByte = 'a'): UMPToke
     presentationRecoveryPrimary: fields[3],
     passwordPrimaryPrivileged: fields[4],
     presentationRecoveryPrivileged: fields[5],
-    presentationHash: Array.from({ length: 32 }).fill(hashByte),
+    presentationHash: Array.from<number>({ length: 32 }).fill(hashByte),
     recoveryHash: fields[7],
     presentationKeyEncrypted: fields[8],
     passwordKeyEncrypted: fields[9],
@@ -98,9 +102,9 @@ async function umpTokenLockingScript(
 ): Promise<LockingScript> {
   const { recoveryByte = 1, fieldCount = 11, presentationLength = 32, recoveryLength = 32 } = opts
   const fields = Array.from({ length: fieldCount }, (_, i) => {
-    if (i === 6) return Array.from({ length: presentationLength }).fill(hashByte) as number[]
-    if (i === 7) return Array.from({ length: recoveryLength }).fill(recoveryByte) as number[]
-    return Array.from({ length: 32 }).fill(1) as number[]
+    if (i === 6) return Array.from<number>({ length: presentationLength }).fill(hashByte) as number[]
+    if (i === 7) return Array.from<number>({ length: recoveryLength }).fill(recoveryByte) as number[]
+    return Array.from<number>({ length: 32 }).fill(1) as number[]
   })
   return await new PushDrop(new ProtoWallet(new PrivateKey(42))).lock(
     fields,
@@ -141,7 +145,9 @@ describe('CWI account lookup diagnostics', () => {
   it('returns not-found when every host returned empty', async () => {
     const interactor = new OverlayUMPTokenInteractor(resolverWith(async () => ({ type: 'output-list', outputs: [] })))
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(1))).resolves.toBeUndefined()
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(1))
+    ).resolves.toBeUndefined()
   })
 
   it('returns not-found when one host is empty and another host fails', async () => {
@@ -152,8 +158,10 @@ describe('CWI account lookup diagnostics', () => {
       })
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(2))).resolves.toBeUndefined()
-    await expect(interactor.findByRecoveryKeyHash(Array.from({ length: 32 }).fill(2))).resolves.toBeUndefined()
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(2))
+    ).resolves.toBeUndefined()
+    await expect(interactor.findByRecoveryKeyHash(Array.from<number>({ length: 32 }).fill(2))).resolves.toBeUndefined()
   })
 
   it('uses the same partial-empty rule when resolving an old token outpoint', async () => {
@@ -195,7 +203,7 @@ describe('CWI account lookup diagnostics', () => {
         failedHosts: 2,
         outputCount: 0
       }
-    } satisfies Partial<UMPTokenLookupError>)
+    } satisfies LookupErrorExpectation)
   })
 
   it('rejects lookup when every host fails', async () => {
@@ -205,7 +213,9 @@ describe('CWI account lookup diagnostics', () => {
       })
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(2))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(2))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       code: 'WERR_UMP_LOOKUP_INDETERMINATE',
       reason: 'lookup-incomplete',
@@ -216,7 +226,7 @@ describe('CWI account lookup diagnostics', () => {
         failedHosts: 2,
         outputCount: 0
       }
-    } satisfies Partial<UMPTokenLookupError>)
+    } satisfies LookupErrorExpectation)
   })
 
   it('uses one verified token despite empty, malformed, and failing peers', async () => {
@@ -231,8 +241,8 @@ describe('CWI account lookup diagnostics', () => {
       [token]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(token)
-    await expect(interactor.findByRecoveryKeyHash(Array.from({ length: 32 }).fill(1))).resolves.toBe(token)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(token)
+    await expect(interactor.findByRecoveryKeyHash(Array.from<number>({ length: 32 }).fill(1))).resolves.toBe(token)
   })
 
   it('returns not-found when malformed output is accompanied by a clean empty response', async () => {
@@ -245,7 +255,9 @@ describe('CWI account lookup diagnostics', () => {
       []
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBeUndefined()
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).resolves.toBeUndefined()
   })
 
   it('returns not-found when a mismatched token is accompanied by a clean empty response', async () => {
@@ -258,13 +270,17 @@ describe('CWI account lookup diagnostics', () => {
       [tokenForPresentationHash(9)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBeUndefined()
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).resolves.toBeUndefined()
   })
 
   it('rejects malformed output when no host supplies a token or clean empty response', async () => {
     const interactor = interactorWithParsedTokens(resolutionWith(1), [])
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-malformed'
     })
@@ -280,7 +296,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenForPresentationHash(3, 'a'), tokenForPresentationHash(3, 'b')]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -301,7 +319,9 @@ describe('CWI account lookup diagnostics', () => {
       [oldToken, newToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(newToken)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      newToken
+    )
   })
 
   it('resolves a multi-hop rendition chain to its tip', async () => {
@@ -317,7 +337,9 @@ describe('CWI account lookup diagnostics', () => {
       tokens
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(tokens[2])
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      tokens[2]
+    )
   })
 
   it('detects supersession through an intermediate rendition absent from the lookup answer', async () => {
@@ -334,7 +356,9 @@ describe('CWI account lookup diagnostics', () => {
       [firstToken, thirdToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(thirdToken)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      thirdToken
+    )
   })
 
   it('still rejects competing tokens with no supersession relationship', async () => {
@@ -349,7 +373,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${forkA.id('hex')}.0`), tokenAtOutpoint(3, `${forkB.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -371,7 +397,7 @@ describe('CWI account lookup diagnostics', () => {
       [freshMintToken, continuationToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
       continuationToken
     )
   })
@@ -389,7 +415,9 @@ describe('CWI account lookup diagnostics', () => {
       [newToken, oldToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(newToken)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      newToken
+    )
   })
 
   it('treats duplicate records of the same outpoint as one token, not a conflict', async () => {
@@ -401,7 +429,7 @@ describe('CWI account lookup diagnostics', () => {
       [first, second]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(second)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(second)
   })
 
   it('stays indeterminate when a competing token lacks an outpoint', async () => {
@@ -412,7 +440,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${tx.id('hex')}.0`), anonymous]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -430,7 +460,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${continuation.id('hex')}.0`), tokenAtOutpoint(3, 'b'.repeat(64) + '.0')]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -452,7 +484,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${continuationA.id('hex')}.0`), tokenAtOutpoint(3, `${continuationB.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -473,7 +507,7 @@ describe('CWI account lookup diagnostics', () => {
       [continuationToken, tokenAtOutpoint(3, `${freshMint.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
       continuationToken
     )
   })
@@ -495,7 +529,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${continuation.id('hex')}.0`), tokenAtOutpoint(3, `${freshMint.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -514,7 +550,9 @@ describe('CWI account lookup diagnostics', () => {
       [tokenAtOutpoint(3, `${continuation.id('hex')}.0`), tokenAtOutpoint(3, `${freshMint.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+    await expect(
+      interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))
+    ).rejects.toMatchObject({
       name: 'UMPTokenLookupError',
       reason: 'token-ambiguous'
     })
@@ -535,7 +573,7 @@ describe('CWI account lookup diagnostics', () => {
       [continuationToken, tokenAtOutpoint(3, `${freshMint.id('hex')}.0`)]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
       continuationToken
     )
   })
@@ -559,7 +597,7 @@ describe('CWI account lookup diagnostics', () => {
       ]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
       continuationToken
     )
   })
@@ -579,7 +617,9 @@ describe('CWI account lookup diagnostics', () => {
       [tipToken, predecessorToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(tipToken)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      tipToken
+    )
   })
 
   it('resolves a very deep update chain without exhausting the stack', async () => {
@@ -596,7 +636,9 @@ describe('CWI account lookup diagnostics', () => {
       [rootToken, tipToken]
     )
 
-    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(tipToken)
+    await expect(interactor.findByPresentationKeyHash(Array.from<number>({ length: 32 }).fill(3))).resolves.toBe(
+      tipToken
+    )
   })
 
   it('keeps authentication unknown until lookup succeeds and rejects invalid initial state', async () => {

@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync, promiseFromSync } from '../../utility/promiseFromSync'
 import { validateInteger, validateOptionalInteger, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import { Random, Telemetry, TelemetrySpan, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
@@ -264,24 +265,21 @@ export async function generateChangeSdk(
       }
     },
     async span => {
-      const allocate = async (
+      const allocate = (
         targetSatoshis: number,
         exactSatoshis?: number
       ): Promise<GenerateChangeSdkChangeInput | undefined> =>
-        await traceGenerateChangeStep(
-          telemetry,
-          span,
-          'wallet.storage.generate_change.allocate',
-          async () => await allocateChangeInput(targetSatoshis, exactSatoshis)
+        awaitFromSync(() =>
+          traceGenerateChangeStep(telemetry, span, 'wallet.storage.generate_change.allocate', () =>
+            awaitFromSync(() => allocateChangeInput(targetSatoshis, exactSatoshis))
+          )
         )
-      const release = async (outputId: number): Promise<void> => {
-        await traceGenerateChangeStep(
-          telemetry,
-          span,
-          'wallet.storage.generate_change.release',
-          async () => await releaseChangeInput(outputId)
+      const release = (outputId: number): Promise<void> =>
+        awaitVoidFromSync(() =>
+          traceGenerateChangeStep(telemetry, span, 'wallet.storage.generate_change.release', () =>
+            awaitFromSync(() => releaseChangeInput(outputId))
+          )
         )
-      }
       const result = await generateChangeSdkCore(params, allocate, release, logger)
       span.end({
         attributes: {
@@ -296,19 +294,21 @@ export async function generateChangeSdk(
   )
 }
 
-async function traceGenerateChangeStep<T>(
+function traceGenerateChangeStep<T>(
   telemetry: Telemetry,
   parent: TelemetrySpan,
   name: string,
   callback: () => Promise<T>
 ): Promise<T> {
-  return await telemetry.withSpan(
-    name,
-    {
-      component: 'wallet-storage',
-      parent: parent.context
-    },
-    callback
+  return awaitFromSync(() =>
+    telemetry.withSpan(
+      name,
+      {
+        component: 'wallet-storage',
+        parent: parent.context
+      },
+      callback
+    )
   )
 }
 
@@ -942,37 +942,39 @@ export function generateChangeSdkMakeStorage(availableChange: GenerateChangeSdkC
     return c
   }
 
-  const allocateChangeInput = async (
+  const allocateChangeInput = (
     targetSatoshis: number,
     exactSatoshis?: number
-  ): Promise<GenerateChangeSdkChangeInput | undefined> => {
-    log += `allocate target ${targetSatoshis} exact ${exactSatoshis}`
+  ): Promise<GenerateChangeSdkChangeInput | undefined> =>
+    promiseFromSync(() => {
+      log += `allocate target ${targetSatoshis} exact ${exactSatoshis}`
 
-    if (exactSatoshis !== undefined) {
-      const exact = change.find(c => c.spendable && c.satoshis === exactSatoshis)
-      if (exact != null) return allocate(exact)
-    }
-    const over = change.find(c => c.spendable && c.satoshis >= targetSatoshis)
-    if (over != null) return allocate(over)
-    let under: GenerateChangeSdkStorageChange | undefined
-    for (let i = change.length - 1; i >= 0; i--) {
-      if (change[i].spendable) {
-        under = change[i]
-        break
+      if (exactSatoshis !== undefined) {
+        const exact = change.find(c => c.spendable && c.satoshis === exactSatoshis)
+        if (exact != null) return allocate(exact)
       }
-    }
-    if (under != null) return allocate(under)
-    log += '\n'
-    return undefined
-  }
+      const over = change.find(c => c.spendable && c.satoshis >= targetSatoshis)
+      if (over != null) return allocate(over)
+      let under: GenerateChangeSdkStorageChange | undefined
+      for (let i = change.length - 1; i >= 0; i--) {
+        if (change[i].spendable) {
+          under = change[i]
+          break
+        }
+      }
+      if (under != null) return allocate(under)
+      log += '\n'
+      return undefined
+    })
 
-  const releaseChangeInput = async (outputId: number): Promise<void> => {
-    log += `release id ${outputId}\n`
-    const c = change.find(x => x.outputId === outputId)
-    if (c == null) throw new WERR_INTERNAL(`unknown outputId ${outputId}`)
-    if (c.spendable) throw new WERR_INTERNAL(`release of spendable outputId ${outputId}`)
-    c.spendable = true
-  }
+  const releaseChangeInput = (outputId: number): Promise<void> =>
+    promiseFromSync(() => {
+      log += `release id ${outputId}\n`
+      const c = change.find(x => x.outputId === outputId)
+      if (c == null) throw new WERR_INTERNAL(`unknown outputId ${outputId}`)
+      if (c.spendable) throw new WERR_INTERNAL(`release of spendable outputId ${outputId}`)
+      c.spendable = true
+    })
 
   return { allocateChangeInput, releaseChangeInput, getLog }
 }

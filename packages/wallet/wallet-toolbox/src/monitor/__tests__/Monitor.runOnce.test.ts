@@ -10,7 +10,7 @@ class ControlledTask extends WalletMonitorTask {
     monitor: Monitor,
     name: string,
     readonly setup: jest.Mock<Promise<void>, []>,
-    readonly shouldRun: jest.Mock<{ run: boolean }, [number]>,
+    readonly shouldRun: WalletMonitorTask['trigger'],
     readonly execute: jest.Mock<Promise<string>, []>
   ) {
     super(monitor, name)
@@ -226,7 +226,7 @@ describe('Monitor.runOnce compatibility', () => {
     expect(method).toContain('preparedBeefInvalidation()')
 
     const events: Array<{ event: string; details?: string }> = []
-    const invalidatePreparedBeefsForReorg = jest.fn(() => {
+    const invalidatePreparedBeefsForReorg = jest.fn<Promise<void>, []>(() => {
       throw new Error('sync-invalidation')
     })
     const monitor = new Monitor({

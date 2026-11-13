@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Durable BRC-192 application output knowledge and interchangeable source adapters",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -205,7 +205,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {

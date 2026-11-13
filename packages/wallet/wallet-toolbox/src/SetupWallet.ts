@@ -1,8 +1,9 @@
 import { PrivateKey, PublicKey, KeyDeriverApi } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
 
 import { Wallet } from './Wallet'
+import type { ActionBatchMode } from './signer/actionBatch/ActionBatchWorkspace'
 import { Chain } from './sdk/types'
 import { WalletStorageManager } from './storage/WalletStorageManager'
 import { Services } from './services/Services'
@@ -100,9 +101,16 @@ export interface SetupClientWalletArgs {
    * Optional high-performance verifier for internal wallet and locally hosted
    * storage validation. This does not alter the BRC-100 interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /** Optional operator tuning for local wallet-managed liquidity shaping. */
   managedChangePolicy?: ManagedChangePolicyOptions
+  /**
+   * Optional. Forwarded to `WalletArgs.actionBatchMode`; defaults to `auto`.
+   * In `auto` a signed `noSend` action is staged in memory and reaches storage
+   * only through a later `sendWith`. A caller that broadcasts `noSend`
+   * transactions itself needs `legacy` so each one is stored when signed.
+   */
+  actionBatchMode?: ActionBatchMode
 }
 
 /**

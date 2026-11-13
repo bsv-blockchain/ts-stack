@@ -23,7 +23,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "exports": {
     ".": {
@@ -72,7 +74,7 @@
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "qrcode": "^1.5.4"
   },

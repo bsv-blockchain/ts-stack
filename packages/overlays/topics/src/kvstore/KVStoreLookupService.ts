@@ -83,7 +83,7 @@ export class KVStoreLookupService implements LookupService {
       'controller'
     )
     const protocolID = readWalletProtocol(query, 'protocolID')
-    const tags = readStringArray(query, 'tags', { maxItems: 32, maxItemBytes: 256 })
+    const tags = readStringArray(query, 'tags', { maxItems: null, maxItemBytes: 256 })
     const tagQueryMode = query.tagQueryMode ?? 'all'
     if (tagQueryMode !== 'all' && tagQueryMode !== 'any')
       throw new Error('Invalid lookup query: tagQueryMode must be all or any')

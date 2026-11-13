@@ -79,7 +79,7 @@ describe('ChaintracksChaintracker tests', () => {
       retryDelayMs: 0,
       telemetry: {
         sink: {
-          capture: event => events.push(event)
+          capture: event => void events.push(event)
         },
         traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         spanIdFactory: () => (nextSpanId++).toString(16).padStart(16, '0')
@@ -232,7 +232,10 @@ describe('ChaintracksChaintracker tests', () => {
 
   test('does not hide a registration failure from a built-in client that promises reorg events', async () => {
     class PromisingEventsClient extends ChaintracksServiceClient {
-      override readonly supportsReorgEvents = true
+      constructor(...args: ConstructorParameters<typeof ChaintracksServiceClient>) {
+        super(...args)
+        Object.defineProperty(this, 'supportsReorgEvents', { value: true })
+      }
     }
     const provider = new PromisingEventsClient('main', 'https://chaintracks.example')
     expect(provider.supportsReorgEvents).toBe(true)

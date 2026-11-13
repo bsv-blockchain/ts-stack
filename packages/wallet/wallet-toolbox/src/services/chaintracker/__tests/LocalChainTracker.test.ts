@@ -42,7 +42,10 @@ function client(
 }
 
 class PromisingEventsClient extends ChaintracksServiceClient {
-  override readonly supportsReorgEvents = true
+  constructor(...args: ConstructorParameters<typeof ChaintracksServiceClient>) {
+    super(...args)
+    Object.defineProperty(this, 'supportsReorgEvents', { value: true })
+  }
 }
 
 describe('LocalChainTracker', () => {
