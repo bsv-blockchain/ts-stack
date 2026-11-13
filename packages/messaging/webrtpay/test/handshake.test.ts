@@ -218,6 +218,23 @@ async function bAuth(
   return { t: 'auth', signature: toHex(Uint8Array.from(signature)) }
 }
 
+/** A consumer's own kind, carried over the session in place of the payments wire. */
+interface LowEnvelope {
+  t: 'low.envelope'
+  v: 1
+  wire: string
+}
+
+/** A consumer codec that accepts only {@link LowEnvelope}. */
+function lowCodec(raw: unknown): LowEnvelope {
+  const m = raw as Partial<LowEnvelope> | null
+  if (m === null || typeof m !== 'object' || m.t !== 'low.envelope' || m.v !== 1) {
+    throw new TypeError('not a low.envelope')
+  }
+  if (typeof m.wire !== 'string') throw new TypeError('low.envelope without wire')
+  return { t: m.t, v: m.v, wire: m.wire }
+}
+
 describe('bindingTranscript', () => {
   const signer = { fps: ['sha-256 aa', 'sha-512 bb'], nonce: nonce(), key: party().key }
   const verifier = { fps: ['sha-256 cc'], nonce: nonce(), key: party().key }
@@ -869,6 +886,50 @@ describe('AuthenticatedPeer', () => {
     await b.send(make(B))
     expect((await closed)?.code).toBe('protocol')
     expect(got).toEqual([])
+  })
+
+  it('answers a kind the payments wire does not know with a protocol error by default', async () => {
+    const { a, b, pa } = await authenticatedPair()
+    const sent = jest.spyOn(a, 'send')
+    const got: WireMessage[] = []
+    pa.onMessage(m => got.push(m))
+    const closed = closeOf(pa)
+    await b.send({ t: 'low.envelope', v: 1, wire: 'AAAA' })
+    expect((await closed)?.code).toBe('protocol')
+    expect(sent).toHaveBeenCalledWith({ t: 'error', code: 'protocol' })
+    expect(got).toEqual([])
+  })
+
+  it('hands a consumer its own kinds through a session codec, unparsed by the payments layer', async () => {
+    const A = party()
+    const B = party()
+    const { a, b } = await linkPair()
+    const [pa, pb] = await Promise.all([
+      authenticate<LowEnvelope>(a, { wallet: A.wallet, codec: lowCodec }),
+      authenticate<LowEnvelope>(b, { wallet: B.wallet, codec: lowCodec })
+    ])
+    const atB = pb.waitFor((m): m is LowEnvelope => m.t === 'low.envelope', 10000)
+    await pa.send({ t: 'low.envelope', v: 1, wire: 'AAECAw' })
+    expect(await atB).toEqual({ t: 'low.envelope', v: 1, wire: 'AAECAw' })
+    expect(pb.isOpen).toBe(true)
+  })
+
+  it.each<[string, object]>([
+    ['a value its codec refuses', payment('not-low')],
+    ['a handshake message', { t: 'ready' }]
+  ])('closes a codec session with protocol for %s', async (_name, value) => {
+    const A = party()
+    const B = party()
+    const { a, b } = await linkPair()
+    const [pa] = await Promise.all([
+      authenticate<LowEnvelope>(a, { wallet: A.wallet, codec: lowCodec }),
+      authenticate(b, { wallet: B.wallet })
+    ])
+    const sent = jest.spyOn(a, 'send')
+    const closed = closeOf(pa)
+    await b.send(value)
+    expect((await closed)?.code).toBe('protocol')
+    expect(sent).toHaveBeenCalledWith({ t: 'error', code: 'protocol' })
   })
 
   it('closes the link with the reason given to close', async () => {
