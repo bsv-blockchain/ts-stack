@@ -281,6 +281,16 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: accept BRC-205 getVersion strings (patch candidate)
+
+- Wallet result validation now bounds a `getVersion` answer as BRC-205 does:
+  7–30 bytes for the base before the first `;` and at most 2048 bytes for the
+  whole string. It bounded the whole string at 30, so `WalletClient`, its
+  automatic substrate discovery, `HTTPWalletJSON`, the wallet wire and
+  `WalletWireProcessor` refused a toolbox wallet that appends capability
+  attributes (`wallet-brc100-1.0.0; brc177-nosend=2;`). Base-only strings
+  behave as before; attributes are not parsed. No migration is required.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

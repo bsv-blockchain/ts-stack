@@ -112,8 +112,8 @@
     "VersionString7To30Bytes": {
       "type": "string",
       "minLength": 7,
-      "maxLength": 30,
-      "description": "Version string in format [vendor]-[major].[minor].[patch]."
+      "maxLength": 2048,
+      "description": "Version string whose base, [vendor]-[major].[minor].[patch], is 7-30 bytes. BRC-205 allows '; key=value;' attributes after the base, up to 2048 bytes in total."
     },
     "ISOTimestampString": {
       "type": "string",
