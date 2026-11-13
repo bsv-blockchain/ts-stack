@@ -33,7 +33,7 @@
     "clean": "rm -rf dist",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/sigma-permission-module/src/**/*.ts\" \"packages/wallet/sigma-permission-module/README.md\" \"packages/wallet/sigma-permission-module/*.{cjs,json,ts}\"",
     "lint": "oxlint src --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports SigmaPermissionModule,createSigmaModule",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports SigmaPermissionModule,createSigmaModule,verifySchnorr,verifyDleq,verifyOr,parsePoint33,point64",
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",

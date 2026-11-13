@@ -59,7 +59,7 @@ under one logical protocol proves statements about the same point.
 ```ts
 const { ciphertext } = await wallet.encrypt(
   {
-    protocolID: [0, 'p sigma key example payout'],
+    protocolID: [2, 'p sigma key example payout'],
     keyID: 'member 1',
     plaintext: []
   },
@@ -67,6 +67,9 @@ const { ciphertext } = await wallet.encrypt(
 )
 // ciphertext: the 33-byte compressed statement point P
 ```
+
+Use level 1 or 2 for a key that guards value; level 0 needs no prompt (see
+Security and permissions).
 
 The module is deterministic: the same request always returns the same bytes.
 
@@ -160,10 +163,34 @@ information for the prompt, not a limit on what the grant allows.
 A proof spends whatever was locked to the statement point. An application with
 a grant can therefore spend those outputs.
 
-Only `encrypt` is accepted in the `p sigma` namespace. Every other method, and
-any basket or label beginning `p sigma`, is refused. Authorization precedes key
-derivation. The module is trusted wallet code: applications never receive a key
-deriver or a private scalar.
+Limits to know before relying on a key:
+
+- Security level 0 needs no prompt, and the originator is not part of the key
+  derivation, so at level 0 every application the wallet talks to can obtain
+  proofs under the same key. Use level 1 or 2 for any key that guards value.
+- `key` with a base and `dleq` return `x·H` for any base `H` the caller
+  chooses. That value is not a secret and must never be used as one.
+- Proofs are deterministic, so anyone who can query the wallet under the same
+  key and request can recognise the wallet's proof by asking again and
+  comparing bytes. The `or` proof hides which ring member proved only from
+  parties without that access.
+- Only a ring of two has an on-chain verifier today; larger rings are verified
+  by the exported verifier.
+- `H` must differ from the generator. Ring points must be distinct and must not
+  include the wallet's own point.
+- A counterparty key is lowercase hex.
+- The authorization handler must return exactly `true`; any other value is a
+  denial.
+- The originator is at most 1,024 bytes.
+- The key ID is not part of the grant scope: a grant covers every key ID under
+  the logical protocol.
+- `plaintext` must be a plain array of byte values; a `Uint8Array` is refused.
+- Points passed to the exported verifiers should be built with `parsePoint33`.
+
+The module accepts only `encrypt`. It refuses every other method the wallet
+host routes to it, and every basket or label beginning `p sigma` that reaches
+it. Authorization precedes key derivation. The module is trusted wallet code:
+applications never receive a key deriver or a private scalar.
 
 ## Verifying proofs
 
@@ -178,11 +205,11 @@ import { parsePoint33, verifySchnorr } from '@bsv/sigma-permission-module'
 const ctx = Utils.toArray('payout 7', 'utf8')
 
 const key = await wallet.encrypt(
-  { protocolID: [0, 'p sigma key example payout'], keyID: 'member 1', plaintext: [] },
+  { protocolID: [2, 'p sigma key example payout'], keyID: 'member 1', plaintext: [] },
   'app.example'
 )
 const proof = await wallet.encrypt(
-  { protocolID: [0, 'p sigma schnorr example payout'], keyID: 'member 1', plaintext: ctx },
+  { protocolID: [2, 'p sigma schnorr example payout'], keyID: 'member 1', plaintext: ctx },
   'app.example'
 )
 
