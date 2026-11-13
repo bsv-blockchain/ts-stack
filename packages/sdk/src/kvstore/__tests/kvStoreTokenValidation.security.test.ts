@@ -4,7 +4,7 @@ import LockingScript from '../../script/LockingScript'
 import PushDrop from '../../script/templates/PushDrop'
 import ProtoWallet from '../../wallet/ProtoWallet'
 import type { WalletProtocol } from '../../wallet/Wallet.interfaces'
-import { decodeAndVerifyKVStoreToken } from '../kvStoreTokenValidation'
+import { decodeAndVerifyKVStoreToken, validateKVStoreTags } from '../kvStoreTokenValidation'
 
 const protocolID: WalletProtocol = [1, 'kvstore']
 const key = 'security-key'
@@ -107,6 +107,18 @@ describe('GlobalKVStore token authentication', () => {
     await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(
       'controller is invalid'
     )
+  })
+
+  it('preserves the existing error identity and diagnostic for a non-array tag schema', () => {
+    let failure: unknown
+    try {
+      validateKVStoreTags({ tags: [] })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(Error)
+    expect(Object.getPrototypeOf(failure)).toBe(Error.prototype)
+    expect(failure).toHaveProperty('message', 'KVStore tags must be a bounded array')
   })
 
   it('rejects an attacker token that claims a different controller', async () => {
