@@ -46,7 +46,8 @@ info:
 
     Source: /docs/BRCs/payments/0121.md
   license:
-    name: Open BSV Licence
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
   contact:
     name: Deggen
     email: d.kellenschwiler@bsvassociation.org

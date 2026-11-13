@@ -78,7 +78,7 @@ all limits, shared state, BRC-105 pricing, memory evidence, and scaling guidance
 | Variable                             | Required | Description                                                                                                               |
 | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | NODE_ENV                             | No       | `development`, `staging`, or `production`                                                                                 |
-| BSV_NETWORK                          | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                                                      |
+| BSV_NETWORK                          | No       | `mainnet`, `testnet`, `ttn`, or `teratestnet` (default `mainnet`)                                                         |
 | PORT                                 | No       | HTTP/WebSocket port (default 8080; takes precedence)                                                                      |
 | HTTP_PORT                            | No       | Compatibility port fallback                                                                                               |
 | HOSTING_DOMAIN                       | No       | Public domain for overlay advertisement (e.g., `http://localhost:8080`)                                                   |

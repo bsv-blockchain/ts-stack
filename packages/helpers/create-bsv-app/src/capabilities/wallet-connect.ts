@@ -1,12 +1,12 @@
 // src/capabilities/wallet-connect.ts
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
-import { bsvImport } from '../scaffold/base-app.js'
+import { bsvImport, SERVER_ORIGIN_CONFIG } from '../scaffold/base-app.js'
 
 const AUTH_UTIL = `// Shared, framework-agnostic auth-proof helpers built on @bsv/auth (BRC-103).
 // One primitive: sign a proof bound to { action, body? }, verify it on the server.
-import { AuthProofClient, AuthProofServer, type AuthProof, type ProofSignerWallet, type RequestBody } from '@bsv/auth'
+import { AuthProofClient, AuthProofServer, type AuthProof, type ProofSignerWallet, type ProofVerifierWallet, type RequestBody } from '@bsv/auth'
 
-export type { AuthProof, RequestBody }
+export type { AuthProof, ProofVerifierWallet, RequestBody }
 
 export async function createAuthProof (
   wallet: ProofSignerWallet,
@@ -17,7 +17,7 @@ export async function createAuthProof (
 }
 
 export async function verifyAuthProof (
-  serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> },
+  serverWallet: ProofVerifierWallet,
   proof: AuthProof,
   opts: { action: string, body?: RequestBody },
   consumeNonce: (nonce: string, expiresAt: Date) => boolean | Promise<boolean>
@@ -93,7 +93,7 @@ function contentLength (response: Response): number | undefined {
   return length
 }
 
-async function readBoundedBody (response: Response): Promise<Uint8Array> {
+async function readBoundedBody (response: Response): Promise<Uint8Array<ArrayBuffer>> {
   const declared = contentLength(response)
   if (declared !== undefined && declared > MAX_API_RESPONSE_BYTES) {
     throw new Error('API response exceeds the byte limit')
@@ -259,7 +259,8 @@ const Ctx = createContext<RelayValue | null>(null)
 
 export function WalletConnectionProvider ({ children, apiUrl = API_BASE_URL }: { children: ReactNode, apiUrl?: string }) {
   // apiUrl points at the server running the WalletRelayService (REST /api/session + WS /ws).
-  const relay = useWalletRelayClient({ apiUrl, autoCreate: false })
+  // Dev builds accept the server's ws://<LAN IP> relay URL so a phone can pair over the LAN.
+  const relay = useWalletRelayClient({ apiUrl, autoCreate: false, allowLocalNetworkHttp: import.meta.env.DEV })
   return <Ctx.Provider value={relay}>{children}</Ctx.Provider>
 }
 
@@ -293,12 +294,13 @@ export function WalletProvider ({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<WalletInterface | null>(null)
   const [identityKey, setIdentityKey] = useState<string | null>(null)
   const [status, setStatus] = useState<ConnectStatus>('disconnected')
+  const [source, setSource] = useState<'desktop' | 'relay' | null>(null)
 
   const connect = useCallback(async () => {
     setStatus('connecting')
     try {
       const { wallet, identityKey } = await connectDesktopWallet()
-      setWallet(wallet); setIdentityKey(identityKey); setStatus('connected')
+      setWallet(wallet); setIdentityKey(identityKey); setSource('desktop'); setStatus('connected')
     } catch {
       setStatus('choosing')   // no desktop wallet -> show modal
     }
@@ -315,15 +317,23 @@ export function WalletProvider ({ children }: { children: ReactNode }) {
 
   const cancel = useCallback(() => { relay.cancelSession?.(); setStatus('disconnected') }, [relay])
 
-  // bridge: when the relay session connects, adopt its wallet
+  // bridge: when the relay session ends (phone disconnected, session expired or cancelled),
+  // drop the wallet adopted from it. Adjusted during render, not in an effect; a desktop
+  // wallet is never dropped.
+  const relayWallet = relay.session?.status === 'connected' ? relay.wallet : null
+  if (source === 'relay' && relayWallet == null) {
+    setWallet(null); setIdentityKey(null); setSource(null); setStatus('disconnected')
+  }
+  // when the relay session connects, adopt its wallet
   useEffect(() => {
-    if (relay.session?.status === 'connected' && relay.wallet != null && wallet == null) {
-      const w = relay.wallet as unknown as WalletInterface
-      w.getPublicKey({ identityKey: true }).then(({ publicKey }) => {
-        setWallet(w); setIdentityKey(publicKey); setStatus('connected')
-      }).catch(() => {})
-    }
-  }, [relay.session?.status, relay.wallet, wallet])
+    if (relayWallet == null || wallet != null) return
+    const w = relayWallet as unknown as WalletInterface
+    let current = true   // a key arriving after the session or wallet changed must not adopt
+    w.getPublicKey({ identityKey: true }).then(({ publicKey }) => {
+      if (current) { setWallet(w); setIdentityKey(publicKey); setSource('relay'); setStatus('connected') }
+    }).catch(() => {})
+    return () => { current = false }
+  }, [relayWallet, wallet])
 
   return <Ctx.Provider value={{ wallet, identityKey, connected: wallet !== null, status, connect, connectMobile, cancel }}>{children}</Ctx.Provider>
 }
@@ -448,7 +458,10 @@ Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) o
 
 ### How it works
 - Connecting is a small state machine: it tries the desktop/extension wallet first; if none is found it opens a modal to pair a mobile wallet over a relay (QR) or install a desktop one. The connected wallet lives in React context, reachable anywhere via \`useWallet()\`.
-- The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session\` (+ \`/:id\`, \`POST /api/request/:id\`) and a \`/ws\` WebSocket upgrade on the raw HTTP server. The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates a session, shows its QR, and pairs over \`/ws\`. Frontend-only projects (no server) get desktop connect only.
+- The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin: SERVER_ORIGIN, relayUrl: RELAY_URL, allowLocalNetworkHttp: process.env.NODE_ENV !== 'production' })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session/:id\`, \`POST /api/request/:id\`, \`DELETE /api/session/:id\` and a \`/ws\` WebSocket upgrade on the raw HTTP server; the app's own \`GET /api/session\` (registered first) puts \`SERVER_ORIGIN\` in the QR. The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates a session and shows its QR; the phone pairs over \`/ws\`. Frontend-only projects (no server) get desktop connect only.
+- To pair a phone on the same network, set \`SERVER_ORIGIN=http://<your LAN IP>:<your server port>\` in the server env (the browser keeps using localhost). HTTP works only for \`localhost\` / \`*.localhost\` names and loopback or private-network IP addresses, and LAN HTTP only in development (the server and \`useWalletRelayClient\` pass \`allowLocalNetworkHttp\` only outside production / in \`import.meta.env.DEV\`). The phone wallet must also enable local-network HTTP (e.g. a developer setting) or it rejects the QR. Public hosts need HTTPS.
+- When the phone disconnects, the app drops the relay wallet on the next relay poll, so it can lag by up to the connected poll interval (10 s by default; \`connectedPollInterval\` on \`useWalletRelayClient\` shortens it). A desktop wallet is unaffected.
+- \`SERVER_ORIGIN\` is also the origin the wallet shows the user when they approve the connection, so in production set it to the app's public HTTPS origin users recognise; with separate app and API hosts the wallet shows the API host.
 - The proof primitive (\`auth.ts\`) uses the wallet to sign a message bound to \`{ counterparty, action, body? }\` and verifies it server-side (BRC-103). That's identity (and request auth) without passwords or shared secrets.
 - The server publishes its own identity key at \`GET /api/identity\`; \`getServerIdentity()\` accepts that key under the configured API origin's HTTPS/local-development authority. This is convenient endpoint trust, not an independent identity proof. Pin the expected key through the login/signed-request hooks when continuity must survive DNS, certificate, proxy, or deployment changes.
 - Every generated API call uses \`apiClient.ts\`: safe fixed-origin paths, no redirects or credentials, a 10-second whole-response deadline, 1 MiB request/response ceilings, validated unencoded lengths, and strict UTF-8 JSON. Production requires an explicit HTTPS \`VITE_API_URL\`.
@@ -499,15 +512,35 @@ export const walletConnect: Capability = {
     builder.main.wraps.push({ open: '<WalletProviders>', close: '</WalletProviders>' })
     // Server side of the relay: one service registers REST /api/session(+/:id, /request/:id) and the /ws upgrade.
     builder.server.imports.push("import { WalletRelayService } from '@bsv/wallet-relay'")
+    builder.server.config.push({
+      import: `import { SERVER_ORIGIN, RELAY_URL } from '${bsvImport(ctx, 'config.js')}'`,
+      inline: SERVER_ORIGIN_CONFIG
+    })
     builder.server.setup.push(
-      'new WalletRelayService({ app, server, wallet: serverWallet, origin: CLIENT_ORIGIN }) // mobile-wallet pairing relay (QR)'
+      "// QR pairing session. Registered before the relay so it replaces the relay's built-in",
+      "// GET /api/session, which would embed the browser's Origin (localhost) where a phone can't reach it.",
+      "app.get('/api/session', (_req, res) => {",
+      "  res.setHeader('Cache-Control', 'no-store, max-age=0')",
+      "  res.setHeader('Pragma', 'no-cache')",
+      '  relay.createSession({ origin: SERVER_ORIGIN }).then(info => res.json(info)).catch((err: unknown) => {',
+      "    const message = err instanceof Error ? err.message : 'Failed'",
+      '    const code = (err as { code?: number }).code',
+      "    res.status(code === 429 ? 429 : message.includes('allowedOrigins') ? 403 : 500).json({ error: message })",
+      '  })',
+      '})',
+      '// Mobile-wallet pairing relay (QR). Plain HTTP/WS on a private-network IP is development-only,',
+      '// matching the SERVER_ORIGIN check.',
+      'const relay = new WalletRelayService({ app, server, wallet: serverWallet, origin: SERVER_ORIGIN, relayUrl: RELAY_URL,',
+      "  allowLocalNetworkHttp: process.env.NODE_ENV !== 'production' })",
+      'console.log(`wallet pairing: phones reach ${SERVER_ORIGIN} (relay ${RELAY_URL})` +',
+      "  (process.env.NODE_ENV === 'production' ? '' : '; set SERVER_ORIGIN to your LAN address to pair a phone'))"
     )
   },
   npmDependencies: () => ({
-    shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.1.0' },
-    client: { '@bsv/wallet-relay': '^0.2.0', react: '>=18', 'react-router-dom': '^7.0.0' },
-    // @bsv/wallet-relay's peer deps for the server-side WalletRelayService.
-    server: { '@bsv/wallet-relay': '^0.2.0', qrcode: '^1.5.0', ws: '^8.0.0' }
+    shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.4.1' },
+    client: { '@bsv/wallet-relay': '^0.7.0', react: '>=18', 'react-router-dom': '^7.0.0' },
+    // Server-side WalletRelayService + its qrcode peer (ws ships with the relay).
+    server: { '@bsv/wallet-relay': '^0.7.0', qrcode: '^1.5.0' }
   }),
   agentsSection
 }

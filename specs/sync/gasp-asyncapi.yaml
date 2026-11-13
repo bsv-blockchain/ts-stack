@@ -35,7 +35,8 @@ info:
 
     Source of truth: /ts/gasp-core/src/GASP.ts
   license:
-    name: Open BSV Licence
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 defaultContentType: application/json
 

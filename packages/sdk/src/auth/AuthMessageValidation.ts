@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from '../wallet/CertificateType.js'
 import PublicKey from '../primitives/PublicKey.js'
 import { toArray } from '../primitives/utils.js'
 import type { AuthMessage, AuthMessageValidationOptions, RequestedCertificateSet } from './types.js'
@@ -53,10 +54,24 @@ export function copyAuthByteArray(
   maxBytes: number,
   allowEmpty = false
 ): number[] {
-  assertAuthByteArray(value, name, maxBytes, allowEmpty)
-  const copy = Array.from({ length: value.length }, () => 0)
-  for (let index = 0; index < value.length; index++) {
-    copy[index] = Object.getOwnPropertyDescriptor(value, index)!.value
+  const invalid = () =>
+    new Error(`${name} must be a dense byte array of at most ${maxBytes} bytes.`)
+  if (!Array.isArray(value)) throw invalid()
+  const length = value.length
+  if ((!allowEmpty && length === 0) || length > maxBytes) throw invalid()
+  const copy: number[] = []
+  for (let index = 0; index < length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (
+      descriptor == null ||
+      !Object.hasOwn(descriptor, 'value') ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      throw invalid()
+    }
+    copy.push(descriptor.value)
   }
   return copy
 }
@@ -142,7 +157,7 @@ export function assertRequestedCertificateSet(
   }
   for (const [type, fields] of entries) {
     if (isUnsafeRecordKey(type)) throw new Error('Unsafe requested certificate type key.')
-    assertCanonicalBase64(type, 'certificate type', 32)
+    existingCertificateTypeBytes(type)
     if (!Array.isArray(fields) || fields.length > MAX_CERTIFICATE_FIELDS) {
       throw new Error('Requested certificate fields exceed their limit.')
     }
@@ -197,28 +212,31 @@ function visitAuthArray(
   if (!Number.isSafeInteger(length) || length < 0 || length > maxArrayBytes) {
     throw new Error('Authentication message array exceeds its limit.')
   }
-  const descriptors = Array.from({ length }, (_, index) =>
-    Object.getOwnPropertyDescriptor(candidate, index)
-  )
-  if (descriptors.some(descriptor => descriptor == null || !('value' in descriptor))) {
-    throw new Error('Authentication messages must not contain sparse arrays.')
+  // Capture each descriptor value once without retaining one descriptor object
+  // per byte. The captured values supply both validation and the owned snapshot.
+  const values: unknown[] = []
+  let denseBytes = true
+  for (let index = 0; index < length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(candidate, index)
+    if (descriptor == null || !('value' in descriptor)) {
+      throw new Error('Authentication messages must not contain sparse arrays.')
+    }
+    const value = descriptor.value
+    values.push(value)
+    if (!Number.isInteger(value) || value < 0 || value > 255) denseBytes = false
   }
-  const denseBytes = descriptors.every(
-    descriptor =>
-      Number.isInteger(descriptor!.value) && descriptor!.value >= 0 && descriptor!.value <= 255
-  )
   if (denseBytes) {
     // JSON uses at most three digits and a comma for each byte.
     let bytes = 0
     if (!separatePayload) bytes += length * 4 + 2
-    if (snapshot) retain(descriptors.map(descriptor => descriptor!.value))
+    if (snapshot) retain(values)
     return bytes
   }
   const copy = snapshot ? Array.from({ length }, () => undefined as unknown) : undefined
   retain(copy)
   for (let index = length - 1; index >= 0; index--) {
     pending.push({
-      value: descriptors[index]!.value,
+      value: values[index],
       depth: current.depth + 1,
       parent: copy,
       key: index
@@ -328,6 +346,23 @@ export function snapshotBoundedAuthData<T>(value: T): T {
   return walkAuthData(value, true)
 }
 
+/** Shape checking receives only arrays owned by the completed snapshot traversal. */
+function assertOwnedAuthByteArray(
+  value: unknown,
+  name: string,
+  maxBytes: number,
+  allowEmpty = false
+): asserts value is number[] {
+  if (
+    !Array.isArray(value) ||
+    (!allowEmpty && value.length === 0) ||
+    value.length > maxBytes ||
+    value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)
+  ) {
+    throw new Error(`${name} must be a dense byte array of at most ${maxBytes} bytes.`)
+  }
+}
+
 function assertValidAuthMessageShape(
   value: unknown,
   maxGeneralPayloadBytes?: number | null
@@ -358,14 +393,18 @@ function assertValidAuthMessageShape(
     case 'initialResponse':
       assertCanonicalBase64(message.initialNonce, 'initialResponse.initialNonce', 48)
       assertCanonicalBase64(message.yourNonce, 'initialResponse.yourNonce', 48)
-      assertAuthByteArray(message.signature, 'initialResponse.signature', MAX_AUTH_SIGNATURE_BYTES)
+      assertOwnedAuthByteArray(
+        message.signature,
+        'initialResponse.signature',
+        MAX_AUTH_SIGNATURE_BYTES
+      )
       break
     case 'certificateRequest':
       assertCanonicalBase64(message.nonce, 'certificateRequest.nonce', 32)
       assertCanonicalBase64(message.initialNonce, 'certificateRequest.initialNonce', 48)
       assertCanonicalBase64(message.yourNonce, 'certificateRequest.yourNonce', 48)
       assertRequestedCertificateSet(message.requestedCertificates)
-      assertAuthByteArray(
+      assertOwnedAuthByteArray(
         message.signature,
         'certificateRequest.signature',
         MAX_AUTH_SIGNATURE_BYTES
@@ -378,7 +417,7 @@ function assertValidAuthMessageShape(
       if (!Array.isArray(message.certificates)) {
         throw new Error('certificateResponse.certificates must be an array.')
       }
-      assertAuthByteArray(
+      assertOwnedAuthByteArray(
         message.signature,
         'certificateResponse.signature',
         MAX_AUTH_SIGNATURE_BYTES
@@ -387,7 +426,7 @@ function assertValidAuthMessageShape(
     case 'general':
       assertCanonicalBase64(message.nonce, 'general.nonce', 32)
       assertCanonicalBase64(message.yourNonce, 'general.yourNonce', 48)
-      assertAuthByteArray(
+      assertOwnedAuthByteArray(
         message.payload,
         'general.payload',
         maxGeneralPayloadBytes === null
@@ -395,7 +434,7 @@ function assertValidAuthMessageShape(
           : (maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
         true
       )
-      assertAuthByteArray(message.signature, 'general.signature', MAX_AUTH_SIGNATURE_BYTES)
+      assertOwnedAuthByteArray(message.signature, 'general.signature', MAX_AUTH_SIGNATURE_BYTES)
       break
     default:
       throw new Error(`Unknown authentication message type: ${String(message.messageType)}`)

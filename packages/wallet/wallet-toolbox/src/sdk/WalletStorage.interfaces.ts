@@ -1,3 +1,4 @@
+import type { Brc197InternalizeActionArgs, Brc197InternalizationCapabilities } from './Brc197Internalization'
 import type {
   AbortActionArgs,
   AbortActionResult,
@@ -38,6 +39,7 @@ import {
 import { WalletServices } from './WalletServices.interfaces'
 import { Chain, Paged, ProvenTxReqStatus, TransactionStatus } from './types'
 import { WalletError } from './WalletError'
+import type { SnapshotSyncStorage } from '../storage/snapshot/SnapshotSync'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -81,7 +83,7 @@ export interface WalletStorage {
 
   getAuth: () => Promise<AuthId>
 
-  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser, isNew: boolean }>
+  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser; isNew: boolean }>
 
   abortAction: (args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
@@ -101,6 +103,8 @@ export interface WalletStorage {
   commitActionBatchByDigest?: (args: CommitActionBatchByDigestArgs) => Promise<CommitActionBatchResult>
   abortActionBatch: (batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (args: InternalizeActionArgs) => Promise<InternalizeActionResult>
+  internalizeBrc197Action?: (args: Brc197InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
+  getBrc197InternalizationCapabilities?: () => Promise<Brc197InternalizationCapabilities>
 
   findCertificates: (args: FindCertificatesArgs) => Promise<TableCertificateX[]>
   findOutputBaskets: (args: FindOutputBasketsArgs) => Promise<TableOutputBasket[]>
@@ -146,7 +150,7 @@ export interface WalletStorageProvider extends WalletStorageSync {
   setServices: (v: WalletServices) => void
 }
 
-export interface WalletStorageSync extends WalletStorageWriter {
+export interface WalletStorageSync extends WalletStorageWriter, WalletStorageSyncReader {
   /** Compact writer checkpoint. Undefined means a legacy remote provider. */
   getSyncCheckpoint?: (
     auth: AuthId,
@@ -158,7 +162,7 @@ export interface WalletStorageSync extends WalletStorageWriter {
     auth: AuthId,
     storageIdentityKey: string,
     storageName: string
-  ) => Promise<{ syncState: TableSyncState, isNew: boolean }>
+  ) => Promise<{ syncState: TableSyncState; isNew: boolean }>
 
   /**
    * Updagte the `activeStorage` property of the authenticated user by their `userId`.
@@ -182,6 +186,8 @@ export interface WalletStorageSync extends WalletStorageWriter {
 export interface WalletStorageSyncReader {
   makeAvailable: () => Promise<TableSettings>
   getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
+  /** Optional local adapter; immutable remote sources negotiate their capability when opened. */
+  getSnapshotSync?: () => SnapshotSyncStorage | undefined
 }
 
 export interface WalletStorageWriter extends WalletStorageReader {
@@ -189,7 +195,7 @@ export interface WalletStorageWriter extends WalletStorageReader {
   migrate: (storageName: string, storageIdentityKey: string) => Promise<string>
   destroy: () => Promise<void>
 
-  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser, isNew: boolean }>
+  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser; isNew: boolean }>
 
   abortAction: (auth: AuthId, args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (auth: AuthId, args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
@@ -212,12 +218,10 @@ export interface WalletStorageWriter extends WalletStorageReader {
   putActionBatchBlob: (auth: AuthId, args: PutActionBatchBlobArgs) => Promise<void>
   putActionBatchPack?: (auth: AuthId, args: PutActionBatchPackArgs) => Promise<void>
   commitActionBatch: (auth: AuthId, manifest: ActionBatchManifest) => Promise<CommitActionBatchResult>
-  commitActionBatchByDigest?: (
-    auth: AuthId,
-    args: CommitActionBatchByDigestArgs
-  ) => Promise<CommitActionBatchResult>
+  commitActionBatchByDigest?: (auth: AuthId, args: CommitActionBatchByDigestArgs) => Promise<CommitActionBatchResult>
   abortActionBatch: (auth: AuthId, batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (auth: AuthId, args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
+  internalizeBrc197Action?: (auth: AuthId, args: Brc197InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 
   insertCertificateAuth: (auth: AuthId, certificate: TableCertificateX) => Promise<number>
 
@@ -340,7 +344,8 @@ export interface StorageActivateNoSendExpiryArgs {
 export interface StorageActivateNoSendExpiryResult {
   action: StorageCreateActionResult
   expiry: Brc177NoSendExpiry
-  deadline: number
+  /** Absolute deadline in the expiry mode's units; null for `never`. */
+  deadline: number | null
   anchorTxid: string
   anchorVout: number
 }
@@ -595,7 +600,7 @@ export type SyncProtocolVersion = '0.1.0'
 export interface SyncCheckpoint {
   syncStateId: number
   since?: Date
-  offsets: Array<{ name: string, offset: number }>
+  offsets: Array<{ name: string; offset: number }>
 }
 
 export interface RequestSyncChunkArgs {
@@ -661,7 +666,7 @@ export interface RequestSyncChunkArgs {
    * 10 Certificates
    * 11 CertificateFields
    */
-  offsets: Array<{ name: string, offset: number }>
+  offsets: Array<{ name: string; offset: number }>
 }
 
 export interface SyncChunkTotals {
@@ -721,10 +726,11 @@ export interface ProcessSyncChunkResult {
   updates: number
   inserts: number
   /**
-   * Optional non-throwing failure from a custom writer. First-party
-   * `StorageProvider` implementations throw instead of setting this field.
-   * `WalletStorageManager.syncToWriter` and `syncFromReader` throw `error`
-   * immediately and do not request another chunk.
+   * Optional failure channel for custom providers; local providers normally throw.
+   * A failure takes precedence over done, counters and nextCheckpoint. Callers stop
+   * and resume from the destination's durable checkpoint instead of retrying a write.
+   * First-party implementations throw. Live syncToWriter and syncFromReader
+   * stop immediately when a custom writer returns this field.
    */
   error?: WalletError
 }
@@ -740,7 +746,7 @@ export interface ReproveHeaderResult {
   /**
    * List of proven_txs records that were updated with new proof data.
    */
-  updated: Array<{ was: TableProvenTx, update: Partial<TableProvenTx>, logUpdate: string }>
+  updated: Array<{ was: TableProvenTx; update: Partial<TableProvenTx>; logUpdate: string }>
   /**
    * List of proven_txs records that were checked but currently available proof is unchanged.
    */
@@ -762,7 +768,7 @@ export interface ReproveProvenResult {
   /**
    * Valid if proof data for proven_txs record is available and has changed.
    */
-  updated?: { update: Partial<TableProvenTx>, logUpdate: string }
+  updated?: { update: Partial<TableProvenTx>; logUpdate: string }
   /**
    * True if proof data for proven_txs record was found to be unchanged.
    */

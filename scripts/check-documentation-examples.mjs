@@ -192,7 +192,9 @@ export async function main() {
     )
     await writeFile(
       join(consumerDirectory, 'pnpm-workspace.yaml'),
-      `${JSON.stringify({ overrides: dependencies }, null, 2)}\n`
+      // Match the reviewed root lock rather than resolving a newer untrusted
+      // encodeurl publication in this temporary documentation-only consumer.
+      `${JSON.stringify({ overrides: { ...dependencies, encodeurl: '2.0.0' } }, null, 2)}\n`
     )
     const combinedExamples = blocks
       .map(block => [`// ${block.id}`, block.source].join('\n'))

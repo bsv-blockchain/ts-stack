@@ -5,8 +5,8 @@
   "baseImages": [
     {
       "name": "Node.js",
-      "version": "24.20.0-alpine3.24",
-      "digest": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+      "version": "24.22.1-alpine3.24",
+      "digest": "sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53",
       "discoveryReference": "node",
       "references": ["node", "public.ecr.aws/docker/library/node"],
       "refreshOwner": "dependabot-docker",
@@ -31,7 +31,7 @@
       "path": "infra/chaintracks-server",
       "title": "BSV Chaintracks Server",
       "description": "Chaintracks service and bulk-header API for BSV applications",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server",
       "release": "ghcr-keyless"
@@ -41,7 +41,7 @@
       "path": "infra/message-box-server",
       "title": "BSV Message Box Server",
       "description": "Authenticated message-box and payment service for BSV applications",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server",
       "release": "ghcr-keyless"
@@ -51,7 +51,7 @@
       "path": "infra/overlay-server",
       "title": "BSV Overlay Server",
       "description": "Reference overlay-services deployment for distributed BSV applications",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server",
       "release": "ghcr-keyless"
@@ -61,7 +61,7 @@
       "path": "infra/uhrp-server-basic",
       "title": "BSV UHRP Basic Server",
       "description": "Filesystem-backed UHRP content service",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic",
       "release": "ghcr-keyless"
@@ -71,7 +71,7 @@
       "path": "infra/uhrp-server-cloud-bucket",
       "title": "BSV UHRP Cloud Bucket Server",
       "description": "Cloud-bucket-backed UHRP storage service",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket",
       "release": "ghcr-keyless"
@@ -81,7 +81,7 @@
       "path": "infra/wab",
       "title": "Wallet Authentication Backend",
       "description": "Multi-factor authentication backend for BSV wallets",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab",
       "release": "ghcr-and-aws-marketplace-keyless"
@@ -91,9 +91,19 @@
       "path": "infra/wallet-infra",
       "title": "BSV Wallet Infrastructure",
       "description": "Wallet storage and management service for BSV applications",
-      "license": "LicenseRef-Open-BSV-License-6",
+      "license": "Apache-2.0",
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra",
+      "release": "ghcr-keyless"
+    },
+    {
+      "name": "webrtpay-relay",
+      "path": "infra/webrtpay-relay",
+      "title": "BSV WebRTPay Signalling Relay",
+      "description": "Signalling relay and TURN credential issuer for direct WebRTC payments between BSV wallets",
+      "license": "Apache-2.0",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay",
       "release": "ghcr-keyless"
     }
   ]

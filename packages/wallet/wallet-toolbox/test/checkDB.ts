@@ -30,7 +30,7 @@ const runTest = () => {
       if (rows.length === 0) {
         console.log('  No foreign key constraints defined.')
       } else {
-        rows.forEach(fk => {
+        rows.forEach((fk: { from: string; table: string; to: string; on_update: string; on_delete: string }) => {
           console.log(
             `  Column '${fk.from}' references '${fk.table}(${fk.to})' ` +
               `ON UPDATE ${fk.on_update} ON DELETE ${fk.on_delete}`

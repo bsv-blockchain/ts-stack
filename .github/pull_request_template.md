@@ -26,6 +26,10 @@ through the release workflow after approval):
 
 - Local commands and results:
 - Hosted CI run:
+- Compatibility evidence (published client/wallet versions, both old/new
+  directions, transports, legacy wire fixtures, and unchanged validation):
+- [ ] Established compatibility contracts and the BRC-100 application-wallet
+      boundary remain compatible, including across major versions
 - Conformance evidence:
 - Coverage delta:
 - Lint/typecheck delta:
@@ -45,7 +49,13 @@ through the release workflow after approval):
 - [ ] The exact-head CodeQL analysis has no new alert
 - [ ] The exact-head repository quality gate reports zero new Sonar findings
       (including accepted or false-positive issue states) and zero unreviewed hotspots;
-      Sonar's aggregate `Quality Gate passed` verdict alone is not merge evidence
+      Sonar's aggregate `Quality Gate passed` verdict alone is not merge evidence.
+      Only the exact, unexpired [approved PR569 budget](../docs/reviews/sonar-pr569-budget.md)
+      may instead retain visible maintainability-only findings with maintainability A
+      and duplication ≤6%; attach complete inventories and both verdicts.
+      Bugs, vulnerabilities, reliability/security impacts and unreviewed hotspots
+      remain blocking, including accepted/false-positive states; all other PRs
+      retain the original zero-findings gate
 - [ ] No new override, advisory dismissal, quality suppression, or skipped test
 - [ ] Any temporary exception is registered with owner, evidence, review date,
       and removal condition

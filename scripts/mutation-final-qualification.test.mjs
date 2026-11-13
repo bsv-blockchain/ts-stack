@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import {
+  qualificationIdentity,
   makeTargetReceipt,
   verifyFullCampaign,
-  loadCanonicalEvidence
+  loadCanonicalEvidence,
+  packageScopedTargets
 } from './mutation-final-qualification.mjs'
 
 import {
@@ -43,6 +50,80 @@ const capture = value =>
     executionFor(JSON.stringify(value))
   )
 
+test('both batch controls bind the actual final configuration identity alongside all prior inputs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'mutation-identity-inputs-'))
+  const originalInputs = [
+    'governance/mutation-testing/stop-on-kill-environment.cjs',
+    'governance/mutation-testing/durations.json',
+    'governance/mutation-testing/wallet-component-tests.json',
+    'scripts/provision-wallet-native-browser.mjs',
+    'scripts/wallet-native-browser.json',
+    'scripts/mutation-execution-partitions.mjs',
+    'governance/mutation-testing/execution-partitions.json',
+    'scripts/wallet-journal-ci.mjs',
+    'scripts/wallet-composed-native-ci.mjs',
+    '.github/workflows/ci.yml',
+    'governance/mutation-testing/targets.mjs',
+    'governance/mutation-testing/policy.json',
+    'governance/mutation-testing/stryker.config.mjs',
+    'scripts/mutation-testing.mjs',
+    'scripts/mutation-final-qualification.mjs',
+    'scripts/mutation-partitions.mjs',
+    'scripts/mutation-partition-evidence.mjs',
+    '.github/workflows/mutation-tests.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json'
+  ]
+  const batchInputs = ['scripts/mutation-execution-batches.mjs']
+  const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
+  const commit = () => {
+    git(['add', '.'])
+    git([
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Fixture'
+    ])
+  }
+  const actualIdentity = () =>
+    qualificationIdentity(
+      root,
+      {
+        GITHUB_SHA: git(['rev-parse', 'HEAD']).trim(),
+        GITHUB_RUN_ID: '1',
+        GITHUB_RUN_ATTEMPT: '1'
+      },
+      { fixture: { packageDirectory: 'packages/fixture' } }
+    )
+  try {
+    for (const file of [...originalInputs, ...batchInputs]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true })
+      writeFileSync(join(root, file), file)
+    }
+    git(['init', '--quiet'])
+    commit()
+    for (const file of [...originalInputs, ...batchInputs]) {
+      const before = actualIdentity()
+      writeFileSync(join(root, file), `${file}\nchanged`)
+      assert.throws(actualIdentity, /Tracked source changed/)
+      commit()
+      const after = actualIdentity()
+      assert.notEqual(after.inputsDigest, before.inputsDigest, file)
+      assert.notEqual(after.sourceSha, before.sourceSha, file)
+      assert.equal(after.targetsDigest, before.targetsDigest)
+      assert.equal(after.runId, before.runId)
+      assert.equal(after.runAttempt, before.runAttempt)
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('complete exact-source campaigns preserve every target score, no-coverage and invalid gate', () => {
   const qualified = qualify([entry('two'), entry('one')])
   assert.equal(qualified.identity.sourceSha, identity.sourceSha)
@@ -53,12 +134,75 @@ test('complete exact-source campaigns preserve every target score, no-coverage a
   assert.ok(inventory.length > 5)
 })
 
+test('canonical raw rechecks reject interrupted kills even with matching digests and a forged passing receipt', () => {
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex')
+  for (const reason of [
+    'Error: Property interrupted after 290 tests\n{ seed: 3242026 }',
+    'Error: thrown: "Exceeded timeout of 5000 ms for a test.'
+  ]) {
+    const value = report()
+    Object.values(value.files)[0].mutants[0].statusReason = reason
+    assert.throws(() => capture(value), /reported kills.*runner limit/)
+    const packet = entry('one')
+    packet.reportBytes = JSON.stringify(value)
+    packet.executionBytes = executionFor(packet.reportBytes)
+    packet.receipt.reportDigest = digest(packet.reportBytes)
+    packet.receipt.executionDigest = digest(packet.executionBytes)
+    assert.equal(packet.receipt.metrics.score, 100)
+    assert.equal(packet.receipt.metrics.runnerLimitedKills, 0)
+    assert.throws(() => qualify([packet, entry('two')]), /reported kills.*runner limit/)
+  }
+})
+
 test('missing, duplicate, extra and diagnostic targets never qualify a full campaign', () => {
   assert.throws(() => qualify([entry('one')]), /every canonical/)
   assert.throws(() => qualify([]), /every canonical/)
   assert.throws(() => qualify([entry('one'), entry('one'), entry('two')]), /Duplicate/)
   assert.throws(() => entry('extra'), /outside canonical/)
   assert.throws(() => qualify([entry('one'), entry('two', undefined, 'diagnostic')]), /Diagnostic/)
+})
+
+test('package scope selects every target in its directories or falls back to the full campaign', () => {
+  const targets = {
+    templates: { packageDirectory: 'packages/helpers/ts-templates' },
+    nested: { packageDirectory: 'packages/helpers/ts-templates/sub' },
+    prefix: { packageDirectory: 'packages/helpers/ts-templates-extra' },
+    sdk: { packageDirectory: 'packages/sdk' }
+  }
+  assert.deepEqual(packageScopedTargets(targets, ['./packages/helpers/ts-templates/']), {
+    packages: ['packages/helpers/ts-templates'],
+    targetIds: ['nested', 'templates']
+  })
+  assert.deepEqual(packageScopedTargets(targets, ['packages/none']), {
+    packages: null,
+    targetIds: ['nested', 'prefix', 'sdk', 'templates']
+  })
+  for (const invalid of [[], 'packages/sdk', ['../sdk'], ['packages/../sdk'], ['lib/x'], [7]])
+    assert.throws(() => packageScopedTargets(targets, invalid), /package directory/)
+})
+
+test('a package-scoped campaign needs exactly every target of its packages', () => {
+  const scope = { packages: ['packages/one'], targetIds: ['one'] }
+  const scoped = entries => verifyFullCampaign(identity, entries, policy, () => evidence, scope)
+  const qualified = scoped([entry('one')])
+  assert.equal(qualified.kind, 'package-scoped-mutation-qualification')
+  assert.deepEqual(qualified.packages, ['packages/one'])
+  assert.deepEqual(qualified.targetIds, ['one'])
+  assert.throws(() => scoped([]), /every canonical target of its packages/)
+  assert.throws(() => scoped([entry('one'), entry('two')]), /outside the qualification scope/)
+  assert.throws(() => scoped([entry('one'), entry('one')]), /Duplicate/)
+  assert.throws(() => scoped([entry('one', undefined, 'diagnostic')]), /Diagnostic/)
+  for (const invalid of [
+    { packages: [], targetIds: ['one'] },
+    { packages: null, targetIds: ['one'] },
+    { packages: ['packages/one'], targetIds: [] },
+    { packages: ['packages/one'], targetIds: ['extra'] }
+  ])
+    assert.throws(
+      () => verifyFullCampaign(identity, [entry('one')], policy, () => evidence, invalid),
+      /canonical targets for named packages/
+    )
+  assert.equal(qualify([entry('one'), entry('two')]).kind, 'full-mutation-qualification')
 })
 
 test('head, attempt, runtime, control inputs and modified receipts fail closed', () => {

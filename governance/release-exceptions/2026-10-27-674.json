@@ -1,0 +1,26 @@
+{
+  "id": "2026-10-27-674-experimental",
+  "owner": "ty-everett",
+  "sourceBase": "a6b6e352ab98b1fe5d7dce9fa834959ab260c71f",
+  "recordedAt": "2026-10-28T00:41:32Z",
+  "expiresAt": "2026-10-29T00:00:00Z",
+  "reason": "The operator explicitly waives full mutation qualification of additive experimental PR674 for this one release set. Failed campaigns remain failed. Established backwards-compatibility contracts, old WalletClients, normal release approval and every artifact, signature, SBOM and security gate remain mandatory.",
+  "releaseSet": "The 37 npm candidates and 8 infrastructure images derived from the unchanged a6b6e352 application tree, including SDK 4.0.1 and Toolbox 2.15.1.",
+  "evidence": "Merged numeric/HMAC/timeout repairs and BRC351/362; exact-source main CI and security analyses; actual staged SDK 50 numeric transport checks and 54 HMAC combinations with published SDK 2.8.11/3.2.1 and the candidate.",
+  "failedRuns": [40582701982, 40589778304, 40596363414],
+  "removalCondition": "Remove the temporary workflow admission after this exact release and published-baseline reconciliation. Any application, package, lockfile or other source change is ineligible; subsequent releases require normal full qualification.",
+  "status": "retired",
+  "releaseRun": "https://github.com/bsv-blockchain/ts-stack/actions/runs/40612905804",
+  "admittedSource": "f12e0dd669287b63964545035a39f0d339abc447",
+  "imageContinuationRun": "https://github.com/bsv-blockchain/ts-stack/actions/runs/40617228519",
+  "imageContinuationSource": "ada0681362455045ff3a0dd795fcf89e6f177d92",
+  "retirement": "The same release completed37npm packages and8images. Six images use the original generated child; two version-only replacements use the remaining recovery child because the previous tags contained SDK4.0.0. All temporary dispatch/admission/recovery controls are removed. This is historical evidence, not successful full mutation qualification; every future release requires normal full qualification.",
+  "originalGeneratedImageSource": "1aa0983115ba39579ac09885e1977c05b765e42e",
+  "remainingGeneratedImageSource": "f69c6f2b1f805e0d69962815515a641a35e230cb",
+  "remainingImageRecoverySource": "d344bf07b8a9d25adc7203687b667a70e96955f5",
+  "remainingImageRecoveryRun": "https://github.com/bsv-blockchain/ts-stack/actions/runs/40623065656",
+  "remainingImageVersions": {
+    "message-box-server": "1.1.56",
+    "webrtpay-relay": "0.2.3"
+  }
+}

@@ -41,25 +41,41 @@ describe('isValidTopicOrServiceName', () => {
     expect(isValidTopicOrServiceName('ls_tempo__songs')).toBe(false)
   })
 
-  // Only lower-case letters and underscores allowed (no digits or special characters)
-  it('should invalidate names containing non-alphabetic characters', () => {
-    expect(isValidTopicOrServiceName('tm_uhrp_files2')).toBe(false)
+  // BRC-207 per-asset names: lowercase hex txid, underscore, decimal output index
+  it('should validate BRC-207 per-asset topic and lookup service names', () => {
+    const assetId = `${'0123456789abcdef'.repeat(4)}_0`
+    expect(isValidTopicOrServiceName(`tm_color_${assetId}`)).toBe(true)
+    expect(isValidTopicOrServiceName(`ls_color_${assetId}`)).toBe(true)
+    expect(isValidTopicOrServiceName('tm_uhrp_files2')).toBe(true)
+  })
+
+  // Only lower-case letters, digits and underscores allowed
+  it('should invalidate names containing other characters', () => {
     expect(isValidTopicOrServiceName('ls_tempo_songs-search')).toBe(false)
     expect(isValidTopicOrServiceName('tm_uhrp%files')).toBe(false)
+    expect(isValidTopicOrServiceName('tm_uhrp files')).toBe(false)
+    expect(isValidTopicOrServiceName('tm_\u00e9')).toBe(false)
   })
 
-  // Length checks: Must not exceed 50 characters
-  it('should invalidate names exceeding 50 characters', () => {
-    // "tm_" is 3 characters, so append 48 letters to make a 51-character string.
-    const longName = 'tm_' + 'a'.repeat(48)
-    expect(longName).toHaveLength(51)
+  it('should invalidate a bare prefix and names without a prefix', () => {
+    expect(isValidTopicOrServiceName('tm_')).toBe(false)
+    expect(isValidTopicOrServiceName('ls_')).toBe(false)
+    expect(isValidTopicOrServiceName('tm__x')).toBe(false)
+    expect(isValidTopicOrServiceName('tm_x_')).toBe(false)
+    expect(isValidTopicOrServiceName('color_abc')).toBe(false)
+  })
+
+  // Length checks: at most 256 bytes, the overlay engine's topic limit
+  it('should invalidate names exceeding 256 bytes', () => {
+    const longName = 'tm_' + 'a'.repeat(254)
+    expect(longName).toHaveLength(257)
     expect(isValidTopicOrServiceName(longName)).toBe(false)
+    expect(isValidTopicOrServiceName('tm_' + 'a'.repeat(297))).toBe(false)
   })
 
-  it('should validate a name with exactly 50 characters', () => {
-    // "tm_" is 3 characters, so append 47 letters to make a 50-character string.
-    const validName = 'tm_' + 'a'.repeat(47)
-    expect(validName).toHaveLength(50)
+  it('should validate a name with exactly 256 bytes', () => {
+    const validName = 'ls_' + 'a'.repeat(253)
+    expect(validName).toHaveLength(256)
     expect(isValidTopicOrServiceName(validName)).toBe(true)
   })
 

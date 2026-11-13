@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync } from '../utility/promiseFromSync'
 import { wait } from '../utility/utilityHelpers'
 
 import { WalletMonitorTask } from './tasks/WalletMonitorTask'
@@ -211,10 +212,12 @@ export class Monitor {
       // Method presence is not capability (see ChaintracksClientApi's own doc
       // comment on `supportsReorgEvents`): `false` means subscribeHeaders /
       // subscribeReorgs are unsupported stubs that must not be called, e.g.
-      // ChaintracksServiceClient, an HTTP-polling client. Regular scheduled
-      // tasks (TaskNewHeader, TaskReorg, ...) already poll the configured
-      // `chaintracks` every tick regardless of push events, so there is
-      // nothing to set up here; skip without touching the network.
+      // ChaintracksServiceClient, an HTTP-polling client. TaskNewHeader polls
+      // the tip. TaskReorg checks recent proofs and journals unresolved heights
+      // and observed tip gaps for retries in bounded batches, independent of
+      // push events. TaskReviewProvenTxs bootstraps its separate lagged audit
+      // from a safe proof-height lower bound. Skip push registration without
+      // touching the network.
       if (eventSource.supportsReorgEvents === false) return
       const actualChain = await eventSource.getChain()
       if (actualChain !== this.chain) {
@@ -267,7 +270,7 @@ export class Monitor {
       await Promise.all(
         subscriptions
           .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')
-          .map(async result => await c.unsubscribe(result.value).catch(() => false))
+          .map(result => awaitFromSync(() => c.unsubscribe(result.value).catch(() => false)))
       )
     }
     await this.reorgInvalidationPromise
@@ -421,13 +424,11 @@ export class Monitor {
    * Best-effort attempt to (re)register the optional Chaintracks header/reorg
    * push subscriptions ahead of this scheduler tick.
    *
-   * Header and reorg events are a latency optimization, not a requirement:
-   * every task that cares about chain height or reorgs (TaskNewHeader,
-   * TaskReorg, ...) already polls the configured `chaintracks` on its own
-   * schedule regardless of whether push events are flowing. An offline,
-   * unimplemented (see the `supportsReorgEvents` skip in `_init`), or
-   * otherwise misconfigured event source must not stop the scheduler that
-   * runs every other maintenance task.
+   * TaskNewHeader polls the tip. TaskReorg handles deactivated-header events,
+   * checks a recent proof window at each processed tip and retries journaled
+   * heights and observed tip gaps even without another event. TaskReviewProvenTxs
+   * supplies the separate lagged proof audit. A failed, unsupported or offline
+   * event source must not stop these tasks or the rest of the scheduler.
    *
    * A failure here is swallowed and logged once per outage; the `ready`
    * getter's own `.catch` resets `_readyInit` first, so the *next* call to
@@ -553,15 +554,17 @@ export class Monitor {
       throw new WERR_INVALID_PARAMETER('event', 'a bounded control-free monitor event name')
     }
     const boundedDetails = details == null ? undefined : safeDiagnostic(details, 8192)
-    await this.storage.runAsStorageProvider(async sp => {
-      await sp.insertMonitorEvent({
-        created_at: new Date(),
-        updated_at: new Date(),
-        id: 0,
-        event,
-        details: boundedDetails
-      })
-    })
+    await this.storage.runAsStorageProvider(sp =>
+      awaitVoidFromSync(() =>
+        sp.insertMonitorEvent({
+          created_at: new Date(),
+          updated_at: new Date(),
+          id: 0,
+          event,
+          details: boundedDetails
+        })
+      )
+    )
   }
 
   stopTasks(): void {
@@ -618,7 +621,9 @@ export class Monitor {
    */
   callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void {
     if (this.onTransactionBroadcasted != null) {
-      this.invokeCallback('onTransactionBroadcasted', async () => await this.onTransactionBroadcasted!(broadcastResult))
+      this.invokeCallback('onTransactionBroadcasted', () =>
+        awaitFromSync(() => this.onTransactionBroadcasted!(broadcastResult))
+      )
     }
   }
 
@@ -631,7 +636,7 @@ export class Monitor {
    */
   callOnProvenTransaction(txStatus: ProvenTransactionStatus): void {
     if (this.onTransactionProven != null) {
-      this.invokeCallback('onTransactionProven', async () => await this.onTransactionProven!({ ...txStatus }))
+      this.invokeCallback('onTransactionProven', () => awaitFromSync(() => this.onTransactionProven!({ ...txStatus })))
     }
   }
 
@@ -640,9 +645,8 @@ export class Monitor {
    */
   callOnTransactionStatusChanged(txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged != null) {
-      this.invokeCallback(
-        'onTransactionStatusChanged',
-        async () => await this.onTransactionStatusChanged!(txid, newStatus)
+      this.invokeCallback('onTransactionStatusChanged', () =>
+        awaitFromSync(() => this.onTransactionStatusChanged!(txid, newStatus))
       )
     }
   }
@@ -650,9 +654,11 @@ export class Monitor {
   private invokeCallback(name: string, callback: () => Promise<void>): void {
     void Promise.resolve()
       .then(callback)
-      .catch(async error => {
-        await this.logEvent('error1', `monitor ${name} callback error ${safeDiagnostic(error)}`).catch(() => {})
-      })
+      .catch(error =>
+        awaitVoidFromSync(() =>
+          this.logEvent('error1', `monitor ${name} callback error ${safeDiagnostic(error)}`).catch(() => {})
+        )
+      )
   }
 
   /**

@@ -343,6 +343,28 @@ describe('SHIPCast', () => {
     })
   })
 
+  it('accepts BRC-207 per-asset topic names and keeps rejecting noncanonical ones', () => {
+    const assetTopic = `tm_color_${'0123456789abcdef'.repeat(4)}_0`
+    expect(
+      () =>
+        new SHIPCast([assetTopic, 'tm_uhrp_files'], {
+          requireAcknowledgmentFromAnyHostForTopics: [assetTopic]
+        })
+    ).not.toThrow()
+    for (const topic of [
+      'tm_',
+      'tm__x',
+      'tm_x_',
+      'tm_Color',
+      'tm_' + 'a'.repeat(297),
+      `color_${'0123456789abcdef'.repeat(4)}_0`
+    ]) {
+      expect(() => new SHIPCast([topic])).toThrow(
+        new Error('Broadcast topics must contain unique canonical tm_ topic names.')
+      )
+    }
+  })
+
   it('Handles constructor errors', () => {
     expect(() => new SHIPCast([])).toThrow(
       new Error('Broadcast topics must be a bounded array of canonical topic names.')

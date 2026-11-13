@@ -1,5 +1,7 @@
 # AuthSocket (server-side)
 
+Patch candidate `2.1.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 ## Overview
 
 This package provides a **drop-in server-side solution** for Socket.IO that enforces [BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) **mutual authentication** on all connected clients.
@@ -203,8 +205,8 @@ operation and should be reserved for intentionally public events.
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
@@ -225,5 +227,12 @@ pnpm pack:check
 
 `pack:check` validates the exact npm tarball with `publint`, strict ESM and
 CommonJS type resolution, and clean consumer installations. The package uses
-the Open BSV License Version 6; the repository license controls ensure the
+the Apache License 2.0; the repository license controls ensure the
 manifest, included license, and packed artifact remain in sync.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

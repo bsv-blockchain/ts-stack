@@ -113,6 +113,85 @@ describe('BRC-38/39 portable wallet data', () => {
     await expect(importBRC38(target, document, { mode: 'restore' })).rejects.toThrow(/empty target storage/)
   })
 
+  test('canonical capture omits absent legacy JSON object fields without changing source history or array positions', async () => {
+    const source = await createPortableSource('portable_nullable_history', '4'.repeat(64))
+    const storage = source.activeStorage
+    const original = await exportBRC38(storage, source.identityKey)
+    const partial = { provenTxReqId: original.tables.provenTxReqs[0].provenTxReqId as number }
+    const request = verifyOne(await storage.findProvenTxReqs({ partial }))
+    const history = JSON.stringify({
+      notes: [{ when: null, what: 'sent', optional: null, retained: false, zero: 0, text: '', ['__proto__']: 'own JSON property' }]
+    })
+    await storage.updateProvenTxReq(request.provenTxReqId, { history })
+    const document = await exportBRC38(storage, source.identityKey)
+    expect(document.tables.provenTxReqs[0].history).toEqual({
+      notes: [{ what: 'sent', retained: false, zero: 0, text: '', ['__proto__']: 'own JSON property' }]
+    })
+    expect(verifyOne(await storage.findProvenTxReqs({ partial })).history).toBe(history)
+    expect(parseBRC38Json(await exportBRC38Json(storage, source.identityKey)).tables.provenTxReqs[0].history)
+      .toEqual(document.tables.provenTxReqs[0].history)
+  })
+
+  test('canonical capture refuses null required history fields instead of hiding them', async () => {
+    const source = await createPortableSource('portable_null_required', '6'.repeat(64))
+    const original = await exportBRC38(source.activeStorage, source.identityKey)
+    const provenTxReqId = original.tables.provenTxReqs[0].provenTxReqId as number
+    await source.activeStorage.updateProvenTxReq(provenTxReqId, { history: '{"notes":[{"what":null}]}' })
+    await expect(exportBRC38(source.activeStorage, source.identityKey)).rejects.toThrow('must not contain null')
+  })
+
+  test.each(['labels', 'tags'])('capture refuses inconsistent %s relationships instead of omitting owned map rows', async kind => {
+    const source = await createPortableSource(`portable_inconsistent_${kind}`, '8'.repeat(64))
+    const setup = source.setup!
+    if (kind === 'labels') {
+      await _tu.insertTestTxLabelMap(source.activeStorage, setup.u2tx1, setup.u1label1)
+      await expect(exportBRC38(source.activeStorage, source.identityKey)).rejects.toThrow('txLabelMap.transactionId')
+      expect(await source.activeStorage.findTxLabelMaps({ partial: {
+        transactionId: setup.u2tx1.transactionId, txLabelId: setup.u1label1.txLabelId
+      } })).toHaveLength(1)
+    } else {
+      await _tu.insertTestOutputTagMap(source.activeStorage, setup.u2tx1o0, setup.u1tag1)
+      await expect(exportBRC38(source.activeStorage, source.identityKey)).rejects.toThrow('outputTagMap.outputId')
+      expect(await source.activeStorage.findOutputTagMaps({ partial: {
+        outputId: setup.u2tx1o0.outputId, outputTagId: setup.u1tag1.outputTagId
+      } })).toHaveLength(1)
+    }
+  })
+
+  test('legacy optional sync/error fields normalize while checkpoint counts and ID mappings remain authoritative', async () => {
+    const source = await createPortableSource('portable_nullable_checkpoint', '7'.repeat(64))
+    const storage = source.activeStorage
+    const original = await exportBRC38(storage, source.identityKey)
+    const originalState = verifyTruthy(original.tables.syncStates.find(row => row.storageIdentityKey === remoteSyncStorageIdentityKey))
+    const partial = { syncStateId: originalState.syncStateId as number }
+    const state = verifyOne(await storage.findSyncStates({ partial }))
+    const map = JSON.parse(state.syncMap)
+    map.transaction.maxUpdated_at = null
+    const syncMap = JSON.stringify(map)
+    const errorLocal = '{"code":"retry","description":"synthetic checkpoint","stack":null}'
+    await storage.updateSyncState(state.syncStateId, { syncMap, errorLocal })
+    const captured = await exportBRC38(storage, source.identityKey)
+    const row = verifyTruthy(captured.tables.syncStates.find(row => row.syncStateId === state.syncStateId))
+    expect(row.errorLocal).toEqual({ code: 'retry', description: 'synthetic checkpoint' })
+    delete map.transaction.maxUpdated_at
+    expect(row.syncMap).toEqual(map)
+    expect(verifyOne(await storage.findSyncStates({ partial })).syncMap).toBe(syncMap)
+    map.transaction.idMap['999'] = null
+    await storage.updateSyncState(state.syncStateId, { syncMap: JSON.stringify(map) })
+    await expect(exportBRC38(storage, source.identityKey)).rejects.toThrow('must not contain null')
+  })
+
+  test('canonical capture rejects a null array entry instead of silently dropping it', async () => {
+    const source = await createPortableSource('portable_null_array', '5'.repeat(64))
+    const original = await exportBRC38(source.activeStorage, source.identityKey)
+    const partial = { provenTxReqId: original.tables.provenTxReqs[0].provenTxReqId as number }
+    const request = verifyOne(await source.activeStorage.findProvenTxReqs({ partial }))
+    const history = '{"notes":[{"what":"before"},null,{"what":"after"}]}'
+    await source.activeStorage.updateProvenTxReq(request.provenTxReqId, { history })
+    await expect(exportBRC38(source.activeStorage, source.identityKey)).rejects.toThrow('must not contain null')
+    expect(verifyOne(await source.activeStorage.findProvenTxReqs({ partial })).history).toBe(history)
+  })
+
   test('normalizes an exact legacy managed-change default during BRC-38 restore', async () => {
     const document = minimalDocument()
     document.tables.outputBaskets.push(

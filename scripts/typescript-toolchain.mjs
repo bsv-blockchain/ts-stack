@@ -47,8 +47,16 @@ const STANDALONE_RUNTIME_PROFILES = new Map(
     'infra/uhrp-server-basic/tsconfig.json',
     'infra/uhrp-server-cloud-bucket/tsconfig.json',
     'infra/wab/tsconfig.json',
-    'infra/wallet-infra/tsconfig.json'
-  ].map(relativePath => [relativePath, 'config/typescript/node-service.json'])
+    'infra/wallet-infra/tsconfig.json',
+    'infra/webrtpay-relay/tsconfig.json'
+  ]
+    .map(relativePath => [relativePath, 'config/typescript/node-service.json'])
+    .concat([
+      [
+        'packages/wallet/wallet-toolbox/client/test/tsconfig.browser.json',
+        'config/typescript/browser.json'
+      ]
+    ])
 )
 const REQUIRED_STRICT_OPTIONS = [
   'strict',
@@ -248,7 +256,7 @@ function validateStandaloneProfileMappings(parsedConfigs, findings) {
       findings.push(`standalone TypeScript profile mapping references missing ${relativePath}`)
     } else if (config.extends !== undefined) {
       findings.push(
-        `${relativePath} must remain self-contained for its package and Docker build contexts`
+        `${relativePath} must remain self-contained for its package, Docker or mutation build context`
       )
     }
     if (!APPROVED_TYPESCRIPT_PROFILES.has(approvedProfile)) {
@@ -380,7 +388,7 @@ function main() {
     `TypeScript toolchain: ${report.governed} native compiler profiles, ` +
       `${report.codegen} isolated codegen API profile, ${report.configurations} governed ` +
       `tsconfig files across ${report.profiles} runtime profiles ` +
-      `(${report.standalone} self-contained service contexts), ${report.findings.length} findings.`
+      `(${report.standalone} self-contained runtime contexts), ${report.findings.length} findings.`
   )
   if (report.findings.length > 0) process.exitCode = 1
 }

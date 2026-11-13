@@ -40,12 +40,12 @@ describe('Wave 28 compatibility boundaries', () => {
   })
 
   test('normalizes E.164 share-auth payloads before transport', async () => {
-    const fetchClient = jest.fn(async () =>
+    const fetchClient = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>(async () =>
       jsonResponse({
         success: true,
         message: 'started'
       })
-    ) as typeof fetch
+    )
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
 
     await expect(

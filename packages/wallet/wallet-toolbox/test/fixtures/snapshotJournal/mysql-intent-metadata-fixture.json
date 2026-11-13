@@ -1,0 +1,112 @@
+{
+  "tables": [
+    {
+      "engine": "InnoDB",
+      "type": "BASE TABLE",
+      "collation": "ascii_bin",
+      "rowFormat": "Dynamic",
+      "options": "row_format=DYNAMIC"
+    }
+  ],
+  "columns": [
+    {
+      "name": "id",
+      "type": "int",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": null,
+      "collation": null,
+      "expression": ""
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": null,
+      "collation": null,
+      "expression": ""
+    },
+    {
+      "name": "epoch",
+      "type": "varchar(36)",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": "ascii",
+      "collation": "ascii_bin",
+      "expression": ""
+    },
+    {
+      "name": "source",
+      "type": "varchar(64)",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": "ascii",
+      "collation": "ascii_bin",
+      "expression": ""
+    },
+    {
+      "name": "plan",
+      "type": "varchar(64)",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": "ascii",
+      "collation": "ascii_bin",
+      "expression": ""
+    },
+    {
+      "name": "ceiling",
+      "type": "varchar(19)",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": "ascii",
+      "collation": "ascii_bin",
+      "expression": ""
+    },
+    {
+      "name": "nextObject",
+      "type": "int",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": null,
+      "collation": null,
+      "expression": ""
+    },
+    {
+      "name": "complete",
+      "type": "tinyint(1)",
+      "nullable": "NO",
+      "defaultValue": null,
+      "extra": "",
+      "charset": null,
+      "collation": null,
+      "expression": ""
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PRIMARY",
+      "columnName": "id",
+      "nonUnique": 0,
+      "direction": "A",
+      "prefix": null,
+      "type": "BTREE",
+      "visible": "YES"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "PRIMARY",
+      "type": "PRIMARY KEY",
+      "enforced": "YES"
+    }
+  ],
+  "triggers": []
+}

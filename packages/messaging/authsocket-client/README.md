@@ -1,5 +1,7 @@
 # AuthSocket (client-side)
 
+Patch candidate `2.1.10` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 ## Overview
 
 This package provides a **drop-in client-side solution** for Socket.IO that
@@ -10,6 +12,14 @@ This package provides a **drop-in client-side solution** for Socket.IO that
   [`@bsv/authsocket`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket)
   or any BRC-103-compatible server.
 - Minimal changes compared to normal `socket.io-client` usage.
+
+## Next release candidate
+
+Unpublished 2.1.8 refreshes the UMD browser bundle with the integrated SDK.
+AuthSocket APIs, signed event JSON and the ESM/CommonJS SDK peer range are
+unchanged. The rebuilt UMD bytes differ from published 2.1.7, so distributors
+should adopt the new artifact only after publication and retain its license
+notices. Current wallet release pins are unaffected.
 
 ## Installation
 
@@ -138,7 +148,7 @@ sentinel. Malformed, oversized, or reserved-name frames are not dispatched.
 
 ## License
 
-TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party material is under the [Apache License 2.0](./LICENSE).
 The UMD bundle incorporates separately licensed SDK material; keep
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
 with the bundle.
@@ -165,3 +175,10 @@ verifies the packed package with Vite, esbuild, and the UMD artifact and
 enforces the repository's compressed-size budgets. The package uses the Open
 BSV License Version 6; the repository license controls ensure the manifest,
 included license, and packed artifact remain in sync.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

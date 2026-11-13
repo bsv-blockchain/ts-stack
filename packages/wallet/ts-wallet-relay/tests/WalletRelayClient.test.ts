@@ -1,6 +1,8 @@
 import { WalletRelayClient, WalletRelayError } from '../src/client/WalletRelayClient.js'
 import type { SessionInfo } from '../src/types.js'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import * as validation from '../src/shared/validation.js'
+import { LOCAL_NETWORK_AUTHORITIES, PUBLIC_AUTHORITIES } from './fixtures/localDevelopmentHosts.js'
 
 const SESSION_ID = 'A'.repeat(43)
 const OLD_SESSION_ID = 'B'.repeat(43)
@@ -63,6 +65,29 @@ describe('WalletRelayClient session lifecycle', () => {
     expect(() => new WalletRelayClient({ apiUrl: 'http://relay.example' })).toThrow(
       'requires HTTPS'
     )
+    for (const authority of PUBLIC_AUTHORITIES) {
+      expect(() => new WalletRelayClient({ apiUrl: `http://${authority}` })).toThrow(
+        'Relay API URL requires HTTPS, except for loopback development.'
+      )
+      expect(
+        () => new WalletRelayClient({ apiUrl: `http://${authority}`, allowLocalNetworkHttp: true })
+      ).toThrow('Relay API URL requires HTTPS, except for loopback or local-network development.')
+    }
+    for (const authority of LOCAL_NETWORK_AUTHORITIES) {
+      expect(() => new WalletRelayClient({ apiUrl: `http://${authority}` })).toThrow(
+        'Relay API URL requires HTTPS, except for loopback development (set allowLocalNetworkHttp: true to allow private-network IP addresses in development).'
+      )
+      expect(
+        () => new WalletRelayClient({ apiUrl: `http://${authority}`, allowLocalNetworkHttp: false })
+      ).toThrow('allowLocalNetworkHttp')
+    }
+    expect(
+      () =>
+        new WalletRelayClient({
+          apiUrl: 'https://relay.example',
+          allowLocalNetworkHttp: 'yes' as unknown as boolean
+        })
+    ).toThrow('allowLocalNetworkHttp must be a boolean')
     expect(() => new WalletRelayClient({ apiUrl: '//relay.example' })).toThrow(
       'absolute or a root-relative path'
     )
@@ -86,19 +111,246 @@ describe('WalletRelayClient session lifecycle', () => {
   })
 
   it.each([
-    ['http://localhost:3001', 'http://localhost:3001/api/session'],
-    ['http://wallet.localhost:3001/relay/', 'http://wallet.localhost:3001/relay/api/session'],
-    ['/relay/', '/relay/api/session']
-  ])('permits loopback or same-origin relay API URL %s', async (apiUrl, expected) => {
-    fetchMock.mockResolvedValueOnce(response(pendingSession))
-    const client = new WalletRelayClient({ apiUrl })
+    ['http://localhost:3001', 'http://localhost:3001/api/session', false],
+    [
+      'http://wallet.localhost:3001/relay/',
+      'http://wallet.localhost:3001/relay/api/session',
+      false
+    ],
+    ['http://127.0.0.1:3001/api', 'http://127.0.0.1:3001/api/session', false],
+    ['http://[::1]:3001', 'http://[::1]:3001/api/session', false],
+    ['http://192.168.1.20:3000', 'http://192.168.1.20:3000/api/session', true],
+    ['http://10.0.0.5:3000/relay', 'http://10.0.0.5:3000/relay/api/session', true],
+    ['http://172.16.4.2:3000', 'http://172.16.4.2:3000/api/session', true],
+    ['http://[fd00::20]:3000', 'http://[fd00::20]:3000/api/session', true],
+    ['/relay/', '/relay/api/session', false]
+  ])(
+    'permits loopback, opted-in local-network, or same-origin relay API URL %s',
+    async (apiUrl, expected, allowLocalNetworkHttp) => {
+      fetchMock.mockResolvedValueOnce(response(pendingSession))
+      const client = new WalletRelayClient({ apiUrl, allowLocalNetworkHttp })
+      await client.createSession()
+      expect(fetchMock).toHaveBeenCalledWith(
+        expected,
+        expect.objectContaining({ redirect: 'error', signal: expect.anything() })
+      )
+      client.destroy()
+    }
+  )
+
+  // The server sends `relay` only in status responses, never in the create response.
+  const lanStatus = { sessionId: SESSION_ID, status: 'pending', relay: 'ws://192.168.1.20:3000' }
+
+  it('accepts a private-network ws: relay in status polls with allowLocalNetworkHttp', async () => {
+    const onError = jest.fn()
+    fetchMock
+      .mockResolvedValueOnce(response(pendingSession))
+      .mockImplementation(async () => response(lanStatus))
+    const client = new WalletRelayClient({
+      allowLocalNetworkHttp: true,
+      pollInterval: 100,
+      onError
+    })
     await client.createSession()
-    expect(fetchMock).toHaveBeenCalledWith(
-      expected,
-      expect.objectContaining({ redirect: 'error', signal: expect.anything() })
-    )
+
+    await jest.advanceTimersByTimeAsync(100)
+
+    expect(client.session).toMatchObject({ relay: 'ws://192.168.1.20:3000', status: 'pending' })
+    expect(onError).not.toHaveBeenCalled()
     client.destroy()
   })
+
+  it('stops polling and reports allowLocalNetworkHttp when a status poll carries a private-network ws: relay', async () => {
+    const onError = jest.fn()
+    fetchMock
+      .mockResolvedValueOnce(response(pendingSession))
+      .mockImplementation(async () => response(lanStatus))
+    const client = new WalletRelayClient({ pollInterval: 100, onError })
+    await client.createSession()
+
+    await jest.advanceTimersByTimeAsync(100)
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toContain('set allowLocalNetworkHttp: true')
+    expect(client.error).toBe(onError.mock.calls[0][0])
+    await jest.advanceTimersByTimeAsync(1_000)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onError).toHaveBeenCalledTimes(1)
+    client.destroy()
+  })
+
+  it('keeps polling through transient network errors', async () => {
+    const onError = jest.fn()
+    fetchMock
+      .mockResolvedValueOnce(response(pendingSession))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(response({ sessionId: SESSION_ID, status: 'connected' }))
+    const client = new WalletRelayClient({ pollInterval: 100, onError })
+    await client.createSession()
+
+    await jest.advanceTimersByTimeAsync(100)
+    await jest.advanceTimersByTimeAsync(100)
+
+    expect(client.session?.status).toBe('connected')
+    expect(client.error).toBeNull()
+    expect(onError).not.toHaveBeenCalled()
+    client.destroy()
+  })
+
+  it('reports allowLocalNetworkHttp and discards storage when resume sees a private-network ws: relay', async () => {
+    sessionStorage.setItem(
+      'resume-key',
+      JSON.stringify({
+        sessionId: SESSION_ID,
+        desktopToken: DESKTOP_TOKEN,
+        status: 'pending',
+        savedAt: Date.now()
+      })
+    )
+    const onError = jest.fn()
+    fetchMock.mockImplementation(async () => response(lanStatus))
+    const client = new WalletRelayClient({
+      sessionStorageKey: 'resume-key',
+      pollInterval: 100,
+      onError
+    })
+
+    await expect(client.resumeSession()).resolves.toBeNull()
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toContain('set allowLocalNetworkHttp: true')
+    expect(client.error).toBe(onError.mock.calls[0][0])
+    expect(sessionStorage.getItem('resume-key')).toBeNull()
+    await jest.advanceTimersByTimeAsync(1_000)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a generic message when session validation throws a non-Error value', async () => {
+    sessionStorage.setItem(
+      'resume-key',
+      JSON.stringify({
+        sessionId: SESSION_ID,
+        desktopToken: DESKTOP_TOKEN,
+        status: 'pending',
+        savedAt: Date.now()
+      })
+    )
+    const onError = jest.fn()
+    fetchMock.mockImplementation(async () => response({ sessionId: SESSION_ID, status: 'pending' }))
+    const notAnError: unknown = 'not an Error'
+    const validate = jest.spyOn(validation, 'validateSessionInfo').mockImplementationOnce(() => {
+      throw notAnError
+    })
+    const client = new WalletRelayClient({ sessionStorageKey: 'resume-key', onError })
+
+    try {
+      await expect(client.resumeSession()).resolves.toBeNull()
+      expect(onError).toHaveBeenCalledWith('Invalid session response')
+      expect(client.error).toBe('Invalid session response')
+      expect(sessionStorage.getItem('resume-key')).toBeNull()
+    } finally {
+      validate.mockRestore()
+    }
+  })
+
+  it('returns null without reporting when resume hits a transient network error', async () => {
+    sessionStorage.setItem(
+      'resume-key',
+      JSON.stringify({
+        sessionId: SESSION_ID,
+        desktopToken: DESKTOP_TOKEN,
+        status: 'pending',
+        savedAt: Date.now()
+      })
+    )
+    const onError = jest.fn()
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const client = new WalletRelayClient({ sessionStorageKey: 'resume-key', onError })
+
+    await expect(client.resumeSession()).resolves.toBeNull()
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(client.error).toBeNull()
+  })
+
+  it('reports allowLocalNetworkHttp when the create response carries a private-network ws: relay', async () => {
+    const onError = jest.fn()
+    fetchMock.mockResolvedValueOnce(response({ ...pendingSession, relay: lanStatus.relay }))
+    const client = new WalletRelayClient({ onError })
+
+    await expect(client.createSession()).rejects.toThrow('set allowLocalNetworkHttp: true')
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toContain('set allowLocalNetworkHttp: true')
+    expect(client.session).toBeNull()
+  })
+
+  function storeResumable(sessionId: string): void {
+    sessionStorage.setItem(
+      'resume-key',
+      JSON.stringify({
+        sessionId,
+        desktopToken: DESKTOP_TOKEN,
+        status: 'pending',
+        savedAt: Date.now()
+      })
+    )
+  }
+
+  it('does not report a resume validation error after the client is destroyed', async () => {
+    storeResumable(SESSION_ID)
+    let resolveResume!: (value: Response) => void
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>(resolve => {
+        resolveResume = resolve
+      })
+    )
+    const onError = jest.fn()
+    const client = new WalletRelayClient({ sessionStorageKey: 'resume-key', onError })
+
+    const resume = client.resumeSession()
+    client.destroy()
+    resolveResume(response(lanStatus))
+
+    await expect(resume).resolves.toBeNull()
+    expect(onError).not.toHaveBeenCalled()
+    expect(client.error).toBeNull()
+  })
+
+  it.each([
+    ['a missing session', () => response({}, 404)],
+    [
+      'a rejected relay',
+      () => response({ sessionId: OLD_SESSION_ID, status: 'pending', relay: lanStatus.relay })
+    ],
+    ['an expired session', () => response({ sessionId: OLD_SESSION_ID, status: 'expired' })]
+  ])(
+    "keeps a newer session's stored entry when a stale resume sees %s",
+    async (_case, staleResponse) => {
+      storeResumable(OLD_SESSION_ID)
+      let resolveResume!: (value: Response) => void
+      fetchMock
+        .mockReturnValueOnce(
+          new Promise<Response>(resolve => {
+            resolveResume = resolve
+          })
+        )
+        .mockResolvedValueOnce(response(pendingSession))
+      const onError = jest.fn()
+      const client = new WalletRelayClient({ sessionStorageKey: 'resume-key', onError })
+
+      const resume = client.resumeSession()
+      await client.createSession()
+      resolveResume(staleResponse())
+
+      await expect(resume).resolves.toBeNull()
+      expect(JSON.parse(sessionStorage.getItem('resume-key') ?? 'null')).toMatchObject({
+        sessionId: SESSION_ID
+      })
+      expect(client.session?.sessionId).toBe(SESSION_ID)
+      expect(onError).not.toHaveBeenCalled()
+      client.destroy()
+    }
+  )
 
   it('normalizes the API URL, creates a session, persists it, and notifies callers', async () => {
     const onSessionChange = jest.fn()

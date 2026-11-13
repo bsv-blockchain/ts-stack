@@ -1,5 +1,7 @@
 # @bsv/verifast
 
+Patch candidate `0.3.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Real BSV BDK script verification in WebAssembly for `@bsv/sdk`. One package
 supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 
@@ -11,6 +13,10 @@ npm install @bsv/verifast @bsv/sdk
 
 The package includes its validated WASM assets. No native compiler or
 post-install build is required for consumers.
+
+Repository development uses Vite 8.3.3 or later in its existing major line to
+include the patched development-server editor and file-access checks. The
+published verifier runtime and WASM ABI retain their existing contracts.
 
 ## Transaction verification
 
@@ -126,6 +132,11 @@ large signature-heavy batches. Spend items sharing the same transaction input
 and output arrays serialize that transaction once before packing. The soft byte
 target then prevents a multi-input, multi-megabyte transaction from being
 duplicated into one unbounded packed allocation.
+
+CommonJS declarations are generated in a CommonJS module context, keeping SDK
+transaction and Spend types aligned with the SDK’s `require` declarations. ESM
+and browser consumers retain their original declaration tree. This declaration
+correction requires no consumer migration and changes no runtime exports.
 
 ## Generic cryptography and SDK integration
 
@@ -273,8 +284,15 @@ Typed and cached serialization materially improves large-EF workloads. See
 
 ## License
 
-TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party material is under the [Apache License 2.0](./LICENSE).
 The bundled BDK, bitcoin-sv, libsecp256k1, Emscripten, musl, LLVM, and Boost
 material remains under the separate terms in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 Keep those files with every JavaScript and WebAssembly distribution.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

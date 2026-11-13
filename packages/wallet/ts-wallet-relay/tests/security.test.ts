@@ -36,6 +36,18 @@ describe('QRSessionManager — desktopToken', () => {
     mgr.stop()
   })
 
+  it('records the backend identity key only on a known session', () => {
+    const mgr = new QRSessionManager()
+    const created = mgr.createSession()
+    mgr.setBackendIdentityKey('unknown-session', '02' + 'a'.repeat(64))
+    expect(mgr.getSession('unknown-session')).toBeNull()
+    expect(mgr.getSession(created.id)?.backendIdentityKey).toBeUndefined()
+
+    mgr.setBackendIdentityKey(created.id, '02' + 'b'.repeat(64))
+    expect(mgr.getSession(created.id)?.backendIdentityKey).toBe('02' + 'b'.repeat(64))
+    mgr.stop()
+  })
+
   it('does not let repeated unauthenticated connects extend the pairing grace window', () => {
     const now = jest.spyOn(Date, 'now').mockReturnValue(1_000)
     const mgr = new QRSessionManager()

@@ -6,6 +6,6 @@
     "emitDeclarationOnly": true,
     "declaration": true,
     "declarationMap": true,
-    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-types.tsbuildinfo"
+    "tsBuildInfoFile": "./.cache/overlay-express-types.tsbuildinfo"
   }
 }

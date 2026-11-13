@@ -168,6 +168,7 @@ These deployable projects are not included in `pnpm-workspace.yaml`; they keep t
 | [`infra/uhrp-server-cloud-bucket`](infra/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments                         |
 | [`infra/wallet-infra`](infra/wallet-infra)                         | `@bsv/wallet-infra` private                                                          | UTXO management server                                                   |
 | [`infra/wab`](infra/wab)                                           | `@bsv/wab-server` private                                                            | Wallet Authentication Backend                                            |
+| [`infra/webrtpay-relay`](infra/webrtpay-relay)                     | `@bsv/webrtpay-relay` private                                                        | WebRTPay signalling relay for direct WebRTC payments                     |
 
 ## Conformance Vectors
 
@@ -256,7 +257,7 @@ Keep unrelated package history and generated artifacts out of the same change wh
 ## License
 
 Current TS Stack first-party contributions are licensed under the
-[Open BSV License Version 6](./LICENSE.txt). Historical grants and incorporated
+[Apache License 2.0](./LICENSE). Historical grants and incorporated
 material remain under the scoped terms in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/). The repository copies those payloads into each

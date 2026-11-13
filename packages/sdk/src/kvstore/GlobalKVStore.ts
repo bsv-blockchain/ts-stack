@@ -302,6 +302,8 @@ export class GlobalKVStore {
         'anyone',
         true
       )
+      // Check the same token bounds as the overlay before requesting a funded action.
+      await decodeAndVerifyKVStoreToken(lockingScript)
 
       // Wrap entire operation in double-spend retry, including overlay query
       const outpoint = await withDoubleSpendRetry(async () => {

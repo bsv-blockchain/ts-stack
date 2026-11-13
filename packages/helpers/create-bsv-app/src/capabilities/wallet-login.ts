@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { ConnectWallet } from './ConnectWallet.js'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity, readIdentityKeyResponse, requireIdentityKey } from './serverIdentity.js'
+import { getServerIdentity, readIdentityKeyResponse } from './serverIdentity.js'
 import { apiFetch } from './apiClient.js'
 
 export function WalletLogin () {
@@ -61,7 +61,7 @@ const HOOK = `// Wallet login: prove identity with the connected wallet, then PO
 import { useCallback } from 'react'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity, readIdentityKeyResponse } from './serverIdentity.js'
+import { getServerIdentity, readIdentityKeyResponse, requireIdentityKey } from './serverIdentity.js'
 import { apiFetch } from './apiClient.js'
 
 // serverIdentityKey is optional: when omitted it's fetched from GET /api/identity.
@@ -80,17 +80,17 @@ export function useWalletLogin (opts: UseWalletLoginOptions = {}) {
     const loggedInIdentity = await readIdentityKeyResponse(res)
     if (identityKey !== null && loggedInIdentity !== identityKey) throw new Error('server returned another wallet identity')
     return { identityKey: loggedInIdentity }
-  }, [wallet, opts.serverIdentityKey, opts.loginEndpoint])
+  }, [wallet, identityKey, opts.serverIdentityKey, opts.loginEndpoint])
   return { login, identityKey, connected: wallet !== null }
 }
 `
 
 const ROUTE = `// Express login route. Mount: app.post('/api/login', loginRoute(serverWallet))
 import type { Request, Response } from 'express'
-import { verifyAuthProof } from './auth.js'
+import { verifyAuthProof, type ProofVerifierWallet } from './auth.js'
 import { consumeNonce } from './nonceStore.js'
 
-export function loginRoute (serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> }) {
+export function loginRoute (serverWallet: ProofVerifierWallet) {
   return async (req: Request, res: Response): Promise<void> => {
     const result = await verifyAuthProof(serverWallet, req.body, { action: 'login' }, consumeNonce)
     if (!result.valid) { res.status(401).json({ error: 'invalid proof' }); return }
@@ -116,7 +116,7 @@ Passwordless login: the connected wallet signs a proof with \`action: 'login'\`,
 
 ### Environment (in \`bsv/config.ts\`)
 - Client: \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).
-- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization). Production requires explicit stable key and HTTPS origin values.
+- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization), \`SERVER_ORIGIN\` (address a phone uses to reach the server for wallet pairing; set \`http://<your LAN IP>:<your server port>\` to pair on the same network). Production requires explicit stable key and HTTPS origin values.
 
 ### Future integrations — turn login into a session
 After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):

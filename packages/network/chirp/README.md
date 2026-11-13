@@ -1,5 +1,7 @@
 # `@bsv/chirp`
 
+Patch candidate `0.1.6` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Reference implementation of BRC-167, the Chunked, Hashed, Interleaved
 Resolution Protocol. CHIRP is an additive Merkle-object layer over UHRP: roots
 are discovered with the existing `ls_uhrp` service and complete hosts advertise
@@ -45,6 +47,10 @@ verified result. Pass an `AbortSignal` as `signal` when a stream or asynchronous
 iterator must remain cancellable. A custom sink is still a local authority: it
 decides where verified bytes are persisted and must provide its own durability
 and access-control policy.
+
+Hash updates use bounded 64 KiB typed-byte views directly, avoiding an extra
+expanded number array. Content hashes, object identifiers, and the existing
+SDK 2 and SDK 3 peer ranges remain unchanged. No hashing migration is required.
 
 ## Publish to complete hosts
 
@@ -177,4 +183,11 @@ package behavior and the standard differ, the standard is authoritative.
 
 ## License
 
-Open BSV License v6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

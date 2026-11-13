@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../../../utility/promiseFromSync'
 import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 import { BulkIngestorBaseOptions } from '../Api/BulkIngestorApi'
@@ -102,8 +103,10 @@ export class BulkIngestorCDN extends BulkIngestorBase {
     this.maxPerFile = options.maxPerFile
   }
 
-  override async getPresentHeight(): Promise<number | undefined> {
-    return undefined
+  override getPresentHeight(): Promise<number | undefined> {
+    return promiseFromSync(() => {
+      return undefined
+    })
   }
 
   getJsonHttpHeaders(): Record<string, string> {

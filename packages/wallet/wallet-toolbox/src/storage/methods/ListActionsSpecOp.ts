@@ -1,3 +1,4 @@
+import { awaitVoidFromSync } from '../../utility/promiseFromSync'
 import { type ValidListActionsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { specOpFailedActions, specOpNoSendActions, TransactionStatus, isListActionsSpecOp } from '../../sdk/types'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
@@ -110,15 +111,13 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
       name: 'noSendActions',
       labelsToIntercept: ['abort'],
       setStatusFilter: () => ['nosend'],
-      postProcess: async (
+      postProcess: (
         s: StorageProvider,
         auth: AuthId,
         vargs: ValidListActionsArgs,
         specOpLabels: string[],
         txs: Array<Partial<TableTransaction>>
-      ): Promise<void> => {
-        await postProcessNoSendActions(s, auth, specOpLabels, txs)
-      }
+      ): Promise<void> => awaitVoidFromSync(() => postProcessNoSendActions(s, auth, specOpLabels, txs))
     },
     [specOpFailedActions]: {
       name: 'failedActions',

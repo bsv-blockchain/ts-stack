@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '2.0.0'
+version: '2.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-22'
+last_verified: '2026-10-22'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -16,11 +16,13 @@ tags: [templates, scripts, locking, unlocking]
 
 # @bsv/templates
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
+
+The 2.2.0 source candidate is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
 
 The 2.0.0 source candidate is a breaking release: `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL` are removed, and [BRC-162](https://brc.dev/162) token outputs and their strict CBOR payloads move to `Bsv21Binary`. The SDK peer range is unchanged in source, and 2.0.0 is the first release to publish `^3.0.0` alongside `^2.1.6`.
 
@@ -45,6 +47,14 @@ console.log(lockingScript.toHex())
 const decodedData = OpReturn.decode(lockingScript)
 console.log(decodedData) // ['APP', '{"action":"vote"}']
 ```
+
+## CommonJS compatibility
+
+The 1.10.3 candidate fixes SDK default-import double wrapping in CommonJS.
+Both module formats retain the same root/wildcard exports and script encodings.
+Packed acceptance constructs and signs scripts, including Mandala, multisig,
+MultiPushDrop and R1K1 recovery, with published SDK 2.8.0 and the candidate SDK.
+This source candidate is not yet published.
 
 ## What it provides
 
@@ -263,3 +273,7 @@ on a trusted host before approving it.
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/templates/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
 - [npm](https://www.npmjs.com/package/@bsv/templates)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

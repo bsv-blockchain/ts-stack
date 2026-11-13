@@ -1,3 +1,4 @@
+import { retainTransactionBEEF } from './RetainedTransactionBEEF.js'
 import { createHash } from 'node:crypto'
 import type { STEAK, Transaction } from '@bsv/sdk'
 import { extractMerkleProofMetadata } from './BASM.js'
@@ -37,6 +38,8 @@ type TopicValidationLike = {
 export interface OverlayAdmissionHost {
   admission: AdmissionStorage
   admissionScope: StorageScope
+  /** Optional public proof ancestry retention; never contains off-chain values. */
+  retainedBEEF?: Readonly<{ maximumBytes: number }>
   publishAdmissionPayload?: (input: {
     kind: AdmissionPayloadRef['kind']
     bytes: Uint8Array
@@ -64,6 +67,7 @@ export function getOverlayAdmissionHost(storage: unknown): OverlayAdmissionHost 
   return {
     admission,
     admissionScope: { ...scope },
+    ...(host.retainedBEEF === undefined ? {} : { retainedBEEF: { ...host.retainedBEEF } }),
     // Adapters are class instances whose methods read instance state, so each
     // optional method stays bound to the storage it came from.
     publishAdmissionPayload: host.publishAdmissionPayload?.bind(host),
@@ -178,6 +182,10 @@ export async function buildOverlayAdmissionPlan(input: {
     contextDigest: overlayAdmissionContextDigest(input.offChainValues),
     topics: identityTopics
   }
+  const retainedBytes =
+    input.host.retainedBEEF === undefined
+      ? undefined
+      : retainTransactionBEEF(input.beef, input.txid, input.host.retainedBEEF)
   const raw = await localPayload(
     input.host,
     'raw-transaction',
@@ -185,6 +193,8 @@ export async function buildOverlayAdmissionPlan(input: {
     input.txid
   )
   const payloads: AdmissionPayloadRef[] = [raw]
+  if (retainedBytes !== undefined)
+    payloads.push(await localPayload(input.host, 'beef-manifest', Uint8Array.from(retainedBytes)))
   let proof: AdmissionPayloadRef | undefined
   if (input.tx.merklePath !== undefined) {
     proof = await localPayload(
@@ -230,7 +240,10 @@ export async function buildOverlayAdmissionPlan(input: {
         ? []
         : [
             {
-              outpoint: { txid: output.txid, outputIndex: asStorageUint64(String(output.outputIndex)) },
+              outpoint: {
+                txid: output.txid,
+                outputIndex: asStorageUint64(String(output.outputIndex))
+              },
               expectedVersion: '1',
               spender: input.txid
             }

@@ -1,3 +1,5 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
+import type { StorageActiveWrite } from '../StorageActiveWrite'
 import {
   type ValidCreateActionArgs,
   type ValidCreateActionInput,
@@ -55,8 +57,15 @@ import type { ManagedChangeInputCandidate } from './availableManagedChange'
 import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
+import { repairBeefProofs } from './repairBeefProofs'
 import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
 import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
+import {
+  resumeActionRecoveryPlan,
+  validateRecoveryConstruction,
+  type ActionRecoveryConstruction,
+  type ActionRecoveryPlan
+} from '../actionRecovery/ActionRecoveryPlan'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -67,9 +76,19 @@ export async function createAction(
   storage: StorageProvider,
   auth: AuthId,
   vargs: ValidCreateActionArgs,
-  _originator?: OriginatorDomainNameStringUnder250Bytes
+  _originator?: OriginatorDomainNameStringUnder250Bytes,
+  recovery?: ActionRecoveryConstruction,
+  capturedWrite?: StorageActiveWrite
 ): Promise<StorageCreateActionResult> {
-  if (!storage.telemetry.enabled) return await createActionCore(storage, auth, vargs)
+  const write = capturedWrite ?? (await storage.activeWriteTransaction(auth))
+  if (recovery != null) {
+    if (recovery.protocol !== 'wallet-action-recovery-v1')
+      throw new WERR_INVALID_OPERATION('Unsupported action recovery construction')
+    validateRecoveryConstruction(vargs)
+    const retained = await recovery.read()
+    if (retained != null) return await resumeActionRecoveryPlan(storage, recovery, retained)
+  }
+  if (!storage.telemetry.enabled) return await createActionCore(storage, auth, vargs, write, undefined, recovery)
   return await storage.telemetry.withSpan(
     'wallet.storage.create_action',
     {
@@ -84,7 +103,7 @@ export async function createAction(
       }
     },
     async span => {
-      const result = await createActionCore(storage, auth, vargs, span)
+      const result = await createActionCore(storage, auth, vargs, write, span, recovery)
       span.end({
         attributes: {
           'action.result_input_count': result.inputs.length,
@@ -101,7 +120,9 @@ async function createActionCore(
   storage: StorageProvider,
   auth: AuthId,
   vargs: ValidCreateActionArgs,
-  parent?: TelemetrySpan
+  write: StorageActiveWrite,
+  parent?: TelemetrySpan,
+  recovery?: ActionRecoveryConstruction
 ): Promise<StorageCreateActionResult> {
   const logger = vargs.logger
   logger?.group('storage createAction')
@@ -202,7 +223,9 @@ async function createActionCore(
   let newTx: TableTransaction | undefined
   let newTxCommitted = false
   try {
-    const persisted = await storage.transaction(async trx => {
+    const persisted = await write.transaction(async trx => {
+      const recovered = await recovery?.claim(trx)
+      if (recovered != null) return { recovered }
       const initialSatoshis = fundingPlanSatoshis(initialFundingPlan)
       newTx = await traceStorageStep(
         storage,
@@ -264,9 +287,36 @@ async function createActionCore(
           return result
         }
       )
-      return { ...funded, ...storedOutputs, ctx }
+      let recoveryPlan: ActionRecoveryPlan | undefined
+      if (recovery != null) {
+        const inputs = await createNewInputs(storage, userId, vargs, ctx, funded.allocatedChange, write, trx)
+        recoveryPlan = {
+          fundingTxids: [...new Set(funded.allocatedChange.map(output => verifyTruthy(output.txid)))],
+          result: {
+            reference: newTx.reference,
+            version: newTx.version!,
+            lockTime: newTx.lockTime!,
+            inputs,
+            outputs: storedOutputs.outputs,
+            derivationPrefix: funded.derivationPrefix,
+            inputBeef: Uint8Array.from(beef.toBinary()),
+            noSendChangeOutputVouts: storedOutputs.changeVouts
+          }
+        }
+        await recovery.retain(recoveryPlan, trx)
+      }
+      return { ...funded, ...storedOutputs, ctx, recoveryPlan }
     })
     newTxCommitted = true
+    if ('recovered' in persisted || persisted.recoveryPlan != null) {
+      // Let the original read settle, then complete only the retained allocation.
+      // A failed completion must not release those inputs or choose another plan.
+      await allocatedBeefPrefetch
+      const retained = 'recovered' in persisted ? verifyTruthy(persisted.recovered) : { plan: persisted.recoveryPlan! }
+      const result = await resumeActionRecoveryPlan(storage, recovery!, retained)
+      logger?.groupEnd()
+      return result
+    }
     const committedTx = verifyTruthy(newTx)
     const { allocatedChange, derivationPrefix, outputs, changeVouts, ctx } = persisted
     logger?.log('created new output records')
@@ -292,7 +342,7 @@ async function createActionCore(
         'action.include_source_transactions': vargs.includeAllSourceTransactions
       },
       async span => {
-        const assembled = await createNewInputs(storage, userId, vargs, ctx, allocatedChange)
+        const assembled = await createNewInputs(storage, userId, vargs, ctx, allocatedChange, write)
         span?.end({ attributes: { 'action.result_input_count': assembled.length } })
         return assembled
       }
@@ -322,21 +372,40 @@ async function createActionCore(
     // reuses the provider. Its error is surfaced on the success path above;
     // here the construction error remains authoritative.
     await allocatedBeefPrefetch
-    if (newTx?.transactionId != null) {
-      try {
-        if (newTxCommitted) {
-          await storage.updateTransactionStatus('failed', newTx.transactionId)
-          logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
-        } else {
-          const failed = await createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, undefined, 'failed')
-          logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
-        }
-      } catch (cleanupError) {
-        logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
-      }
-    }
+    await recordCreateActionFailure(storage, userId, vargs, storageBeefBytes, newTx, newTxCommitted, recovery, write)
     logger?.groupEnd()
     throw error
+  }
+}
+
+async function recordCreateActionFailure(
+  storage: StorageProvider,
+  userId: number,
+  vargs: ValidCreateActionArgs,
+  storageBeefBytes: number[],
+  newTx: TableTransaction | undefined,
+  committed: boolean,
+  recovery: ActionRecoveryConstruction | undefined,
+  write: StorageActiveWrite
+): Promise<void> {
+  if (newTx?.transactionId == null) return
+  const logger = vargs.logger
+  try {
+    if (committed && recovery != null) {
+      logger?.log('retained recoverable allocation after evidence completion error')
+    } else if (committed) {
+      await write.transaction(trx =>
+        awaitFromSync(() => storage.updateTransactionStatus('failed', newTx!.transactionId, undefined, undefined, trx))
+      )
+      logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
+    } else if (recovery == null) {
+      const failed = await write.transaction(trx =>
+        awaitFromSync(() => createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, trx, 'failed'))
+      )
+      logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
+    }
+  } catch (cleanupError) {
+    logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
   }
 }
 
@@ -396,18 +465,25 @@ function makeDefaultOutput(userId: number, transactionId: number, satoshis: numb
 }
 
 /** Check known outputs for double-spend, mark them spent, return competing txid if found. */
-async function markKnownInputsSpent(
+export async function markKnownInputsSpent(
   storage: StorageProvider,
   knownInputRows: Array<{ i: XValidCreateActionInput; o: TableOutput }>,
-  transactionId: number
+  transactionId: number,
+  write: StorageActiveWrite,
+  transaction?: TrxToken
 ): Promise<string | undefined> {
   let doubleSpendTxid: string | undefined
-  await storage.transaction(async trx => {
-    const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
-    const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
+  await write.transaction(async trx => {
+    // Locks the inputs on MySQL and Postgres, so a concurrent action spending one waits and then
+    // reads it as spent instead of overwriting spentBy.
+    const knownOutputs = await storage.findOutputsByOutpointsForUpdate(
+      verifyId(knownInputRows[0].o.userId),
+      knownInputRows.map(({ o }) => ({ txid: verifyTruthy(o.txid), vout: o.vout })),
+      trx
+    )
     for (const ni of knownInputRows) {
       const { i, o } = ni
-      const o2 = knownOutputsById[verifyId(o.outputId)]
+      const o2 = knownOutputs[`${o.txid}.${o.vout}`]
       if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
       if (o2.spentBy !== undefined && o2.spentBy !== null) {
         const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
@@ -431,7 +507,7 @@ async function markKnownInputsSpent(
       o.spentBy = transactionId
       o.spendingDescription = i.inputDescription
     }
-  })
+  }, transaction)
   return doubleSpendTxid
 }
 
@@ -442,12 +518,13 @@ async function buildSdkInputFromOutput(
   vin: number,
   i: XValidCreateActionInput | undefined,
   o: TableOutput,
-  unlockLen: number | undefined
+  unlockLen: number | undefined,
+  trx?: TrxToken
 ): Promise<StorageCreateTransactionSdkInput> {
   if (i == null && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
   const sourceRawTx =
     vargs.includeAllSourceTransactions && vargs.isSignAction
-      ? await storage.getRawTxOfKnownValidTransaction(o.txid)
+      ? await storage.getRawTxOfKnownValidTransaction(o.txid, undefined, undefined, trx)
       : undefined
   const sourceTransaction = sourceRawTx == null ? undefined : Uint8Array.from(sourceRawTx)
   return {
@@ -490,7 +567,9 @@ async function createNewInputs(
   userId: number,
   vargs: ValidCreateActionArgs,
   ctx: CreateTransactionSdkContext,
-  allocatedChange: TableOutput[]
+  allocatedChange: TableOutput[],
+  write: StorageActiveWrite,
+  trx?: TrxToken
 ): Promise<StorageCreateTransactionSdkInput[]> {
   const r: StorageCreateTransactionSdkInput[] = []
 
@@ -501,8 +580,9 @@ async function createNewInputs(
     (ni): ni is { i: XValidCreateActionInput; o: TableOutput } => ni.i != null && ni.o != null
   )
   if (knownInputRows.length > 0) {
-    const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId)
+    const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId, write, trx)
     if (doubleSpendTxid) {
+      if (trx != null) throw new WERR_INVALID_OPERATION('Recoverable action input is already spent')
       const beef = await getCompetingBeefForReview(storage, doubleSpendTxid)
       throw new WERR_REVIEW_ACTIONS(
         [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }],
@@ -513,16 +593,15 @@ async function createNewInputs(
 
   for (const o of allocatedChange) newInputs.push({ o, unlockLen: 107 })
 
-  let vin = -1
-  for (const { i, o, unlockLen } of newInputs) {
-    vin++
+  await newInputs.reduce<Promise<void>>(async (previous, { i, o, unlockLen }, vin) => {
+    await previous
     if (o != null) {
-      r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen))
+      r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen, trx))
     } else {
       if (i == null) throw new WERR_INTERNAL(`vin ${vin} without output or xinput`)
       r.push(buildSdkInputFromXInput(vin, i))
     }
-  }
+  }, Promise.resolve())
   return r
 }
 
@@ -731,9 +810,10 @@ async function createNewTxRecord(
   const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   if (brc177?.kind === 'protected') {
     newTx.noSendExpiryMode = brc177.expiry.mode
-    newTx.noSendExpiryValue = brc177.expiry.value
-    newTx.noSendExpiryDeadline = brc177.deadline
-    newTx.noSendExpiryState = 'preparing'
+    newTx.noSendExpiryValue = brc177.expiry.value ?? undefined
+    newTx.noSendExpiryDeadline = brc177.deadline ?? undefined
+    // A `never` action has no reclaim to arm, so it is ready for signature release at once.
+    newTx.noSendExpiryState = brc177.expiry.mode === 'never' ? 'unsigned' : 'preparing'
     newTx.noSendExpiryAnchorTxid = brc177.anchorTxid
     newTx.noSendExpiryAnchorVout = brc177.anchorVout
   }
@@ -2008,6 +2088,9 @@ async function mergeAllocatedChangeBeefs(
       })
     }
   )
+  // Cached and embedded funding proofs must be current before the signer receives them.
+  // This network work runs after the allocation transaction has committed.
+  beef = await repairBeefProofs(storage, beef)
   const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',

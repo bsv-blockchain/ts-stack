@@ -1,7 +1,7 @@
 {
   "name": "@bsv/fund-wallet",
   "private": false,
-  "version": "1.5.3",
+  "version": "1.5.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -14,7 +14,7 @@
     "faucet",
     "transactions"
   ],
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "BSV Association",
   "type": "module",
   "bin": {
@@ -55,7 +55,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -69,7 +71,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6 || ^3.0.0"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

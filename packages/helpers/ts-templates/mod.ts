@@ -5,6 +5,7 @@ export { P2MSKH } from './src/P2MSKH.js'
 export {
   Bsv21Binary,
   Bsv21BinaryError,
+  Bsv21BinaryError as OneColorError,
   BSV21_MAX_AMOUNT,
   encodeAmountChunk,
   decodeAmountChunk,
@@ -12,20 +13,34 @@ export {
   tokenIdFromString,
   isTokenShaped
 } from './src/Bsv21Binary.js'
-export type { Bsv21BinaryDecoded, Bsv21Role } from './src/Bsv21Binary.js'
+export type { Bsv21BinaryDecoded, Bsv21Role, Bsv21Role as OneColorRole } from './src/Bsv21Binary.js'
+// New 1Color code should prefer oneColorTokenIdFromString/oneColorTokenIdToString (32- and 36-byte ids).
+export { OneColor, oneColorTokenIdFromString, oneColorTokenIdToString } from './src/OneColor.js'
+export type { OneColorDecoded } from './src/OneColor.js'
+export {
+  isProfileId,
+  readOneColorAttributes,
+  reqMatchesDeploy,
+  needsEmptyPayloadMarker
+} from './src/OneColorAttributes.js'
+export type {
+  OneColorAttributes,
+  OneColorField,
+  OneColorProfileDescriptor
+} from './src/OneColorAttributes.js'
 export {
   encodeStrictCbor,
   decodeStrictCbor,
   tryDecodeStrictCbor,
   StrictCborError,
-  STRICT_CBOR_MAX_BYTES,
+  StrictCborLink,
   STRICT_CBOR_MAX_DEPTH
 } from './src/strictCbor.js'
-export type { StrictCborValue, StrictCborMap } from './src/strictCbor.js'
+export type { StrictCborValue, StrictCborMap, StrictCborInput } from './src/strictCbor.js'
 export { StasToken } from './src/StasToken.js'
 export type { StasTokenDecoded } from './src/StasToken.js'
 export { Bsv21Token } from './src/Bsv21Token.js'
-export type { Bsv21TokenDecoded } from './src/Bsv21Token.js'
+export type { Bsv21Envelope, Bsv21TokenDecoded } from './src/Bsv21Token.js'
 export { DstasToken } from './src/DstasToken.js'
 export type { DstasTokenDecoded } from './src/DstasToken.js'
 export { R1K1Wallet } from './src/R1K1Wallet.js'

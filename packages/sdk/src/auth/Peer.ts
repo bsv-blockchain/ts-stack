@@ -652,6 +652,8 @@ export class Peer {
     // Register before sending: an in-memory or otherwise synchronous transport
     // can deliver the response before send() resolves.
     const initialResponse = this.waitForInitialResponse(sessionNonce)
+    // Observe a timeout even while send is pending; await the original response below.
+    void initialResponse.catch(() => undefined)
     try {
       await this.#transport.send(snapshotBoundedAuthData(initialRequest))
       return await initialResponse

@@ -27,7 +27,7 @@ export function runtimeComparisonAvailable() {
 }
 
 const EXCLUDED_SOURCE_PATTERNS = [
-  /(?:^|\/)__tests(?:__)?(?:\/|$)/,
+  /(?:^|\/)__tests?(?:__)?(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
   /(?:^|\/)bench(?:marks?)?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,
@@ -66,6 +66,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
   /packages\/wallet\/btms\/src\/types\.ts$/,
   /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
+  /packages\/wallet\/color-permission-module\/src\/types\.ts$/,
   // CHIRP's package entry point is a pure re-export barrel and its types module
   // emits declarations only. The executable CLI remains instrumented and is
   // intentionally not part of this exact exclusion.
@@ -76,6 +77,15 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // patch-coverage boundary.
   /packages\/content\/lch\/src\/index\.ts$/,
   /packages\/content\/lch\/src\/types\.ts$/,
+  // WebRTPay's server entry point is a pure re-export barrel and its signaling
+  // types module emits declarations only. Executable source, the relay CLI
+  // included, remains in the patch-coverage boundary.
+  /packages\/messaging\/webrtpay\/server\/index\.ts$/,
+  /packages\/messaging\/webrtpay\/src\/signaling\/types\.ts$/,
+  // The WebRTPay demo is an example program, not package source: it imports the
+  // built package by name and is run by hand, so package coverage, collected
+  // from src/ and server/, never instruments it.
+  /packages\/messaging\/webrtpay\/examples\/demo-node\.ts$/,
   // These ChainTracks modules emit no executable statements: two contain
   // interfaces/type-only imports and the mobile entry point only re-exports
   // platform-safe implementations. Keep the exclusions exact so executable
@@ -144,6 +154,68 @@ export function hasRuntimeChange(before, after) {
   }
 }
 
+// Istanbul does not emit LCOV rows for erased declarations or pure re-export
+// bindings. Inspect the locked compiler's complete output rather than granting
+// an exemption by filename: adding any executable statement keeps a module in
+// the coverage boundary. These modules still undergo type/artifact/API checks.
+// Intentionally fail closed on other module forms and unavailable compilers.
+export function isUninstrumentedModule(source) {
+  const transformSync = loadEsbuildTransform()
+  if (transformSync === null) return false
+  try {
+    const { code } = transformSync(source, {
+      loader: 'ts',
+      format: 'esm',
+      target: 'esnext',
+      legalComments: 'none'
+    })
+    return onlyReexportBindings(code)
+  } catch {
+    return false
+  }
+}
+
+// Inspect only the locked compiler's normalized ESM, never arbitrary source
+// text. Named re-exports are emitted as named imports followed by an export
+// list. Accept those exact binding forms; a side-effect import, declaration,
+// initializer, namespace import or any other statement stays in the gate.
+function retainBindingNames(match, names, index) {
+  if (match === null) return
+  for (const item of match[1].split(',').filter(Boolean))
+    names.add(item.trim().split(' as ').at(index))
+}
+
+function onlyReexportBindings(code) {
+  const name = String.raw`[$A-Z_a-z][$\w]*`
+  const binding = `${name}(?: as ${name})?`
+  const list = String.raw`(${binding}(?:,\s*${binding})*,?)`
+  const moduleName = String.raw`"(?:[^"\\]|\\.)*"`
+  const imported = new RegExp(String.raw`^import \{\s*${list}\s*\} from ${moduleName};`)
+  const exported = new RegExp(String.raw`^export \{\s*${list}\s*\};`)
+  const star = new RegExp(String.raw`^export \* from ${moduleName};`)
+  const imports = new Set()
+  const exports = new Set()
+  let remaining = code.trim()
+  while (remaining !== '') {
+    const simple = /^(?:;|export \{\};)/.exec(remaining) ?? star.exec(remaining)
+    const input = simple === null ? imported.exec(remaining) : null
+    const output = simple === null && input === null ? exported.exec(remaining) : null
+    const match = simple ?? input ?? output
+    if (match === null) return false
+    retainBindingNames(input, imports, -1)
+    retainBindingNames(output, exports, 0)
+    remaining = remaining.slice(match[0].length).trimStart()
+  }
+  return imports.size === exports.size && [...exports].every(name => imports.has(name))
+}
+
+export function omitUninstrumentedModules(changed, readSource) {
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    if (isUninstrumentedModule(readSource(file))) changed.delete(file)
+  }
+}
+
 // Markdown modules are not instrumented by package test configurations. Omit
 // one only when its complete source is a static default-exported template
 // literal. Imports, interpolation, declarations, and any other statements fail
@@ -197,30 +269,24 @@ export function omitStaticMarkdownModules(changed, readSource) {
   }
 }
 
-function omitTypeOnlyChanges(changed, base) {
-  const mergeBase = execFileSync('/usr/bin/git', ['merge-base', base, 'HEAD'], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8'
-  }).trim()
-  for (const file of changed.keys()) {
-    if (!/\.[cm]?ts$/.test(file)) continue
-    let before
-    try {
-      before = execFileSync('/usr/bin/git', ['show', `${mergeBase}:${file}`], {
-        cwd: REPOSITORY_ROOT,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        maxBuffer: 20 * 1024 * 1024
-      })
-    } catch {
-      // New or unreadable files remain governed.
-      continue
-    }
-    const after = execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
-      cwd: REPOSITORY_ROOT,
+export function omitTypeOnlyChanges(changed, base, repositoryRoot = REPOSITORY_ROOT) {
+  const git = arguments_ =>
+    execFileSync('/usr/bin/git', arguments_, {
+      cwd: repositoryRoot,
       encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
       maxBuffer: 20 * 1024 * 1024
     })
+  const mergeBase = git(['merge-base', base, 'HEAD']).trim()
+  // Only a successfully read base tree can prove that a path is new. A failed
+  // blob read is not evidence of an empty file: Git/read errors fail the gate.
+  const baseFiles = new Set(
+    git(['ls-tree', '-r', '--name-only', '-z', mergeBase, '--', 'packages']).split('\0')
+  )
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    const before = baseFiles.has(file) ? git(['show', `${mergeBase}:${file}`]) : ''
+    const after = git(['show', `HEAD:${file}`])
     if (!hasRuntimeChange(before, after)) changed.delete(file)
   }
 }
@@ -336,6 +402,13 @@ async function main(arguments_) {
     })
   )
   omitTypeOnlyChanges(changed, base)
+  omitUninstrumentedModules(changed, file =>
+    execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024
+    })
+  )
   const directoryPath = path.resolve(directory)
   const files = fs.existsSync(directoryPath) ? lcovFiles(directoryPath) : []
   if (changed.size > 0 && files.length === 0) {

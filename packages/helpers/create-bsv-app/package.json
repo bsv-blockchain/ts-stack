@@ -1,6 +1,6 @@
 {
   "name": "create-bsv-app",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "sideEffects": false,
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
@@ -19,7 +19,9 @@
     "dist",
     ".claude",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -57,7 +59,7 @@
     "node": ">=22"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

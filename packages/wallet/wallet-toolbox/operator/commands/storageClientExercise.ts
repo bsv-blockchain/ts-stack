@@ -69,7 +69,7 @@ export const storageClientExerciseCommand: OperatorCommand = {
     }
   },
   async execute(_options, plan): Promise<OperatorEvidence> {
-    const { SetupClient } = await import('../../out/src/index.js')
+    const { SetupClient, numericTotalOutputs } = await import('../../out/src/index.js')
     const { Beef, CachedKeyDeriver, P2PKH, PrivateKey, Validation } = await import('@bsv/sdk')
     const startedAt = new Date().toISOString()
     const chain = plan.parameters.chain as Chain
@@ -100,7 +100,7 @@ export const storageClientExerciseCommand: OperatorCommand = {
           include: 'entire transactions',
           limit: concurrency
         })
-        const missing = Math.max(0, concurrency - outputs.totalOutputs)
+        const missing = Math.max(0, concurrency - numericTotalOutputs(outputs))
         if ((await wallet.balance()) < missing * 10_000) {
           throw new Error(`Wallet balance is insufficient to create ${missing} exercise outputs`)
         }

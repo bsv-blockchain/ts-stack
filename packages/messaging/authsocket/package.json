@@ -1,6 +1,6 @@
 {
   "name": "@bsv/authsocket",
-  "version": "2.1.9",
+  "version": "2.1.11",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -16,7 +16,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -60,7 +62,7 @@
     "Sockets"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
@@ -83,7 +85,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.1 || ^3.0.0"
+    "@bsv/sdk": "^2.4.1 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

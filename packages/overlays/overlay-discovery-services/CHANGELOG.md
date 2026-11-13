@@ -1,5 +1,9 @@
 # CHANGELOG for `@bsv/overlay-discovery-services`
 
+## 2.2.7 (unreleased)
+
+- Refresh packed first-party dependency ranges for the next wallet interoperability release; no independent API migration.
+
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Table of Contents
@@ -8,6 +12,17 @@ All notable changes to this project will be documented in this file. The format 
 - [1.6.1 - 2026-02-05](#161---2026-02-05)
 
 ## [Unreleased]
+
+- Prepare `2.2.9` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+- Prepare `2.2.8` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+- `isValidTopicOrServiceName`, SHIP/SLAP admission, `WalletAdvertiser` and the
+  SHIP/SLAP lookup filters accept topic and service names with digits, up to
+  256 bytes, matching the `@bsv/sdk` overlay name grammar and the BRC-207
+  per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`). Names
+  accepted before are still accepted; no migration is required.
 
 - Order equal creation timestamps by unique MongoDB _id for stable discovery pagination.
 

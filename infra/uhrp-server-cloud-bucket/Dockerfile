@@ -1,6 +1,6 @@
 # ── Stage 1: build ──────────────────────────────────────────
-# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS build
+# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
 
 # better-sqlite3 13 has no musl prebuilt for this Node 24 image. Keep the
 # compiler toolchain in the disposable build stage so both audited rebuilds
@@ -21,7 +21,7 @@ RUN npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3
 
 # ── Stage 2: production ────────────────────────────────────
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
@@ -42,7 +42,7 @@ COPY --from=build /app/package.json ./
 COPY public/ ./public/
 
 # Keep first-party and incorporated-material terms with the deployed image.
-COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
 COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
 RUN chmod -R a=rX /usr/share/licenses/ts-stack
 LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"

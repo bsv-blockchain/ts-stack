@@ -162,7 +162,7 @@ describe('generateChange tests', () => {
   test('2 WERR_INSUFFICIENT_FUNDS', async () => {
     const events: any[] = []
     const telemetry = new Telemetry({
-      sink: { capture: event => events.push(event) }
+      sink: { capture: event => void events.push(event) }
     })
     const params: GenerateChangeSdkParams = {
       ...defParams,
@@ -1555,7 +1555,7 @@ describe('generateChange tests', () => {
     const events: any[] = []
     const telemetry = new Telemetry({
       sink: {
-        capture: event => events.push(event)
+        capture: event => void events.push(event)
       },
       traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       spanIdFactory: (() => {
@@ -1617,27 +1617,27 @@ function makeTransaction(params: GenerateChangeSdkParams, results: GenerateChang
   const tx = new BsvTransaction()
   for (const i of params.fixedInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(Array.from({ length: i.unlockingScriptLength }).fill(0)),
+      unlockingScript: Script.fromBinary(Array.from({ length: i.unlockingScriptLength }, () => 0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const i of results.allocatedChangeInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(Array.from({ length: params.changeUnlockingScriptLength }).fill(0)),
+      unlockingScript: Script.fromBinary(Array.from({ length: params.changeUnlockingScriptLength }, () => 0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const o of params.fixedOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }).fill(0)),
+      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }, () => 0)),
       satoshis: o.satoshis
     })
   }
   for (const o of results.changeOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }).fill(0)),
+      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }, () => 0)),
       satoshis: o.satoshis
     })
   }

@@ -1,6 +1,16 @@
 # @bsv/402-pay
 
+Patch candidate `0.3.5` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [BRC-121](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) Simple 402 Payments -- server middleware and client for BSV micropayments over HTTP.
+
+## Protocol boundary
+
+This package implements the BRC-121 `x-bsv-beef`/sender/nonce/time/vout contract.
+BRC-118 extends the separate authenticated BRC-105 payment path in SDK AuthFetch
+and `@bsv/payment-express-middleware`; it is not implicitly negotiated here.
+See the [BRC-118 guide](../../../docs/guides/brc118-payments.md) when selecting an
+integration. Existing 402-pay wire behavior is unchanged.
 
 ## Install
 
@@ -8,7 +18,7 @@
 npm install @bsv/402-pay
 ```
 
-Peer dependency: `@bsv/sdk ^2.1.6 || ^3.0.0`. The package supports Node.js 22+ and browser
+Peer dependency: `@bsv/sdk ^2.1.6 || ^3.0.0 || ^4.0.1`. The package supports Node.js 22+ and browser
 consumers, with matching ESM and CommonJS entry points and declarations for the
 package root, `/server`, and `/client`.
 
@@ -48,13 +58,7 @@ import { validatePayment, send402 } from '@bsv/402-pay/server'
 
 // In any HTTP handler:
 const requiredSatoshis = 100
-const result = await validatePayment(
-  req,
-  wallet,
-  requiredSatoshis,
-  30_000,
-  sharedAtomicReplayStore
-)
+const result = await validatePayment(req, wallet, requiredSatoshis, 30_000, sharedAtomicReplayStore)
 if (!result) {
   send402(res, serverIdentityKey, requiredSatoshis)
   return
@@ -158,8 +162,15 @@ and a non-affirmative wallet internalization result are rejected.
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under its package-specific Open BSV License Version 4 grant. Redistributors
 must preserve [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
 applicable text in [`LICENSES/`](./LICENSES/).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

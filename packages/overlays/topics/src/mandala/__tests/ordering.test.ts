@@ -10,7 +10,14 @@ describe('txOrdering', () => {
   it('reads height and this txid leaf offset from the merkle path', () => {
     const tx = new Transaction()
     const txid = tx.id('hex')
-    tx.merklePath = new MerklePath(840000, [[{ offset: 7, hash: txid, txid: true }]])
+    // Offset 7 is not a one-transaction block. Pair the leaf with its sibling
+    // so construction accepts the path; ordering only reads this txid's offset.
+    tx.merklePath = new MerklePath(840000, [
+      [
+        { offset: 6, hash: '11'.repeat(32) },
+        { offset: 7, hash: txid, txid: true }
+      ]
+    ])
     expect(txOrdering(tx)).toEqual({ height: 840000, offset: 7 })
   })
 })

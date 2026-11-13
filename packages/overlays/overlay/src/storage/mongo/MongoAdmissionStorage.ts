@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream'
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Collection, Db, Document } from 'mongodb'
@@ -7,6 +8,9 @@ import {
   isReplaySafeProjection,
   type AdmissionCommit,
   type AdmissionCommitResult,
+  type AdmissionHistory,
+  type AdmissionHistoryQuery,
+  type AdmissionHistoryResult,
   type AdmissionOperationKey,
   type AdmissionOutboxIntent,
   type AdmissionOutpoint,
@@ -43,6 +47,12 @@ import {
   type MongoTransactionContext,
   type MongoTransactionOptions
 } from './MongoTransactionRunner.js'
+import { encodeMongoAdmissionReceipt } from './MongoAdmissionReceipt.js'
+
+/** Keep typed iteration and bounded buffering; transaction writes stay in the consumer. */
+function orderedValues<T>(values: Iterable<T>): AsyncIterable<T> {
+  return Readable.from(values, { objectMode: true, highWaterMark: 1 })
+}
 
 function isMongoWriteConflict(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
@@ -63,6 +73,8 @@ export interface MongoEnlistedLookupIndex {
 }
 
 export interface MongoAdmissionStorageOptions {
+  /** Explicitly retain identity with new receipts and expose trusted local history reads. Default false. */
+  retainAdmissionHistory?: boolean
   runner?: MongoTransactionRunner
   payloads?: MongoPayloadStore
   readGuards?: MongoReadGuards
@@ -156,6 +168,7 @@ const isPayloadKind = (value: string): value is MongoPayloadKind =>
  */
 export class MongoAdmissionStorage implements AdmissionStorage {
   readonly protocol = 'overlay-admission-v1' as const
+  readonly history?: AdmissionHistory
   readonly scope: StorageScope
   private readonly runner: MongoTransactionRunner
   private readonly payloads: MongoPayloadStore
@@ -169,12 +182,23 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     scope: StorageScope,
     options: MongoAdmissionStorageOptions = {}
   ) {
+    if (
+      options.retainAdmissionHistory !== undefined &&
+      typeof options.retainAdmissionHistory !== 'boolean'
+    )
+      throw new Error('Invalid admission-history retention option')
     this.scope = { ...scope }
     this.runner = options.runner ?? new MongoTransactionRunner(db, this.scope)
     this.payloads = options.payloads ?? new MongoPayloadStore(db, this.scope)
     this.guards = options.readGuards ?? new MongoReadGuards(db)
     this.enlisted = [...(options.enlistedIndexes ?? [])]
     this.projector = options.projector
+    if (options.retainAdmissionHistory === true) {
+      this.history = {
+        protocol: 'overlay-admission-history-v1',
+        read: async query => await this.readHistory(query)
+      }
+    }
     if (
       this.enlisted.some(
         index => index.protocol !== 'overlay-mongo-index-v1' || index.target.length === 0
@@ -221,6 +245,8 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     let receipt
     try {
       receipt = admissionReceiptFor(plan, this.enlistedTargets())
+      // Include retained provenance in the bound before guards, uploads or commit effects.
+      encodeMongoAdmissionReceipt(receipt, plan.identity, this.history !== undefined)
     } catch (error) {
       return this.asResult(error)
     }
@@ -236,7 +262,12 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const result = await this.runner.run(
-          { key: plan.key, identity: plan.identity, receipt },
+          {
+            key: plan.key,
+            identity: plan.identity,
+            receipt,
+            retainIdentity: this.history !== undefined
+          },
           async context => {
             await this.applyPlan(context, plan)
           }
@@ -288,13 +319,48 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     ])
   }
 
+  private async readHistory(input: AdmissionHistoryQuery): Promise<AdmissionHistoryResult> {
+    // Own the complete selector before I/O; a caller cannot change its authorization
+    // or semantic scope while either majority read is pending.
+    const query = { ...input, scope: { ...input.scope } }
+    // Match the Mongo identity-part limits before hashing caller-controlled strings.
+    mongoRecordKey(query.topic, query.policyId, query.txid, query.contextDigest)
+    admissionSemanticDigest({
+      scope: query.scope,
+      txid: query.txid,
+      contextDigest: query.contextDigest,
+      mode: 'live',
+      topics: [{ topic: query.topic, policyId: query.policyId }]
+    })
+    if (mongoNodeKey(query.scope) !== mongoNodeKey(this.scope))
+      throw new Error('Admission-history reader belongs to a different scope')
+    const applied = await this.applied().findOne(
+      { _id: this.appliedId(query.topic, query.txid) },
+      { readConcern: { level: 'majority' }, readPreference: 'primary', timeoutMS: 5000 }
+    )
+    if (applied === null) return { state: 'unresolved' }
+    if (applied.topic !== query.topic || applied.txid !== query.txid)
+      throw new Error('Corrupt Mongo applied admission identity')
+    const admission = await this.runner.readRetainedAdmission(applied.admissionId)
+    if (
+      admission?.identity.txid !== query.txid ||
+      admission.identity.contextDigest !== query.contextDigest ||
+      !admission.identity.topics.some(
+        item => item.topic === query.topic && item.policyId === query.policyId
+      )
+    )
+      return { state: 'unresolved' }
+    return { state: 'committed', admission }
+  }
+
   private peerFor(scope: StorageScope): MongoAdmissionStorage {
     const id = mongoNodeKey(scope)
     const existing = this.peers.get(id)
     if (existing !== undefined) return existing
     const peer = new MongoAdmissionStorage(this.db, scope, {
       enlistedIndexes: this.enlisted,
-      projector: this.projector
+      projector: this.projector,
+      retainAdmissionHistory: this.history !== undefined
     })
     this.peers.set(id, peer)
     return peer
@@ -361,13 +427,14 @@ export class MongoAdmissionStorage implements AdmissionStorage {
   }
 
   private async prepareReadGuards(plan: AdmissionCommit): Promise<void> {
-    for (const decision of plan.decisions) {
-      for (const read of decision.reads) await this.guards.initialize(this.scope, read.key)
+    for await (const decision of orderedValues(plan.decisions)) {
+      for await (const read of orderedValues(decision.reads))
+        await this.guards.initialize(this.scope, read.key)
     }
   }
 
   private async publishHistoryUpdatePayloads(plan: AdmissionCommit): Promise<void> {
-    for (const decision of plan.decisions) {
+    for await (const decision of orderedValues(plan.decisions)) {
       if (decision.historyUpdate === undefined) continue
       const bytes = Buffer.from(JSON.stringify(this.historyUpdateRecord(decision)), 'utf8')
       const digest = createHash('sha256').update(bytes).digest('hex')
@@ -375,9 +442,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
         kind: 'outbox-data',
         digest,
         byteLength: String(bytes.byteLength),
-        bytes: (async function* () {
-          yield bytes
-        })()
+        bytes: Readable.from([bytes])
       })
     }
   }
@@ -397,18 +462,22 @@ export class MongoAdmissionStorage implements AdmissionStorage {
 
   private async applyPlan(context: MongoTransactionContext, plan: AdmissionCommit): Promise<void> {
     await this.assertReadyPayloads(context, plan)
-    for (const decision of plan.decisions) {
+    for await (const decision of orderedValues(plan.decisions)) {
       await this.checkReads(context, decision)
       await this.checkHistory(context, decision)
       await this.assertAppliedAvailable(context, plan, decision)
     }
-    for (const intent of plan.outbox) await this.assertOutboxAvailable(context, intent)
-    for (const decision of plan.decisions) {
-      for (const spend of decision.spends) await this.applySpend(context, decision.topic, spend)
-      for (const eviction of decision.evictions)
+    for await (const intent of orderedValues(plan.outbox))
+      await this.assertOutboxAvailable(context, intent)
+    for await (const decision of orderedValues(plan.decisions)) {
+      for await (const spend of orderedValues(decision.spends))
+        await this.applySpend(context, decision.topic, spend)
+      for await (const eviction of orderedValues(decision.evictions))
         await this.applyEviction(context, decision.topic, eviction)
-      for (const output of decision.outputs) await this.insertOutput(context, decision, output)
-      for (const edge of decision.edges) await this.insertEdge(context, decision.topic, edge)
+      for await (const output of orderedValues(decision.outputs))
+        await this.insertOutput(context, decision, output)
+      for await (const edge of orderedValues(decision.edges))
+        await this.insertEdge(context, decision.topic, edge)
       await this.insertApplied(context, plan, decision)
       await this.applyHistoryUpdate(
         context,
@@ -417,15 +486,18 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       )
     }
     await this.upsertTransaction(context, plan)
-    for (const ref of admissionPlanPayloads(plan)) {
+    for await (const ref of orderedValues(admissionPlanPayloads(plan))) {
       await this.pin(context, ref, 'transaction', plan.identity.txid, `${ref.kind}:${ref.digest}`)
     }
-    for (const intent of lookupOutboxIntents(plan))
+    for await (const intent of orderedValues(lookupOutboxIntents(plan)))
       await this.insertOutbox(context, 'lookup', intent)
-    for (const intent of propagationOutboxIntents(plan)) {
+    for await (const intent of orderedValues(propagationOutboxIntents(plan))) {
       await this.insertOutbox(context, 'propagation', intent)
     }
-    for (const index of this.enlisted) await index.apply(context, plan)
+    // Iterate entry tuples so a host index with its own `then` method remains
+    // an index object, rather than being assimilated as a promise by for-await.
+    for await (const [, index] of orderedValues(this.enlisted.entries()))
+      await index.apply(context, plan)
   }
 
   private async assertReadyPayloads(
@@ -433,7 +505,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     plan: AdmissionCommit
   ): Promise<void> {
     const seen = new Set<string>()
-    for (const ref of admissionPlanPayloads(plan)) {
+    for await (const ref of orderedValues(admissionPlanPayloads(plan))) {
       const id = this.payloadId(ref)
       if (seen.has(id)) continue
       seen.add(id)
@@ -450,7 +522,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
     context: MongoTransactionContext,
     decision: AdmissionTopicDecision
   ): Promise<void> {
-    for (const read of decision.reads) {
+    for await (const read of orderedValues(decision.reads)) {
       const options = context.options()
       await this.guards.check(
         options.session,
@@ -892,7 +964,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       if (duplicateKey(error)) rejectAdmission('invalid-plan')
       throw error
     }
-    for (const [index, payload] of intent.payloads.entries()) {
+    for await (const [index, payload] of orderedValues(intent.payloads.entries())) {
       await this.pin(context, payload, `${kind}-outbox`, intent.eventId, String(index))
     }
   }
@@ -952,7 +1024,7 @@ export class MongoAdmissionStorage implements AdmissionStorage {
       .sort({ slot: 1 })
       .toArray()
     const result: AdmissionPayloadRef[] = []
-    for (const reference of refs) {
+    for await (const reference of refs) {
       const payload = await this.db
         .collection<IdDocument>(MongoCollectionNames.payloads)
         .findOne({ _id: String(reference.payloadId) })

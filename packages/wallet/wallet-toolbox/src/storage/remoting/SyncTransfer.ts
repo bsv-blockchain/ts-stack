@@ -1,6 +1,6 @@
 import { sha256 } from '@bsv/sdk/primitives/Hash'
 import { toHex } from '@bsv/sdk/primitives/utils'
-import { parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
+import { defineOwnValues, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /** Versioned transport framing; the reconstructed BRC-40 request/response is unchanged. */
 export interface SyncTransferCapabilities {
@@ -90,7 +90,7 @@ function restoreBinaryField(holder: { value: unknown }, fieldPath: Array<string 
       invalid()
     if (i === path.length - 1) {
       if (target[key] !== null) invalid()
-      Object.defineProperty(target, key, { value: bytes, enumerable: true, writable: true, configurable: true })
+      defineOwnValues(target, [[String(key), bytes]])
     } else target = target[key] as Record<string | number, unknown>
   }
 }

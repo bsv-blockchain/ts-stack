@@ -3,6 +3,7 @@ import { parseKnownTxidsHeader, AuthFetch } from '../AuthFetch.js'
 import { Utils, PrivateKey } from '../../../primitives/index.js'
 import type { CreateActionOptions, WalletInterface } from '../../../wallet/Wallet.interfaces.js'
 import type { Peer } from '../../Peer.js'
+import { paymentActionResult } from '../__tests/paymentFixtures.js'
 
 jest.mock('../../utils/createNonce.js', () => ({
   createNonce: jest.fn()
@@ -13,7 +14,9 @@ import { createNonce } from '../../utils/createNonce.js'
 const createNonceMock = createNonce as jest.MockedFunction<typeof createNonce>
 type FetchOptions = NonNullable<Parameters<AuthFetch['fetch']>[1]>
 type PaymentContext = NonNullable<FetchOptions['paymentContext']>
-type TestWallet = jest.Mocked<Pick<WalletInterface, 'getPublicKey' | 'createAction' | 'createHmac'>>
+type TestWallet = jest.Mocked<
+  Pick<WalletInterface, 'getPublicKey' | 'createAction' | 'createHmac' | 'abortAction'>
+>
 
 interface PaymentInternals {
   handlePaymentAndRetry: (
@@ -99,9 +102,8 @@ function buildWallet(): TestWallet {
       .mockImplementation(async opts =>
         opts?.identityKey === true ? { publicKey: identityKey } : { publicKey: derivedKey }
       ),
-    createAction: jest.fn<WalletInterface['createAction']>().mockResolvedValue({
-      tx: Utils.toArray('mock-tx', 'utf8')
-    }),
+    createAction: jest.fn<WalletInterface['createAction']>(paymentActionResult),
+    abortAction: jest.fn<WalletInterface['abortAction']>().mockResolvedValue({ aborted: true }),
     createHmac: jest.fn<WalletInterface['createHmac']>().mockResolvedValue({
       hmac: Array.from({ length: 32 }, () => 0)
     })
@@ -156,7 +158,9 @@ describe('AuthFetch.handlePaymentAndRetry – known-txids wiring', () => {
   }
 
   function optionsOfLastCreateAction(wallet: TestWallet): CreateActionOptions {
-    const options = wallet.createAction.mock.calls.at(-1)?.[0].options
+    const options = wallet.createAction.mock.calls.find(
+      ([args]) => args.options?.noSend === true
+    )?.[0].options
     if (options === undefined) throw new Error('Expected createAction options')
     return options
   }
@@ -198,8 +202,12 @@ describe('AuthFetch.handlePaymentAndRetry – known-txids wiring', () => {
     )
 
     expect(response?.status).toBe(200)
-    expect(wallet.createAction).toHaveBeenCalledTimes(1)
-    expect(optionsOfLastCreateAction(wallet)).toEqual({ randomizeOutputs: false })
+    expect(wallet.createAction).toHaveBeenCalledTimes(2)
+    expect(optionsOfLastCreateAction(wallet)).toEqual({
+      randomizeOutputs: false,
+      noSend: true,
+      acceptDelayedBroadcast: false
+    })
   })
 
   it.each([
@@ -227,7 +235,7 @@ describe('AuthFetch.handlePaymentAndRetry – known-txids wiring', () => {
       )
 
       expect(response?.status).toBe(200)
-      expect(wallet.createAction).toHaveBeenCalledTimes(1)
+      expect(wallet.createAction).toHaveBeenCalledTimes(2)
       expect(optionsOfLastCreateAction(wallet).knownTxids).toEqual([A])
       expect(createNonceMock).toHaveBeenCalledTimes(1)
       expect(fetchSpy).toHaveBeenCalledTimes(2)
@@ -287,9 +295,11 @@ describe('AuthFetch.handlePaymentAndRetry – known-txids wiring', () => {
     const response = await authFetch.fetch('https://example.com/resource')
 
     expect(response.status).toBe(200)
-    expect(wallet.createAction).toHaveBeenCalledTimes(1)
+    expect(wallet.createAction).toHaveBeenCalledTimes(2)
     expect(optionsOfLastCreateAction(wallet)).toEqual({
       randomizeOutputs: false,
+      noSend: true,
+      acceptDelayedBroadcast: false,
       knownTxids: [A, B]
     })
     expect(wallet.getPublicKey).toHaveBeenCalledWith(
@@ -300,22 +310,15 @@ describe('AuthFetch.handlePaymentAndRetry – known-txids wiring', () => {
     expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards the declared txids when the server changes its price mid-flight', async () => {
-    // The regeneration branch builds a SECOND transaction. It is the path that matters most:
-    // a repriced retry is already the largest request in the exchange, so dropping the
-    // optimisation here would re-ship full ancestry at exactly the wrong moment.
+  it('requires reconciliation when the server changes price instead of creating another payment', async () => {
     const { internals, wallet } = harness()
-
-    await internals.handlePaymentAndRetry(
-      'https://example.com',
-      { paymentContext: existingContext(5) }, // server now asks for 10
-      make402Response({
-        'x-bsv-payment-satoshis-required': '10',
-        'x-bsv-payment-known-txids': A
-      })
-    )
-
-    expect(wallet.createAction).toHaveBeenCalledTimes(1)
-    expect(optionsOfLastCreateAction(wallet).knownTxids).toEqual([A])
+    await expect(
+      internals.handlePaymentAndRetry(
+        'https://example.com',
+        { paymentContext: existingContext(5) },
+        make402Response({ 'x-bsv-payment-satoshis-required': '10', 'x-bsv-payment-known-txids': A })
+      )
+    ).rejects.toMatchObject({ code: 'ERR_PAYMENT_REQUIREMENTS_CHANGED' })
+    expect(wallet.createAction).not.toHaveBeenCalled()
   })
 })

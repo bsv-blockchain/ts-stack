@@ -20,8 +20,25 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Add an optional `scriptVerifier` (last `Engine` constructor argument) used for SPV verification in `submit` and GASP graph anchoring, for example a preloaded `BdkVerifier` from `@bsv/verifast` (about 11x less CPU per input script than the default interpreter). Omitted, scripts are verified by the SDK interpreter exactly as before. Additive; no migration.
+
+- Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+- Add an explicit Mongo retained-admission history option and trusted scoped reader. Preserve default receipt bytes, existing public receipt shape, legacy retry behavior and database validators; old receipts without provenance remain unresolved. Bound the complete opt-in record before effects.
+- SHIP/SLAP advertisement validation accepts topic and service names with
+  digits, up to 256 bytes, matching the `@bsv/sdk` overlay name grammar and the
+  BRC-207 per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`).
+  Names accepted before are still accepted; no migration is required.
+
 - Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
 
+- Adds an optional `Engine.onTopicFailed` reporter and the exported
+  `TopicFailureReporter` type. `submit` already records a per-topic validation
+  failure in `failedTopics` and returns `{ outputsToAdmit: [], coinsToRetain: [] }`
+  for that topic, which is the same STEAK as a duplicate or an empty admission;
+  the reporter receives the topic, the error, the txid and the submission mode
+  so a host can distinguish them. Unset by default, invoked inside a try/catch,
+  and no constructor parameter is added. No migration is required.
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
 - Adds `storageHasAdmission` for the optional `Storage.admission` field.
 - Adds an opt-in MongoDB schema, payload-publication, reference-guard, and

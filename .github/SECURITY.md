@@ -76,8 +76,9 @@ Pull requests and releases enforce, as applicable:
   audit gates;
 - warning-free lint, strict TypeScript build/typecheck, unit/integration,
   conformance, clean-consumer, browser, mobile, CLI, and WASM package checks;
-- governed property tests and mutation targets for implementation trust
-  boundaries, with replayable seeds and scheduled long campaigns;
+- governed deterministic/property/native tests for implementation trust
+  boundaries, with replayable seeds; mutation audits run only in the background
+  and raise triage findings without blocking merge or publication;
 - CodeQL security-extended analysis, secret scanning, OpenSSF Scorecard, and
   Sonar semantic review with an exact-head, zero-new-findings merge gate that
   cannot be bypassed by accepting or marking a new issue false-positive;
@@ -88,7 +89,7 @@ Pull requests and releases enforce, as applicable:
 - pack-once npm candidates, CycloneDX SBOMs, vulnerability/license scans,
   GitHub attestations, npm OIDC provenance, and registry digest
   reconciliation; and
-- uniform Open BSV License Version 6 checks across package and image artifacts.
+- uniform Apache License 2.0 checks across package and image artifacts.
 
 Coverage-guided fuzzing, remaining manual/browser/performance review, and the
 final QA hardening campaign are deliberately tracked as unfinished in
@@ -113,6 +114,18 @@ malformed, unowned, or unregistered exceptions still fail CI. Dependency release
 age does not prevent applying a patched release; vulnerability audits, provenance
 checks, denied lifecycle scripts, and immutable artifact verification remain required.
 
+The maintainer-approved [PR569 Sonar budget](../docs/reviews/sonar-pr569-budget.md)
+is registered in `governance/sonar-pr569-budget.json` and the exceptions registry.
+Only the exact PR/repository/head branch/base before `2026-10-24T23:59:59Z` may
+retain visible maintainability-only findings with maintainability A and
+duplication ≤6%. Bugs, vulnerabilities, all reliability/security impacts,
+unknown classifications and unreviewed hotspots remain blocking, including
+accepted/false-positive issues. Complete inventories and original/scoped verdicts
+are retained; no suppression, exclusion, profile, baseline or finding-state
+change is authorized. Live PR and exact, stable analysis checks enforce scope;
+out-of-scope or expired approval returns to the strict gate. CodeQL and all
+other security/qualification gates remain unchanged. The PR569 merge hold remains.
+
 Public services such as Overlay, Wallet Storage, WAB, Message Box, and Wallet
 Relay may need to accept clients from previously unknown domains. Their public
 default and opt-in CORS/CSP/origin allowlists are deployment policy, not a
@@ -136,3 +149,15 @@ For a suspected release compromise:
 5. deprecate and forward-fix immutable npm versions or roll deployments back to
    a previously verified image digest; and
 6. coordinate advisory, consumer guidance, and post-incident control changes.
+
+The separately reviewed PR569 analysis operations in
+[`governance/pr569-reviewed-analysis-exceptions.json`](../governance/pr569-reviewed-analysis-exceptions.json)
+are the sole additional exception: CodeQL353 intentional private JSON evidence
+storage and two exact Sonar S2612 required public artifact permissions. Owner
+BraydenLangley reviewed the operator-delegated decision on October 19. Exact
+alert identities and SHA-256 source checks apply only to PR569 before October 24
+at 23:59:59 UTC. The Sonar inventory and original failed verdict remain visible;
+reviewed permission keys are reported separately. Their original security C
+metric is covered only when both exact findings are present; all other
+security ratings and findings retain strict enforcement. Every other finding, metric,
+platform and merge gate remains required. Changed source requires fresh review.

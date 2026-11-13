@@ -1,5 +1,7 @@
+import { awaitFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import { CWIStyleWalletManager, UMPTokenInteractor } from './CWIStyleWalletManager'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
+import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import {
   WalletInterface,
   Random,
@@ -109,8 +111,11 @@ async function proveInternalizedFaucetOutput(
   const outpoint = `${redemptionTxid}.${outputIndex}`.toLowerCase()
   const proof = await wallet.listOutputs(
     {
-      basket: 'default', include: 'entire transactions', includeLabels: true,
-      limit: 1, offset
+      basket: 'default',
+      include: 'entire transactions',
+      includeLabels: true,
+      limit: 1,
+      offset
     },
     adminOriginator
   )
@@ -130,9 +135,8 @@ async function proveInternalizedFaucetOutput(
   const transaction = Beef.fromBinaryStrict(proof.BEEF).findTxid(redemptionTxid)?.tx
   if (
     transaction?.outputs[outputIndex]?.satoshis !== satoshis ||
-    transaction.inputs.filter((_, inputIndex) =>
-      transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint
-    ).length !== 1
+    transaction.inputs.filter((_, inputIndex) => transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint)
+      .length !== 1
   ) {
     throw new Error('Wallet returned unrelated internalized faucet transaction evidence.')
   }
@@ -158,12 +162,13 @@ async function hasInternalizedFaucetOutput(
       { basket: 'default', includeLabels: true, limit: pageSize, offset },
       adminOriginator
     )
+    const totalOutputs = numericTotalOutputs(page)
     if (
       !Array.isArray(page.outputs) ||
-      !Number.isSafeInteger(page.totalOutputs) ||
-      page.totalOutputs < 0 ||
+      !Number.isSafeInteger(totalOutputs) ||
+      totalOutputs < 0 ||
       page.outputs.length > pageSize ||
-      offset + page.outputs.length > page.totalOutputs
+      offset + page.outputs.length > totalOutputs
     ) {
       throw new Error('Wallet returned invalid faucet payment outputs.')
     }
@@ -174,13 +179,15 @@ async function hasInternalizedFaucetOutput(
         throw new Error('Wallet returned unrelated internalized faucet output.')
       }
       await proveInternalizedFaucetOutput(
-        wallet, { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label }, adminOriginator,
+        wallet,
+        { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label },
+        adminOriginator,
         offset + index
       )
       return true
     }
     offset += page.outputs.length
-    if (offset >= page.totalOutputs) return false
+    if (offset >= totalOutputs) return false
     if (page.outputs.length === 0) throw new Error('Wallet returned an incomplete faucet output page.')
   }
 }
@@ -280,10 +287,15 @@ async function recoverWABFaucetPayment(
     Number.isSafeInteger(internalized[0].outputIndex) &&
     internalized[0].outputIndex >= 0 &&
     internalized[0].outputIndex <= 0xffffffff &&
-    await hasInternalizedFaucetOutput(
-      wallet, action.txid.toLowerCase(), internalized[0].outputIndex,
-      internalized[0].satoshis, faucetOutpoint, label, adminOriginator
-    )
+    (await hasInternalizedFaucetOutput(
+      wallet,
+      action.txid.toLowerCase(),
+      internalized[0].outputIndex,
+      internalized[0].satoshis,
+      faucetOutpoint,
+      label,
+      adminOriginator
+    ))
   ) {
     return true
   }
@@ -529,11 +541,12 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
               }
             },
             {
-              ...(completeBoundAction.outputAuthorizationVersion === 1
+              ...(Reflect.get(completeBoundAction, 'outputAuthorizationVersion') === 1
                 ? { authorizeAdditionalOutputs: getActionOutputAuthorizations }
                 : {}),
               inputSigners: {
-                [outpoint]: async (transaction, inputIndex) => await faucetRedeemUnlocker.sign(transaction, inputIndex)
+                [outpoint]: (transaction, inputIndex) =>
+                  awaitFromSync(() => faucetRedeemUnlocker.sign(transaction, inputIndex))
               },
               outputSatoshisRanges: {
                 0: {
@@ -886,15 +899,20 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     }
   }
 
-  private async finalizePendingPhoneChange(currentPresentationKey: string, pending: PendingPhoneChange): Promise<void> {
-    const finalized = await this.phoneChange<WABPhoneChangeCommit>('finalize', {
-      changeId: pending.changeId,
-      presentationKey: currentPresentationKey,
-      newPresentationKey: pending.presentationKey
-    })
-    if (finalized.success !== true || finalized.changeId !== pending.changeId) {
-      throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
-    }
+  private finalizePendingPhoneChange(currentPresentationKey: string, pending: PendingPhoneChange): Promise<void> {
+    return mapAwaitFromSync(
+      () =>
+        this.phoneChange<WABPhoneChangeCommit>('finalize', {
+          changeId: pending.changeId,
+          presentationKey: currentPresentationKey,
+          newPresentationKey: pending.presentationKey
+        }),
+      finalized => {
+        if (finalized.success !== true || finalized.changeId !== pending.changeId) {
+          throw new WABAccountContinuityError(finalized.message || 'WAB could not finalize the pending phone change.')
+        }
+      }
+    )
   }
 
   /**
@@ -992,12 +1010,17 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     super.destroy()
   }
 
-  private async phoneChange<T extends WABOperationResponse>(phase: string, body: unknown): Promise<T> {
-    const response = await this.wabClient.transport.request<unknown>(`/auth/phone-change/${phase}`, {
-      operation: 'phone-change',
-      body
-    })
-    return validateWABOperationResponse(response, `phone-change-${phase}`) as T
+  private phoneChange<T extends WABOperationResponse>(phase: string, body: unknown): Promise<T> {
+    return mapAwaitFromSync(
+      () =>
+        this.wabClient.transport.request<unknown>(`/auth/phone-change/${phase}`, {
+          operation: 'phone-change',
+          body
+        }),
+      response => {
+        return validateWABOperationResponse(response, `phone-change-${phase}`) as T
+      }
+    )
   }
 
   private inferAccountStatus(

@@ -15,11 +15,16 @@ describe('@bsv/templates 2.0.0 public surface', () => {
       'decodeStrictCbor',
       'tryDecodeStrictCbor',
       'StrictCborError',
-      'STRICT_CBOR_MAX_BYTES',
+      'StrictCborLink',
       'STRICT_CBOR_MAX_DEPTH'
     ]) {
       expect(name in mod).toBe(true)
     }
+  })
+
+  it('exports the 1Color template', () => {
+    expect(typeof mod.OneColor.decode).toBe('function')
+    expect(mod.OneColorError).toBe(mod.Bsv21BinaryError)
   })
 
   it('no longer exports the Mandala templates', () => {
@@ -40,5 +45,22 @@ describe('@bsv/templates 2.0.0 public surface', () => {
     ]) {
       expect(name in mod).toBe(true)
     }
+  })
+
+  it('exports the 1Color attribute reader and the 36-byte-aware id helpers', () => {
+    for (const name of [
+      'isProfileId',
+      'readOneColorAttributes',
+      'reqMatchesDeploy',
+      'needsEmptyPayloadMarker',
+      'oneColorTokenIdFromString',
+      'oneColorTokenIdToString'
+    ])
+      expect(typeof (mod as Record<string, unknown>)[name]).toBe('function')
+    expect(typeof mod.OneColor.lockRemainder).toBe('function')
+    const id = `${'ab'.repeat(31)}cd_258`
+    expect(mod.oneColorTokenIdFromString(id)).toEqual(mod.OneColor.tokenIdFromString(id))
+    expect(mod.oneColorTokenIdToString(mod.oneColorTokenIdFromString(id))).toBe(id)
+    expect(() => mod.tokenIdFromString(id)).toThrow('<64 lowercase hex>_0') // the old name stays 32-byte only
   })
 })

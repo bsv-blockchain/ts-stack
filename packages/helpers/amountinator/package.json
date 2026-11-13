@@ -1,6 +1,6 @@
 {
   "name": "@bsv/amountinator",
-  "version": "2.1.7",
+  "version": "2.1.9",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -10,7 +10,7 @@
   },
   "description": "Currency amount conversion",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "commonjs",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -30,7 +30,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "directories": {
     "test": "tests"
@@ -79,7 +81,7 @@
     "wallet"
   ],
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6 || ^3.0.0"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

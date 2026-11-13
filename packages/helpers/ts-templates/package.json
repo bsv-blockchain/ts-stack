@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -16,7 +16,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -47,7 +49,7 @@
     "dev": "pnpm build --watch",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/ts-templates/src/**/*.ts\" \"packages/helpers/ts-templates/__tests/*.ts\" \"packages/helpers/ts-templates/test/**/*.ts\" \"packages/helpers/ts-templates/*.{js,json,ts}\"",
     "lint": "oxlint src __tests test --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports Bsv21Binary,Bsv21Token,DstasToken,MultiPushDrop,OpReturn,P2MSKH,R1K1Wallet,StasToken,decodeStrictCbor,encodeStrictCbor",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports Bsv21Binary,Bsv21Token,DstasToken,MultiPushDrop,OneColor,OpReturn,P2MSKH,R1K1Wallet,StasToken,decodeStrictCbor,encodeStrictCbor,isProfileId,needsEmptyPayloadMarker,oneColorTokenIdFromString,oneColorTokenIdToString,readOneColorAttributes,reqMatchesDeploy",
     "prepublishOnly": "pnpm build",
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
@@ -70,7 +72,7 @@
     "SV"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
@@ -89,7 +91,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6 || ^3.0.0"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

@@ -3,7 +3,7 @@
 W02 persistence / S01; requirements S1, S2, S3, B2, B3 and X1. This is an
 additive logical adapter contract and executable reference seam. It is not a
 Mongo schema, a new public HTTP shape, or authorization for TS and Go writers to
-share a node database. No production adapter implements this capability yet.
+share a node database. The opt-in TS Mongo adapter implements this capability; it is not the default.
 
 ## Baseline and selection
 
@@ -162,3 +162,28 @@ Replica-set crashes, unknown commit labels, index enlistment, payload GC races,
 all-equal-score peer exchange and deployment/migration evidence remain required.
 No consumer migration is required for this additive S01 API. Mixed-version
 concurrent TS/Go writers remain unsupported.
+
+
+## Optional retained-history companion
+
+`AdmissionStorage.history` may explicitly declare `overlay-admission-history-v1`.
+Its read selector is `(scope, txid, topic, policyId, contextDigest)`. It must follow
+retained applied history to a majority-committed operation, recompute that
+operation's semantic digest from its saved original identity, and validate the
+selector against it. The original mode and all committed topics remain explicit.
+A topic key in saved STEAK without corresponding identity membership is not proof
+of admission: STEAK can also describe previously applied duplicate topics.
+
+The result is committed `{ identity, receipt }` or unresolved. Missing applied
+history, missing/pending operations, absent legacy provenance and selector
+mismatches are unresolved, never rejection or proof of abort. Invalid selectors,
+corrupt storage and failed reads throw. The reader is observational and cannot
+broadcast, apply effects, rewrite old receipts or resolve an uncertain attempt.
+A separate recovery path still owns reconciliation.
+
+History can outlive spending, serving eviction and changed chain assessment. It
+cannot certify present unspentness, index visibility, authorization or the current
+chain. This trusted local result can include private co-admitted topics; a public
+protocol adapter must authorize and project it, and independently bind any actual
+assessment context. This companion does not establish the BRC-194 finalization
+contract on its own. Legacy providers need not implement it.

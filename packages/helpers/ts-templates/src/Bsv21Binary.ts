@@ -132,7 +132,7 @@ const canonicalPushOp = (data: readonly number[]): number => {
 }
 
 // OP_0, OP_1..OP_16 and OP_1NEGATE carry no data; every other push carries its bytes.
-const payloadChunk = (data: readonly number[]): ScriptChunk => {
+export const payloadChunk = (data: readonly number[]): ScriptChunk => {
   const op = canonicalPushOp(data)
   return op === OP.OP_0 || op > OP.OP_PUSHDATA4 ? { op } : { op, data: [...data] }
 }
@@ -143,14 +143,14 @@ const pushedBytes = (chunk: ScriptChunk): number[] => {
   return [...(chunk.data ?? [])]
 }
 
-interface PayloadSplit {
+export interface PayloadSplit {
   payload?: number[]
   payloadCanonical: boolean
   rest: ScriptChunk[]
 }
 
 // BRC-162: a single push followed by OP_DROP right after OP_2DROP is the payload.
-const splitPayload = (afterPrefix: ScriptChunk[]): PayloadSplit => {
+export const splitPayload = (afterPrefix: ScriptChunk[]): PayloadSplit => {
   const [first, second] = afterPrefix
   if (second === undefined || !isPushOp(first.op) || second.op !== OP.OP_DROP) {
     return { payloadCanonical: true, rest: afterPrefix }
@@ -163,7 +163,7 @@ const splitPayload = (afterPrefix: ScriptChunk[]): PayloadSplit => {
   }
 }
 
-const p2pkhHash = (rest: readonly ScriptChunk[]): number[] | undefined => {
+export const p2pkhHash = (rest: readonly ScriptChunk[]): number[] | undefined => {
   if (rest.length !== P2PKH_OPS.length || rest.some((c, i) => c.op !== P2PKH_OPS[i])) {
     return undefined
   }
@@ -179,7 +179,7 @@ const decodeTokenId = (chunk: ScriptChunk): number[] | undefined => {
   return [...chunk.data]
 }
 
-const roleOf = (tokenId: number[] | undefined, amount: bigint): Bsv21Role => {
+export const roleOf = (tokenId: number[] | undefined, amount: bigint): Bsv21Role => {
   if (tokenId === undefined) return 'deploy'
   return amount === 0n ? 'authority' : 'value'
 }

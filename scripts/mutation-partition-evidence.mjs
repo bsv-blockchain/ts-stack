@@ -1,29 +1,38 @@
-#!/usr/bin/env node
 import fs from 'node:fs'
+
 import path from 'node:path'
+
 import { createHash } from 'node:crypto'
+
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
 import { isDeepStrictEqual } from 'node:util'
+
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 import {
   partitionMutationTarget,
   partitionedMutationTargets,
   selectedMutationPartition,
-  mutationExecutionMatrix
+  scheduledMutationExecutionMatrix
 } from './mutation-partitions.mjs'
+
 import {
   inspectMutationEvidence,
   makeTargetReceipt,
   qualificationIdentity,
-  targetEvidence
+  targetEvidence,
+  mutantTuple
 } from './mutation-final-qualification.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
+
 function compare(left, right) {
   if (left < right) return -1
   if (left > right) return 1
   return 0
 }
+
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 
 export function partitionReceipt(
@@ -73,12 +82,25 @@ function checkedPartition(identity, targetId, expected, seen, packet, policy, mo
   const execution = JSON.parse(executionBytes)
   return { part, checked, execution }
 }
-function addPartitionFiles(files, partitionId, reportBytes) {
+
+function addPartitionFiles(files, owners, partitionId, reportBytes) {
   for (const [file, value] of Object.entries(JSON.parse(reportBytes).files)) {
-    if (Object.hasOwn(files, file)) throw new Error('Partition source files overlap')
-    files[file] = {
-      ...value,
-      mutants: value.mutants.map(mutant => ({ ...mutant, id: `${partitionId}/${mutant.id}` }))
+    const { mutants, ...metadata } = value
+    if (Object.hasOwn(files, file)) {
+      const previous = { ...files[file] }
+      delete previous.mutants
+      if (!isDeepStrictEqual(previous, metadata))
+        throw new Error(
+          'Partition source files overlap with different complete metadata or source bytes differ'
+        )
+    } else files[file] = { ...metadata, mutants: [] }
+    for (const mutant of mutants) {
+      const tuple = mutantTuple(file, mutant)
+      const previous = owners.get(tuple)
+      if (previous !== undefined && previous !== partitionId)
+        throw new Error('Partition canonical mutant ownership overlaps in inventory')
+      owners.set(tuple, partitionId)
+      files[file].mutants.push({ ...mutant, id: `${partitionId}/${mutant.id}` })
     }
   }
 }
@@ -97,6 +119,7 @@ export function combinePartitionEvidence(
     throw new Error('Missing disjoint execution partition plan')
   const seen = new Set()
   const files = {}
+  const owners = new Map()
   let properties
   const bindings = []
   for (const packet of packets) {
@@ -117,17 +140,22 @@ export function combinePartitionEvidence(
       reportDigest: checked.reportDigest,
       executionDigest: checked.executionDigest
     })
-    addPartitionFiles(files, part.id, packet.reportBytes)
+    addPartitionFiles(files, owners, part.id, packet.reportBytes)
   }
   if (seen.size !== expected.size) throw new Error('Missing canonical execution partition')
-  // Normalize execution ordering only; the original canonical inventory/config
-  // and global score are rechecked by makeTargetReceipt below.
   const reportBytes = JSON.stringify({
     schemaVersion: '1.0',
-    framework: { name: 'StrykerJS', version: '9.6.1' },
+    framework: { name: 'StrykerJS', version: '10.1.1' },
     projectRoot: canonical.projectRoot,
     config: canonical.config,
-    files: Object.fromEntries(Object.entries(files).sort(([left], [right]) => compare(left, right)))
+    files: Object.fromEntries(
+      Object.entries(files)
+        .sort(([left], [right]) => compare(left, right))
+        .map(([file, value]) => [
+          file,
+          { ...value, mutants: value.mutants.toSorted((left, right) => compare(left.id, right.id)) }
+        ])
+    )
   })
   bindings.sort((left, right) => compare(left.partitionId, right.partitionId))
   const executionBytes = JSON.stringify({
@@ -170,6 +198,7 @@ function packetIn(directory, file = 'partition-receipt.json') {
     executionBytes: fs.readFileSync(path.join(directory, 'execution.json'), 'utf8')
   }
 }
+
 function packetDirectories(directory, file) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const location = path.join(directory, entry.name)
@@ -178,6 +207,7 @@ function packetDirectories(directory, file) {
     return entry.name === file ? [directory] : []
   })
 }
+
 function parseArguments(argv) {
   const [command, ...rest] = argv
   if (!['matrix', 'targets', 'capture', 'verify', 'recheck'].includes(command))
@@ -195,6 +225,7 @@ function parseArguments(argv) {
   }
   return options
 }
+
 async function context(targetId, mode, targets) {
   if (!['full', 'diagnostic'].includes(mode) || !Object.hasOwn(targets, targetId))
     throw new Error('Missing canonical partition target or mode')
@@ -215,11 +246,19 @@ async function context(targetId, mode, targets) {
     canonical: await targetEvidence(ROOT, targets[targetId], targetId)
   }
 }
+
 async function main(argv) {
   const options = parseArguments(argv)
   const targets = buildMutationTargets(ROOT)
   if (options.command === 'matrix') {
-    console.log(JSON.stringify(mutationExecutionMatrix(JSON.parse(options.selected), targets)))
+    const { seconds } = JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'governance/mutation-testing/durations.json'), 'utf8')
+    )
+    console.log(
+      JSON.stringify(
+        scheduledMutationExecutionMatrix(JSON.parse(options.selected), targets, seconds)
+      )
+    )
     return
   }
   if (options.command === 'targets') {
@@ -307,6 +346,7 @@ async function main(argv) {
     `Canonical ${options.target} mutation gate passed from every partition; score ${combined.receipt.metrics.score.toFixed(2)}, mode=${options.mode}. No full-campaign output issued here.`
   )
 }
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     await main(process.argv.slice(2))

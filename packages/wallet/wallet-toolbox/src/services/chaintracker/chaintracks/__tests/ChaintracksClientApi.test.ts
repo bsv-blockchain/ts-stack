@@ -55,8 +55,8 @@ describe('ChaintracksClientApi deterministic contract', () => {
     const bulkWoc = options.bulkIngestors.find(
       ingestor => ingestor instanceof BulkIngestorWhatsOnChainCdn
     ) as BulkIngestorWhatsOnChainCdn
-    WhatsOnChainServices.chainInfo[chain] = undefined
-    WhatsOnChainServices.chainInfoTime[chain] = undefined
+    Reflect.set(WhatsOnChainServices.chainInfo, chain, undefined)
+    Reflect.set(WhatsOnChainServices.chainInfoTime, chain, undefined)
     bulkWoc.woc.woc.getChainInfo = async () => ({
       chain,
       blocks: headers.at(-1)!.height,
@@ -80,9 +80,9 @@ describe('ChaintracksClientApi deterministic contract', () => {
       chaintracks: localChaintracks
     })
 
-    // Each Jest worker has a separate process ID, avoiding collisions when
-    // package tests execute in parallel.
-    await localService.startJsonRpcServer(30000 + (process.pid % 10000))
+    // Let the OS atomically assign an available port; a PID-derived port may
+    // already be occupied by another test or an ephemeral client socket.
+    await localService.startJsonRpcServer(0)
     localServiceBaseUrl = `http://localhost:${localService.port}`
     const localServiceClient = new ChaintracksServiceClient(chain, localServiceBaseUrl, {})
 

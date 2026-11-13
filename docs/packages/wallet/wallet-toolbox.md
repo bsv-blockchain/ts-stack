@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.15.0'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.16.0'
+last_updated: '2026-11-09'
+last_verified: '2026-11-09'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -15,33 +15,40 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
+The 2.15.3 source candidate restores ordinary import of exactly framed legacy
+AtomicBEEF with surplus unrelated branches. It retains the declared payment and
+its dependencies, reruns strict SDK argument validation, and preserves native
+proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
+remain rejected. No API, wire or schema migration is required. Upgrade the host
+and remote Storage separately; reconcile and retry the original import instead
+of creating or broadcasting a replacement payment. Source is not publication or
+deployment.
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate adds `syncFromReaderResumable`, fair foreground scheduling, network/error preflight and canonical proof recovery. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md). Existing sync methods and BRC-38/39/40 formats remain supported.
+
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
-BEEF requests and schema-declared storage response bytes use the existing
-negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
-and identical transaction/proof bytes. Authentication and payload ceilings
-remain unchanged; upgrade both clients and active storage for the savings.
+## Optional local transaction recovery
 
-IndexedDB treats empty certificate certifier/type, transaction status and
-output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
-arrays, partial predicates and user ownership remain enforced. No API, wire
-or database migration is required.
+The 2.15.0 source candidate adds separate deep-import SQLite action and funding
+recovery controllers. They retain exact noSend preparation/signing state or
+atomically reconcile BRC-29 wallet ownership with a durable receipt. Ordinary
+BRC-100 APIs and SDK peer compatibility remain unchanged; the optional funding
+capability requires SDK 3.3.0 and explicit same-wallet schema installation.
 
-Internalizing an unproven transaction new to a user attempts broadcast before
-storing recipient outputs, including a sender's no-send transaction already
-known to shared storage. Rejected broadcasts return a review-actions error
-and store no recipient outputs. Transactions backed by a mining proof are
-not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
-
-Confirmed internalization resolves and checks the block header before the
-storage writer opens. IndexedDB commits a transaction when the event loop
-turns during an asynchronous header lookup, so the proven transaction,
-transaction, and requested outputs are stored together only after that lookup
-finishes. A missing or malformed header, or an invalid proof, still rejects
-and leaves none of those records. Upgrade the active storage implementation,
-including the browser client.
+Read [local action recovery](../../guides/local-action-recovery.md) and
+[local funding recovery](../../guides/local-funding-recovery.md) before adopting
+them. Retain a consistent whole database plus keys and reopen existing auxiliary
+state after restart. Legacy entity sync/export, IndexedDB, remote providers and
+browser/mobile wrappers do not carry this state. Stop new use and reconcile
+outstanding operations before rollback. These local receipts do not establish
+settlement, quote-time service capacity or protected delivery.
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.
@@ -125,6 +132,13 @@ only as a generic signal. Monitor and daemon startup await retryable ChainTracks
 subscriptions, teardown closes SSE/subscriptions before storage, persisted
 diagnostics are bounded, and monitor operational logging requires the additive
 `MonitorOptions.logging` callback.
+
+An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
+argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it
+is sent as `Authorization: Bearer <key>` on broadcast, lookup and SSE requests.
+A refused key (HTTP 401 or 403) is a service error, like a 429 or 5xx: the
+wallet fails over to the next broadcaster or retries, and never marks the
+transaction invalid because of it.
 
 Spending approvals apply to one operation per prompt and are never cached or
 coalesced. Spending-token accounting reads every action page before authorizing
@@ -453,3 +467,13 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

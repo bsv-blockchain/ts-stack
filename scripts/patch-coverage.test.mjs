@@ -1,16 +1,71 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 import {
   changedLinesFromDiff,
   evaluatePatchCoverage,
   hasRuntimeChange,
+  isUninstrumentedModule,
+  omitUninstrumentedModules,
   isStaticMarkdownModule,
   omitStaticMarkdownModules,
+  omitTypeOnlyChanges,
   mergeLcov,
   runtimeComparisonAvailable
 } from './patch-coverage.mjs'
+
+test('only compiler-erased declarations and pure re-export bindings lack instrumentable statements', () => {
+  for (const source of [
+    'export interface Scope { id: string }; export type Generation = string',
+    "import type { Context } from './context.js'; export type Scope = Context",
+    "export * from './worker.js'; export type { Context } from './context.js'",
+    "export { Worker, type Context } from './worker.js'",
+    "export { Worker as PublicWorker } from './worker.js'; export { start } from './start.js'",
+    "export { default as Worker } from './worker.js'; export * from './other.js'",
+    "import { Worker as Internal } from './worker.js'; export { Internal as Worker }",
+    'export {}',
+    '/** Documentation without runtime code. */'
+  ])
+    assert.equal(isUninstrumentedModule(source), runtimeComparisonAvailable(), source)
+  for (const source of [
+    "export * from './worker.js'; startService()",
+    "import './startup.js'; export * from './worker.js'",
+    "export { Worker } from './worker.js'; startService()",
+    "import './startup.js'; export { Worker } from './worker.js'",
+    "import { Worker } from './worker.js'; export const worker = new Worker()",
+    "import { Worker } from './worker.js'; export default Worker",
+    "import * as workers from './worker.js'; export { workers }",
+    'export const value = 1',
+    'export const run = () => process.exit(1)',
+    'export class Worker { start() {} }',
+    'export enum State { Ready }',
+    'const text = \'export * from \\"./x\\";\'; export { text }',
+    'export * from "./worker.js"; throw new Error("startup")',
+    'invalid TypeScript {'
+  ])
+    assert.equal(isUninstrumentedModule(source), false, source)
+})
+
+test('statement classification retains executable code regardless of a barrel-like filename', () => {
+  const declaration = 'packages/example/src/ports.ts',
+    barrel = 'packages/example/src/index.ts',
+    executable = 'packages/example/src/other/index.ts',
+    changed = new Map([declaration, barrel, executable].map(file => [file, new Set([1])]))
+  const sources = new Map([
+    [declaration, 'export interface Context { epoch: string }'],
+    [barrel, "export { Worker, type Context } from './worker.js'"],
+    [executable, "export * from './worker.js'; registerPlugin()"]
+  ])
+  omitUninstrumentedModules(changed, file => sources.get(file))
+  assert.deepEqual(
+    [...changed.keys()],
+    runtimeComparisonAvailable() ? [executable] : [declaration, barrel, executable]
+  )
+})
 
 test('patch coverage intersects changed production lines with merged LCOV line and branch data', () => {
   const changed =
@@ -57,6 +112,18 @@ diff --git a/packages/sdk/src/__tests/fixtures/slow-worker.cjs b/packages/sdk/sr
 diff --git a/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
 +++ b/packages/sdk/src/__tests__/fixtures/legacy-slow-worker.cjs
 @@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs b/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs
++++ b/packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/fixtures/crash-worker.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs b/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs
++++ b/packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/fixtures/crash-worker.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs b/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs
++++ b/packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/fixtures/mutationDatabases.cjs
+@@ -0,0 +1,20 @@
+diff --git a/packages/sdk/src/__test__/fixture.cjs b/packages/sdk/src/__test__/fixture.cjs
++++ b/packages/sdk/src/__test__/fixture.cjs
+@@ -0,0 +1,20 @@
 `)
   const coverage = mergeLcov([
     `SF:packages/sdk/src/example.ts
@@ -74,6 +141,21 @@ end_of_record
   assert.ok(Math.abs(result.percent - 200 / 3) < Number.EPSILON * 100)
   assert.deepEqual(result.misses, ['packages/sdk/src/example.ts:3 (branch 0:1)'])
   assert.deepEqual(result.missingFiles, [])
+})
+
+test('test-directory classification retains similarly named production files and fixtures outside tests', () => {
+  const paths = [
+    'packages/sdk/src/__testing/worker.cjs',
+    'packages/sdk/src/__test_helpers/worker.cjs',
+    'packages/sdk/src/__tests_extra/worker.cjs',
+    'packages/sdk/src/prefix__test/worker.cjs',
+    'packages/sdk/src/fixtures/worker.cjs'
+  ]
+  const changed = changedLinesFromDiff(
+    paths.map(file => `diff --git a/${file} b/${file}\n+++ b/${file}\n@@ -0,0 +1,2 @@\n`).join('')
+  )
+  assert.deepEqual([...changed.keys()], paths)
+  assert.deepEqual(evaluatePatchCoverage(changed, new Map()).missingFiles, paths)
 })
 
 test('patch coverage fails closed when a changed production file is absent from LCOV', () => {
@@ -267,7 +349,7 @@ test('the coverage aggregation job installs its locked compiler before classifyi
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   const section = workflow.split('  coverage-upload:\n')[1].split(/\n  [a-z][a-z-]*:/)[0]
   const bootstrap = section.indexOf('name: Install the locked patch-coverage compiler')
-  const gate = section.indexOf('name: Enforce the repository-owned 90% patch-coverage gate')
+  const gate = section.indexOf('name: Report repository patch coverage against its 90% target')
   assert.ok(bootstrap >= 0 && gate > bootstrap)
   const beforeGate = section.slice(0, gate)
   assert.match(beforeGate, /uses: pnpm\/action-setup@/)
@@ -280,4 +362,68 @@ test('the coverage aggregation job installs its locked compiler before classifyi
   assert.match(beforeGate, /if \(!runtimeComparisonAvailable\(\)\) throw new Error/)
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.equal(typeof manifest.devDependencies.esbuild, 'string')
+})
+
+test('new erased declarations need no LCOV while runtime, unsupported syntax and unreadable Git sources stay governed', t => {
+  const repository = mkdtempSync(join(tmpdir(), 'patch-coverage-source-'))
+  t.after(() => rmSync(repository, { recursive: true, force: true }))
+  const git = (...args) =>
+    execFileSync('/usr/bin/git', args, {
+      cwd: repository,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).trim()
+  const write = (name, source) => writeFileSync(join(repository, 'packages', name), source)
+  git('init', '--initial-branch=main')
+  mkdirSync(join(repository, 'packages'))
+  write('existing.ts', 'export interface Options { first: string }')
+  git('add', 'packages')
+  const commit = () =>
+    git(
+      '-c',
+      'user.name=Coverage fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Synthetic source'
+    )
+  commit()
+  const base = git('rev-parse', 'HEAD')
+  write('existing.ts', 'export interface Options { first: string; second?: number }')
+  write(
+    'new-types.ts',
+    "import type * as values from './values'; export type Value = values.Value; export interface Options { value: Value }"
+  )
+  write('new-runtime.ts', 'export const value = 1')
+  write('new-enum.ts', 'export enum State { Ready }')
+  write('new-effect.ts', 'import "./start.js"; export interface Options {}')
+  write('new-invalid.ts', 'invalid TypeScript {')
+  git('add', 'packages')
+  commit()
+  const names = [
+    'existing.ts',
+    'new-types.ts',
+    'new-runtime.ts',
+    'new-enum.ts',
+    'new-effect.ts',
+    'new-invalid.ts'
+  ]
+  const changed = new Map(names.map(name => ['packages/' + name, new Set([1])]))
+  omitTypeOnlyChanges(changed, base, repository)
+  const expected = runtimeComparisonAvailable() ? names.slice(2) : names
+  assert.deepEqual(
+    [...changed.keys()],
+    expected.map(name => 'packages/' + name)
+  )
+  assert.throws(() =>
+    omitTypeOnlyChanges(new Map([['packages/missing.ts', new Set([1])]]), base, repository)
+  )
+  assert.throws(() =>
+    omitTypeOnlyChanges(
+      new Map([['packages/new-types.ts', new Set([1])]]),
+      'missing-base',
+      repository
+    )
+  )
 })

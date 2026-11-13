@@ -126,7 +126,7 @@ function escapeJsonObject(value: object): unknown {
   return { [TAG]: ESCAPED, entries: Object.entries(value) }
 }
 
-function defineOwnValues(target: object, values: Array<readonly [string, unknown]>): void {
+export function defineOwnValues(target: object, values: Array<readonly [string, unknown]>): void {
   // Build the descriptors through Object.fromEntries so reserved keys such as
   // __proto__ remain ordinary own data properties. Defining the batch avoids
   // both prototype setters and individual writes through remote property names.

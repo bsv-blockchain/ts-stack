@@ -1,6 +1,6 @@
 # ---- Build stage ----
-# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
+# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 
 WORKDIR /app
 
@@ -50,7 +50,7 @@ COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
 COPY --from=builder --chown=root:root --chmod=0444 /app/knexfile.js ./knexfile.js
 
 # Keep first-party and incorporated-material terms with the deployed image.
-COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
 COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
 RUN chmod -R a=rX /usr/share/licenses/ts-stack
 LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"

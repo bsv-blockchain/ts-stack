@@ -123,7 +123,8 @@ function reclaimValues(
 async function estimateAnchorSatoshis(
   storage: StorageProvider,
   userId: number,
-  target: ValidCreateActionArgs
+  target: ValidCreateActionArgs,
+  reclaimable: boolean
 ): Promise<number> {
   const { xinputs } = await validateRequiredInputs(storage, userId, target)
   const xoutputs = validateRequiredOutputs(storage, userId, target)
@@ -137,6 +138,8 @@ async function estimateAnchorSatoshis(
   if (!Number.isSafeInteger(actionSatoshis) || actionSatoshis <= 0) {
     throw new WERR_INVALID_PARAMETER('inputs', 'a BRC-177 action requiring a positive, exactly sized revocation anchor')
   }
+  // A `never` anchor is never reclaimed, so it needs no reclaim-fee allowance.
+  if (!reclaimable) return actionSatoshis
   // BRC-177 Prefunding step 2: the anchor MUST both fund the protected action
   // and be reclaimable net of the reclaim fee. When the reclaim floor is the
   // larger need (e.g. a value-neutral token transfer), that MUST outweighs the
@@ -151,6 +154,7 @@ export async function prepareNoSendExpiry(
   auth: AuthId,
   target: ValidCreateActionArgs
 ): Promise<StoragePrepareNoSendExpiryResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const expiry = validateNoSendExpiryRequest(target)
   if (expiry == null) {
     throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 noSend expiry label')
@@ -165,11 +169,14 @@ export async function prepareNoSendExpiry(
     throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 blockheight later than the current best-chain height')
   }
   const userId = verifyId(auth.userId)
-  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target)
-  const { reclaimFee, reclaimSatoshis } = reclaimValues(storage, anchorSatoshis)
+  const reclaimable = expiry.mode !== 'never'
+  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target, reclaimable)
+  const { reclaimFee, reclaimSatoshis } = reclaimable
+    ? reclaimValues(storage, anchorSatoshis)
+    : { reclaimFee: 0, reclaimSatoshis: 0 }
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
-  const funding = await createAction(storage, auth, fundingArgs)
+  const funding = await createAction(storage, auth, fundingArgs, undefined, undefined, write)
   const anchor = selectNoSendExpiryFundingAnchor(funding.outputs, anchorSatoshis)
   return {
     funding,
@@ -183,7 +190,8 @@ export async function prepareNoSendExpiry(
 async function resolveDeadline(
   storage: StorageProvider,
   expiry: NonNullable<ReturnType<typeof parseBrc177NoSendExpiryLabels>>
-): Promise<number> {
+): Promise<number | null> {
+  if (expiry.mode === 'never') return null
   if (expiry.mode === 'blockheight') {
     const height = await storage.getServices().getHeight()
     if (expiry.value <= height) {
@@ -210,6 +218,7 @@ export async function activateNoSendExpiry(
   auth: AuthId,
   args: StorageActivateNoSendExpiryArgs
 ): Promise<StorageActivateNoSendExpiryResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const expiry = validateNoSendExpiryRequest(args.target)
   if (expiry == null) throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 noSend expiry label')
   const userId = verifyId(auth.userId)
@@ -230,11 +239,12 @@ export async function activateNoSendExpiry(
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor is not available managed change')
   }
 
-  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target)
+  const reclaimable = expiry.mode !== 'never'
+  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target, reclaimable)
   if (Number(anchor.satoshis) !== expectedAnchor) {
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor no longer exactly funds the protected action')
   }
-  reclaimValues(storage, expectedAnchor)
+  if (reclaimable) reclaimValues(storage, expectedAnchor)
   const deadline = await resolveDeadline(storage, expiry)
   const target = {
     ...args.target,
@@ -256,7 +266,7 @@ export async function activateNoSendExpiry(
     anchorTxid: args.fundingTxid,
     anchorVout: args.anchorVout
   }
-  const action = await createAction(storage, auth, target)
+  const action = await createAction(storage, auth, target, undefined, undefined, write)
   return {
     action,
     expiry,
@@ -438,6 +448,7 @@ export async function armNoSendExpiry(
   auth: AuthId,
   args: StorageArmNoSendExpiryArgs
 ): Promise<void> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   validateDerivation(args.reclaimDerivationPrefix, 'reclaimDerivationPrefix')
   validateDerivation(args.reclaimDerivationSuffix, 'reclaimDerivationSuffix')
@@ -454,7 +465,7 @@ export async function armNoSendExpiry(
   const observedBlockheight =
     snapshot.noSendExpiryMode === 'blockheight' ? await storage.getServices().getHeight() : undefined
 
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     const target = await validateArmSnapshot(storage, userId, args.reference, args, reclaim, {
       trx,
       observedBlockheight,

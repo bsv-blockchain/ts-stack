@@ -1,0 +1,15 @@
+{
+  "extends": "../../../config/typescript/dual-runtime.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "isolatedModules": true,
+    "types": ["node"],
+    "paths": {
+      "@bsv/webrtpay": ["./src/index.ts"]
+    }
+  },
+  "include": ["src", "server", "test", "examples"]
+}
