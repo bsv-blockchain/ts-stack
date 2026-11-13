@@ -4530,10 +4530,13 @@ export class WalletPermissionsManager implements WalletInterface {
     // source; this is an independent check at the permissions layer.
     try {
       const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, args)
+      // Modules can add or reorder explicit inputs and requested outputs. The
+      // signer excludes those inputs from wallet funding, so use the final
+      // request for this independent net-spend calculation.
+      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, moduleArgs)
       let { netSpent, lineItems } = this.computeNetSpend(
         tx,
-        args,
+        moduleArgs,
         originalInputDescriptions,
         originalOutputDescriptions,
         resolvedOutputSatoshis
@@ -4642,20 +4645,25 @@ export class WalletPermissionsManager implements WalletInterface {
 
   /** Encrypts all description/instruction fields in args in-place; returns original (plaintext) copies. */
   private async encryptActionMetadata(args: Parameters<WalletInterface['createAction']>[0]): Promise<{
-    originalInputDescriptions: Record<number, string>
-    originalOutputDescriptions: Record<number, string>
+    originalInputDescriptions: Record<string, string>
+    originalOutputDescriptions: Map<string, string>
   }> {
-    const originalInputDescriptions: Record<number, string> = {}
-    const originalOutputDescriptions: Record<number, string> = {}
-    const inputEncryptionTasks = (args.inputs || []).map(async (input, i) => {
+    const originalInputDescriptions: Record<string, string> = {}
+    const originalOutputDescriptions = new Map<string, string>()
+    const inputEncryptionTasks = (args.inputs || []).map(async input => {
       if (!input.inputDescription) return
-      originalInputDescriptions[i] = input.inputDescription
+      // Modules can reorder inputs, so retain the caller's description by identity,
+      // before any module transforms the request.
+      originalInputDescriptions[input.outpoint.toLowerCase()] = input.inputDescription
       input.inputDescription = await this.maybeEncryptMetadata(input.inputDescription)
     })
-    const outputEncryptionTasks = (args.outputs || []).map(async (output, i) => {
+    const outputEncryptionTasks = (args.outputs || []).map(async output => {
       if (output.outputDescription) {
-        originalOutputDescriptions[i] = output.outputDescription
-        output.outputDescription = await this.maybeEncryptMetadata(output.outputDescription)
+        const description = output.outputDescription
+        output.outputDescription = await this.maybeEncryptMetadata(description)
+        // Retained metadata follows copied/reordered outputs, even when a module
+        // changes their scripts or amounts. No additional decryption is needed.
+        originalOutputDescriptions.set(output.outputDescription, description)
       }
       // P-basket custom instructions are encrypted after the permission modules run.
       if (output.customInstructions && output.basket?.startsWith('p ') !== true) {
@@ -4820,8 +4828,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private computeNetSpend(
     tx: Transaction,
     args: Parameters<WalletInterface['createAction']>[0],
-    originalInputDescriptions: Record<number, string>,
-    originalOutputDescriptions: Record<number, string>,
+    originalInputDescriptions: Record<string, string>,
+    originalOutputDescriptions: Map<string, string>,
     resolvedOutputSatoshis: Map<number, number>
   ): { netSpent: number; lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> } {
     const lineItems: Array<{ type: LineItemType; description: string; satoshis: number }> = []
@@ -4830,8 +4838,7 @@ export class WalletPermissionsManager implements WalletInterface {
     let totalInputSatoshis = 0
     for (const input of tx.inputs) {
       const outpoint = this.inputOutpointForBinding(input)
-      const matchingIndex = (args.inputs || []).findIndex(i => i.outpoint === outpoint)
-      if (matchingIndex !== -1) {
+      if ((args.inputs || []).some(i => i.outpoint.toLowerCase() === outpoint)) {
         if (input.sourceTransaction == null) {
           throw new Error('Caller-provided action input is missing its authenticated source transaction.')
         }
@@ -4841,7 +4848,7 @@ export class WalletPermissionsManager implements WalletInterface {
         totalInputSatoshis = this.checkedSatoshiTotal(totalInputSatoshis, satoshis, 'caller input total')
         lineItems.push({
           type: 'input',
-          description: originalInputDescriptions[matchingIndex] || 'No input description provided',
+          description: originalInputDescriptions[outpoint] || 'No input description provided',
           satoshis
         })
       }
@@ -4865,7 +4872,8 @@ export class WalletPermissionsManager implements WalletInterface {
       lineItems.push({
         type: 'output',
         satoshis,
-        description: originalOutputDescriptions[index] || 'No output description provided'
+        description:
+          originalOutputDescriptions.get(args.outputs![index].outputDescription) || 'No output description provided'
       })
     }
 
