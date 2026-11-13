@@ -281,6 +281,22 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Empty ASM string (patch)
+
+- `Script.fromASM('')` returns the empty script. `fromASM(toASM(script))` holds
+  for a script with no chunks, matching `toASM()` and go-sdk `NewFromASM("")`.
+- An empty token from a leading, trailing, or repeated space throws
+  `invalid ASM: empty token` instead of inserting an empty push. An intentional
+  empty push is still `0`, `OP_0`, or `OP_FALSE`. Single-spaced ASM is unchanged.
+- `toASM()` writes a zero-length push, including a non-minimal `OP_PUSHDATA*` of
+  length 0, as `OP_0`. Previously that chunk was a blank token, so a doubled
+  space was the only way to round-trip it. The original script bytes are
+  unchanged; parsing the ASM back yields the minimal `OP_0` byte `00`.
+- No version bump in this change. This is a patch defect fix for the next SDK
+  release. Valid single-spaced ASM needs no migration. Callers that relied on a
+  blank token becoming an empty push must spell that push as `OP_0`.
+  `@bsv/wallet-helper` `addOpReturnData` does that for an empty field.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

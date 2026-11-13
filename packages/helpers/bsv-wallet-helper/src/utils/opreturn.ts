@@ -18,19 +18,12 @@ const isHex = (str: string): boolean => {
  * @returns Hex-encoded string (lowercase)
  */
 const toHexField = (field: string | number[]): string => {
-  if (Array.isArray(field)) {
-    // Convert byte array to hex
-    return toHex(field)
-  }
-
-  // Check if it's already a hex string
-  if (isHex(field)) {
-    // Normalize to lowercase for SDK compatibility
-    return field.toLowerCase()
-  }
-
-  // Convert UTF-8 string to hex
-  return toHex(toArray(field))
+  // An empty field is a zero-length push. ASM rejects a blank token, so spell it OP_0.
+  let hex: string
+  if (Array.isArray(field)) hex = toHex(field)
+  else if (isHex(field)) hex = field.toLowerCase()
+  else hex = toHex(toArray(field))
+  return hex.length === 0 ? 'OP_0' : hex
 }
 
 const validateScript = (script: LockingScript): void => {
