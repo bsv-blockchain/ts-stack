@@ -3,8 +3,17 @@ import Curve from '@bsv/sdk/primitives/Curve'
 import * as Hash from '@bsv/sdk/primitives/Hash'
 import PrivateKey from '@bsv/sdk/primitives/PrivateKey'
 import * as Utils from '@bsv/sdk/primitives/utils'
-import { scalar32 } from '../encoding.js'
-import { challenge, deriveScalar, requestDigest, streamScalar } from '../sigma.js'
+import { point64, scalar32 } from '../encoding.js'
+import {
+  challenge,
+  deriveScalar,
+  proveDleq,
+  proveSchnorr,
+  requestDigest,
+  streamScalar,
+  verifyDleq,
+  verifySchnorr
+} from '../sigma.js'
 
 const filled = (length: number, value: number): number[] => Array.from({ length }, () => value)
 
@@ -52,5 +61,56 @@ describe('sigma scalar derivation and stream', () => {
     expect(Utils.toHex(scalar32(streamScalar(x, q, 0, 1, 0)))).toBe(
       '109bb891f974d7ea2fc46b98d8c66b891d32221e7ebe1eb1016ec7ba74cee227'
     )
+  })
+})
+
+describe('schnorr and dleq proofs', () => {
+  const curve = new Curve()
+  const x = deriveScalar(new PrivateKey(5))
+  const P = curve.g.mul(x)
+  const H = curve.g.mul(new BigNumber(7))
+  const ctx = filled(68, 3)
+
+  it('schnorr proof verifies, is 96 bytes and repeats exactly', () => {
+    const proof = proveSchnorr(x, ctx)
+    expect(proof).toHaveLength(96)
+    expect(verifySchnorr(P, ctx, proof)).toBe(true)
+    expect(proveSchnorr(x, ctx)).toEqual(proof)
+  })
+  it('schnorr rejects another context, another key and a flipped bit', () => {
+    const proof = proveSchnorr(x, ctx)
+    expect(verifySchnorr(P, [...ctx.slice(1), 4], proof)).toBe(false)
+    expect(verifySchnorr(curve.g.mul(new BigNumber(9)), ctx, proof)).toBe(false)
+    expect(verifySchnorr(P, ctx, [...proof.slice(0, 95), proof[95] ^ 1])).toBe(false)
+    expect(verifySchnorr(P, ctx, proof.slice(1))).toBe(false)
+  })
+  it('schnorr verifier returns false for an off-curve commitment and out-of-range scalars', () => {
+    const proof = proveSchnorr(x, ctx)
+    expect(verifySchnorr(P, ctx, [...proof.slice(0, 63), proof[63] ^ 1, ...proof.slice(64)])).toBe(
+      false
+    )
+    expect(verifySchnorr(P, ctx, [...proof.slice(0, 64), ...filled(32, 0)])).toBe(false)
+    expect(verifySchnorr(P, ctx, [...proof.slice(0, 64), ...filled(32, 255)])).toBe(false)
+  })
+  it('dleq proof verifies, starts with x·H and is 224 bytes', () => {
+    const proof = proveDleq(x, H, ctx)
+    expect(proof).toHaveLength(224)
+    expect(proof.slice(0, 64)).toEqual(point64(H.mul(x)))
+    expect(verifyDleq(P, H, ctx, proof)).toBe(true)
+    expect(proveDleq(x, H, ctx)).toEqual(proof)
+  })
+  it('dleq rejects a proof whose P2 belongs to another scalar', () => {
+    const forged = [...point64(H.mul(new BigNumber(9))), ...proveDleq(x, H, ctx).slice(64)]
+    expect(verifyDleq(P, H, ctx, forged)).toBe(false)
+  })
+  it('dleq verifier returns false for a wrong length, off-curve P2 and bad scalars', () => {
+    const proof = proveDleq(x, H, ctx)
+    expect(verifyDleq(P, H, ctx, proof.slice(1))).toBe(false)
+    expect(verifyDleq(P, H, [...ctx.slice(1), 4], proof)).toBe(false)
+    expect(verifyDleq(P, H, ctx, [...proof.slice(0, 63), proof[63] ^ 1, ...proof.slice(64)])).toBe(
+      false
+    )
+    expect(verifyDleq(P, H, ctx, [...proof.slice(0, 192), ...filled(32, 0)])).toBe(false)
+    expect(verifyDleq(P, H, ctx, [...proof.slice(0, 192), ...filled(32, 255)])).toBe(false)
   })
 })

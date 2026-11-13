@@ -3,9 +3,11 @@ import Curve from '@bsv/sdk/primitives/Curve'
 import * as Hash from '@bsv/sdk/primitives/Hash'
 import type PrivateKey from '@bsv/sdk/primitives/PrivateKey'
 import * as Utils from '@bsv/sdk/primitives/utils'
-import { scalar32 } from './encoding.js'
+import Point from '@bsv/sdk/primitives/Point'
+import { point64, scalar32 } from './encoding.js'
 
-const n = new Curve().n
+const curve = new Curve()
+const n = curve.n
 
 const utf8 = (text: string): number[] => Utils.toArray(text, 'utf8')
 
@@ -68,4 +70,73 @@ export function streamScalar(
     const value = inRange(Hash.sha256hmac(key, [...prefix, ...uint32be(c)]))
     if (value !== undefined) return value
   }
+}
+
+/** A 64-byte x then y point that is on the curve and not the identity, else undefined. */
+const readPoint64 = (bytes: number[]): Point | undefined => {
+  const x = new BigNumber(bytes.slice(0, 32))
+  const y = new BigNumber(bytes.slice(32, 64))
+  if (x.gte(curve.p) || y.gte(curve.p)) return undefined
+  const point = new Point(x, y)
+  return point.validate() ? point : undefined
+}
+
+/** A 32-byte big-endian scalar in [1, n), else undefined. */
+const readScalar = (bytes: number[]): BigNumber | undefined => inRange(bytes)
+
+/** Schnorr proof of knowledge of x for P = x·G. Result R || s, 96 bytes. */
+export function proveSchnorr(x: BigNumber, ctx: number[]): number[] {
+  const P = point64(curve.g.mul(x))
+  const q = requestDigest(1, P, ctx)
+  for (let a = 0; ; a++) {
+    const k = streamScalar(x, q, a, 1, 0)
+    const R = point64(curve.g.mul(k))
+    const e = challenge([...R, ...P, ...ctx])
+    const s = k.add(e.mul(x)).umod(n)
+    if (!s.isZero()) return [...R, ...scalar32(s)]
+  }
+}
+
+/** Verifies a Schnorr result against the statement point P. Never throws. */
+export function verifySchnorr(P: Point, ctx: number[], result: number[]): boolean {
+  if (result.length !== 96) return false
+  const R = readPoint64(result.slice(0, 64))
+  const s = readScalar(result.slice(64))
+  if (R === undefined || s === undefined) return false
+  const e = challenge([...result.slice(0, 64), ...point64(P), ...ctx])
+  return curve.g.mul(s).eq(R.add(P.mul(e)))
+}
+
+/** Chaum-Pedersen proof that P = x·G and P2 = x·H share x. Result P2 || R1 || R2 || s, 224 bytes. */
+export function proveDleq(x: BigNumber, H: Point, ctx: number[]): number[] {
+  const P = point64(curve.g.mul(x))
+  const P2 = point64(H.mul(x))
+  const Hb = point64(H)
+  const q = requestDigest(2, [...P, ...P2, ...Hb], ctx)
+  for (let a = 0; ; a++) {
+    const k = streamScalar(x, q, a, 1, 0)
+    const R1 = point64(curve.g.mul(k))
+    const R2 = point64(H.mul(k))
+    const e = challenge([...R1, ...R2, ...P, ...P2, ...Hb, ...ctx])
+    const s = k.add(e.mul(x)).umod(n)
+    if (!s.isZero()) return [...P2, ...R1, ...R2, ...scalar32(s)]
+  }
+}
+
+/** Verifies a DLEQ result against the statement points P and H. Never throws. */
+export function verifyDleq(P: Point, H: Point, ctx: number[], result: number[]): boolean {
+  if (result.length !== 224) return false
+  const P2 = readPoint64(result.slice(0, 64))
+  const R1 = readPoint64(result.slice(64, 128))
+  const R2 = readPoint64(result.slice(128, 192))
+  const s = readScalar(result.slice(192))
+  if (P2 === undefined || R1 === undefined || R2 === undefined || s === undefined) return false
+  const e = challenge([
+    ...result.slice(64, 192),
+    ...point64(P),
+    ...result.slice(0, 64),
+    ...point64(H),
+    ...ctx
+  ])
+  return curve.g.mul(s).eq(R1.add(P.mul(e))) && H.mul(s).eq(R2.add(P2.mul(e)))
 }
