@@ -55,6 +55,69 @@ describe('listCertificates', () => {
     jest.clearAllMocks()
   })
 
+  const certificateRow = (certificateId: number): TableCertificate => ({
+    certificateId,
+    userId: 123,
+    type: 'base64Type',
+    serialNumber: `serial${certificateId}`,
+    certifier: 'abcdef01',
+    subject: '12345678',
+    verifier: undefined,
+    revocationOutpoint: 'abcd1234.0',
+    signature: 'deadbeef01',
+    isDeleted: false,
+    created_at: new Date(),
+    updated_at: new Date()
+  })
+
+  test('reports every match when a short page starts at a non-zero offset', async () => {
+    // Five matches, offset 3, limit 10: the page holds the last two.
+    // totalCertificates is the matching set, not the page length.
+    vargs.offset = 3
+    vargs.limit = 10
+    mockStorage.findCertificates.mockResolvedValueOnce([certificateRow(4), certificateRow(5)])
+    mockStorage.findCertificateFields.mockResolvedValue([])
+    mockStorage.countCertificates.mockResolvedValueOnce(999)
+
+    const result = await listCertificates(mockStorage, auth, vargs)
+
+    expect(result.certificates).toHaveLength(2)
+    expect(result.totalCertificates).toBe(5)
+    expect(mockStorage.countCertificates).not.toHaveBeenCalled()
+  })
+
+  test('counts without the page window when a full page starts at a non-zero offset', async () => {
+    vargs.offset = 10
+    vargs.limit = 10
+    mockStorage.findCertificates.mockResolvedValueOnce(
+      Array.from({ length: 10 }, (_, index) => certificateRow(index + 11))
+    )
+    mockStorage.findCertificateFields.mockResolvedValue([])
+    mockStorage.countCertificates.mockResolvedValueOnce(25)
+
+    const result = await listCertificates(mockStorage, auth, vargs)
+
+    expect(result.certificates).toHaveLength(10)
+    expect(result.totalCertificates).toBe(25)
+    expect(mockStorage.countCertificates).toHaveBeenCalledTimes(1)
+    expect(mockStorage.countCertificates.mock.calls[0][0].paged).toBeUndefined()
+  })
+
+  test('counts without the page window when a non-zero offset returns an empty page', async () => {
+    // Offset past the end does not prove the total is the offset.
+    vargs.offset = 10
+    vargs.limit = 10
+    mockStorage.findCertificates.mockResolvedValueOnce([])
+    mockStorage.countCertificates.mockResolvedValueOnce(5)
+
+    const result = await listCertificates(mockStorage, auth, vargs)
+
+    expect(result.certificates).toHaveLength(0)
+    expect(result.totalCertificates).toBe(5)
+    expect(mockStorage.countCertificates).toHaveBeenCalledTimes(1)
+    expect(mockStorage.countCertificates.mock.calls[0][0].paged).toBeUndefined()
+  })
+
   test.each([0, 2])('preserves the full total on a later page containing %i certificates', async length => {
     vargs.offset = 10
     mockStorage.findCertificates.mockResolvedValueOnce(

@@ -15,6 +15,16 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 # @bsv/wallet-toolbox-client
 
+## Certificate pagination
+
+The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
+the size of the matching set at every offset, including full and empty later
+pages in IndexedDB. Non-empty final pages use the skipped rows plus the page;
+other pages count without a page window. User, deletion, type and certifier
+filters and returned certificate fields are unchanged. Upgrade the affected
+local storage package or remote Storage service to receive corrected totals.
+No API, wire or schema migration is required.
+
 ## Permission-module spending authorization
 
 Spending authorization accounts for the inputs and outputs that permission

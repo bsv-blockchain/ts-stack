@@ -1,5 +1,12 @@
 # 2.17.0 source candidate
 
+Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages
+report offset plus page length; full pages and empty later pages use an unpaged
+count with the same user, deletion, type and certifier filters. SQL aggregate
+hardening and packed/native hydration remain intact. No API, wire or schema
+migration is needed; upgrade the local storage package or remote Storage service
+to receive the corrected totals.
+
 - Add optional `actionBatchMode` to Node and browser setup-factory arguments and
   forward it to the existing Wallet controller. Explicit `legacy` selects
   per-action persistence for callers that broadcast their own `noSend`
