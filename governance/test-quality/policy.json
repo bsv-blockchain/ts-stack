@@ -43,6 +43,7 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/wallet/color-permission-module/package.json",
+      "packages/wallet/sigma-permission-module/package.json",
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/application/output-knowledge/package.json",
@@ -444,6 +445,18 @@
         "invariants": [
           "Applying and then removing one module-derived scalar returns every generated finite input point exactly.",
           "Neither randomized root material nor the corresponding derived scalar is exposed in the wallet result."
+        ]
+      },
+      {
+        "path": "packages/wallet/sigma-permission-module/src/__tests__/SigmaPermissionModule.property.test.ts",
+        "manifest": "packages/wallet/sigma-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-derived secret scalars proving statements about untrusted caller-supplied points and contexts",
+        "target": "Schnorr, DLEQ and OR proofs across generated wallet roots, key identifiers, contexts and ring positions",
+        "invariants": [
+          "Every generated request yields a proof that its pure verifier accepts, and the same request returns identical bytes.",
+          "A proof does not verify under a context that differs in one byte.",
+          "An OR proof verifies at every ring position of every generated ring size."
         ]
       },
       {

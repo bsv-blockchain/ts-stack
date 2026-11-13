@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.16.0'
-last_updated: '2026-11-09'
-last_verified: '2026-11-09'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -357,6 +357,9 @@ if it needs the underlying wallet operation, `next` is guarded to one call.
 The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
 this hook to implement point multiplication under `p ecpm` while keeping
 `getPublicKey` as the public wallet method.
+[@bsv/sigma-permission-module](./sigma-permission-module.md) uses it to
+return statement points and zero-knowledge proofs under `p sigma` through
+`encrypt`.
 
 ## Action Flow
 
