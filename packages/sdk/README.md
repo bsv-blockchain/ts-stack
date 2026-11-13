@@ -15,7 +15,8 @@ GlobalKVStore has no fixed tag-count cap. A signed token may contain more than
 must remain a unique, non-empty string of at most 256 UTF-8 bytes. Existing
 token field/payload byte bounds, signature verification and controller/locking-key
 binding still apply. Wallet output tags and action labels are separate metadata
-and are unchanged.
+and are unchanged. A non-array tag container raises `TypeError`, an `Error`
+subclass, with the existing diagnostic.
 
 To read or publish larger tag sets, upgrade both the application's SDK and the
 SDK used by the overlay, together with the updated `@bsv/overlay-topics` lookup

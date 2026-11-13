@@ -24,6 +24,8 @@ tags. Upgrade both client and overlay SDKs to 4.1.1 and deploy Overlay Topics
 no migration. Each tag still must be unique, non-empty and at most 256 UTF-8
 bytes; token payload, request and cryptographic checks remain unchanged. Wallet
 output tags, action labels and other overlay protocols' count policies are unchanged.
+A non-array tag container raises `TypeError` (still an `Error` subclass) with the
+existing diagnostic; valid arrays and other validation errors are unchanged.
 
 The 4.1.0 release adds bounded BRC-118 payment transport to `AuthFetch` and retains recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
 

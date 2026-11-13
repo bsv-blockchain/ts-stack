@@ -57,7 +57,7 @@ export function validateKVStoreValue(value: unknown): string {
 export function validateKVStoreTags(value: unknown): string[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) {
-    throw new Error('KVStore tags must be a bounded array')
+    throw new TypeError('KVStore tags must be a bounded array')
   }
   const tags: string[] = []
   const seen = new Set<string>()

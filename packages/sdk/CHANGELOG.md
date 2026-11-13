@@ -1,5 +1,7 @@
 # 4.1.1 unpublished patch candidate
 
+- A non-array tag container raises TypeError (an Error subclass) with the existing
+  diagnostic; valid tag arrays and other validation errors are unchanged.
 - Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries
   and signed-token decoding. Larger tag arrays retain every entry.
 - Validate the freshly signed token before requesting a funded wallet action,

@@ -109,7 +109,7 @@ describe('GlobalKVStore token authentication', () => {
     )
   })
 
-  it('preserves the existing error identity and diagnostic for a non-array tag schema', () => {
+  it('reports a TypeError with the legacy diagnostic for a non-array tag schema', () => {
     let failure: unknown
     try {
       validateKVStoreTags({ tags: [] })
@@ -117,7 +117,7 @@ describe('GlobalKVStore token authentication', () => {
       failure = error
     }
     expect(failure).toBeInstanceOf(Error)
-    expect(Object.getPrototypeOf(failure)).toBe(Error.prototype)
+    expect(failure).toBeInstanceOf(TypeError)
     expect(failure).toHaveProperty('message', 'KVStore tags must be a bounded array')
   })
 
