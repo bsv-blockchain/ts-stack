@@ -17,7 +17,7 @@ Use `@bsv/overlay` 2.6.4 or later to preserve explicitly selected history past
 confirmation. Wallet Toolbox 2.14.6 links that history so an older WAB support
 pin can remain a lineage anchor while a password or token update takes precedence.
 
-## KVStore tag compatibility
+## KVStore tag compatibility (2.0.4 patch candidate)
 
 `tm_kvstore` admission and history verification accept signed tokens with more
 than 32 tags when paired with the SDK tag-count compatibility fix. `ls_kvstore`

@@ -8,7 +8,7 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
-## GlobalKVStore tag compatibility
+## GlobalKVStore tag compatibility (4.1.1 patch candidate)
 
 GlobalKVStore has no fixed tag-count cap. A signed token may contain more than
 32 tags, and tag-filter queries preserve the entire supplied array. Each tag
