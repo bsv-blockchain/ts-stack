@@ -9,7 +9,6 @@ import { utf8ByteLength } from '../primitives/UTF8.js'
 
 const MAX_KEY_BYTES = 800
 const MAX_VALUE_BYTES = 1024 * 1024
-const MAX_TAGS = 32
 const MAX_TAG_BYTES = 256
 
 export interface AuthenticatedKVStoreToken {
@@ -57,8 +56,8 @@ export function validateKVStoreValue(value: unknown): string {
 
 export function validateKVStoreTags(value: unknown): string[] | undefined {
   if (value === undefined) return undefined
-  if (!Array.isArray(value) || value.length > MAX_TAGS) {
-    throw new Error('KVStore tags must be a bounded array')
+  if (!Array.isArray(value)) {
+    throw new Error('KVStore tags must be an array')
   }
   const tags: string[] = []
   const seen = new Set<string>()

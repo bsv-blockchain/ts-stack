@@ -43,6 +43,43 @@ describe('GlobalKVStore token authentication', () => {
     })
   })
 
+  it.each([33, 60, 240, 1024])(
+    'authenticates all %i signed tags without a count cap',
+    async count => {
+      const tags = Array.from({ length: count }, (_, index) => `post:${index}`)
+      const { lockingScript } = await token(undefined, undefined, tags)
+
+      await expect(decodeAndVerifyKVStoreToken(lockingScript)).resolves.toEqual(
+        expect.objectContaining({ tags })
+      )
+    }
+  )
+
+  it.each([
+    ['duplicate', 'post:0', /unique/],
+    ['empty', '', /length/],
+    ['oversized UTF-8', 'é'.repeat(129), /length/],
+    ['non-string', 42, /length/]
+  ])('still rejects a %s tag after the former count boundary', async (_name, tag, error) => {
+    const tags = [...Array.from({ length: 33 }, (_, index) => `post:${index}`), tag]
+    const { lockingScript } = await token(undefined, undefined, tags as string[])
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(error as RegExp)
+  })
+
+  it('retains the signed-token field byte bound for an oversized tag payload', async () => {
+    const { lockingScript } = await token(undefined, undefined, ['one'])
+    const chunks = lockingScript.chunks.map(chunk => ({
+      op: chunk.op,
+      data: chunk.data == null ? undefined : [...chunk.data]
+    }))
+    chunks[6] = { op: 0x4e, data: Array.from({ length: 1024 * 1024 + 1 }, () => 0x61) }
+
+    await expect(decodeAndVerifyKVStoreToken(new LockingScript(chunks))).rejects.toThrow(
+      'oversized field'
+    )
+  })
+
   it('rejects an attacker token that claims a different controller', async () => {
     const attackerWallet = new ProtoWallet(PrivateKey.fromRandom())
     const victim = PrivateKey.fromRandom().toPublicKey().toString()

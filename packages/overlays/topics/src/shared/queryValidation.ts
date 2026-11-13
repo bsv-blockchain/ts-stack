@@ -108,14 +108,22 @@ export function readDate(query: LookupQueryRecord, field: string): Date | undefi
 export function readStringArray(
   query: LookupQueryRecord,
   field: string,
-  options: { maxItems?: number; maxItemBytes?: number } = {}
+  options: { maxItems?: number | null; maxItemBytes?: number } = {}
 ): string[] | undefined {
   const value = query[field]
   if (value === undefined) return undefined
-  const maxItems = options.maxItems ?? 32
+  const maxItems = options.maxItems === undefined ? 32 : options.maxItems
   const maxItemBytes = options.maxItemBytes ?? 1000
-  if (!Array.isArray(value) || value.length === 0 || value.length > maxItems) {
-    invalid(`${field} must be an array of 1-${maxItems} strings`)
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    (maxItems !== null && value.length > maxItems)
+  ) {
+    invalid(
+      maxItems === null
+        ? `${field} must be a non-empty array of strings`
+        : `${field} must be an array of 1-${maxItems} strings`
+    )
   }
   const result: string[] = []
   const unique = new Set<string>()

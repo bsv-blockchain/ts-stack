@@ -409,6 +409,51 @@ describe('KVStoreLookupService (MongoDB)', () => {
     expect(result.some((r: any) => r.txid === 'kv0003')).toBe(true)
   })
 
+  it.each([33, 60, 240, 1024])(
+    'admits, indexes, queries and retains history for all %i tags',
+    async count => {
+      const tags = Array.from({ length: count }, (_, index) => `post:${index}`)
+      const { lockingScript } = await buildValidKVStoreScript(
+        PrivateKey.fromRandom(),
+        [1, 'kvstore many tags'],
+        `batch-${count}`,
+        'batch value',
+        tags
+      )
+      const tx = buildTxWithInput([lockingScript])
+      const txid = tx.id('hex')
+      const beef = tx.toBEEF()
+
+      expect(
+        (await new KVStoreTopicManager().identifyAdmissibleOutputs(beef, [])).outputsToAdmit
+      ).toEqual([0])
+      await service.outputAdmittedByTopic({
+        mode: 'locking-script',
+        txid,
+        outputIndex: 0,
+        topic: 'tm_kvstore',
+        satoshis: 1000,
+        lockingScript
+      } as OutputAdmittedByTopic)
+      const stored = await db!.collection('kvstoreRecords').findOne({ txid, outputIndex: 0 })
+      expect(stored?.tags).toEqual(tags)
+
+      for (const tagQueryMode of ['all', 'any']) {
+        const results = (await service.lookup({
+          service: 'ls_kvstore',
+          query: { tags, tagQueryMode, history: true }
+        })) as Array<{
+          txid: string
+          outputIndex: number
+          history: (beef: number[], index: number, depth: number) => Promise<boolean>
+        }>
+        expect(results).toHaveLength(1)
+        expect(results[0].txid).toBe(txid)
+        await expect(results[0].history(beef, 0, 0)).resolves.toBe(true)
+      }
+    }
+  )
+
   it('ignores outputAdmittedByTopic for a different topic', async () => {
     const controllerPrivKey = PrivateKey.fromRandom()
     const { lockingScript } = await buildValidKVStoreScript(
