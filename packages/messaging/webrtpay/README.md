@@ -828,7 +828,7 @@ Not verified:
 
 ## License
 
-Open BSV License Version 6; see [LICENSE.txt](LICENSE.txt).
+Apache License 2.0; see [LICENSE](LICENSE).
 
 ## SDK4 hotfix peer requirement
 

@@ -3,7 +3,7 @@
   "version": "0.1.6",
   "description": "BRC-167 Chunked, Hashed, Interleaved Resolution Protocol reference implementation",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -40,7 +40,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsc",

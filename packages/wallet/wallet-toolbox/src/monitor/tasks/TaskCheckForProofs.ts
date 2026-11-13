@@ -1,3 +1,7 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
+import { WalletError } from '../../sdk/WalletError'
+import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
+import { StorageReqWrite } from '../../storage/StorageReqWrite'
 import { GetMerklePathResult } from '../../sdk'
 import { EntityProvenTx, EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
@@ -7,7 +11,7 @@ import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
 import { Monitor } from '../Monitor'
 import { MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
-import { WalletMonitorTask } from './WalletMonitorTask'
+import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 
 /**
  * `TaskCheckForProofs` is a WalletMonitor task that retreives merkle proofs for
@@ -101,30 +105,68 @@ function rawTransactionMatchesTxid(req: EntityProvenTxReq): boolean {
   return req.rawTx != null && asString(doubleSha256BE(req.rawTx)) === req.txid
 }
 
+/** Merge an observation into the actual locked request. Concurrent attempts,
+ * new notifications and advanced durable states survive a slow proof lookup. */
+async function persistProofObservation(
+  task: WalletMonitorTask,
+  req: EntityProvenTxReq,
+  before: TableProvenTxReq,
+  writes: StorageReqWrite | undefined
+): Promise<void> {
+  if (writes == null) return await req.updateStorageDynamicProperties(task.storage)
+  const observed = { ...req.toApi() }
+  if (
+    !(await writes.request(req, current => {
+      return promiseFromSync(() => {
+        current.mergeHistory(observed, undefined, true)
+        const sameCycle =
+          current.status === before.status && current.rebroadcastAttempts === (before.rebroadcastAttempts ?? 0)
+        if (sameCycle) {
+          const unchangedAttempts = current.attempts === before.attempts
+          const delta = observed.attempts - before.attempts
+          if (delta > 0) current.attempts = Math.min(Number.MAX_SAFE_INTEGER, current.attempts + delta)
+          if (unchangedAttempts) {
+            if (delta < 0) current.attempts = observed.attempts
+            current.status = observed.status
+            current.rebroadcastAttempts = observed.rebroadcastAttempts ?? 0
+          }
+        }
+        if (observed.wasBroadcast) current.wasBroadcast = true
+        if (!observed.notified) current.notified = false
+      })
+    }))
+  )
+    throw new WERR_NOT_ACTIVE('Proof observation lost its captured primary profiles')
+}
+
 async function completeLinkedRequest(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
-  log: string
+  log: string,
+  writes: StorageReqWrite | undefined
 ): Promise<ProofRequestResult> {
+  const before = { ...req.toApi() }
   log += `Already linked to provenTxId ${req.provenTxId}.\n`
   req.notified = false
   req.status = 'completed'
-  await req.updateStorageDynamicProperties(task.storage)
-  return { log, status: req.status, proven: reqApi }
+  await persistProofObservation(task, req, before, writes)
+  return { log, status: req.status, ...(req.status === 'completed' ? { proven: reqApi } : {}) }
 }
 
 async function invalidateMalformedRequest(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
-  log: string
+  log: string,
+  writes: StorageReqWrite | undefined
 ): Promise<ProofRequestResult> {
+  const before = { ...req.toApi() }
   log += " rawTx doesn't hash to txid. status => invalid.\n"
   req.notified = false
   req.status = 'invalid'
-  await req.updateStorageDynamicProperties(task.storage)
-  return { log, status: req.status, invalid: reqApi }
+  await persistProofObservation(task, req, before, writes)
+  return { log, status: req.status, ...(req.status === 'invalid' ? { invalid: reqApi } : {}) }
 }
 
 async function applyProofTimeout(
@@ -132,8 +174,10 @@ async function applyProofTimeout(
   req: EntityProvenTxReq,
   reqApi: TableProvenTxReq,
   ignoreStatus: boolean,
-  log: string
+  log: string,
+  writes: StorageReqWrite | undefined
 ): Promise<ProofRequestResult | undefined> {
+  const before = { ...req.toApi() }
   const limit =
     task.monitor.chain === 'main'
       ? task.monitor.options.unprovenAttemptsLimitMain
@@ -146,40 +190,49 @@ async function applyProofTimeout(
   const timeout = req.applyProofTimeout(maxRebroadcast)
   if (timeout.action === 'rebroadcast') {
     log += ` too many failed attempts ${timedOutAttempts}, resetting to unsent for rebroadcast (cycle ${timeout.rebroadcastAttempts})\n`
-    await req.updateStorageDynamicProperties(task.storage)
+    await persistProofObservation(task, req, before, writes)
     return { log, status: req.status }
   }
 
   log += wasBroadcast
     ? ` too many failed attempts ${timedOutAttempts} and rebroadcast limit ${maxRebroadcast} reached, marking invalid\n`
     : ` too many failed attempts ${timedOutAttempts} and tx was never broadcast, marking invalid\n`
-  await req.updateStorageDynamicProperties(task.storage)
-  return { log, status: req.status, invalid: reqApi }
+  await persistProofObservation(task, req, before, writes)
+  return { log, status: req.status, ...(req.status === 'invalid' ? { invalid: reqApi } : {}) }
 }
 
 async function applyProvenTransaction(
   task: WalletMonitorTask,
   req: EntityProvenTxReq,
-  provenTx: EntityProvenTx
+  provenTx: EntityProvenTx,
+  writes: StorageReqWrite | undefined,
+  before: TableProvenTxReq
 ): Promise<void> {
-  await req.updateStorageDynamicProperties(task.storage)
+  await persistProofObservation(task, req, before, writes)
   await req.refreshFromStorage(task.storage)
   const { provenTxReqId, status, txid, attempts, history } = req.toApi()
   const { index, height, blockHash, merklePath, merkleRoot } = provenTx.toApi()
-  const result = await task.storage.runAsStorageProvider(async provider => {
-    return await provider.updateProvenTxReqWithNewProvenTx({
-      provenTxReqId,
-      status,
-      txid,
-      attempts,
-      history,
-      index,
-      height,
-      blockHash,
-      merklePath,
-      merkleRoot
-    })
-  })
+  const args = {
+    provenTxReqId,
+    status,
+    txid,
+    attempts,
+    history,
+    index,
+    height,
+    blockHash,
+    merklePath,
+    merkleRoot
+  }
+  const complete = async (provider: import('../../storage/StorageProvider').StorageProvider) =>
+    writes == null
+      ? await provider.updateProvenTxReqWithNewProvenTx(args)
+      : await provider.updateProvenTxReqWithNewProvenTx(args, undefined, writes)
+  const result =
+    writes?.preparesOutsideManager === true
+      ? await writes.prepare(complete)
+      : await task.storage.runAsStorageProvider(complete)
+
   req.status = result.status
   req.apiHistory = result.history
   req.provenTxId = result.provenTxId
@@ -210,18 +263,21 @@ async function processProofRequest(
   }
 
   const req = new EntityProvenTxReq(reqApi)
+  const writes = await captureMonitorReqWrite(task, [req.txid])
+  await writes?.assertCurrent()
   if (req.provenTxId != null && Number.isInteger(req.provenTxId)) {
-    return await completeLinkedRequest(task, req, reqApi, log)
+    return await completeLinkedRequest(task, req, reqApi, log, writes)
   }
 
   log += '\n'
   if (!rawTransactionMatchesTxid(req)) {
-    return await invalidateMalformedRequest(task, req, reqApi, log)
+    return await invalidateMalformedRequest(task, req, reqApi, log, writes)
   }
 
-  const timedOut = await applyProofTimeout(task, req, reqApi, ignoreStatus, log)
+  const timedOut = await applyProofTimeout(task, req, reqApi, ignoreStatus, log, writes)
   if (timedOut != null) return timedOut
 
+  const before = { ...req.toApi() }
   const since = new Date()
   const merklePathResult: GetMerklePathResult = await getCanonicalMerklePath(
     task.monitor.services,
@@ -242,7 +298,7 @@ async function processProofRequest(
     task.monitor.chaintracks
   )
   if (provenTx != null) {
-    await applyProvenTransaction(task, req, provenTx)
+    await applyProvenTransaction(task, req, provenTx, writes, before)
   } else if (
     countsAsAttempt &&
     req.attempts === attemptsBefore &&
@@ -250,7 +306,8 @@ async function processProofRequest(
   ) {
     req.attempts = Math.min(Number.MAX_SAFE_INTEGER, req.attempts + 1)
   }
-  await req.updateStorageDynamicProperties(task.storage)
+  if (provenTx == null) await persistProofObservation(task, req, before, writes)
+  else if (writes == null) await req.updateStorageDynamicProperties(task.storage)
   await req.refreshFromStorage(task.storage)
   log += req.historyPretty(since, indent + 2) + '\n'
   return {
@@ -295,7 +352,14 @@ export async function getProofs(
 
   let log = ''
   for (const reqApi of reqs) {
-    const result = await processProofRequest(task, reqApi, maxAcceptableHeight, indent, countsAsAttempt, ignoreStatus)
+    const retainedStatus = reqApi.status
+    let result: ProofRequestResult
+    try {
+      result = await processProofRequest(task, reqApi, maxAcceptableHeight, indent, countsAsAttempt, ignoreStatus)
+    } catch (error) {
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+      result = { status: retainedStatus, log: `reqId ${reqApi.provenTxReqId} deferred to its current primary\n` }
+    }
     log += result.log
     if (result.proven != null) proven.push(result.proven)
     if (result.invalid != null) invalid.push(result.invalid)

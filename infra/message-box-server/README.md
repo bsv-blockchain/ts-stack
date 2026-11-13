@@ -341,7 +341,7 @@ implementation tests are the contract evidence.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+See [LICENSE](./LICENSE).
 
 The same isolated lock review selects `ip-address` 10.7.1 within the existing
 parent range. It clears the reviewed address-classification and bounded-parser

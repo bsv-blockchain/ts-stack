@@ -223,6 +223,19 @@ dependency and runtime inputs still expand the affected graph. Shared CI/governa
 `pnpm lint`, `pnpm format:check` and `pnpm typecheck` once for the completed batch. Exact-head required CI, security analysis,
 coverage, deterministic/property/native/conformance and artifact checks still apply.
 
+Browser/mobile bundle sizes are measured and reported against advisory targets.
+A historical byte target alone cannot block functional tests, review, merge or
+release. Invalid budget metadata, prohibited dependencies/exports, browser or
+mobile execution failures and other packaging contracts still fail. Runtime
+memory/disk/KDF and protocol integrity limits retain their separate contracts.
+
+Ordinary wallet CI runs its six functional shards and both HTTP latency cases.
+The complete extended native recovery/fault matrix is an explicit manual CI
+selection (`extended-wallet-qualification`), with its original tests and evidence
+checks retained. Missing extended results are not passes and do not block ordinary
+merge/release. Patch-coverage percentages are advisory review measurements; actual
+selected tests, package/platform contracts and security checks remain required.
+
 ### Mutation campaigns are background findings only
 
 Mutation campaigns must never be required before editing, committing, pushing,
@@ -259,13 +272,44 @@ Report suspected vulnerabilities privately under `.github/SECURITY.md`.
 - “Quality gate passed” means the complete repository gate passed for the
   exact head. SonarCloud’s aggregate badge alone is not evidence. New Sonar
   issues—including accepted or false-positive classifications—new unreviewed
-  hotspots, and new CodeQL alerts must be resolved before review.
+  hotspots, and new CodeQL alerts must be resolved before review, subject only
+  to the exact approved PR569 Sonar budget below.
 - One qualified maintainer approval is sufficient. Maintainers and
   administrators may facilitate a merge after required checks and review
   threads are complete; no independent last-pusher rule is assumed.
 - Re-read the final diff and verify the head SHA before review or merge. After
   merge, verify `main` when the change affects shared controls, releases, or
   deployed behavior.
+
+## Approved PR569 Sonar budget
+
+The maintainer approved the narrow exception recorded in
+[`governance/sonar-pr569-budget.json`](./governance/sonar-pr569-budget.json) and
+[its review record](./docs/reviews/sonar-pr569-budget.md). Only PR569 from
+`codex/wallet-sync-interop-reliability` to `main` in this repository may use
+maintainability A and duplication ≤6% until `2026-11-19T23:59:59Z`.
+The repository gate independently checks Actions and live GitHub PR context,
+exact Sonar revision, stable analysis and complete inventories. All findings
+remain visible. Bugs, vulnerabilities, reliability/security impacts (including
+mixed CODE_SMELL impacts), unknown findings and unreviewed hotspots still block;
+accepted or false-positive states do not waive them. Every other context and
+expired approval uses the original zero-findings gate. The PR569 completion contract is
+`specs/wallet/sync-portability-program.md`: affected functional/security checks,
+the managed native TTN acceptance case, resolved review findings and one qualified
+maintainer approval. Mutation campaigns, broad historical qualification matrices
+and separate ceremonial PR569 merge holds are excluded.
+
+The separately reviewed PR569 analysis operations in
+[`governance/pr569-reviewed-analysis-exceptions.json`](./governance/pr569-reviewed-analysis-exceptions.json)
+are the sole additional exception: CodeQL353 intentional private JSON evidence
+storage and two exact Sonar S2612 required public artifact permissions. Owner
+BraydenLangley reviewed the operator-delegated decision on October 19. Exact
+alert identities and SHA-256 source checks apply only to PR569 before November 19
+at 23:59:59 UTC, following ty-everett's explicit November 11 bounded renewal. The Sonar inventory and original failed verdict remain visible;
+reviewed permission keys are reported separately. Their original security C
+metric is covered only when both exact findings are present; all other
+security ratings and findings retain strict enforcement. Every other finding, metric,
+platform and merge gate remains required. Changed source requires fresh review.
 
 ## Versions, notes, and releases
 

@@ -115,8 +115,8 @@ describe('ordinary internalization argument compatibility', () => {
       })
     }
     const manager = {
-      getAuth: async () => ({ userId: 1 }),
-      runAsWriter: async (run: (writer: unknown) => unknown) => await run(writer)
+      runAsAuthorizedWriter: async (run: (writer: unknown, auth: unknown) => unknown) =>
+        await run(writer, { userId: 1 })
     }
     await expect(
       WalletStorageManager.prototype.internalizeAction.call(manager as unknown as WalletStorageManager, f.args)

@@ -58,7 +58,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -89,7 +91,7 @@
     "directory": "packages/middleware/402-pay"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6 || ^3.0.0 || ^4.0.1"
   },

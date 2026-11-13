@@ -68,7 +68,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     const beef = new Beef()
     beef.mergeTransaction(source)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
 
     const spending = await ctx.wallet.createAction({
@@ -107,7 +108,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     beef.mergeTransaction(source)
     beef.mergeTransaction(unrelated)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
     const verifyKnown = jest.spyOn(ctx.activeStorage, 'verifyKnownValidTransaction')
     const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
@@ -156,7 +158,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     beef.mergeTransaction(required)
     beef.mergeTransaction(makeUnprovenSourceTransaction(2000))
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
     const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
 
@@ -202,7 +205,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     beef.mergeTxidOnly(txid)
     beef.mergeTransaction(unrelated)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
     jest.spyOn(ctx.activeStorage, 'verifyKnownValidTransaction').mockResolvedValue(true)
     jest.spyOn(ctx.activeStorage, 'getProvenOrRawTx').mockResolvedValue({
@@ -344,7 +348,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     const beef = new Beef()
     beef.mergeTransaction(source)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
     const template = (
       await ctx.activeStorage.findOutputs({
@@ -396,7 +401,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     const beef = new Beef()
     beef.mergeTxidOnly(txid)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
     jest.spyOn(ctx.activeStorage, 'verifyKnownValidTransaction').mockResolvedValue(true)
     jest.spyOn(ctx.activeStorage, 'getProvenOrRawTx').mockResolvedValue({
@@ -437,7 +443,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     const beef = new Beef()
     beef.mergeTransaction(source)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
     })
 
     await expect(

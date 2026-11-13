@@ -79,6 +79,10 @@ strict option inline, and rejects either profile drift or a new external
 repository-health job and locally through `pnpm typescript:check` or
 `pnpm health:check`.
 
+The relocated wallet browser-test project is a ninth self-contained context.
+It retains the browser role and the same strict compiler options when copied
+outside the workspace's configuration hierarchy.
+
 ## Strict runtime profiles
 
 All profiles live under `config/typescript/` and inherit the same strict

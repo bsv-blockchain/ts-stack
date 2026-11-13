@@ -75,6 +75,7 @@ export interface KVStoreQuery {
   key?: string
   controller?: PubKeyHex
   protocolID?: WalletProtocol
+  /** Unique non-empty tags of at most 256 UTF-8 bytes each; no fixed count cap. */
   tags?: string[]
   /**
    * Controls tag matching behavior when tags are specified.
@@ -108,6 +109,7 @@ export interface KVStoreSetOptions {
   tokenSetDescription?: string
   tokenUpdateDescription?: string
   tokenAmount?: number
+  /** Unique non-empty tags of at most 256 UTF-8 bytes each; no fixed count cap. */
   tags?: string[]
 }
 
@@ -125,6 +127,7 @@ export interface KVStoreEntry {
   value: string
   controller: PubKeyHex
   protocolID: WalletProtocol
+  /** Unique non-empty tags of at most 256 UTF-8 bytes each; no fixed count cap. */
   tags?: string[]
   token?: KVStoreToken
   history?: string[]

@@ -11,7 +11,9 @@ export interface PaymentReceipt {
 export interface PaymentRequest extends Request {
   auth?: {
     identityKey?: unknown
+    supportsMultipart?: boolean
   }
+  rawBody?: Uint8Array
   payment?: PaymentReceipt
 }
 
@@ -37,6 +39,12 @@ export interface PaymentMiddlewareOptions {
    * header budgets on the HTTP server, CDN, proxy or WAF before middleware.
    */
   maxPaymentHeaderBytes?: number
+  /** Advertise multipart only when raw-byte auth support is present on the request. */
+  enableMultipart?: boolean
+  /** Complete multipart request size, default 7 MiB. */
+  maxPaymentBodyBytes?: number
+  /** Serialized payment part size, default 4 MiB. */
+  maxPaymentBytes?: number
   logger?: PaymentLogger
 }
 

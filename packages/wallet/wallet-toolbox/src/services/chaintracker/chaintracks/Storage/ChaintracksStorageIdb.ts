@@ -1,3 +1,4 @@
+import { promiseFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import {
   ChaintracksStorageBaseOptions,
   ChaintracksStorageBulkFileApi,
@@ -67,8 +68,10 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     await super.migrateLatest()
   }
 
-  override async destroy(): Promise<void> {
-    /* intentional no-op: IDB cleanup handled by openDB */
+  override destroy(): Promise<void> {
+    return promiseFromSync(() => {
+      /* intentional no-op: IDB cleanup handled by openDB */
+    })
   }
 
   override async deleteLiveBlockHeaders(): Promise<void> {
@@ -120,10 +123,14 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @returns the active chain tip header
    * @throws an error if there is no tip.
    */
-  override async findChainTipHeader(): Promise<LiveBlockHeader> {
-    const header = await this.findChainTipHeaderOrUndefined()
-    if (header == null) throw new Error('Database contains no active chain tip header.')
-    return header
+  override findChainTipHeader(): Promise<LiveBlockHeader> {
+    return mapAwaitFromSync(
+      () => this.findChainTipHeaderOrUndefined(),
+      header => {
+        if (header == null) throw new Error('Database contains no active chain tip header.')
+        return header
+      }
+    )
   }
 
   /**

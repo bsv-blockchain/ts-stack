@@ -27,6 +27,22 @@ tx.addOutput({
 })
 ```
 
+## Module compatibility
+
+Published 1.10.3 repairs CommonJS SDK import interop reported
+in [stack#571](https://github.com/bsv-blockchain/ts-stack/issues/571). Both
+`require('@bsv/templates')` and ESM imports construct and sign the same scripts;
+root and `@bsv/templates/MandalaToken.ts` exports retain their public shape.
+No API or script-encoding migration is required.
+
+The unpublished 1.10.4 candidate retains that runtime repair and adds the packed
+consumer-check command. `pnpm pack:check` runs synthetic signed spends from exact packed artifacts in
+clean CJS and ESM consumers with published SDK 2.8.0 and the candidate SDK.
+For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a local
+SDK 2.8.0 tarball. The check verifies the reviewed registry SHA-512 digest and
+installed version for either the downloaded or supplied artifact; resolver age
+policy and lifecycle-script restrictions stay unchanged.
+
 ## Current Templates
 
 | Name                                    | Description                                           |
@@ -286,8 +302,8 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).

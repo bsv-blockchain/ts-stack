@@ -31,3 +31,11 @@ export * from './WalletSettingsManager'
 export * from './ShamirWalletManager'
 export * from './entropy/EntropyCollector'
 export * from './mockchain/index'
+
+export type {
+  PrimaryHandoffControl,
+  PrimaryHandoffControlOptions,
+  PrimaryHandoffPlan,
+  PrimaryHandoffSource,
+  PrimaryHandoffStatus
+} from './storage/PrimaryHandoffControl'

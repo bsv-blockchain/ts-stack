@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "BRC-170 Licensed Content Header reference implementation",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -38,7 +38,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {

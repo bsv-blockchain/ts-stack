@@ -33,7 +33,7 @@ export function createSHA256(): {
 
 function updateHasher(hasher: SHA256, bytes: Uint8Array): void {
   for (let offset = 0; offset < bytes.byteLength; offset += HASH_UPDATE_BYTES) {
-    hasher.update(Array.from(bytes.subarray(offset, offset + HASH_UPDATE_BYTES)))
+    hasher.update(bytes.subarray(offset, offset + HASH_UPDATE_BYTES))
   }
 }
 

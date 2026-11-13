@@ -4,7 +4,7 @@ import LockingScript from '../../script/LockingScript'
 import PushDrop from '../../script/templates/PushDrop'
 import ProtoWallet from '../../wallet/ProtoWallet'
 import type { WalletProtocol } from '../../wallet/Wallet.interfaces'
-import { decodeAndVerifyKVStoreToken } from '../kvStoreTokenValidation'
+import { decodeAndVerifyKVStoreToken, validateKVStoreTags } from '../kvStoreTokenValidation'
 
 const protocolID: WalletProtocol = [1, 'kvstore']
 const key = 'security-key'
@@ -41,6 +41,84 @@ describe('GlobalKVStore token authentication', () => {
       controller,
       tags: ['one', 'two']
     })
+  })
+
+  it.each([33, 60, 240, 1024])(
+    'authenticates all %i signed tags without a count cap',
+    async count => {
+      const tags = Array.from({ length: count }, (_, index) => `post:${index}`)
+      const { lockingScript } = await token(undefined, undefined, tags)
+
+      await expect(decodeAndVerifyKVStoreToken(lockingScript)).resolves.toEqual(
+        expect.objectContaining({ tags })
+      )
+    }
+  )
+
+  it.each([
+    ['duplicate', 'post:0', /unique/],
+    ['empty', '', /length/],
+    ['oversized UTF-8', 'é'.repeat(129), /length/],
+    ['non-string', 42, /length/]
+  ])('still rejects a %s tag after the former count boundary', async (_name, tag, error) => {
+    const tags = [...Array.from({ length: 33 }, (_, index) => `post:${index}`), tag]
+    const { lockingScript } = await token(undefined, undefined, tags as string[])
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(error as RegExp)
+  })
+
+  it('retains the signed-token field byte bound for an oversized tag payload', async () => {
+    const { lockingScript } = await token(undefined, undefined, ['one'])
+    const chunks = lockingScript.chunks.map(chunk => ({
+      op: chunk.op,
+      data: chunk.data == null ? undefined : [...chunk.data]
+    }))
+    chunks[6] = { op: 0x4e, data: Array.from({ length: 1024 * 1024 + 1 }, () => 0x61) }
+
+    await expect(decodeAndVerifyKVStoreToken(new LockingScript(chunks))).rejects.toThrow(
+      'oversized field'
+    )
+  })
+
+  it.each([
+    ['protocol shape', 0, '{}', /exactly two fields/],
+    ['protocol security level', 0, '[3,"kvstore"]', /protocol ID is invalid/],
+    ['key byte bound', 1, 'k'.repeat(801), /key has an invalid length/],
+    ['value byte bound', 2, 'v'.repeat(1024 * 1024 + 1), /oversized field/]
+  ])('preserves the %s check when lifting the tag-count cap', async (_name, field, text, error) => {
+    const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+    const { lockingScript } = await token(
+      undefined,
+      { [field as number]: Utils.toArray(text as string, 'utf8') },
+      tags
+    )
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(error as RegExp)
+  })
+
+  it('preserves the compressed-controller byte bound for larger tag sets', async () => {
+    const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+    const { lockingScript } = await token(
+      undefined,
+      { 3: Array.from({ length: 32 }, () => 0x11) },
+      tags
+    )
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(
+      'controller is invalid'
+    )
+  })
+
+  it('reports a TypeError with the legacy diagnostic for a non-array tag schema', () => {
+    let failure: unknown
+    try {
+      validateKVStoreTags({ tags: [] })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).toBeInstanceOf(TypeError)
+    expect(failure).toHaveProperty('message', 'KVStore tags must be a bounded array')
   })
 
   it('rejects an attacker token that claims a different controller', async () => {

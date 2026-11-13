@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.15.3'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+version: '2.17.0'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -15,6 +15,26 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 
 # @bsv/wallet-toolbox-mobile
 
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Coordinated 2.17.0 version
+
+The 2.17.0 source candidate preserves the required version lockstep with the core
+and browser client distributions. The new setup-factory `actionBatchMode` option
+belongs to those distributions; the mobile entry point exports neither `Setup`
+nor `SetupClient`. Existing mobile `Wallet` construction, its `actionBatchMode`
+option and default `auto` behavior remain unchanged. No mobile consumer or storage
+migration is required. Publication is separate from this source candidate.
+
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and
 its dependencies, reruns strict SDK argument validation, and preserves native
@@ -23,6 +43,12 @@ remain rejected. No API, wire or schema migration is required. Upgrade the host
 and remote Storage separately; reconcile and retry the original import instead
 of creating or broadcasting a replacement payment. Source is not publication or
 deployment.
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate exports the portable resumable sync API. Remote destinations retain exclusive execution unless a future capability explicitly guarantees safe concurrency; this package does not acquire a local native database. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md).
 
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
@@ -166,8 +192,8 @@ for remote storage setup and supported runtime assumptions.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE).
 
 ## Faucet output authorization
 

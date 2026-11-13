@@ -8,6 +8,77 @@ function mappedBasketId(basketId: number | undefined, syncMap: SyncMap): number 
   return basketId == null ? undefined : verifyId(syncMap.outputBasket.idMap[verifyId(basketId)])
 }
 
+/** Payload may be an original array or descriptor DATA. This policy selects
+ * fields without parsing or authenticating them. Its caller must enforce the
+ * actual unresolved-reclaim quarantine before persisting a spendable output. */
+export type OutputMergeRow<Binary, Text = string> = Omit<
+  TableOutput,
+  | 'lockingScript'
+  | 'outputDescription'
+  | 'spendingDescription'
+  | 'customInstructions'
+  | 'derivationPrefix'
+  | 'derivationSuffix'
+  | 'type'
+  | 'purpose'
+> & {
+  lockingScript?: Binary
+  outputDescription: Text
+  spendingDescription?: Text
+  customInstructions?: Text
+  derivationPrefix?: Text
+  derivationSuffix?: Text
+  type: Text
+  purpose: Text
+}
+export function planOutputMerge<Binary, Text = string>(
+  current: OutputMergeRow<Binary, Text>,
+  incoming: OutputMergeRow<Binary, Text>,
+  syncMap: SyncMap,
+  mappedParents?: Readonly<{ basketId?: number; spentBy?: number }>
+): OutputMergeRow<Binary, Text> | undefined {
+  if (!(incoming.updated_at > current.updated_at)) return undefined
+  if (
+    mappedParents !== undefined &&
+    ((incoming.basketId != null) !== (mappedParents.basketId !== undefined) ||
+      (incoming.spentBy != null) !== (mappedParents.spentBy !== undefined))
+  )
+    throw new Error('Archive output parents require complete mapped destination IDs')
+  return {
+    ...current,
+    // A private archive can carry signed/zero original IDs. Its separate
+    // producer supplies freshly checked positive destination parent DATA.
+    // Ordinary legacy callers retain their established mapping contract.
+    basketId:
+      mappedParents === undefined
+        ? mappedBasketId(incoming.basketId, syncMap)
+        : mappedParents.basketId === undefined
+          ? undefined
+          : verifyId(mappedParents.basketId),
+    spentBy:
+      mappedParents === undefined
+        ? incoming.spentBy
+          ? syncMap.transaction.idMap[incoming.spentBy]
+          : undefined
+        : mappedParents.spentBy === undefined
+          ? undefined
+          : verifyId(mappedParents.spentBy),
+    spendable: incoming.spendable,
+    change: incoming.change,
+    type: incoming.type,
+    providedBy: incoming.providedBy,
+    purpose: incoming.purpose,
+    outputDescription: incoming.outputDescription,
+    spendingDescription: incoming.spendingDescription,
+    senderIdentityKey: incoming.senderIdentityKey,
+    customInstructions: incoming.customInstructions,
+    scriptLength: incoming.scriptLength,
+    scriptOffset: incoming.scriptOffset,
+    lockingScript: incoming.lockingScript,
+    updated_at: new Date(Math.max(incoming.updated_at.getTime(), current.updated_at.getTime()))
+  }
+}
+
 async function quarantineUnresolvedBrc177Reclaim(
   output: EntityOutput,
   storage: EntityStorage,
@@ -336,27 +407,13 @@ export class EntityOutput extends EntityBase<TableOutput> {
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    let wasMerged = false
-    if (ei.updated_at > this.updated_at) {
-      this.basketId = mappedBasketId(ei.basketId, syncMap)
-      this.spentBy = ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : undefined
-      this.spendable = ei.spendable
-      this.change = ei.change
-      this.type = ei.type
-      this.providedBy = ei.providedBy
-      this.purpose = ei.purpose
-      this.outputDescription = ei.outputDescription
-      this.spendingDescription = ei.spendingDescription
-      this.senderIdentityKey = ei.senderIdentityKey
-      this.customInstructions = ei.customInstructions
-      this.scriptLength = ei.scriptLength
-      this.scriptOffset = ei.scriptOffset
-      this.lockingScript = ei.lockingScript
-      await quarantineUnresolvedBrc177Reclaim(this, storage, trx)
-      this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
-      await storage.updateOutput(this.id, this.toApi(), trx)
-      wasMerged = true
-    }
-    return wasMerged
+    const planned = planOutputMerge(this.api, ei, syncMap)
+    if (planned === undefined) return false
+    const previousUpdatedAt = this.updated_at
+    Object.assign(this.api, planned, { updated_at: previousUpdatedAt })
+    await quarantineUnresolvedBrc177Reclaim(this, storage, trx)
+    this.updated_at = planned.updated_at
+    await storage.updateOutput(this.id, this.toApi(), trx)
+    return true
   }
 }

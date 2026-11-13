@@ -137,7 +137,7 @@ export function renderThirdPartyNotice(registry, distributionPath) {
     '',
     '# Third-Party Notices',
     '',
-    'The Open BSV License Version 6 in `LICENSE.txt` applies to current TS Stack',
+    'The Apache License, Version 2.0 in `LICENSE` applies to current TS Stack',
     'first-party contributions. It does not replace, narrow, or relicense historical',
     'or third-party material identified below. Each identified portion remains available',
     'under its stated terms.',
@@ -288,8 +288,8 @@ export function synchronizeThirdPartyMaterials(root = REPOSITORY_ROOT) {
 
 function validateRegistryShape(registry, errors) {
   if (registry.schemaVersion !== 1) errors.push('third-party registry schemaVersion must be 1')
-  if (registry.policy?.firstPartyLicense !== 'LicenseRef-Open-BSV-License-6') {
-    errors.push('third-party registry first-party license must remain scoped to Open BSV v6')
+  if (registry.policy?.firstPartyLicense !== 'Apache-2.0') {
+    errors.push('third-party registry first-party license must remain scoped to Apache-2.0')
   }
   if (registry.policy?.noticeFile !== 'THIRD_PARTY_NOTICES.md') {
     errors.push('third-party registry notice file must be THIRD_PARTY_NOTICES.md')

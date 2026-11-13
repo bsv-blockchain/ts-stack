@@ -100,14 +100,17 @@ describe('getSyncChunk query batching', () => {
       basketId: index + 1,
       userId: 1,
       name: `basket-${index}`,
+      numberOfDesiredUTXOs: 0,
+      minimumDesiredUTXOValue: 0,
+      isDeleted: false,
       created_at: now,
       updated_at: now
     }))
-    const findOutputBaskets = jest.fn(async ({ paged }: { paged?: { limit: number; offset?: number } }) => {
+    const findOutputBaskets = jest.fn(async ({ paged }: Parameters<StorageReader['findOutputBaskets']>[0]) => {
       const offset = paged?.offset ?? 0
       return outputBaskets.slice(offset, offset + (paged?.limit ?? outputBaskets.length))
     })
-    storage.findOutputBaskets = findOutputBaskets as StorageReader['findOutputBaskets']
+    storage.findOutputBaskets = findOutputBaskets
 
     const chunk = await getSyncChunk(storage, makeArgs(1_000))
 

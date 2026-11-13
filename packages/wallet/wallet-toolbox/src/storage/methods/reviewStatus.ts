@@ -1,6 +1,9 @@
+import { StorageReqWrite } from '../StorageReqWrite'
+import type { StorageStatusReviewArgs, StorageWriterAdmission } from '../StorageActiveWrite'
+import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
+import { quarantineRecordedTerminalInputs } from './reconcileFailedTransactionInputs'
 import { Knex } from 'knex'
 import type { StorageKnex } from '../StorageKnex'
-import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WalletError } from '../../sdk/WalletError'
 import type { ProvenTxReqStatus } from '../../sdk/types'
 import { TableTransaction } from '../schema/tables/TableTransaction'
@@ -20,9 +23,10 @@ const provenTxReqStatusesSafeForInputRestore: ProvenTxReqStatus[] = ['invalid', 
  * @param args
  * @returns
  */
-export async function reviewStatus(
+async function reviewStatusLegacy(
   storage: StorageKnex,
-  args: { agedLimit: Date; trx?: TrxToken }
+  args: StorageStatusReviewArgs,
+  scope?: { userId: number; transactionId: number; protectInputs?: boolean }
 ): Promise<{ log: string }> {
   const r: { log: string } = { log: '' }
 
@@ -57,7 +61,8 @@ export async function reviewStatus(
         .whereExists(function () {
           this.select(k.raw(1))
             .from('proven_tx_reqs as r')
-            .whereRaw("transactions.txid = r.txid and r.status = 'invalid'")
+            .whereRaw('transactions.txid = r.txid')
+            .whereIn('r.status', scope == null ? ['invalid'] : ['invalid', 'doubleSpend'])
         })
     },
     {
@@ -137,7 +142,19 @@ export async function reviewStatus(
     }
   )
 
-  for (const q of qs) await runReviewStatusQuery(q)
+  if (scope != null) {
+    for (let i = 0; i < qs.length; i++) {
+      qs[i].q.where('userId', scope.userId).where(i === 1 ? 'spentBy' : 'transactionId', scope.transactionId)
+    }
+    // An observed rejection is never stronger than a stored completed proof.
+    qs[0].q.whereNull('provenTxId').whereNot({ status: 'completed' })
+    qs[3].q.whereNot({ status: 'failed' })
+  }
+
+  for (let i = 0; i < qs.length; i++) {
+    if (scope?.protectInputs && i === 1) continue
+    await runReviewStatusQuery(qs[i])
+  }
 
   return r
 }
@@ -146,4 +163,122 @@ interface ReviewStatusQuery {
   q: Knex.QueryBuilder<any, number>
   sql?: string
   log: string
+}
+
+/** Real SQL primary fences and metadata keysets make each financial repair
+ * independent of total wallet size. No external observation runs in a writer.
+ * Explicit transaction/older-provider callers retain their serialized path. */
+export async function reviewStatus(storage: StorageKnex, args: StorageStatusReviewArgs): Promise<{ log: string }> {
+  if (args.trx != null || !(await storage.supportsPrimaryWriteFences())) return await reviewStatusLegacy(storage, args)
+  let log = ''
+  let afterUser = 0
+  const admit: StorageWriterAdmission = args.admission ?? (async operation => await operation())
+  for (;;) {
+    const users: Array<{ userId: number; identityKey: string }> = await storage
+      .knex('users')
+      .select('userId', 'identityKey')
+      .where('userId', '>', afterUser)
+      .orderBy('userId')
+      .limit(100)
+    if (!users.length) break
+    for (const user of users) {
+      afterUser = user.userId
+      try {
+        const write = await storage.activeWriteTransaction(user)
+        let afterTransaction = 0
+        for (;;) {
+          const ids: Array<{ transactionId: number }> = await storage
+            .knex('transactions')
+            .select('transactionId')
+            .where({ userId: user.userId })
+            .where('transactionId', '>', afterTransaction)
+            .orderBy('transactionId')
+            .limit(100)
+          if (!ids.length) break
+          for (const { transactionId } of ids) {
+            const rows = await storage.findTransactions({
+              partial: { transactionId, userId: user.userId },
+              noRawTx: true
+            })
+            const row = rows[0]
+            if (row == null) {
+              afterTransaction = transactionId
+              continue
+            }
+            if (row.status === 'failed' && row.txid != null) {
+              const proven = (await storage.findProvenTxs({ partial: { txid: row.txid } }))[0]
+              const req = await EntityProvenTxReq.fromStorageTxid(storage, row.txid)
+              if (proven != null && req != null) {
+                const writes = await StorageReqWrite.capture(
+                  storage,
+                  [row.txid],
+                  { userId: user.userId, write },
+                  args.admission
+                )
+                await storage.updateProvenTxReqWithNewProvenTx(
+                  {
+                    provenTxReqId: req.id,
+                    txid: req.txid,
+                    status: req.status,
+                    attempts: req.attempts,
+                    history: req.apiHistory,
+                    height: proven.height,
+                    index: proven.index,
+                    blockHash: proven.blockHash,
+                    merkleRoot: proven.merkleRoot,
+                    merklePath: proven.merklePath
+                  },
+                  proven,
+                  writes
+                )
+              }
+            }
+            log += await admit(
+              async () =>
+                await write.transaction(async trx => {
+                  const current = (
+                    await storage.findTransactions({
+                      partial: { transactionId, userId: user.userId },
+                      noRawTx: true,
+                      trx
+                    })
+                  )[0]
+                  if (current == null) return ''
+                  const req =
+                    current.txid == null
+                      ? undefined
+                      : await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
+                  if (req?.status === 'unmined' && ['nosend', 'unprocessed', 'sending'].includes(current.status))
+                    await storage.updateTransactionStatus('unproven', transactionId, user.userId, undefined, trx)
+                  const protectedTargets =
+                    current.txid == null
+                      ? []
+                      : await storage.findTransactions({
+                          partial: { userId: user.userId, noSendExpiryReclaimTxid: current.txid },
+                          noRawTx: true,
+                          trx
+                        })
+                  const repaired = await reviewStatusLegacy(
+                    storage,
+                    { ...args, trx },
+                    {
+                      userId: user.userId,
+                      transactionId,
+                      protectInputs: protectedTargets.length > 0
+                    }
+                  )
+                  if (req != null) await quarantineRecordedTerminalInputs(req, storage, user.userId, trx)
+                  return repaired.log
+                })
+            )
+            afterTransaction = transactionId
+          }
+        }
+      } catch (error) {
+        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+        log += `user ${user.userId} review deferred to its current primary\n`
+      }
+    }
+  }
+  return { log }
 }
