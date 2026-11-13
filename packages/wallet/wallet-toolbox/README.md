@@ -1,5 +1,25 @@
 # BSV Wallet Toolbox
 
+## Setup factory action batching
+
+The 2.17.0 source candidate adds optional `actionBatchMode` to the `Setup` and
+`SetupClient` factory arguments. Select `legacy` when your application broadcasts
+its own `noSend` transactions and needs the existing per-action storage path:
+
+```ts
+import { SetupClient, type SetupClientWalletArgs } from '@bsv/wallet-toolbox'
+
+declare const options: SetupClientWalletArgs
+const { wallet } = await SetupClient.createWallet({ ...options, actionBatchMode: 'legacy' })
+```
+
+The browser client exposes the same `SetupClient` option. Omission keeps `auto`,
+including its existing storage-capability negotiation and fallback. When batching
+is available, related signed `noSend` actions can remain staged until a subsequent
+batch commit. The new option does not recover previously discarded batches or
+change signing, BRC-100 calls or database schemas. Existing consumers need no
+migration; package publication and consumer upgrades are separate steps.
+
 ## Sync and recovery candidate
 
 PR569 adds bounded wallet sync, portable recovery and durable primary handoff.
