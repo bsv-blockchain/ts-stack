@@ -281,6 +281,15 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: StorageUploader sends one Content-Type (patch candidate)
+
+- `StorageUploader.publishFile` no longer sends the file's `Content-Type`
+  beside a provider-required `content-type`. fetch joined the two values, so a
+  signed upload URL that covers `content-type` (as the cloud-bucket UHRP server
+  signs since its hardening) refused the PUT with 403. The provider's required
+  value now wins case-insensitively; with no required content type the file's
+  type is still sent. No API, wire or migration change for other providers.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

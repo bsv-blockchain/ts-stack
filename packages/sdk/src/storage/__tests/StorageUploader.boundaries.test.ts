@@ -242,6 +242,40 @@ describe('StorageUploader boundary validation', () => {
   })
 
   it.each([
+    ['content-type', 'application/octet-stream'],
+    ['Content-Type', 'text/plain'],
+    ['CONTENT-TYPE', 'image/png']
+  ])(
+    'sends a required %p header exactly once on the wire when the file type is %p',
+    async (name, fileType) => {
+      jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(
+        jsonResponse({
+          status: 'success',
+          uploadURL: 'https://uploads.example/file',
+          requiredHeaders: { 'content-length': 3, [name]: 'application/octet-stream' }
+        })
+      )
+      let wireContentType: string | null = null
+      const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+        if (String(input).endsWith('/quote')) {
+          return jsonResponse({ status: 'success', quote: 2 })
+        }
+        // fetch serializes init.headers through Headers, which joins repeated
+        // names; a signed upload URL rejects any value other than the signed one.
+        wireContentType = new Headers(init?.headers).get('content-type')
+        return new Response('', { status: 200 })
+      })
+      await expect(
+        uploader(fetchClient, ['https://one.example']).publishFile({
+          file: { data: [1, 2, 3], type: fileType },
+          retentionPeriod: 60
+        })
+      ).resolves.toMatchObject({ published: true })
+      expect(wireContentType).toBe('application/octet-stream')
+    }
+  )
+
+  it.each([
     [new Response('', { status: 500 }), 'Upload info request failed'],
     [jsonResponse({ status: 'error' }), 'Upload route returned an error'],
     [jsonResponse({ status: 'success', requiredHeaders: {} }), 'omitted uploadURL'],
