@@ -1,5 +1,6 @@
 import FeeModel from '../FeeModel.js'
 import Transaction from '../Transaction.js'
+import { transactionSize } from '../transactionSize.js'
 
 /**
  * Represents the "satoshis per kilobyte" transaction fee model.
@@ -30,23 +31,10 @@ export default class SatoshisPerKilobyte implements FeeModel {
   async computeFee(tx: Transaction): Promise<number> {
     const rate = this.value
     validateRate(rate)
-    const getVarIntSize = (i: number): number => {
-      if (i > 0xffffffff) {
-        return 9
-      } else if (i > 0xffff) {
-        return 5
-      } else if (i >= 253) {
-        return 3
-      } else {
-        return 1
-      }
-    }
-    // Compute the (potentially estimated) size of the transaction
-    let size = 4 // version
-    size += getVarIntSize(tx.inputs.length) // number of inputs
+    // Collect the script lengths; transactionSize applies the serialization layout.
+    const inputLengths: number[] = []
     for (let i = 0; i < tx.inputs.length; i++) {
       const input = tx.inputs[i]
-      size += 40 // txid, output index, sequence number
       let scriptLength: number
       if (typeof input.unlockingScript === 'object') {
         scriptLength = input.unlockingScript.toBinary().length
@@ -60,20 +48,10 @@ export default class SatoshisPerKilobyte implements FeeModel {
       if (!Number.isSafeInteger(scriptLength) || scriptLength < 0) {
         throw new RangeError('Unlocking script length must be a non-negative safe integer.')
       }
-      size += getVarIntSize(scriptLength) // unlocking script length
-      size += scriptLength // unlocking script
+      inputLengths.push(scriptLength)
     }
-    size += getVarIntSize(tx.outputs.length) // number of outputs
-    for (const out of tx.outputs) {
-      size += 8 // satoshis
-      const length = out.lockingScript.toBinary().length
-      if (!Number.isSafeInteger(length) || length < 0) {
-        throw new RangeError('Locking script length must be a non-negative safe integer.')
-      }
-      size += getVarIntSize(length) // script length
-      size += length // script
-    }
-    size += 4 // lock time
+    const outputLengths = tx.outputs.map(out => out.lockingScript.toBinary().length)
+    const size = transactionSize(inputLengths, outputLengths)
     // We'll use Math.ceil to ensure the miners get the extra satoshi.
     const fee = Math.ceil((size / 1000) * rate)
     if (!Number.isSafeInteger(fee) || fee < 0 || fee > 21e14) {
