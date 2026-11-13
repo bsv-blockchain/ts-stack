@@ -80,6 +80,35 @@ describe('GlobalKVStore token authentication', () => {
     )
   })
 
+  it.each([
+    ['protocol shape', 0, '{}', /exactly two fields/],
+    ['protocol security level', 0, '[3,"kvstore"]', /protocol ID is invalid/],
+    ['key byte bound', 1, 'k'.repeat(801), /key has an invalid length/],
+    ['value byte bound', 2, 'v'.repeat(1024 * 1024 + 1), /oversized field/]
+  ])('preserves the %s check when lifting the tag-count cap', async (_name, field, text, error) => {
+    const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+    const { lockingScript } = await token(
+      undefined,
+      { [field as number]: Utils.toArray(text as string, 'utf8') },
+      tags
+    )
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(error as RegExp)
+  })
+
+  it('preserves the compressed-controller byte bound for larger tag sets', async () => {
+    const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+    const { lockingScript } = await token(
+      undefined,
+      { 3: Array.from({ length: 32 }, () => 0x11) },
+      tags
+    )
+
+    await expect(decodeAndVerifyKVStoreToken(lockingScript)).rejects.toThrow(
+      'controller is invalid'
+    )
+  })
+
   it('rejects an attacker token that claims a different controller', async () => {
     const attackerWallet = new ProtoWallet(PrivateKey.fromRandom())
     const victim = PrivateKey.fromRandom().toPublicKey().toString()
