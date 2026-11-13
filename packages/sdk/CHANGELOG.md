@@ -281,6 +281,31 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: answer a certificate request embedded in an initialResponse (patch candidate)
+
+- `Peer`'s automatic answer and `AuthFetch`'s certificate listener now send an
+  empty `certificateResponse` when the wallet holds no requested certificate,
+  as `Peer` already did for a standalone `certificateRequest`. The empty list
+  validates nothing; it lets a server whose policy decides on the certificates
+  it receives, including none, decide without waiting for its own certificate
+  deadline. `@bsv/auth-express-middleware` is not such a server: it answers the
+  empty response itself with `400 ERR_CERTIFICATES_REQUIRED` and still holds a
+  general request that is waiting for certificates until its request timeout
+  (`408 CERTIFICATE_TIMEOUT`). A wallet error or declined disclosure still
+  sends nothing.
+- `toPeer` waits, for at most 30 seconds, until `Peer`'s own answer to a
+  certificate request embedded in the session's `initialResponse` has been
+  sent or has ended without one, so a server that refuses general messages
+  while certificates are pending is not sent one first. This orders dispatch
+  only: it orders arrival on an ordered transport such as a WebSocket, not
+  across separate HTTP requests. When the `initialResponse` also carries
+  certificates, the answer is sent before certificates-received listeners
+  run, so a listener that sends on the session does not wait on it. An
+  application certificate-request listener runs outside this wait.
+- `SimplifiedFetchTransport` dispatches a later certificate message of a
+  session only after that session's empty `certificateResponse` has its HTTP
+  response, because servers route these messages by the session nonce.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
