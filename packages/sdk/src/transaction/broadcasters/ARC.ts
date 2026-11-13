@@ -4,7 +4,14 @@ import { HttpClient, HttpClientRequestOptions } from '../http/HttpClient.js'
 import Random from '../../primitives/Random.js'
 import { toHex } from '../../primitives/utils.js'
 import { normalizeArcConfig, normalizeArcUrl, type ArcConfig } from './ArcConfigValidation.js'
-import { hasControlCharacter, utf8ByteLength } from '../../primitives/UTF8.js'
+import {
+  ARC_ERROR_STATUSES,
+  boundedText,
+  MAX_ARC_INFO_BYTES,
+  MAX_ARC_STATUS_BYTES,
+  ownArcData,
+  parseArcData
+} from './BroadcasterValidation.js'
 import { lockConfiguration } from '../http/ConfigurationLock.js'
 
 export type { ArcConfig } from './ArcConfigValidation.js'
@@ -13,18 +20,8 @@ function defaultDeploymentId(): string {
   return `ts-sdk-${toHex(Random(16))}`
 }
 
-const ARC_ERROR_STATUSES = new Set([
-  'DOUBLE_SPEND_ATTEMPTED',
-  'REJECTED',
-  'INVALID',
-  'MALFORMED',
-  'MINED_IN_STALE_BLOCK'
-])
 const TXID = /^[0-9a-f]{64}$/i
-const MAX_ARC_STATUS_BYTES = 128
-const MAX_ARC_INFO_BYTES = 8192
 const MAX_COMPETING_TXS = 256
-const MAX_ARC_RESPONSE_PROPERTIES = 32
 const ARC_ACCEPTED_STATUSES = new Set([
   'SUCCESS',
   'RECEIVED',
@@ -36,30 +33,6 @@ const ARC_ACCEPTED_STATUSES = new Set([
   'MINED',
   'IMMUTABLE'
 ])
-
-function boundedText(value: unknown, maximumBytes: number, allowEmpty = true): value is string {
-  return (
-    typeof value === 'string' &&
-    (allowEmpty || value.length !== 0) &&
-    utf8ByteLength(value) <= maximumBytes &&
-    !hasControlCharacter(value)
-  )
-}
-
-function ownArcData(value: unknown): Record<string, PropertyDescriptor> | undefined {
-  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const prototype = Object.getPrototypeOf(value)
-  if (prototype !== Object.prototype && prototype !== null) return undefined
-  const properties = Object.getOwnPropertyDescriptors(value)
-  if (
-    Object.getOwnPropertySymbols(value).length !== 0 ||
-    Object.keys(properties).length > MAX_ARC_RESPONSE_PROPERTIES ||
-    Object.values(properties).some(property => property.get != null || property.set != null)
-  ) {
-    return undefined
-  }
-  return properties
-}
 
 function snapshotCompetingTxs(value: unknown): string[] | undefined {
   if (value === undefined) return undefined
@@ -173,19 +146,13 @@ function successfulArcResponse(
   const response: BroadcastResponse = {
     status: 'success',
     txid: expectedTxid,
-    message: `${txStatus} ${extraInfo ?? ''}`.trim()
+    message: `${txStatus} ${extraInfo ?? ''}`.trim(),
+    txStatus
   }
+  const arcStatus = read('status')
+  if (Number.isSafeInteger(arcStatus)) response.arcStatus = arcStatus as number
   if (competingTxs != null) response.competingTxs = competingTxs
   return response
-}
-
-function parseArcFailureData(data: unknown): unknown {
-  if (typeof data !== 'string') return data
-  try {
-    return JSON.parse(data)
-  } catch {
-    return data
-  }
 }
 
 function failedArcResponse(
@@ -203,7 +170,7 @@ function failedArcResponse(
     code,
     description: 'Unknown error'
   }
-  const data = parseArcFailureData(responseData)
+  const data = parseArcData(responseData)
   const properties = ownArcData(data)
   if (properties === undefined) return failure
   const detail = properties.detail?.value

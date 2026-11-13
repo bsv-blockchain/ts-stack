@@ -281,6 +281,27 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Fixed: Teranode broadcaster reports ARC-style status bodies (minor candidate)
+
+- `Teranode.broadcast` reported every 2xx as `broadcast successful` without
+  reading the body. Against an ARC-style endpoint such as BSV Broadcaster's
+  `POST /tx`, a `202 {"txStatus":"RECEIVED"}` was indistinguishable from a
+  mined transaction. A JSON body with a `txStatus` is now read with `ARC`'s
+  rules, and the result carries it as data.
+- Add optional `BroadcastResponse.txStatus` and `BroadcastResponse.arcStatus`,
+  set by `Teranode` and `ARC` when the service reports them and kept by
+  `validateBroadcastResult`. `RECEIVED` stays a success but means received,
+  not yet validated, and may still be rejected; callers that need certainty
+  check `txStatus` or poll the service (`GET /tx/{txid}`).
+- Behaviour change: a 2xx body reporting a status in ARC's failure set
+  (`REJECTED`, `DOUBLE_SPEND_ATTEMPTED`, `INVALID`, `MALFORMED`,
+  `MINED_IN_STALE_BLOCK`), an orphan, or another txid is now a failure, with
+  `code: txStatus` and `more: { txStatus, arcStatus }` (or
+  `ERR_TXID_MISMATCH`). A non-2xx keeps its HTTP `code` and `description` and
+  adds the body's ARC `status`, `txStatus` and `detail` under `more`.
+- A bare 2xx with no body, `OK` or any non-status body is unchanged, so plain
+  Teranode nodes see the same result.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the
