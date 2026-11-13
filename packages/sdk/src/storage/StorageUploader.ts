@@ -375,7 +375,12 @@ export class StorageUploader {
       throw new Error('Upload route returned an error.')
     }
     if (typeof data.uploadURL !== 'string') throw new Error('Upload route omitted uploadURL.')
-    const requiredHeaders = validateUploadHeaders(data.requiredHeaders, fileSize)
+    // An omitted header set means no extra headers, as 2.7.x treated it: some
+    // servers drop an empty map from the reply. A present value is still validated.
+    const requiredHeaders = validateUploadHeaders(
+      data.requiredHeaders === undefined ? {} : data.requiredHeaders,
+      fileSize
+    )
     if (
       data.amount !== undefined &&
       (!Number.isSafeInteger(data.amount) || data.amount < 0 || data.amount > MAX_SATOSHIS)
