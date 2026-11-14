@@ -62,6 +62,12 @@ const SUCCESS_STATUSES = new Set([
   'ANNOUNCED_TO_NETWORK',
   'ACCEPTED_BY_NETWORK',
   'SEEN_ON_NETWORK',
+  // Arcade (bsv-blockchain/broadcaster) answers a re-submit of a known transaction with its stored
+  // state, which can be later than SEEN_ON_NETWORK: seen by several miners, or already in a block.
+  // PENDING_RETRY and UNKNOWN stay out of this set and fall through as non-terminal failures, so
+  // the provider chain tries the next broadcaster.
+  'SEEN_MULTIPLE_NODES',
+  'STUMP_PROCESSING',
   'STORED',
   'MINED',
   'IMMUTABLE'
