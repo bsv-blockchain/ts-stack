@@ -161,7 +161,6 @@ describe('WalletRelayService boundary and state enforcement', () => {
         protocolID: params.protocolID
       })
       expect(info?.topic).toBe(created.sessionId)
-      expect(info?.protocolID).toBe(params.protocolID)
       expect(JSON.stringify(JSON.parse(info!.protocolID))).toBe(info!.protocolID)
     } finally {
       service.stop()

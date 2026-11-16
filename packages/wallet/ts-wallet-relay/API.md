@@ -1404,6 +1404,8 @@ interface SessionInfo {
   status: SessionStatus
   relay?: string // present on status resolution
   backendIdentityKey?: string // present on status resolution from 0.6.0 — must equal the QR key
+  topic?: string // present on status resolution from 0.7.1 — equals the QR topic (the session id)
+  protocolID?: string // present on status resolution from 0.7.1 — the QR's canonical protocolID JSON
   qrDataUrl?: string // present on session creation — base64 PNG data URL
   pairingUri?: string // present on session creation — pass to QRPairingCode / useQRPairing
   desktopToken?: string // present on creation — use X-Desktop-Token or the documented WS subprotocol

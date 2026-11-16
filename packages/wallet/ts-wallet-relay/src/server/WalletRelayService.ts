@@ -180,6 +180,9 @@ const MAX_ACTIVE_REQUESTS_PER_SESSION = 100
 const DEFAULT_MAX_SESSION_CREATIONS_PER_MINUTE = 120
 const MAX_DECLARED_MOBILE_METHODS = 100
 
+/** The canonical protocolID string that the QR carries and the session lookup echoes. */
+const PAIRING_PROTOCOL_ID = stringifyBRC100(PROTOCOL_ID)
+
 /**
  * High-level facade that wires together the relay, session manager,
  * and RPC handler into a ready-to-use WebSocket service.
@@ -417,7 +420,7 @@ export class WalletRelayService {
       const uri = buildPairingUri({
         sessionId: session.id,
         backendIdentityKey,
-        protocolID: stringifyBRC100(PROTOCOL_ID),
+        protocolID: PAIRING_PROTOCOL_ID,
         origin,
         expiry,
         sig,
@@ -456,22 +459,14 @@ export class WalletRelayService {
   } | null {
     const s = this.sessions.getSession(id)
     if (!s) return null
-    const info: {
-      sessionId: string
-      status: string
-      relay: string
-      topic: string
-      protocolID: string
-      backendIdentityKey?: string
-    } = {
+    return {
       sessionId: s.id,
       status: s.status,
       relay: this.relayUrl,
       topic: s.id,
-      protocolID: stringifyBRC100(PROTOCOL_ID)
+      protocolID: PAIRING_PROTOCOL_ID,
+      ...(s.backendIdentityKey !== undefined ? { backendIdentityKey: s.backendIdentityKey } : {})
     }
-    if (s.backendIdentityKey !== undefined) info.backendIdentityKey = s.backendIdentityKey
-    return info
   }
 
   /**
