@@ -79,5 +79,13 @@ describe('deprecated Arcade aliases', () => {
     expect(() => viaAlias.configureArcade('https://arcade.example', null as any)).toThrow(
       'Arcade configuration must be an object'
     )
+
+    const defaults = new OverlayExpress('Alias Test', 'private-key', 'overlay.example')
+    defaults.configureArcade('https://arcade.example')
+    expect(state(defaults)).toMatchObject({
+      arcadeUrl: 'https://arcade.example',
+      arcadeApiKey: undefined,
+      arcadeChaintracksApiPrefix: '/chaintracks/v2'
+    })
   })
 })

@@ -823,6 +823,83 @@ describe('BsvBroadcaster', () => {
       expect(callOrder).toEqual(txids)
       expect(r.status).toBe('success')
     })
+
+    test('records an EF build failure as a service error and still posts the rest of the batch', async () => {
+      const { beef, txids } = buildBeefBatch(2)
+      const original = Beef.prototype.findAtomicTransaction
+      const find = jest.spyOn(Beef.prototype, 'findAtomicTransaction').mockImplementation(function (
+        this: Beef,
+        txid: string
+      ) {
+        if (txid === txids[0]) throw new Error('parent source data missing')
+        return original.call(this, txid)
+      })
+      const posted: string[] = []
+      const http: HttpClient = {
+        async request<D>(): Promise<HttpClientResponse<D>> {
+          posted.push(txids[1])
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid: txids[1], status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      try {
+        const r = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).postBeef(beef, txids)
+
+        expect(posted).toEqual([txids[1]])
+        expect(r.status).toBe('error')
+        expect(r.txidResults[0]).toMatchObject({ txid: txids[0], status: 'error', serviceError: true })
+        expect(r.txidResults[0].notes?.[0]).toMatchObject({ what: 'arcadeEfBuildFailed', txid: txids[0] })
+        expect(r.txidResults[1]).toMatchObject({ txid: txids[1], status: 'success' })
+      } finally {
+        find.mockRestore()
+      }
+    })
+
+    test('makes progress on a cyclic dependency graph, one transaction at a time', async () => {
+      const { beef, txids } = buildBeefBatch(2)
+      const [first, second] = txids
+      const find = jest.spyOn(Beef.prototype, 'findAtomicTransaction').mockImplementation(
+        (txid: string) =>
+          ({
+            inputs: [{ sourceTXID: txid === first ? second : first }],
+            toHexEF: () => (txid === first ? 'aa' : 'bb')
+          }) as unknown as Transaction
+      )
+      const posted: string[] = []
+      let inFlight = 0
+      let maxInFlight = 0
+      const http: HttpClient = {
+        async request<D>(_url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+          const txid = (options.data as { rawTx: string }).rawTx === 'aa' ? first : second
+          posted.push(txid)
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise(resolve => setTimeout(resolve, 5))
+          inFlight--
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid, status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      try {
+        const r = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).postBeef(beef, txids)
+
+        expect(posted).toEqual([first, second])
+        expect(maxInFlight).toBe(1)
+        expect(r.status).toBe('success')
+      } finally {
+        find.mockRestore()
+      }
+    })
   })
 
   describe('getMerklePath provider (proof acquisition)', () => {

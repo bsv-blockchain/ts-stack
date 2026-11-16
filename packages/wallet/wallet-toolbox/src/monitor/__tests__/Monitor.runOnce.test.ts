@@ -373,6 +373,35 @@ describe('Monitor.runOnce compatibility', () => {
     expect(task.sseClient).toBeNull()
   })
 
+  it('fetches SSE events through the BSV Broadcaster task and closes it on removal', async () => {
+    const { monitor } = createMonitor()
+    await expect(monitor.fetchSSEEvents()).resolves.toBe(0)
+
+    const task = new TaskBsvBroadcasterSSE(monitor)
+    const fetchNow = jest.spyOn(task, 'fetchNow').mockResolvedValue(3)
+    const close = jest.spyOn(task, 'close')
+    monitor.addTask(task)
+
+    await expect(monitor.fetchSSEEvents()).resolves.toBe(3)
+    expect(fetchNow).toHaveBeenCalledTimes(1)
+
+    monitor.removeTask(TaskBsvBroadcasterSSE.taskName)
+    expect(close).toHaveBeenCalledTimes(1)
+    await expect(monitor.fetchSSEEvents()).resolves.toBe(0)
+
+    const other = new ControlledTask(
+      monitor,
+      'Other',
+      jest.fn(async () => {}),
+      () => ({ run: false }),
+      jest.fn(async () => '')
+    )
+    monitor.addTask(other)
+    monitor.removeTask('Other')
+    expect(close).toHaveBeenCalledTimes(1)
+    await monitor.destroy()
+  })
+
   it('isolates setup and trigger errors while continuing other tasks', async () => {
     const { monitor, events } = createMonitor()
     const setupFailure = new ControlledTask(

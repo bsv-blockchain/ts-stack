@@ -164,19 +164,14 @@ function snapshotBsvBroadcasterConfig(
   })
 }
 
-function parseDescription(data: unknown, fallback: string): string {
-  if (typeof data === 'string') return data
-  if (typeof data === 'object' && data !== null) {
-    const d = data as BsvBroadcasterTxResponse
-    return (
-      d.detail ??
-      d.reason ??
-      d.error ??
-      `${d.txStatus ?? ''} ${d.extraInfo ?? ''}`.trim() ??
-      fallback
-    )
-  }
-  return fallback
+function parseDescription(data: BsvBroadcasterTxResponse | undefined, fallback: string): string {
+  if (data === undefined) return fallback
+  return (
+    data.detail ??
+    data.reason ??
+    data.error ??
+    `${data.txStatus ?? ''} ${data.extraInfo ?? ''}`.trim()
+  )
 }
 
 function assertResponseStatus(status: unknown): void {
@@ -315,20 +310,21 @@ export class BsvBroadcasterProvider implements Broadcaster {
         return failure
       }
 
-      const txStatus = data?.txStatus
-      if (isTerminalArcStatus(txStatus, data?.extraInfo)) {
+      if (data === undefined) throw new TypeError('Arcade returned an unknown success status')
+      const txStatus = data.txStatus
+      if (isTerminalArcStatus(txStatus, data.extraInfo)) {
         const failure: BroadcastFailure = {
           status: 'error',
           code: txStatus ?? 'UNKNOWN',
-          txid: data?.txid,
-          description: `${txStatus ?? ''} ${data?.extraInfo ?? ''}`.trim()
+          txid: data.txid,
+          description: `${txStatus ?? ''} ${data.extraInfo ?? ''}`.trim()
         }
         const more: Record<string, unknown> = {
           provider: this.name,
           terminal: true,
           response: data
         }
-        if (data?.competingTxs !== undefined) {
+        if (data.competingTxs !== undefined) {
           more.competingTxs = data.competingTxs
         }
         failure.more = more
@@ -341,9 +337,9 @@ export class BsvBroadcasterProvider implements Broadcaster {
       }
       return {
         status: 'success',
-        txid: data?.txid ?? expectedTxid,
-        message: `${txStatus} ${data?.extraInfo ?? ''}`.trim(),
-        competingTxs: data?.competingTxs
+        txid: data.txid ?? expectedTxid,
+        message: `${txStatus} ${data.extraInfo ?? ''}`.trim(),
+        competingTxs: data.competingTxs
       }
     } catch (error: unknown) {
       return {
@@ -374,7 +370,8 @@ export class BsvBroadcasterProvider implements Broadcaster {
       )
     }
     const mined = data?.txStatus === 'MINED' || data?.txStatus === 'IMMUTABLE'
-    if (!mined || data?.merklePath === undefined || data.merklePath === '') {
+    // An empty merklePath never gets here: response validation rejects it.
+    if (data === undefined || !mined || data.merklePath === undefined) {
       return undefined
     }
     const merklePath = MerklePath.fromHex(data.merklePath)
