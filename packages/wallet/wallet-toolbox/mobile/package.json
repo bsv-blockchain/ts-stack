@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
-  "version": "2.15.3",
+  "version": "2.17.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -34,7 +34,9 @@
   "files": [
     "out",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -44,7 +46,7 @@
     "directory": "packages/wallet/wallet-toolbox/mobile"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "keywords": [
     "bsv",
     "wallet",
@@ -54,7 +56,7 @@
     "build": "tsdown --config tsdown.config.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/src/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts\" \"packages/wallet/wallet-toolbox/mobile/**/*.{json,md,ts}\"",
     "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/mobile/test packages/wallet/wallet-toolbox/mobile/tsdown.config.ts packages/wallet/wallet-toolbox/mobile/vitest.config.ts --deny-warnings",
-    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,Services,ArcSSEClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,WalletMonitorTask,attemptToPostReqsToNetwork,parseJsonRpc,stringifyJsonRpc,verifyUnlockScripts,sdk",
+    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,Services,ArcSSEClient,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,InlineBulkFileDataValidator,registerArgon2idBackend,unregisterArgon2idBackend,WalletMonitorTask,attemptToPostReqsToNetwork,parseJsonRpc,stringifyJsonRpc,verifyUnlockScripts,sdk,DeviceBackupController,migrateDeviceBackupPreferences,BrowserArgon2idWorkerBackend,installBrowserArgon2idWorker",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:mobile": "node ../../../../scripts/check-wallet-toolbox-platform.mjs mobile",

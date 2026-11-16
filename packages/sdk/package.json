@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "4.0.1",
+  "version": "4.1.1",
   "sideEffects": [
     "./dist/esm/src/umd.js",
     "./dist/cjs/src/umd.js",
@@ -26,7 +26,9 @@
     "!dist/**/*.tsbuildinfo",
     "docs",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES"
   ],
@@ -850,7 +852,7 @@
     "SV"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },

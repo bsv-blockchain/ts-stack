@@ -1,25 +1,28 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 export class TaskMonitorCallHistory extends WalletMonitorTask {
   static readonly taskName = 'MonitorCallHistory'
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 12
   ) {
     super(monitor, TaskMonitorCallHistory.taskName)
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: nowMsecsSinceEpoch > this.lastRunMsecsSinceEpoch + this.triggerMsecs
     }
   }
 
-  async runTask (): Promise<string> {
-    const r = this.monitor.services.getServicesCallHistory(true)
-    const log = JSON.stringify(r)
-    return log
+  runTask(): Promise<string> {
+    return promiseFromSync(() => {
+      const r = this.monitor.services.getServicesCallHistory(true)
+      const log = JSON.stringify(r)
+      return log
+    })
   }
 }

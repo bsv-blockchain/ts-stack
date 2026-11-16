@@ -13,6 +13,14 @@ This package provides a **drop-in client-side solution** for Socket.IO that
   or any BRC-103-compatible server.
 - Minimal changes compared to normal `socket.io-client` usage.
 
+## Next release candidate
+
+Unpublished 2.1.8 refreshes the UMD browser bundle with the integrated SDK.
+AuthSocket APIs, signed event JSON and the ESM/CommonJS SDK peer range are
+unchanged. The rebuilt UMD bytes differ from published 2.1.7, so distributors
+should adopt the new artifact only after publication and retain its license
+notices. Current wallet release pins are unaffected.
+
 ## Installation
 
 Install the client and its required SDK peer:
@@ -140,7 +148,7 @@ sentinel. Malformed, oversized, or reserved-name frames are not dispatched.
 
 ## License
 
-TS Stack first-party material is under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party material is under the [Apache License 2.0](./LICENSE).
 The UMD bundle incorporates separately licensed SDK material; keep
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/)
 with the bundle.

@@ -31,7 +31,7 @@ import { OneColor, readOneColorAttributes, reqMatchesDeploy } from '@bsv/templat
 import {
   encryptMetadata,
   maybeDecryptMetadata,
-  sdk as toolbox,
+  specOpBasketPrefixOutputs,
   type PermissionsModule,
   type PermissionsModuleAction,
   type PermissionsModuleNext,
@@ -2020,7 +2020,7 @@ export class ColorPermissionModule implements PermissionsModule {
     if (outpoints.size !== inputs.length) throw new Error('BRC-207: duplicate explicit input')
     const listed = await this.wallet.listOutputs(
       {
-        basket: toolbox.specOpBasketPrefixOutputs,
+        basket: specOpBasketPrefixOutputs,
         tags: [COLOR_BASKET_NAMESPACE],
         include: 'locking scripts',
         includeCustomInstructions: true,
@@ -3433,7 +3433,7 @@ export class ColorPermissionModule implements PermissionsModule {
     const entireTransactions = args.include === 'entire transactions'
     const listed = await this.wallet.listOutputs(
       {
-        basket: toolbox.specOpBasketPrefixOutputs,
+        basket: specOpBasketPrefixOutputs,
         tags: [COLOR_BASKET_NAMESPACE],
         include: entireTransactions ? 'entire transactions' : 'locking scripts',
         includeCustomInstructions: args.includeCustomInstructions,

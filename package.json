@@ -69,5 +69,5 @@
     "pnpm": ">=10"
   },
   "packageManager": "pnpm@10.33.2",
-  "license": "SEE LICENSE IN LICENSE.txt"
+  "license": "Apache-2.0"
 }

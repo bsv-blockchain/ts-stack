@@ -45,7 +45,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsdown src/index.ts src/host.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -75,7 +77,7 @@
     "directory": "packages/overlays/eqc"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "express-rate-limit": "8.7.0"
   },

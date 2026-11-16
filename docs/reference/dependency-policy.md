@@ -395,17 +395,15 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-10-01 review rechecked all 25 selectors against the frozen graph.
-Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
-`engine.io` ranges, so those two substitutions stay. The earlier findings still
-hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
-`uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
-current frontmatter plugin still requests TOML 3.x. New upstream majors can
-remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. Metro 0.87.1 replaced its `image-size` dependency with an in-tree
-parser, so the former Metro-scoped substitution was retired; the mobile
-platform contract verifies that boundary. The method, result, count, and next
-rehearsal are enforced in
+The 2026-10-02 reconciliation retains 26 selectors from the reviewed main
+updates, including the Mermaid/chevrotain `lodash-es` remediation and the
+Yamux-scoped stream-interface compatibility substitution. It preserves the
+qualified `brace-expansion` 5.0.12 workspace and standalone floor for
+GHSA-q2hr-2g5m-vwhr; Jest and Stryker still admit vulnerable earlier ranges.
+The `engine.io` substitution remains. Metro 0.87.1 replaced its `image-size`
+dependency with an in-tree parser, so the former Metro-scoped substitution
+was retired; the mobile platform contract verifies that boundary. The method,
+result, count and next rehearsal are enforced in
 `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly

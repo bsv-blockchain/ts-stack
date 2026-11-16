@@ -32,10 +32,9 @@ jobs:
         language:
           - actions
           - javascript-typescript
-          # The only Python files are deterministic OpenAPI output under
-          # conformance/generated/**. The CodeQL config excludes that owned
-          # generated boundary, while codegen CI verifies its specs, locked
-          # generator, and output.
+          # Scan the independently authored BRC-118 conformance oracle.
+          # Generated OpenAPI clients remain excluded by the owned registry.
+          - python
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

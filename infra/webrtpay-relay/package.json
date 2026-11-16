@@ -1,7 +1,7 @@
 {
   "name": "@bsv/webrtpay-relay",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -16,7 +16,7 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "infra/webrtpay-relay"
   },
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "BSV Association",
   "type": "module",
   "main": "dist/index.js",
@@ -36,7 +36,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@bsv/sdk": "^4.0.1",
+    "@bsv/sdk": "^4.1.0",
     "@bsv/webrtpay": "^0.2.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.222.0",
