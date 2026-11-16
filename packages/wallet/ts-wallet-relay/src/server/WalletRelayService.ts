@@ -200,7 +200,7 @@ const MAX_DECLARED_MOBILE_METHODS = 100
  *
  * Express auto-registered routes:
  *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET    /api/session/:id    — return { sessionId, status, relay, backendIdentityKey }
+ *   GET    /api/session/:id    — return { sessionId, status, relay, topic, backendIdentityKey, protocolID }
  *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
@@ -439,17 +439,37 @@ export class WalletRelayService {
   }
 
   /**
-   * Return session status, relay URL and the backend identity key embedded in the
-   * session's QR, or null if not found. Serve this unchanged from `GET /api/session/:id`:
-   * the phone requires `backendIdentityKey` to equal the key in the QR it scanned.
+   * Return session status, the relay URL, and the pairing tuple embedded in the
+   * session's QR, or null if not found. Serve this unchanged from `GET /api/session/:id`.
+   * After scanning the QR, the phone requires `topic`, `backendIdentityKey`, and
+   * `protocolID` to equal the QR values. `topic` is the session id. `protocolID` is
+   * the same canonical JSON string `createSession` puts in the pairing URI.
+   * `backendIdentityKey` is present once that key has been embedded in the QR.
    */
-  getSession(
-    id: string
-  ): { sessionId: string; status: string; relay: string; backendIdentityKey?: string } | null {
+  getSession(id: string): {
+    sessionId: string
+    status: string
+    relay: string
+    topic: string
+    protocolID: string
+    backendIdentityKey?: string
+  } | null {
     const s = this.sessions.getSession(id)
     if (!s) return null
-    const info: { sessionId: string; status: string; relay: string; backendIdentityKey?: string } =
-      { sessionId: s.id, status: s.status, relay: this.relayUrl }
+    const info: {
+      sessionId: string
+      status: string
+      relay: string
+      topic: string
+      protocolID: string
+      backendIdentityKey?: string
+    } = {
+      sessionId: s.id,
+      status: s.status,
+      relay: this.relayUrl,
+      topic: s.id,
+      protocolID: stringifyBRC100(PROTOCOL_ID)
+    }
     if (s.backendIdentityKey !== undefined) info.backendIdentityKey = s.backendIdentityKey
     return info
   }

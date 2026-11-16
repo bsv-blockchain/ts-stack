@@ -99,6 +99,8 @@ getSession(id: string): {
   sessionId: string
   status: string
   relay: string
+  topic: string
+  protocolID: string
   backendIdentityKey?: string
 } | null
 ```
@@ -107,7 +109,7 @@ Returns the current status and relay URL of a session, or `null` if the session 
 
 The `relay` field is the `ws://` or `wss://` address the mobile should connect to. This is how the mobile resolves the relay without it being embedded in the QR — it calls this endpoint on the QR origin (over HTTPS outside development) and reads `relay` from the response.
 
-`backendIdentityKey` is the backend identity key embedded in the session's QR (since 0.6.0; it is already public in the QR). `WalletPairingSession.resolveRelay()` rejects the pairing when it differs from the QR's key, which binds the QR key to the origin. Over a plain-HTTP origin (loopback or `allowLocalNetworkHttp`) this gives no assurance, because the lookup is unauthenticated. Custom route handlers must return this object unchanged.
+`topic`, `backendIdentityKey`, and `protocolID` are the pairing tuple from the session's QR. `topic` is the session id. `protocolID` is the canonical JSON string embedded in the QR (`[0,"mobile wallet session"]`). `backendIdentityKey` is present once `createSession` has embedded the backend identity key (since 0.6.0; the key is already public in the QR). Current BSV Wallet rejects the pairing unless all three equal the scanned QR. `WalletPairingSession.resolveRelay()` rejects the pairing when `backendIdentityKey` differs from the QR's key, which binds the QR key to the origin. Over a plain-HTTP origin (loopback or `allowLocalNetworkHttp`) this gives no assurance, because the lookup is unauthenticated. Custom route handlers must return this object unchanged.
 
 ---
 

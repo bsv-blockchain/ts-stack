@@ -324,7 +324,7 @@ export async function GET() {
 import { relay } from '@/lib/relay'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  // Return the object unchanged: the phone checks its backendIdentityKey against the QR.
+  // Return the object unchanged: the phone checks topic, backendIdentityKey, and protocolID against the QR.
   const info = relay.getSession(params.id)
   if (!info) return Response.json({ error: 'Session not found' }, { status: 404 })
   return Response.json(info)

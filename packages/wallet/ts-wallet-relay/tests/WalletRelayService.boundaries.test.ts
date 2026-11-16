@@ -145,6 +145,29 @@ describe('WalletRelayService boundary and state enforcement', () => {
     }
   })
 
+  it('returns the QR pairing tuple from getSession', async () => {
+    const { service } = createService()
+    try {
+      const created = await service.createSession()
+      const parsed = parsePairingUri(created.pairingUri)
+      expect(parsed.error).toBeNull()
+      const params = parsed.params!
+      const info = service.getSession(created.sessionId)
+      expect(info).toMatchObject({
+        sessionId: created.sessionId,
+        status: 'pending',
+        topic: params.topic,
+        backendIdentityKey: params.backendIdentityKey,
+        protocolID: params.protocolID
+      })
+      expect(info?.topic).toBe(created.sessionId)
+      expect(info?.protocolID).toBe(params.protocolID)
+      expect(JSON.stringify(JSON.parse(info!.protocolID))).toBe(info!.protocolID)
+    } finally {
+      service.stop()
+    }
+  })
+
   it('rejects a non-boolean allowLocalNetworkHttp', () => {
     expect(() => createService({ allowLocalNetworkHttp: 'true' as unknown as boolean })).toThrow(
       'allowLocalNetworkHttp must be a boolean'
