@@ -116,7 +116,7 @@ const RESERVED_HEADER_NAMES = new Set([
   'xdeployment-id'
 ])
 
-function snapshotCustomHeaders(value: unknown): Readonly<Record<string, string>> {
+function snapshotCustomHeaders(value: Record<string, string>): Readonly<Record<string, string>> {
   const supplied = snapshotOwnDataRecord(value, 'Arcade headers')
   const headers = Object.create(null) as Record<string, string>
   for (const [name, headerValue] of Object.entries(supplied)) {
