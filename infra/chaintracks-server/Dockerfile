@@ -1,6 +1,6 @@
 # Build stage
-# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+# Base version 24.22.3-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 WORKDIR /app
 
