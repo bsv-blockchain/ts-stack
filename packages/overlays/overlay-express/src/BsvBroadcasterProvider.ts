@@ -92,6 +92,49 @@ function optionalHeaderValue(value: unknown, label: string, maxBytes: number): s
   return value
 }
 
+function snapshotCallbackUrl(value: unknown, allowPrivate: boolean): string | undefined {
+  const callbackUrl = optionalHeaderValue(value, 'Arcade callback URL', 2048)
+  if (callbackUrl === undefined) return undefined
+  const parsed = new URL(callbackUrl)
+  if (
+    (parsed.protocol !== 'https:' && !(allowPrivate && parsed.protocol === 'http:')) ||
+    parsed.username !== '' ||
+    parsed.password !== '' ||
+    parsed.hash !== ''
+  ) {
+    throw new TypeError('Arcade callback URL must be credential-free HTTPS')
+  }
+  return parsed.toString()
+}
+
+const RESERVED_HEADER_NAMES = new Set([
+  'accept',
+  'authorization',
+  'content-type',
+  'x-callbacktoken',
+  'x-callbackurl',
+  'xdeployment-id'
+])
+
+function snapshotCustomHeaders(value: unknown): Readonly<Record<string, string>> {
+  const supplied = snapshotOwnDataRecord(value, 'Arcade headers')
+  const headers = Object.create(null) as Record<string, string>
+  for (const [name, headerValue] of Object.entries(supplied)) {
+    if (
+      !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(name) ||
+      RESERVED_HEADER_NAMES.has(name.toLowerCase())
+    ) {
+      throw new TypeError(`Arcade custom header name is invalid or reserved: ${name}`)
+    }
+    assertBoundedString(headerValue, `Arcade header ${name}`, 8192, true)
+    if (hasControlCharacters(headerValue)) {
+      throw new TypeError(`Arcade header ${name} must not contain control characters`)
+    }
+    headers[name] = headerValue
+  }
+  return Object.freeze(headers)
+}
+
 function snapshotBsvBroadcasterConfig(
   config: BsvBroadcasterProviderConfig
 ): Readonly<BsvBroadcasterProviderConfig> {
@@ -106,45 +149,8 @@ function snapshotBsvBroadcasterConfig(
   const callbackToken = optionalHeaderValue(value.callbackToken, 'Arcade callback token', 16 * 1024)
   const deploymentId = optionalHeaderValue(value.deploymentId, 'Arcade deployment ID', 256)
 
-  let callbackUrl = optionalHeaderValue(value.callbackUrl, 'Arcade callback URL', 2048)
-  if (callbackUrl !== undefined) {
-    const parsed = new URL(callbackUrl)
-    const allowPrivate = value.allowPrivateHosts ?? false
-    if (
-      (parsed.protocol !== 'https:' && !(allowPrivate && parsed.protocol === 'http:')) ||
-      parsed.username !== '' ||
-      parsed.password !== '' ||
-      parsed.hash !== ''
-    ) {
-      throw new TypeError('Arcade callback URL must be credential-free HTTPS')
-    }
-    callbackUrl = parsed.toString()
-  }
-
-  let headers: Record<string, string> | undefined
-  if (value.headers !== undefined) {
-    const supplied = snapshotOwnDataRecord(value.headers, 'Arcade headers')
-    headers = Object.create(null) as Record<string, string>
-    const reserved = new Set([
-      'accept',
-      'authorization',
-      'content-type',
-      'x-callbacktoken',
-      'x-callbackurl',
-      'xdeployment-id'
-    ])
-    for (const [name, headerValue] of Object.entries(supplied)) {
-      if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(name) || reserved.has(name.toLowerCase())) {
-        throw new TypeError(`Arcade custom header name is invalid or reserved: ${name}`)
-      }
-      assertBoundedString(headerValue, `Arcade header ${name}`, 8192, true)
-      if (hasControlCharacters(headerValue)) {
-        throw new TypeError(`Arcade header ${name} must not contain control characters`)
-      }
-      headers[name] = headerValue
-    }
-    headers = Object.freeze(headers)
-  }
+  const callbackUrl = snapshotCallbackUrl(value.callbackUrl, value.allowPrivateHosts ?? false)
+  const headers = value.headers === undefined ? undefined : snapshotCustomHeaders(value.headers)
 
   return Object.freeze({
     apiKey,
@@ -173,6 +179,31 @@ function parseDescription(data: unknown, fallback: string): string {
   return fallback
 }
 
+function assertResponseStatus(status: unknown): void {
+  if (typeof status === 'string') {
+    assertBoundedString(status, 'Arcade response status', 128)
+  } else if (
+    status !== undefined &&
+    !(typeof status === 'number' && Number.isSafeInteger(status))
+  ) {
+    throw new TypeError('Arcade response status is invalid')
+  }
+}
+
+function assertCompetingTxs(competingTxs: unknown): void {
+  if (!Array.isArray(competingTxs) || competingTxs.length > 100) {
+    throw new TypeError('Arcade response competingTxs is invalid')
+  }
+  const seen = new Set<string>()
+  for (const [index, txid] of competingTxs.entries()) {
+    assertHash(txid, `Arcade response competingTxs[${index}]`)
+    const canonical = txid.toLowerCase()
+    if (seen.has(canonical))
+      throw new TypeError('Arcade response contains duplicate competing txids')
+    seen.add(canonical)
+  }
+}
+
 function validateBsvBroadcasterResponse(
   value: unknown,
   expectedTxid?: string
@@ -190,29 +221,8 @@ function validateBsvBroadcasterResponse(
       assertBoundedString(response[field], `Arcade response ${field}`, 4096)
     }
   }
-  if (
-    response.status !== undefined &&
-    !(typeof response.status === 'number' && Number.isSafeInteger(response.status)) &&
-    typeof response.status !== 'string'
-  ) {
-    throw new TypeError('Arcade response status is invalid')
-  }
-  if (typeof response.status === 'string') {
-    assertBoundedString(response.status, 'Arcade response status', 128)
-  }
-  if (response.competingTxs !== undefined) {
-    if (!Array.isArray(response.competingTxs) || response.competingTxs.length > 100) {
-      throw new TypeError('Arcade response competingTxs is invalid')
-    }
-    const seen = new Set<string>()
-    for (const [index, txid] of response.competingTxs.entries()) {
-      assertHash(txid, `Arcade response competingTxs[${index}]`)
-      const canonical = txid.toLowerCase()
-      if (seen.has(canonical))
-        throw new TypeError('Arcade response contains duplicate competing txids')
-      seen.add(canonical)
-    }
-  }
+  assertResponseStatus(response.status)
+  if (response.competingTxs !== undefined) assertCompetingTxs(response.competingTxs)
   if (response.merklePath !== undefined) {
     assertBoundedHex(response.merklePath, 'Arcade response merklePath', 16 * 1024 * 1024)
   }

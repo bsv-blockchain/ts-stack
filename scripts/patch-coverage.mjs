@@ -56,6 +56,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // is a CLI that reads `process.argv` and branches on it, and excluding it by
   // shape would quietly drop real code out of this gate.
   /packages\/overlays\/overlay\/mod\.ts$/,
+  /packages\/overlays\/overlay-express\/mod\.ts$/,
   /packages\/overlays\/overlay\/src\/TopicManager\.ts$/,
   /packages\/overlays\/topics\/src\/index\.ts$/,
   /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/,
