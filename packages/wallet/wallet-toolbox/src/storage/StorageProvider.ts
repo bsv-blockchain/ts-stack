@@ -1,3 +1,13 @@
+import { promiseFromSync, awaitFromSync, awaitVoidFromSync, mapAwaitFromSync } from '../utility/promiseFromSync'
+import type { PrimaryHandoffControl, PrimaryHandoffControlOptions } from './PrimaryHandoffControl'
+import type { ReqHistoryNote } from '../sdk/types'
+import { StorageReqWrite } from './StorageReqWrite'
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
+import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
+import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
+import { runInSeries } from '../utility/runInSeries'
+import { findProofRecords, mapProofWork } from './methods/proofWork'
+import { snapshotSyncPage } from './sync/snapshotSyncPage'
 import { internalizeBrc197Action } from './methods/internalizeBrc197Action'
 import type { Brc197InternalizeActionArgs } from '../sdk/Brc197Internalization'
 import {
@@ -25,7 +35,7 @@ import {
   ChainTracker,
   Transaction
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from '../sdk/WalletScriptVerifier'
 import {
   classifyReqStatus,
   mergeInputsIntoBeef,
@@ -100,6 +110,7 @@ import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyO
 import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
 import {
   canonicalizeSyncProofIdentifiers,
+  markSyncProofReconciled,
   markSyncProofInsertOnly,
   sameSyncProof,
   validateSyncProof
@@ -158,6 +169,8 @@ type AbortActionStorageResult =
 const MAX_AUTH_PROOF_REQUEST_FALLBACK_ROWS = 10_000
 const MAX_AUTH_PROOF_REQUEST_TXIDS = 1_000
 
+import type { StorageActiveWrite, StorageStatusReviewArgs, StorageWriterAdmission } from './StorageActiveWrite'
+
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
   _services?: WalletServices
@@ -167,7 +180,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   maxRecursionDepth?: number
   readonly actionBatchMaxReservedOutputs: number
   readonly managedChangePolicy: ManagedChangePolicy
-  readonly scriptVerifier?: SpendVerifierInterface
+  readonly scriptVerifier?: WalletScriptVerifier
 
   /**
    * Safe lower bound for the proof audit. Built-in providers return the minimum
@@ -219,7 +232,61 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.scriptVerifier = options.scriptVerifier
   }
 
-  abstract reviewStatus(args: { agedLimit: Date; trx?: TrxToken }): Promise<{ log: string }>
+  /** @internal Capture once before preparation; supported providers fence each
+   * bounded SQL commit against this operation's actual durable primary epoch. */
+  activeWriteTransaction(_auth: AuthId): Promise<StorageActiveWrite> {
+    return promiseFromSync(() => {
+      return {
+        transaction: (scope, trx) => awaitFromSync(() => this.transaction(scope, trx)),
+        assertCurrent: () => promiseFromSync(() => {})
+      }
+    })
+  }
+
+  /** Internal scheduling only. Legacy providers keep serialized preparation. */
+  supportsPreparedWalletWrites(): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+  withPreparedWalletWrite<T>(
+    _auth: AuthId,
+    _admission: StorageWriterAdmission,
+    _operation: () => Promise<T>
+  ): Promise<T> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED('Provider requires serialized wallet preparation')
+    })
+  }
+
+  /** Existing DATA writers retain their original authority. Supported stores
+   * additionally serialize them with durable primary retirement. */
+  assertFinancialDataWriteAdmission(
+    _identityKey: string,
+    _sourceStorageIdentityKey: string | undefined,
+    _trx: TrxToken
+  ): Promise<void> {
+    return promiseFromSync(() => {})
+  }
+
+  /** DATA may update profile metadata without granting an enrolled primary. */
+  activeStorageFromSync(_userId: number, proposed: string, _trx?: TrxToken): Promise<string> {
+    return promiseFromSync(() => {
+      return proposed
+    })
+  }
+
+  /** Explicit authenticated primary-control capability, separate from copy DATA. */
+  getPrimaryHandoffControl(_options: PrimaryHandoffControlOptions = {}): Promise<PrimaryHandoffControl | undefined> {
+    return promiseFromSync(() => {
+      return undefined
+    })
+  }
+
+  /** Scheduling negotiation only; each actual write still captures/checks its role. */
+  supportsPrimaryWriteFences(): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
+  abstract reviewStatus(args: StorageStatusReviewArgs): Promise<{ log: string }>
 
   abstract purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults>
 
@@ -254,13 +321,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   /** Return unreserved wallet-managed outputs eligible for automatic funding. */
-  async findAvailableManagedChangeInputs(
+  findAvailableManagedChangeInputs(
     userId: number,
     basketId: number,
     excludeSending: boolean,
     trx?: TrxToken
   ): Promise<TableOutput[]> {
-    return await availableManagedChange(this, userId, basketId, excludeSending, trx)
+    return awaitFromSync(() => availableManagedChange(this, userId, basketId, excludeSending, trx))
   }
 
   /** Read only the fields needed by the in-memory funding planner. */
@@ -365,59 +432,87 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   abstract getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]>
 
   abstract listActions(auth: AuthId, args: ValidListActionsArgs): Promise<ListActionsResult>
-  abstract listOutputs(auth: AuthId, args: ValidListOutputsArgs): Promise<ListOutputsResult>
+  abstract listOutputs(
+    auth: AuthId,
+    args: ValidListOutputsArgs,
+    admission?: StorageWriterAdmission
+  ): Promise<ListOutputsResult>
 
   abstract countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number>
 
-  async insertActionBatch(_batch: TableActionBatch, _trx?: TrxToken): Promise<number> {
-    throw new WERR_NOT_IMPLEMENTED()
+  insertActionBatch(_batch: TableActionBatch, _trx?: TrxToken): Promise<number> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async findActionBatch(_userId: number, _batchId: string, _trx?: TrxToken): Promise<TableActionBatch | undefined> {
-    throw new WERR_NOT_IMPLEMENTED()
+  findActionBatch(_userId: number, _batchId: string, _trx?: TrxToken): Promise<TableActionBatch | undefined> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
   async findActionBatchForUpdate(
     userId: number,
     batchId: string,
-    trx: TrxToken
+    trx: TrxToken,
+    _leaseOnly = false
   ): Promise<TableActionBatch | undefined> {
     return await this.findActionBatch(userId, batchId, trx)
   }
 
-  async findExpiredActionBatches(_now: Date, _trx?: TrxToken): Promise<TableActionBatch[]> {
-    throw new WERR_NOT_IMPLEMENTED()
+  findExpiredActionBatches(_now: Date, _trx?: TrxToken): Promise<TableActionBatch[]> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async updateActionBatch(
-    _actionBatchId: number,
-    _update: Partial<TableActionBatch>,
-    _trx?: TrxToken
-  ): Promise<number> {
-    throw new WERR_NOT_IMPLEMENTED()
+  /** Metadata-only expiry candidates where supported. Older providers retain
+   * their original scan through this serialized compatibility iterator. */
+  async *expiredActionBatchCandidates(now: Date): AsyncIterable<Pick<TableActionBatch, 'userId' | 'batchId'>> {
+    for (const row of await this.findExpiredActionBatches(now)) yield { userId: row.userId, batchId: row.batchId }
   }
-  async deleteActionBatch(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
-    throw new WERR_NOT_IMPLEMENTED()
+  updateActionBatch(_actionBatchId: number, _update: Partial<TableActionBatch>, _trx?: TrxToken): Promise<number> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async reserveActionBatchOutputs(_reservations: TableActionBatchOutput[], _trx?: TrxToken): Promise<void> {
-    throw new WERR_NOT_IMPLEMENTED()
+  deleteActionBatch(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
+  }
+  reserveActionBatchOutputs(_reservations: TableActionBatchOutput[], _trx?: TrxToken): Promise<void> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
 
-  async findActionBatchOutputIds(_actionBatchId: number, _trx?: TrxToken): Promise<number[]> {
-    throw new WERR_NOT_IMPLEMENTED()
+  findActionBatchOutputIds(_actionBatchId: number, _trx?: TrxToken): Promise<number[]> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async findReservedActionBatchOutputIds(_outputIds: number[], _trx?: TrxToken): Promise<number[]> {
-    return []
+  findReservedActionBatchOutputIds(_outputIds: number[], _trx?: TrxToken): Promise<number[]> {
+    return promiseFromSync(() => {
+      return []
+    })
   }
-  async deleteActionBatchOutputReservations(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
-    throw new WERR_NOT_IMPLEMENTED()
+  deleteActionBatchOutputReservations(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async putActionBatchBlobRecord(_blob: TableActionBatchBlob, _trx?: TrxToken): Promise<void> {
-    throw new WERR_NOT_IMPLEMENTED()
+  putActionBatchBlobRecord(_blob: TableActionBatchBlob, _trx?: TrxToken): Promise<void> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
-  async findActionBatchBlobRecord(
+  findActionBatchBlobRecord(
     _actionBatchId: number,
     _digest: string,
     _trx?: TrxToken
   ): Promise<TableActionBatchBlob | undefined> {
-    throw new WERR_NOT_IMPLEMENTED()
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
   async findActionBatchBlobRecords(
     actionBatchId: number,
@@ -425,24 +520,35 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx?: TrxToken
   ): Promise<TableActionBatchBlob[]> {
     return (
-      await Promise.all(digests.map(async digest => await this.findActionBatchBlobRecord(actionBatchId, digest, trx)))
+      await Promise.all(
+        digests.map(digest => awaitFromSync(() => this.findActionBatchBlobRecord(actionBatchId, digest, trx)))
+      )
     ).filter((blob): blob is TableActionBatchBlob => blob != null)
   }
   async putActionBatchBlobRecords(blobs: TableActionBatchBlob[], trx?: TrxToken): Promise<void> {
     for (const blob of blobs) await this.putActionBatchBlobRecord(blob, trx)
   }
 
-  async deleteActionBatchBlobRecords(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
-    throw new WERR_NOT_IMPLEMENTED()
+  deleteActionBatchBlobRecords(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
+    return promiseFromSync(() => {
+      throw new WERR_NOT_IMPLEMENTED()
+    })
   }
 
-  async getCapabilities(): Promise<StorageCapabilities> {
-    return {
-      ...(this.supportsNoSendExpiryPersistence() ? { brc177NoSendExpiry: { version: 1 as const } } : {}),
-      ...(this.supportsActionBatchPersistence()
-        ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
-        : {})
-    }
+  getCapabilities(): Promise<StorageCapabilities> {
+    return promiseFromSync(() => {
+      return {
+        ...(this.supportsStorageAccessScheduling()
+          ? {
+              storageAccess: { version: 1 as const, concurrentReads: true, atomicSyncPages: true }
+            }
+          : {}),
+        ...(this.supportsNoSendExpiryPersistence() ? { brc177NoSendExpiry: { version: 1 as const } } : {}),
+        ...(this.supportsActionBatchPersistence()
+          ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
+          : {})
+      }
+    })
   }
 
   /**
@@ -484,23 +590,27 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await this.findProvenTxReqs({ ...args, txids: requestedTxids })
   }
 
-  async prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
-    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
-    if (!this.supportsNoSendExpiryPersistence()) {
-      throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
-    }
-    return await prepareNoSendExpiry(this, auth, args)
+  prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
+    return awaitFromSync(() => {
+      if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+      if (!this.supportsNoSendExpiryPersistence()) {
+        throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+      }
+      return prepareNoSendExpiry(this, auth, args)
+    })
   }
 
-  async activateNoSendExpiry(
+  activateNoSendExpiry(
     auth: AuthId,
     args: StorageActivateNoSendExpiryArgs
   ): Promise<StorageActivateNoSendExpiryResult> {
-    if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
-    if (!this.supportsNoSendExpiryPersistence()) {
-      throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
-    }
-    return await activateNoSendExpiry(this, auth, args)
+    return awaitFromSync(() => {
+      if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+      if (!this.supportsNoSendExpiryPersistence()) {
+        throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
+      }
+      return activateNoSendExpiry(this, auth, args)
+    })
   }
 
   async armNoSendExpiry(auth: AuthId, args: StorageArmNoSendExpiryArgs): Promise<void> {
@@ -515,8 +625,60 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return false
   }
 
+  /** Custom providers retain serialized manager access until explicitly supported. */
+  protected supportsStorageAccessScheduling(): boolean {
+    return false
+  }
+
+  /** Local provider contract only; this does not advertise a remote export RPC. */
+  supportsReadSnapshot(): boolean {
+    return false
+  }
+
+  /**
+   * Capture related rows from one database read view. The callback must use
+   * this token for every query and must not perform network or file I/O.
+   * Custom providers must implement their actual isolation guarantee rather
+   * than inheriting an ordinary transaction with unknown isolation.
+   */
+  readSnapshot<T>(_read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    return Promise.reject(
+      new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
+    )
+  }
+
+  /** Local transaction retention only; no remote/profile export capability is implied. */
+  supportsRetainedReadSnapshot(): boolean {
+    return false
+  }
+
+  /** Older and auto-closing transaction providers must explicitly refuse retention. */
+  openReadSnapshot(_options?: RetainedReadSnapshotOptions): Promise<RetainedReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Retained read snapshots are not supported by this provider'))
+  }
+
+  /** Local, profile-bound packed keyset pages; never implied by ordinary sync support. */
+  supportsWalletReadSnapshot(): boolean {
+    return false
+  }
+
+  openWalletReadSnapshot(_identityKey: string, _options: WalletReadSnapshotOptions = {}): Promise<WalletReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Wallet read snapshot pages are not supported by this provider'))
+  }
+
+  /** Local versioned snapshot merge capability; older providers keep serialized sync. */
+  getSnapshotSync(): SnapshotSyncStorage | undefined {
+    return undefined
+  }
+
   protected supportsActionBatchPersistence(): boolean {
     return false
+  }
+
+  /** @internal Logical-lease providers need no service-wide physical cleanup
+   * during a foreground batch operation. Older adapters keep that requirement. */
+  requiresActionBatchReservationCleanup(): boolean {
+    return this.requiresActionBatchCleanupBeforeCreateAction()
   }
 
   /** Custom providers may require physical expiry cleanup before reservations are queried. */
@@ -524,46 +686,48 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return true
   }
 
-  async beginActionBatch(auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
-    if (!this.supportsActionBatchPersistence())
-      throw new WERR_NOT_IMPLEMENTED('actionBatch capability is not available')
-    return await beginBatch(this, auth, args)
+  beginActionBatch(auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
+    return awaitFromSync(() => {
+      if (!this.supportsActionBatchPersistence())
+        throw new WERR_NOT_IMPLEMENTED('actionBatch capability is not available')
+      return beginBatch(this, auth, args)
+    })
   }
 
-  async extendActionBatch(auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
-    return await extendBatch(this, auth, args)
+  extendActionBatch(auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
+    return awaitFromSync(() => extendBatch(this, auth, args))
   }
 
-  async renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
-    return await renewBatch(this, auth, batchId)
+  renewActionBatch(auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
+    return awaitFromSync(() => renewBatch(this, auth, batchId))
   }
 
-  async resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
-    return await resumeBatch(this, auth, args)
+  resumeActionBatch(auth: AuthId, args: ResumeActionBatchArgs): Promise<ResumeActionBatchResult> {
+    return awaitFromSync(() => resumeBatch(this, auth, args))
   }
 
-  async prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {
-    return await prepareBatchCommit(this, auth, manifest)
+  prepareActionBatchCommit(auth: AuthId, manifest: ActionBatchManifest): Promise<PrepareActionBatchCommitResult> {
+    return awaitFromSync(() => prepareBatchCommit(this, auth, manifest))
   }
 
-  async putActionBatchBlob(auth: AuthId, args: PutActionBatchBlobArgs): Promise<void> {
-    return await putBatchBlob(this, auth, args)
+  putActionBatchBlob(auth: AuthId, args: PutActionBatchBlobArgs): Promise<void> {
+    return awaitFromSync(() => putBatchBlob(this, auth, args))
   }
 
-  async putActionBatchPack(auth: AuthId, args: PutActionBatchPackArgs): Promise<void> {
-    return await putBatchPack(this, auth, args)
+  putActionBatchPack(auth: AuthId, args: PutActionBatchPackArgs): Promise<void> {
+    return awaitFromSync(() => putBatchPack(this, auth, args))
   }
 
-  async commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
-    return await commitBatch(this, auth, manifest)
+  commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
+    return awaitFromSync(() => commitBatch(this, auth, manifest))
   }
 
-  async commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
-    return await commitBatchByDigest(this, auth, args)
+  commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
+    return awaitFromSync(() => commitBatchByDigest(this, auth, args))
   }
 
-  async abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
-    return await abortBatch(this, auth, batchId)
+  abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
+    return awaitFromSync(() => abortBatch(this, auth, batchId))
   }
 
   async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
@@ -682,7 +846,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       .slice(0, limit)
       .map(([userId]) => userId)
 
-    const users = await Promise.all(sortedUserIds.map(async userId => await this.findUserById(userId, trx)))
+    const users = await Promise.all(sortedUserIds.map(userId => awaitFromSync(() => this.findUserById(userId, trx))))
     return users.filter((user): user is TableUser => user != null)
   }
 
@@ -800,6 +964,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
     if (auth.userId == null) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
 
+    // Preserve the established BRC-177 policy error before general role
+    // admission. This read grants nothing; actual mutation still uses the
+    // captured database epoch and revalidates the row in its SQL writer.
+    if (auth.isActive !== true) {
+      const initial = await this.findAbortableTransaction(auth.userId, args)
+      if (initial.tx.noSendExpiryState != null)
+        throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+    }
+    const write = await this.activeWriteTransaction(auth)
     const userId = auth.userId
     let r: AbortActionStorageResult | undefined
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -808,7 +981,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       // bind the observation to the exact row and txid re-read below.
       const preflight = await this.findAbortableTransaction(userId, args)
       const chainObservation = await this.observeAbortChainProtection(preflight.tx)
-      r = await this.transaction(async trx => {
+      r = await write.transaction(async trx => {
         const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
         if (tx.noSendExpiryState != null && auth.isActive !== true) {
           throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
@@ -953,8 +1126,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return r
   }
 
-  async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
-    return await internalizeAction(this, auth, args)
+  internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+    return awaitFromSync(() => internalizeAction(this, auth, args))
   }
 
   /** Explicit local profile; ordinary provider and remote methods are unchanged. */
@@ -1031,14 +1204,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (rawTx == null || beef == null) throw new WERR_INTERNAL('req rawTx and beef must be valid.')
     mergeToBeef.mergeRawTx(asArray(rawTx))
     mergeToBeef.mergeBeef(asArray(beef))
-    await mergeInputsIntoBeef(
-      asArray(rawTx),
-      mergeToBeef,
-      knownTxids,
-      trx,
-      async (txid, beef, _trust, knownTxids, trx) => {
-        await this.getValidBeefForKnownTxid(txid, beef, undefined, knownTxids, trx)
-      }
+    await mergeInputsIntoBeef(asArray(rawTx), mergeToBeef, knownTxids, trx, (txid, beef, _trust, knownTxids, trx) =>
+      awaitVoidFromSync(() => this.getValidBeefForKnownTxid(txid, beef, undefined, knownTxids, trx))
     )
   }
 
@@ -1222,21 +1389,29 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await createAction(this, auth, args)
   }
 
-  async processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
-    if (auth.userId == null) throw new WERR_UNAUTHORIZED()
-    return await processAction(this, auth, args)
+  processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
+    return awaitFromSync(() => {
+      if (auth.userId == null) throw new WERR_UNAUTHORIZED()
+      return processAction(this, auth, args)
+    })
   }
 
-  async attemptToPostReqsToNetwork(
+  /** Custom providers may opt into atomic canonical-proof repair; default is no mutation. */
+  compareAndSetProvenTxProof(_expected: TableProvenTx, _replacement: TableProvenTx, _trx?: TrxToken): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
+  attemptToPostReqsToNetwork(
     reqs: EntityProvenTxReq[],
     trx?: TrxToken,
-    logger?: WalletLoggerInterface
+    logger?: WalletLoggerInterface,
+    capturedWrites?: StorageReqWrite
   ): Promise<PostReqsToNetworkResult> {
-    return await attemptToPostReqsToNetwork(this, reqs, trx, logger)
+    return awaitFromSync(() => attemptToPostReqsToNetwork(this, reqs, trx, logger, capturedWrites))
   }
 
-  async listCertificates(auth: AuthId, args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
-    return await listCertificates(this, auth, args)
+  listCertificates(auth: AuthId, args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+    return awaitFromSync(() => listCertificates(this, auth, args))
   }
 
   async verifyKnownValidTransaction(txid: string, trx?: TrxToken): Promise<boolean> {
@@ -1258,7 +1433,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param requiredLevels
    * @returns
    */
-  async getValidBeefForKnownTxid(
+  getValidBeefForKnownTxid(
     txid: string,
     mergeToBeef?: Beef,
     trustSelf?: TrustSelf,
@@ -1266,9 +1441,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx?: TrxToken,
     requiredLevels?: number
   ): Promise<Beef> {
-    const beef = await this.getValidBeefForTxid(txid, mergeToBeef, trustSelf, knownTxids, trx, requiredLevels)
-    if (beef == null) throw new WERR_INVALID_PARAMETER('txid', `known to storage. ${txid} is not known.`)
-    return beef
+    return mapAwaitFromSync(
+      () => this.getValidBeefForTxid(txid, mergeToBeef, trustSelf, knownTxids, trx, requiredLevels),
+      beef => {
+        if (beef == null) throw new WERR_INVALID_PARAMETER('txid', `known to storage. ${txid} is not known.`)
+        return beef
+      }
+    )
   }
 
   /**
@@ -1361,21 +1540,26 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         knownTxids,
         trx,
         requiredLevels,
-        async (sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels) => {
-          await this.getValidBeefForKnownTxid(sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels)
-        }
+        (sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels) =>
+          awaitVoidFromSync(() =>
+            this.getValidBeefForKnownTxid(sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels)
+          )
       )
     }
     return beef
   }
 
-  async getBeefForTransaction(txid: string, options: StorageGetBeefOptions): Promise<Beef> {
-    const beef = await getBeefForTransaction(this, txid, options)
-    return beef
+  getBeefForTransaction(txid: string, options: StorageGetBeefOptions): Promise<Beef> {
+    return mapAwaitFromSync(
+      () => getBeefForTransaction(this, txid, options),
+      beef => {
+        return beef
+      }
+    )
   }
 
-  async getBeefForTransactions(txids: string[], options: StorageGetBeefOptions): Promise<Beef> {
-    return await getBeefForTransactions(this, txids, options)
+  getBeefForTransactions(txids: string[], options: StorageGetBeefOptions): Promise<Beef> {
+    return awaitFromSync(() => getBeefForTransactions(this, txids, options))
   }
 
   async findMonitorEventById(id: number, trx?: TrxToken): Promise<TableMonitorEvent | undefined> {
@@ -1384,6 +1568,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
     // Validate an existing reference, including historical types; acquisition remains strict.
+    const write =
+      typeof this.activeWriteTransaction === 'function' ? await this.activeWriteTransaction(auth) : undefined
     const vargs = validateRelinquishCertificateArgs(args)
     const cert = verifyOne(
       await this.findCertificates({
@@ -1395,15 +1581,25 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         }
       })
     )
-    return await this.updateCertificate(cert.certificateId, {
-      isDeleted: true
-    })
+    if (write == null) return await this.updateCertificate(cert.certificateId, { isDeleted: true })
+    return await write.transaction(trx =>
+      awaitFromSync(() =>
+        this.updateCertificate(
+          cert.certificateId,
+          {
+            isDeleted: true
+          },
+          trx
+        )
+      )
+    )
   }
 
   async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
+    const write = await this.activeWriteTransaction(auth)
     const vargs = validateRelinquishOutputArgs(args)
     const { txid, vout } = parseWalletOutpoint(vargs.output)
-    return await this.transaction(async trx => {
+    return await write.transaction(async trx => {
       // Keep existing "not found" behavior for a missing output.
       const output = verifyOne(await this.findOutputs({ partial: { userId: auth.userId, txid, vout }, trx }))
       // Confirm the output actually belongs to the caller-claimed basket before
@@ -1421,7 +1617,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     })
   }
 
-  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+  protected async prepareSyncProofs(chunk: SyncChunk): Promise<Map<string, TableProvenTx>> {
+    const expected = new Map<string, TableProvenTx>()
     // Canonicalize before text-key lookup in every sync mode. Direct
     // backup/conflict sync retains its established trust for new proof rows,
     // but may replace an existing global proof only after active-chain
@@ -1429,63 +1626,112 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const incomingProofs = chunk.provenTxs ?? []
     for (const proof of incomingProofs) canonicalizeSyncProofIdentifiers(proof)
     if (incomingProofs.length > 0) {
-      const existingProofs = await this.findProvenTxs({
-        partial: {},
-        txids: [...new Set(incomingProofs.map(proof => proof.txid))]
-      })
+      const existingProofs = await findProofRecords(
+        this,
+        incomingProofs.map(proof => proof.txid)
+      )
       const existingByTxid = new Map(existingProofs.map(proof => [proof.txid.toLowerCase(), proof]))
-      for (const proof of incomingProofs) {
+      await mapProofWork(incomingProofs, async proof => {
         const existing = existingByTxid.get(proof.txid)
         if (existing == null) markSyncProofInsertOnly(proof)
-        else if (!sameSyncProof(existing, proof)) await validateSyncProof(this, proof)
-      }
+        else if (!sameSyncProof(existing, proof)) {
+          await validateSyncProof(this, proof)
+          markSyncProofReconciled(proof)
+          expected.set(proof.txid, existing)
+        }
+      })
     }
 
-    // A sync page may contain hundreds of related entities. Keep their lookups,
-    // inserts, ID remapping, and sync-state checkpoint in one transaction. This
-    // avoids a transaction startup/commit for every record (especially costly
-    // in IndexedDB) and makes the page checkpoint atomic with its data changes.
-    return await this.transaction(async trx => {
-      const user = verifyTruthy(
-        verifyOneOrNone(await this.findUsers({ partial: { identityKey: args.identityKey }, trx }))
-      )
-      const ss = new EntitySyncState(
-        verifyOne(
-          await this.findSyncStates({
-            partial:
-              args.syncStateId == null
-                ? {
-                    storageIdentityKey: args.fromStorageIdentityKey,
-                    userId: user.userId
-                  }
-                : {
-                    syncStateId: args.syncStateId,
-                    storageIdentityKey: args.fromStorageIdentityKey,
-                    userId: user.userId
-                  },
-            trx
-          })
+    return expected
+  }
+
+  /** Local-only preparation: detach and validate proof I/O before taking manager write ownership. */
+  async prepareSyncChunk(
+    args: RequestSyncChunkArgs,
+    chunk: SyncChunk
+  ): Promise<(trx?: TrxToken) => Promise<ProcessSyncChunkResult>> {
+    const snapshot = snapshotSyncPage(args, chunk)
+    const expected = await this.prepareSyncProofs(snapshot.chunk)
+    let consumed = false
+    return trx =>
+      awaitFromSync(() => {
+        if (consumed)
+          throw new WERR_INVALID_OPERATION('Prepared sync page already consumed; resume from its durable checkpoint.')
+        consumed = true
+        return this.commitSyncChunk(snapshot.args, snapshot.chunk, expected, trx)
+      })
+  }
+
+  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+    return await this.commitSyncChunk(args, chunk, await this.prepareSyncProofs(chunk))
+  }
+
+  private commitSyncChunk(
+    args: RequestSyncChunkArgs,
+    chunk: SyncChunk,
+    expected: Map<string, TableProvenTx>,
+    transaction?: TrxToken
+  ): Promise<ProcessSyncChunkResult> {
+    return awaitFromSync(() => {
+      // A sync page may contain hundreds of related entities. Keep their lookups,
+      // inserts, ID remapping, and sync-state checkpoint in one transaction. This
+      // avoids a transaction startup/commit for every record (especially costly
+      // in IndexedDB) and makes the page checkpoint atomic with its data changes.
+      return this.transaction(async trx => {
+        await this.assertFinancialDataWriteAdmission(args.identityKey, args.fromStorageIdentityKey, trx)
+        // Serial sorted reads retain deterministic lock ordering on the shared transaction.
+        await runInSeries(
+          [...expected.values()].sort((left, right) => left.txid.localeCompare(right.txid)),
+          async previous => {
+            const current = verifyOneOrNone(await this.findProvenTxs({ partial: { txid: previous.txid }, trx }))
+            if (current == null || !sameSyncProof(current, previous)) {
+              throw new WERR_INVALID_OPERATION(
+                'Proof changed during sync preparation; resume from the durable checkpoint.'
+              )
+            }
+          }
         )
-      )
-      if (args.requireMatchingCheckpoint === true) {
-        const checkpoint = ss.makeSyncCheckpoint()
-        const sameSince =
-          (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
-          (args.since == null ? undefined : new Date(args.since).getTime())
-        if (
-          !sameSince ||
-          checkpoint.offsets.length !== args.offsets.length ||
-          checkpoint.offsets.some(
-            (entry, index) => entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset
+        const user = verifyTruthy(
+          verifyOneOrNone(await this.findUsers({ partial: { identityKey: args.identityKey }, trx }))
+        )
+        const ss = new EntitySyncState(
+          verifyOne(
+            await this.findSyncStates({
+              partial:
+                args.syncStateId == null
+                  ? {
+                      storageIdentityKey: args.fromStorageIdentityKey,
+                      userId: user.userId
+                    }
+                  : {
+                      syncStateId: args.syncStateId,
+                      storageIdentityKey: args.fromStorageIdentityKey,
+                      userId: user.userId
+                    },
+              trx
+            })
           )
-        ) {
-          throw new WERR_INVALID_OPERATION(
-            'Wallet sync checkpoint changed; resume from its durable state before retrying'
-          )
+        )
+        if (args.requireMatchingCheckpoint === true) {
+          const checkpoint = ss.makeSyncCheckpoint()
+          const sameSince =
+            (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
+            (args.since == null ? undefined : new Date(args.since).getTime())
+          if (
+            !sameSince ||
+            checkpoint.offsets.length !== args.offsets.length ||
+            checkpoint.offsets.some(
+              (entry, index) => entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset
+            )
+          ) {
+            throw new WERR_INVALID_OPERATION(
+              'Wallet sync checkpoint changed; resume from its durable state before retrying'
+            )
+          }
         }
-      }
-      const result = await ss.processSyncChunk(this, args, chunk, trx)
-      return args.includeNextCheckpoint === true ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() } : result
+        const result = await ss.processSyncChunk(this, args, chunk, trx)
+        return args.includeNextCheckpoint === true ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() } : result
+      }, transaction)
     })
   }
 
@@ -1504,47 +1750,44 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    */
   async updateProvenTxReqWithNewProvenTx(
     args: UpdateProvenTxReqWithNewProvenTxArgs,
-    validatedCandidate?: TableProvenTx
+    validatedCandidate?: TableProvenTx,
+    capturedWrites?: StorageReqWrite
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
     const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
     if (req.txid.toLowerCase() !== args.txid.toLowerCase()) {
       throw new WERR_INVALID_PARAMETER('args.txid', 'the transaction id of the selected proof request')
     }
-    let proven: EntityProvenTx
-    if (req.provenTxId != null && req.provenTxId > 0) {
-      // Someone beat us to it, grab what we need for results...
-      proven = new EntityProvenTx(verifyOne(await this.findProvenTxs({ partial: { txid: args.txid } })))
-      if (req.status !== 'completed' || req.provenTxId !== proven.provenTxId) {
-        req.status = 'completed'
-        req.provenTxId = proven.provenTxId
-        await req.updateStorageDynamicProperties(this)
-      }
-    } else {
-      const candidate = validatedCandidate ?? {
-        created_at: new Date(),
-        updated_at: new Date(),
-        provenTxId: 0,
-        txid: args.txid,
-        height: args.height,
-        index: args.index,
-        merklePath: args.merklePath,
-        rawTx: req.rawTx,
-        blockHash: args.blockHash,
-        merkleRoot: args.merkleRoot
-      }
-      proven = await this.transaction(async trx => {
-        const { proven: api } = await this.findOrInsertProvenTx(candidate, trx)
-        const found = new EntityProvenTx(api)
-        if (req.status !== 'completed' || req.provenTxId !== found.provenTxId) {
-          req.status = 'completed'
-          req.provenTxId = found.provenTxId
-          await req.updateStorageDynamicProperties(this, trx)
+    const writes = capturedWrites ?? (await StorageReqWrite.capture(this, [req.txid]))
+    writes.assertProvider(this)
+    await writes.assertCurrent()
+    let proven: EntityProvenTx | undefined
+    const applied = await writes.request(req, async (current, trx) => {
+      let api: TableProvenTx
+      if (current.provenTxId != null && current.provenTxId > 0) {
+        api = verifyOne(await this.findProvenTxs({ partial: { txid: args.txid }, trx }))
+      } else {
+        const candidate = validatedCandidate ?? {
+          created_at: new Date(),
+          updated_at: new Date(),
+          provenTxId: 0,
+          txid: args.txid,
+          height: args.height,
+          index: args.index,
+          merklePath: args.merklePath,
+          rawTx: current.rawTx,
+          blockHash: args.blockHash,
+          merkleRoot: args.merkleRoot
         }
-        return found
-      })
-    }
-
-    await this.reconcileProvenTxReqTransactions(req, proven)
+        api = (await this.findOrInsertProvenTx(candidate, trx)).proven
+      }
+      proven = new EntityProvenTx(api)
+      current.status = 'completed'
+      current.provenTxId = proven.provenTxId
+      // Completion remains pending until all actual financial copies agree.
+      current.notified = false
+    })
+    if (!applied || proven == null) throw new WERR_NOT_ACTIVE('Proof completion lost its captured primary profiles')
+    await this.reconcileProvenTxReqTransactions(req, proven, writes)
 
     const r: UpdateProvenTxReqWithNewProvenTxResult = {
       status: req.status,
@@ -1561,6 +1804,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     auth: AuthId,
     args: UpdateProvenTxReqWithNewProvenTxArgs
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
+    const write =
+      typeof this.activeWriteTransaction === 'function' ? await this.activeWriteTransaction(auth) : undefined
     const userId = verifyId(auth.userId)
     const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
     if (req.txid.toLowerCase() !== args.txid.toLowerCase()) {
@@ -1584,8 +1829,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       blockHash: args.blockHash,
       merkleRoot: args.merkleRoot
     }
+    const writes = write == null ? undefined : await StorageReqWrite.capture(this, [req.txid], { userId, write })
     await validateSyncProof(this, candidate)
-    return await this.updateProvenTxReqWithNewProvenTx(args, candidate)
+    return await this.updateProvenTxReqWithNewProvenTx(args, candidate, writes)
   }
 
   /**
@@ -1595,13 +1841,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * This is called by TaskReviewStatus so a completed request with
    * `notified = false` is retried and can become eligible for normal purge.
    */
-  async reconcileCompletedProvenTxReqs(): Promise<{ log: string }> {
+  async reconcileCompletedProvenTxReqs(admission?: StorageWriterAdmission): Promise<{ log: string }> {
     let log = ''
-    const reqs = await this.findProvenTxReqs({
-      partial: { status: 'completed', notified: false }
-    })
-
-    for (const reqApi of reqs) {
+    for await (const reqApi of this.completedProofRequests()) {
       const req = new EntityProvenTxReq(reqApi)
       if (req.provenTxId == null || req.provenTxId <= 0) {
         log += `completed req ${req.id} cannot reconcile without provenTxId\n`
@@ -1618,11 +1860,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         continue
       }
 
-      await this.reconcileProvenTxReqTransactions(req, new EntityProvenTx(provenApi))
+      const writes = await StorageReqWrite.capture(this, [req.txid], undefined, admission)
+      await this.reconcileProvenTxReqTransactions(req, new EntityProvenTx(provenApi), writes)
       if (req.notified) log += `completed req ${req.id} transaction notifications reconciled\n`
     }
 
     return { log }
+  }
+
+  /** Older providers keep their existing serialized scan. SQL providers can
+   * override with a metadata keyset, hydrating one bounded request at a time. */
+  protected async *completedProofRequests(): AsyncIterable<TableProvenTxReq> {
+    for (const req of await this.findProvenTxReqs({ partial: { status: 'completed', notified: false } })) yield req
   }
 
   private async prepareProofRecoveryOutputVerdicts(
@@ -1747,112 +1996,90 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async unfailTransactionsForProof(
     req: EntityProvenTxReq,
     indent = 0,
-    requestUpdate?: Pick<TableProvenTxReqDynamics, 'status' | 'attempts'>
+    requestUpdate?: Pick<TableProvenTxReqDynamics, 'status' | 'attempts'>,
+    capturedWrites?: StorageReqWrite
   ): Promise<string> {
-    const transactions = await this.findTransactions({
-      partial: { txid: req.txid },
-      noRawTx: true
-    })
-    const transactionsToRepair = transactions.filter(
-      transaction => requestUpdate != null || transaction.status === 'failed'
-    )
-    // Proof completion is the hot path. If no failed transaction needs repair,
-    // notification reconciliation below will perform the required atomic work;
-    // avoid an otherwise empty refresh/write transaction here.
+    const writes = capturedWrites ?? (await StorageReqWrite.capture(this, [req.txid]))
+    writes.assertProvider(this)
+    await writes.assertCurrent()
+    const transactions = await this.findTransactions({ partial: { txid: req.txid }, noRawTx: true })
+    const transactionsToRepair = transactions.filter(tx => requestUpdate != null || tx.status === 'failed')
     if (transactionsToRepair.length === 0 && requestUpdate == null) return ''
-
-    // Refresh only after deciding recovery is required, while the caller has
-    // not yet applied an intended request transition. TaskUnFail passes that
-    // transition separately so it is persisted atomically with bookkeeping.
-    await req.refreshFromStorage(this)
-    const preparedTransactionIds = new Set(transactionsToRepair.map(transaction => transaction.transactionId))
-    const bsvtx = transactionsToRepair.length > 0 ? Transaction.fromBinary(req.rawTx) : undefined
-
-    // UTXO checks can call external services. Complete every check before
-    // opening the write transaction so network latency never holds DB locks.
+    const preparedTransactionIds = new Set(transactionsToRepair.map(tx => tx.transactionId))
+    const bsvtx = transactionsToRepair.length ? Transaction.fromBinary(req.rawTx) : undefined
     const outputVerdicts = await this.prepareProofRecoveryOutputVerdicts(transactionsToRepair)
-
-    return await this.transaction(async trx => {
-      let log = ''
-      await req.refreshFromStorage(this, trx)
-      const currentTransactions = await this.findTransactions({
-        partial: { txid: req.txid },
-        noRawTx: true,
-        trx
-      })
-      const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
-
-      if (requestUpdate != null) {
-        req.status = requestUpdate.status
-        req.attempts = requestUpdate.attempts
+    const logs = await writes.forEachUser(async (userId, trx) => {
+      let committedLog = ''
+      const current = await this.findTransactions({ partial: { txid: req.txid, userId }, noRawTx: true, trx })
+      for (const tx of current) {
+        if (tx.provenTxId != null) continue
+        if (requestUpdate == null && tx.status !== 'failed') continue
+        committedLog += await this.restoreTransactionForProof(
+          tx,
+          bsvtx,
+          preparedTransactionIds,
+          outputVerdicts,
+          indent,
+          trx
+        )
       }
-
-      for (const tx of currentTransactions) {
-        if (!knownNotificationIds.has(tx.transactionId)) {
-          req.addNotifyTransactionId(tx.transactionId)
-          knownNotificationIds.add(tx.transactionId)
-        }
-        const shouldRepair = requestUpdate != null || tx.status === 'failed'
-        if (!shouldRepair) continue
-        log += await this.restoreTransactionForProof(tx, bsvtx, preparedTransactionIds, outputVerdicts, indent, trx)
-      }
-
-      await req.updateStorageDynamicProperties(this, trx)
-      return log
+      return committedLog
     })
+    const recorded = await writes.request(req, async (current, trx) => {
+      if (requestUpdate != null && current.status !== 'completed') {
+        current.status = requestUpdate.status
+        current.attempts = requestUpdate.attempts
+      }
+      const rows = await this.findTransactions({ partial: { txid: req.txid }, noRawTx: true, trx })
+      for (const tx of rows) current.addNotifyTransactionId(tx.transactionId)
+    })
+    if (!recorded) throw new WERR_NOT_ACTIVE('Proof recovery lost its captured primary profiles')
+    return logs.join('')
   }
 
-  private async reconcileProvenTxReqTransactions(req: EntityProvenTxReq, proven: EntityProvenTx): Promise<void> {
-    // A transaction can be internalized concurrently by several users. Their
-    // transaction rows share a txid but race while merging the JSON notify
-    // list, so a last-writer-wins update can omit one local copy. A valid proof
-    // is authoritative for every local transaction with this txid: discover
-    // them from the indexed transaction table and atomically heal both the
-    // durable notify set and any row that missed the original completion.
-    // Keep the clean proof-completion path identical to the normal notification
-    // transaction. Only leave it when failed rows require external UTXO checks,
-    // which must run without an open transaction.
-    let repairAttempts = 0
-    for (;;) {
-      const needsRepair = await this.transaction(async trx => {
-        await req.refreshFromStorage(this, trx)
-        const transactions = await this.findTransactions({ partial: { txid: req.txid }, trx })
-        if (transactions.some(transaction => transaction.status === 'failed')) return true
-
-        const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
-        for (const transaction of transactions) {
-          if (!knownNotificationIds.has(transaction.transactionId)) {
-            req.addNotifyTransactionId(transaction.transactionId)
-            knownNotificationIds.add(transaction.transactionId)
-          }
-        }
-        const transactionIdsNeedingProof = transactions
-          .filter(transaction => transaction.status !== 'completed' || transaction.provenTxId !== proven.provenTxId)
-          .map(transaction => transaction.transactionId)
-        const updatesSucceeded = await notifyTransactionsOfProof(
-          transactionIdsNeedingProof,
+  private async reconcileProvenTxReqTransactions(
+    req: EntityProvenTxReq,
+    proven: EntityProvenTx,
+    capturedWrites?: StorageReqWrite
+  ): Promise<void> {
+    const writes = capturedWrites ?? (await StorageReqWrite.capture(this, [req.txid]))
+    writes.assertProvider(this)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const committed = await writes.forEachUser(async (userId, trx) => {
+        const notes: ReqHistoryNote[] = []
+        const current = await EntityProvenTxReq.fromStorageId(this, req.id, trx)
+        if (current.provenTxId !== proven.provenTxId) return { needsRepair: false, notes }
+        const rows = await this.findTransactions({ partial: { txid: req.txid, userId }, noRawTx: true, trx })
+        if (rows.some(tx => tx.status === 'failed')) return { needsRepair: true, notes }
+        await notifyTransactionsOfProof(
+          rows
+            .filter(tx => tx.status !== 'completed' || tx.provenTxId !== proven.provenTxId)
+            .map(tx => tx.transactionId),
           proven.provenTxId,
-          note => req.addHistoryNote(note),
-          async (id, update) => {
-            await this.updateTransaction(id, update, trx)
+          note => notes.push(note),
+          (id, update) => awaitVoidFromSync(() => this.updateTransaction(id, update, trx))
+        )
+        return { needsRepair: false, notes }
+      })
+      if (committed.some(value => value.needsRepair)) {
+        if (attempt === 2)
+          throw new WERR_INTERNAL(`Transactions for ${req.txid} repeatedly changed to failed during proof recovery.`)
+        await this.unfailTransactionsForProof(req, 0, undefined, writes)
+        continue
+      }
+      await writes.request(req, (current, trx) =>
+        mapAwaitFromSync(
+          () => this.findTransactions({ partial: { txid: req.txid }, noRawTx: true, trx }),
+          rows => {
+            for (const tx of rows) current.addNotifyTransactionId(tx.transactionId)
+            for (const note of committed.flatMap(value => value.notes)) current.addHistoryNote(note)
+            current.notified =
+              current.provenTxId === proven.provenTxId &&
+              rows.every(tx => tx.status === 'completed' && tx.provenTxId === proven.provenTxId)
           }
         )
-        const completedTransactions = await this.findTransactions({ partial: { txid: req.txid }, trx })
-        req.notified =
-          updatesSucceeded &&
-          completedTransactions.every(
-            transaction => transaction.status === 'completed' && transaction.provenTxId === proven.provenTxId
-          )
-        await req.updateStorageDynamicProperties(this, trx)
-        return false
-      })
-
-      if (!needsRepair) return
-      if (repairAttempts >= 2) {
-        throw new WERR_INTERNAL(`Transactions for ${req.txid} repeatedly changed to failed during proof recovery.`)
-      }
-      repairAttempts++
-      await this.unfailTransactionsForProof(req)
+      )
+      return
     }
   }
 
@@ -1886,24 +2113,22 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return { invalidSpendableOutputs }
   }
 
-  async updateProvenTxReqDynamics(
-    id: number,
-    update: Partial<TableProvenTxReqDynamics>,
-    trx?: TrxToken
-  ): Promise<number> {
-    const partial: Partial<TableProvenTxReq> = {}
-    if (update.updated_at != null) partial.updated_at = update.updated_at
-    if (update.provenTxId != null && update.provenTxId > 0) partial.provenTxId = update.provenTxId
-    if (update.status != null) partial.status = update.status
-    if (Number.isInteger(update.attempts)) partial.attempts = update.attempts
-    if (update.notified !== undefined) partial.notified = update.notified
-    if (update.batch != null && update.batch !== '') partial.batch = update.batch
-    if (update.history != null && update.history !== '') partial.history = update.history
-    if (update.notify != null && update.notify !== '') partial.notify = update.notify
-    if (update.wasBroadcast !== undefined) partial.wasBroadcast = update.wasBroadcast ?? false
-    if (Number.isInteger(update.rebroadcastAttempts)) partial.rebroadcastAttempts = update.rebroadcastAttempts ?? 0
+  updateProvenTxReqDynamics(id: number, update: Partial<TableProvenTxReqDynamics>, trx?: TrxToken): Promise<number> {
+    return awaitFromSync(() => {
+      const partial: Partial<TableProvenTxReq> = {}
+      if (update.updated_at != null) partial.updated_at = update.updated_at
+      if (update.provenTxId != null && update.provenTxId > 0) partial.provenTxId = update.provenTxId
+      if (update.status != null) partial.status = update.status
+      if (Number.isInteger(update.attempts)) partial.attempts = update.attempts
+      if (update.notified !== undefined) partial.notified = update.notified
+      if (update.batch != null && update.batch !== '') partial.batch = update.batch
+      if (update.history != null && update.history !== '') partial.history = update.history
+      if (update.notify != null && update.notify !== '') partial.notify = update.notify
+      if (update.wasBroadcast !== undefined) partial.wasBroadcast = update.wasBroadcast ?? false
+      if (Number.isInteger(update.rebroadcastAttempts)) partial.rebroadcastAttempts = update.rebroadcastAttempts ?? 0
 
-    return await this.updateProvenTxReq(id, partial, trx)
+      return this.updateProvenTxReq(id, partial, trx)
+    })
   }
 
   async extendOutput(
@@ -1961,7 +2186,7 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * Optional verifier for server-side action-batch script checks. This Wallet
    * Toolbox extension leaves the BRC-100 wallet interface unchanged.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /**
    * Maximum persisted outputs one action-batch workspace may reserve.
    * Defaults to 256; -1 disables this cumulative provider limit.

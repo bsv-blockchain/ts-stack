@@ -205,7 +205,7 @@ describe('getBeefForTransaction tests', () => {
     const events: TelemetryEvent[] = []
     const storage = new ProtoStorage('main')
     Object.defineProperty(storage, 'telemetry', {
-      value: new Telemetry({ sink: { capture: event => events.push(event) } })
+      value: new Telemetry({ sink: { capture: event => void events.push(event) } })
     })
     const now = new Date()
     const invalidTxid = '29'.repeat(32)

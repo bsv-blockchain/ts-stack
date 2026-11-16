@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 /**
  * Client for Arcade transaction status updates.
  *
@@ -503,13 +504,15 @@ export class ArcSSEClient {
   }
 
   /** Ensure a connection is open; events still commit asynchronously in arrival order. */
-  async fetchEvents(): Promise<number> {
-    if (this.es == null && !this.connecting && this.processingGeneration == null) {
-      this.connect()
-    } else if (this.es != null && !this.connected && !this.connecting) {
-      this.close()
-      this.connect()
-    }
-    return 0
+  fetchEvents(): Promise<number> {
+    return promiseFromSync(() => {
+      if (this.es == null && !this.connecting && this.processingGeneration == null) {
+        this.connect()
+      } else if (this.es != null && !this.connected && !this.connecting) {
+        this.close()
+        this.connect()
+      }
+      return 0
+    })
   }
 }

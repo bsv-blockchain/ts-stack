@@ -43,3 +43,48 @@ describe('StorageKnex paged queries order by key', () => {
     expect(sql).not.toContain('asc')
   })
 })
+
+describe('StorageKnex counts filtered rows independently of pagination', () => {
+  let knex: Knex
+  let storage: StorageKnex
+
+  beforeEach(async () => {
+    knex = makeKnex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true
+    })
+    storage = new StorageKnex({ ...StorageKnex.defaultOptions(), chain: 'ttn', knex })
+    await knex.schema.createTable('certificates', table => {
+      table.increments('certificateId')
+      table.integer('userId')
+      table.string('certifier')
+      table.string('type')
+    })
+    await knex('certificates').insert([
+      ...Array.from({ length: 5 }, () => ({ userId: 1, certifier: 'owned', type: 'credential' })),
+      { userId: 2, certifier: 'owned', type: 'credential' },
+      { userId: 1, certifier: 'other', type: 'credential' },
+      { userId: 1, certifier: 'owned', type: 'other' }
+    ])
+  })
+
+  afterEach(async () => {
+    await knex.destroy()
+  })
+
+  test.each([0, 2, 5, 100])('counts all matching certificates at offset %i', async offset => {
+    const query = storage.findCertificatesQuery({
+      partial: { userId: 1 },
+      certifiers: ['owned'],
+      types: ['credential'],
+      paged: { limit: 2, offset }
+    })
+    expect(await storage.getCount(query)).toBe(5)
+  })
+
+  test('counts an empty filtered result beyond its last page', async () => {
+    const query = storage.findCertificatesQuery({ partial: { userId: 3 }, paged: { limit: 2, offset: 100 } })
+    expect(await storage.getCount(query)).toBe(0)
+  })
+})

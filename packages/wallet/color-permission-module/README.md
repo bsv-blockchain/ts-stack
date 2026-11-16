@@ -28,7 +28,9 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 `wallet` must be the underlying wallet, not the permissions manager. The module
 derives `p color` keys, signs token inputs and reads its baskets through it.
 Inventory listing uses the wallet-toolbox `specOpBasketPrefixOutputs` storage
-operation.
+operation. The module uses its named wallet-client export so browser bundlers
+can omit the unrelated SDK namespace helpers; the operation and all token
+validation behavior remain unchanged.
 
 `provider` implements `ColorOverlayProvider`. The wallet implementer decides
 which overlays it trusts:

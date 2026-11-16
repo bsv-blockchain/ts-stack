@@ -4,13 +4,15 @@ import { once } from 'node:events'
 import { StorageServer } from '../remoting/StorageServer'
 import { _tu } from '../../../test/utils/TestUtilsWalletStorage'
 import { PrivateKey } from '@bsv/sdk'
+import { WalletError } from '../../sdk/WalletError'
+import { WERR_NETWORK_CHAIN } from '../../sdk/WERR_errors'
 import { StorageIdb } from '../StorageIdb'
 import { StorageProvider } from '../StorageProvider'
 import { WalletStorageManager } from '../WalletStorageManager'
 import { EntitySyncState } from '../schema/entities/EntitySyncState'
 import { StorageClient } from '../remoting/StorageClient'
 import { validateSyncCheckpoint } from './syncCheckpoint'
-import type { RequestSyncChunkArgs, SyncCheckpoint } from '../../sdk/WalletStorage.interfaces'
+import type { ProcessSyncChunkResult, RequestSyncChunkArgs, SyncCheckpoint } from '../../sdk/WalletStorage.interfaces'
 
 async function makeStorage(): Promise<StorageIdb> {
   const storage = new StorageIdb(StorageProvider.createStorageBaseOptions('test'))
@@ -50,6 +52,84 @@ describe('compact sync checkpoints', () => {
     expect(() => validateSyncCheckpoint(c, { syncStateId: 2 })).toThrow()
     expect(() => validateSyncCheckpoint(c, { since: new Date() })).toThrow()
   })
+
+  test.each([undefined, new Date('2026-01-01T00:00:00.000Z')])(
+    'accepts a complete terminal reset with unchanged since %s and preserves other progress guards',
+    since => {
+      const reset = { ...checkpoint(), since }
+      const previous = { ...reset, offsets: reset.offsets.map((entry, index) => ({ ...entry, offset: index + 1 })) }
+      expect(validateSyncCheckpoint(reset, previous, true)).toEqual(reset)
+      expect(() => validateSyncCheckpoint(reset, previous)).toThrow('Invalid sync checkpoint')
+      expect(() => validateSyncCheckpoint(reset, previous, false)).toThrow('Invalid sync checkpoint')
+      expect(() => validateSyncCheckpoint({ ...reset, syncStateId: 2 }, previous, true)).toThrow()
+      expect(() => validateSyncCheckpoint({ ...reset, offsets: [] }, previous, true)).toThrow()
+      for (const offset of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const invalid = {
+          ...reset,
+          offsets: reset.offsets.map((entry, index) => (index === 0 ? { ...entry, offset } : entry))
+        }
+        expect(() => validateSyncCheckpoint(invalid, previous, true)).toThrow()
+      }
+      const partial = {
+        ...reset,
+        offsets: reset.offsets.map((entry, index) => (index === 0 ? { ...entry, offset: 1 } : entry))
+      }
+      expect(() => validateSyncCheckpoint(partial, previous, true)).toThrow('Invalid sync checkpoint')
+      const advanced = { ...previous, offsets: previous.offsets.map(entry => ({ ...entry, offset: entry.offset + 1 })) }
+      expect(validateSyncCheckpoint(advanced, previous, true)).toEqual(advanced)
+      if (since != null) {
+        expect(() => validateSyncCheckpoint({ ...reset, since: undefined }, previous, true)).toThrow()
+        expect(() =>
+          validateSyncCheckpoint({ ...reset, since: new Date(since.getTime() - 1) }, previous, true)
+        ).toThrow()
+      }
+    }
+  )
+
+  test.each([false, undefined, 'true', 1])('rejects an offset reset without literal done: true (%s)', async done => {
+    const reset = { ...checkpoint(), since: new Date('2026-01-01T00:00:00.000Z') }
+    const previous = { ...reset, offsets: reset.offsets.map(entry => ({ ...entry, offset: 1 })) }
+    const client = new StorageClient({} as never, 'https://storage.example')
+    const rpc = jest.spyOn(client as never, 'rpcCall' as never) as jest.SpyInstance
+    rpc.mockResolvedValue({ done, inserts: 0, updates: 0, nextCheckpoint: reset })
+    await expect(client.processSyncChunk(previous as RequestSyncChunkArgs, {} as never)).rejects.toThrow(
+      'Invalid sync checkpoint'
+    )
+    expect(rpc).toHaveBeenCalledTimes(1)
+  })
+
+  test.each(['foreign state', 'earlier timestamp', 'partial reset'])(
+    'does not let a remote terminal reply bypass %s validation',
+    async invalid => {
+      const reset = { ...checkpoint(), since: new Date('2026-01-01T00:00:00.000Z') }
+      const previous = { ...reset, offsets: reset.offsets.map(entry => ({ ...entry, offset: 2 })) }
+      if (invalid === 'foreign state') reset.syncStateId = 2
+      if (invalid === 'earlier timestamp') reset.since = new Date(reset.since.getTime() - 1)
+      if (invalid === 'partial reset') reset.offsets[0].offset = 1
+      const client = new StorageClient({} as never, 'https://storage.example')
+      const rpc = jest.spyOn(client as never, 'rpcCall' as never) as jest.SpyInstance
+      rpc.mockResolvedValue({ done: true, inserts: 0, updates: 0, nextCheckpoint: reset })
+      await expect(client.processSyncChunk(previous as RequestSyncChunkArgs, {} as never)).rejects.toThrow(
+        'Invalid sync checkpoint'
+      )
+      expect(rpc).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  test.each([false, true])(
+    'forwards a returned failure before validating its checkpoint (serialized: %s)',
+    async serialized => {
+      const original = new WERR_NETWORK_CHAIN('synthetic provider failure')
+      const error = serialized ? JSON.parse(WalletError.unknownToJson(original)) : original
+      const result = { error, done: true, inserts: 999, updates: 999, nextCheckpoint: { syncStateId: -1 } }
+      const client = new StorageClient({} as never, 'https://storage.example')
+      const rpc = jest.spyOn(client as never, 'rpcCall' as never) as jest.SpyInstance
+      rpc.mockResolvedValue(result)
+      await expect(client.processSyncChunk(checkpoint() as RequestSyncChunkArgs, {} as never)).resolves.toBe(result)
+      expect(result.error).toBe(error)
+      expect(rpc).toHaveBeenCalledTimes(1)
+    }
+  )
 
   test('checkpoint size stays bounded as the durable ID map grows and remains user scoped', async () => {
     const storage = await makeStorage()
@@ -190,77 +270,122 @@ describe('compact sync checkpoints', () => {
     }
   )
 
-  test('backs up and restores every page through authenticated HTTP with compact committed progress', async () => {
-    const remote = await _tu.createSQLiteTestWallet({ databaseName: 'compactCheckpointHttp', dropAll: true })
-    const source = await makeStorage()
-    const restored = await makeStorage()
-    const server = new StorageServer(remote.activeStorage, {
-      port: 0,
-      wallet: remote.wallet,
-      monetize: false,
-      logRpcRequests: false,
-      calculateRequestPrice: async () => 0
-    })
-    let client: StorageClient | undefined
-    try {
-      server.start()
-      if (!server.server.listening) await once(server.server, 'listening')
-      const address = server.server.address()
-      if (address == null || typeof address === 'string') throw new Error('test server did not bind')
-      client = new StorageClient(remote.wallet, `http://localhost:${address.port}`, { binaryRequests: true })
-      const identityKey = remote.identityKey
-      const manager = new WalletStorageManager(identityKey, source)
-      await manager.makeAvailable()
-      const { user } = await source.findOrInsertUser(identityKey)
-      for (let i = 0; i < 37; i++) await source.findOrInsertTxLabel(user.userId, `http fixture ${i}`)
-      const read = source.getSyncChunk.bind(source)
-      jest.spyOn(source, 'getSyncChunk').mockImplementation(args => read({ ...args, maxItems: 5 }))
-      const checkpoints = jest.spyOn(client, 'getSyncCheckpoint')
-      const fullStates = jest.spyOn(client, 'findOrInsertSyncStateAuth')
-      const backup = await manager.syncToWriter({ identityKey }, client)
-      expect(backup.inserts).toBeGreaterThanOrEqual(37)
-      expect(checkpoints).toHaveBeenCalledTimes(1)
-      expect(fullStates).not.toHaveBeenCalled()
-      const remoteRead = remote.activeStorage.getSyncChunk.bind(remote.activeStorage)
-      jest.spyOn(remote.activeStorage, 'getSyncChunk').mockImplementation(args => remoteRead({ ...args, maxItems: 5 }))
-      const restoreManager = new WalletStorageManager(identityKey, restored)
-      await restoreManager.makeAvailable()
-      await restoreManager.syncFromReader(identityKey, client)
-      const { user: target } = await restored.findOrInsertUser(identityKey)
-      expect(await restored.countTxLabels({ partial: { userId: target.userId } })).toBe(37)
-      const noChange = await restoreManager.syncFromReader(identityKey, client)
-      expect(noChange.inserts).toBe(0)
-      expect(noChange.updates).toBe(0)
-      // Exercise real authenticated binary uploads independently of entity merge rules.
-      const bytes = Array.from({ length: 4096 }, (_, i) => i % 256)
-      const process = jest.spyOn(remote.activeStorage, 'processSyncChunk').mockResolvedValueOnce({
-        done: true,
-        inserts: 0,
-        updates: 0,
-        maxUpdated_at: undefined
+  test.each([false, true])(
+    'backs up unchanged and restores through authenticated HTTP with binary requests %s',
+    async binaryRequests => {
+      const remote = await _tu.createSQLiteTestWallet({
+        databaseName: `compactCheckpointHttp-${binaryRequests}`,
+        dropAll: true
       })
-      const authClient = Reflect.get(client, 'authClient') as { fetch: typeof fetch }
-      const fetchSpy = jest.spyOn(authClient, 'fetch')
-      await client.processSyncChunk(
-        { identityKey } as RequestSyncChunkArgs,
-        {
-          outputs: [{ created_at: new Date(), updated_at: new Date(), lockingScript: bytes }]
-        } as never
-      )
-      expect(process.mock.calls[0][1].outputs?.[0].lockingScript).toEqual(bytes)
-      const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))
-      expect(body.params[1].outputs[0].lockingScript.$bsvBinary).toBe('base64')
-      expect(JSON.stringify(body).length).toBeLessThan(JSON.stringify(bytes).length)
-    } finally {
-      await client?.destroy()
-      await server.close()
-      await remote.wallet.destroy()
-      await source.destroy()
-      await restored.destroy()
-      await source.dropAllData()
-      await restored.dropAllData()
-    }
-  }, 60000)
+      const source = await makeStorage()
+      const restored = await makeStorage()
+      const server = new StorageServer(remote.activeStorage, {
+        port: 0,
+        wallet: remote.wallet,
+        monetize: false,
+        logRpcRequests: false,
+        calculateRequestPrice: async () => 0
+      })
+      let client: StorageClient | undefined
+      try {
+        server.start()
+        if (!server.server.listening) await once(server.server, 'listening')
+        const address = server.server.address()
+        if (address == null || typeof address === 'string') throw new Error('test server did not bind')
+        client = new StorageClient(remote.wallet, `http://localhost:${address.port}`, { binaryRequests })
+        const identityKey = remote.identityKey
+        const manager = new WalletStorageManager(identityKey, source)
+        await manager.makeAvailable()
+        const { user } = await source.findOrInsertUser(identityKey)
+        for (let i = 0; i < 37; i++) await source.findOrInsertTxLabel(user.userId, `http fixture ${i}`)
+        const read = source.getSyncChunk.bind(source)
+        jest.spyOn(source, 'getSyncChunk').mockImplementation(args => read({ ...args, maxItems: 5 }))
+        const checkpoints = jest.spyOn(client, 'getSyncCheckpoint')
+        const fullStates = jest.spyOn(client, 'findOrInsertSyncStateAuth')
+        const committedPages = jest.spyOn(remote.activeStorage, 'processSyncChunk')
+        const backup = await manager.syncToWriter({ identityKey }, client)
+        expect(backup.inserts).toBeGreaterThanOrEqual(37)
+        expect(checkpoints).toHaveBeenCalledTimes(1)
+        expect(fullStates).not.toHaveBeenCalled()
+        const unchanged = await manager.syncToWriter({ identityKey }, client)
+        expect(unchanged).toMatchObject({ inserts: 0, updates: 0 })
+        const terminalArgs = committedPages.mock.calls.at(-1)![0]
+        const terminalReply = (await committedPages.mock.results.at(-1)!.value) as ProcessSyncChunkResult
+        expect(terminalReply.done).toBe(true)
+        expect(terminalArgs.offsets.some(entry => entry.offset > 0)).toBe(true)
+        expect(terminalReply.nextCheckpoint?.offsets.every(entry => entry.offset === 0)).toBe(true)
+        expect(terminalReply.nextCheckpoint?.since?.getTime()).toBe(new Date(terminalArgs.since!).getTime())
+        const upload = client.processSyncChunk.bind(client)
+        const lostReply = jest.spyOn(client, 'processSyncChunk').mockImplementation(async (args, chunk) => {
+          const result = await upload(args, chunk)
+          if (result.done) throw new Error('synthetic lost terminal acknowledgement')
+          return result
+        })
+        await expect(manager.syncToWriter({ identityKey }, client)).rejects.toThrow(
+          'synthetic lost terminal acknowledgement'
+        )
+        lostReply.mockRestore()
+        await expect(manager.syncToWriter({ identityKey }, client)).resolves.toMatchObject({ inserts: 0, updates: 0 })
+        const providerFailure = new WERR_NETWORK_CHAIN('synthetic remote terminal failure')
+        committedPages.mockResolvedValueOnce({
+          error: JSON.parse(WalletError.unknownToJson(providerFailure)),
+          done: true,
+          inserts: 999,
+          updates: 999,
+          maxUpdated_at: new Date(),
+          nextCheckpoint: { syncStateId: -1 } as SyncCheckpoint
+        })
+        await expect(manager.syncToWriter({ identityKey }, client)).rejects.toThrow(providerFailure.message)
+        await expect(manager.syncToWriter({ identityKey }, client)).resolves.toMatchObject({ inserts: 0, updates: 0 })
+        const { user: remoteUser } = await remote.activeStorage.findOrInsertUser(identityKey)
+        expect(await remote.activeStorage.countTxLabels({ partial: { userId: remoteUser.userId } })).toBe(37)
+        const remoteRead = remote.activeStorage.getSyncChunk.bind(remote.activeStorage)
+        jest
+          .spyOn(remote.activeStorage, 'getSyncChunk')
+          .mockImplementation(args => remoteRead({ ...args, maxItems: 5 }))
+        const restoreManager = new WalletStorageManager(identityKey, restored)
+        await restoreManager.makeAvailable()
+        await restoreManager.syncFromReader(identityKey, client)
+        const { user: target } = await restored.findOrInsertUser(identityKey)
+        expect(await restored.countTxLabels({ partial: { userId: target.userId } })).toBe(37)
+        const noChange = await restoreManager.syncFromReader(identityKey, client)
+        expect(noChange.inserts).toBe(0)
+        expect(noChange.updates).toBe(0)
+        committedPages.mockRestore()
+        if (binaryRequests) {
+          // Exercise real authenticated binary uploads independently of entity merge rules.
+          const bytes = Array.from({ length: 4096 }, (_, i) => i % 256)
+          const process = jest.spyOn(remote.activeStorage, 'processSyncChunk').mockResolvedValueOnce({
+            done: true,
+            inserts: 0,
+            updates: 0,
+            maxUpdated_at: undefined
+          })
+          const authClient = Reflect.get(client, 'authClient') as { fetch: typeof fetch }
+          const fetchSpy = jest.spyOn(authClient, 'fetch')
+          await client.processSyncChunk(
+            { identityKey } as RequestSyncChunkArgs,
+            {
+              outputs: [{ created_at: new Date(), updated_at: new Date(), lockingScript: bytes }]
+            } as never
+          )
+          expect(process.mock.calls[0][1].outputs?.[0].lockingScript).toEqual(bytes)
+          const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))
+          expect(body.params[1].outputs[0].lockingScript.$bsvBinary).toBe('base64')
+          expect(JSON.stringify(body).length).toBeLessThan(JSON.stringify(bytes).length)
+        }
+      } finally {
+        await client?.destroy()
+        await server.close()
+        await remote.wallet.destroy()
+        await source.destroy()
+        await restored.destroy()
+        await source.dropAllData()
+        await restored.dropAllData()
+      }
+    },
+    60000
+  )
 
   test('rejects replay of a staged page after its checkpoint has already committed', async () => {
     const writer = await makeStorage()
@@ -268,14 +393,31 @@ describe('compact sync checkpoints', () => {
     try {
       const { user } = await writer.findOrInsertUser(identityKey)
       const checkpoint = await writer.getSyncCheckpoint({ identityKey }, 'source', 'source')
-      const args = { ...checkpoint, identityKey, fromStorageIdentityKey: 'source',
-        toStorageIdentityKey: writer.getSettings().storageIdentityKey, maxItems: 1, maxRoughSize: 1024,
-        requireMatchingCheckpoint: true }
+      const args = {
+        ...checkpoint,
+        identityKey,
+        fromStorageIdentityKey: 'source',
+        toStorageIdentityKey: writer.getSettings().storageIdentityKey,
+        maxItems: 1,
+        maxRoughSize: 1024,
+        requireMatchingCheckpoint: true
+      }
       const now = new Date()
-      const chunk = { userIdentityKey: identityKey, fromStorageIdentityKey: 'source',
+      const chunk = {
+        userIdentityKey: identityKey,
+        fromStorageIdentityKey: 'source',
         toStorageIdentityKey: args.toStorageIdentityKey,
-        outputTags: [{ outputTagId: 1234, userId: user.userId, created_at: now, updated_at: now,
-          tag: 'staged replay fixture', isDeleted: false }] }
+        outputTags: [
+          {
+            outputTagId: 1234,
+            userId: user.userId,
+            created_at: now,
+            updated_at: now,
+            tag: 'staged replay fixture',
+            isDeleted: false
+          }
+        ]
+      }
       await expect(writer.processSyncChunk(args, chunk)).resolves.toMatchObject({ inserts: 1 })
       await expect(writer.processSyncChunk(args, chunk)).rejects.toThrow('checkpoint changed')
       const saved = await writer.getSyncCheckpoint({ identityKey }, 'source', 'source')

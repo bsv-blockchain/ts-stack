@@ -1,7 +1,7 @@
 import { MAXIMUM_SEND_WITH_TRANSACTIONS } from '@bsv/sdk/wallet/validationHelpers'
 import { SendWithResult } from '@bsv/sdk'
 import { Monitor } from '../Monitor'
-import { WalletMonitorTask } from './WalletMonitorTask'
+import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 import { attemptToPostReqsToNetwork } from '../../storage/methods/attemptToPostReqsToNetwork'
 import { aggregateActionResults } from '../../utility/aggregateResults'
 import { ProvenTxReqStatus } from '../../sdk/types'
@@ -239,9 +239,19 @@ export class TaskSendWaiting extends WalletMonitorTask {
 
     const req = new EntityProvenTxReq(reqApi)
     const reqs = await this.expandRequestBatch(req, reqApiIds, groupedReqIds, logs)
-    const result = await this.storage.runAsStorageProvider(async sp => {
-      return await attemptToPostReqsToNetwork(sp, reqs)
-    })
+    const writes = await captureMonitorReqWrite(
+      this,
+      reqs.map(req => req.txid)
+    )
+    const post = async (sp: import('../../storage/StorageProvider').StorageProvider) => {
+      if (writes == null) return await attemptToPostReqsToNetwork(sp, reqs)
+      writes.assertProvider(sp)
+      return await attemptToPostReqsToNetwork(sp, reqs, undefined, undefined, writes)
+    }
+    const result =
+      writes?.preparesOutsideManager === true
+        ? await writes.prepare(post)
+        : await this.storage.runAsStorageProvider(post)
 
     for (const detail of result.details) {
       logs[detail.txid] += ` req.status ${detail.req.status} post.status ${detail.status}`

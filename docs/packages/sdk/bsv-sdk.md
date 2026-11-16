@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.0.1'
+version: '4.1.1'
 npm: '@bsv/sdk'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,34 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## LocalKVStore removal patch
+
+The 4.1.1 source candidate makes `LocalKVStore.remove` reject a wallet response
+with a positive `totalOutputs` and an empty page instead of repeatedly querying
+offset zero. The error identifies the key and reported total; rejection releases
+the per-key operation lock. An absent key still returns `[]`, and ordinary
+removal, `set` and `get` are unchanged. No API, wire or stored-data migration is
+required. This source candidate has not been published.
+
+## GlobalKVStore tag-count compatibility patch
+
+The source candidate restores tag sets larger than 32 entries. Client creation,
+tag-filter queries, token decoding, overlay admission and history preserve all
+tags. Upgrade both client and overlay SDKs to 4.1.1 and deploy Overlay Topics
+2.0.4 for the lookup-query fix. Existing token bytes and stored records require
+no migration. Each tag still must be unique, non-empty and at most 256 UTF-8
+bytes; token payload, request and cryptographic checks remain unchanged. Wallet
+output tags, action labels and other overlay protocols' count policies are unchanged.
+A non-array tag container raises `TypeError` (still an `Error` subclass) with the
+existing diagnostic; valid arrays and other validation errors are unchanged.
+
+The 4.1.0 release adds bounded BRC-118 payment transport to `AuthFetch` and retains recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+Ordinary HTTP fallback retains native text, URLSearchParams, typed Blob and
+FormData serialization and inferred Content-Type, including cached peers.
+Mutable inputs are copied before asynchronous work; explicit headers prevail.
+Authenticated payment retries retain their owned-byte snapshots.
 
 The 4.0.1 source candidate types `ListOutputsResult.totalOutputs` as a number
 again, `PositiveInteger64OrZero` (a finite nonnegative integer summary; below 2^64 on the binary wire). A BRC-112 balance query (`balance <basket>` or
@@ -25,11 +53,13 @@ explicitly selected and acknowledged spendability extension from #674 remains
 available. No separate profile for the defective 4.0.0 layout is introduced.
 This candidate is not publication.
 
-The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+The integrated SDK4 candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+Retained versioned candidate notes below are historical source records; publication is a separate action.
 
 The SDK3.3 source candidate adds explicitly selected BRC-192–194 output observation,
 lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
@@ -254,13 +284,13 @@ clients share the same regression coverage and a portable conformance vector.
 No API, wire or account-data migration is required; only clients already bundling
 the affected hardened SDK need a dependency update for this defect.
 
-The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
 It restores signed `listActions` net amounts with the historical wire encoding,
 matching JSON validation; count, length and individual output bounds stay intact.
 Apps affected by these client defects can update the SDK without changing calls.
 Wallets retain the existing BRC100 contract; an ecosystem-wide application
-migration is not required. The candidate is not published until the protected
+migration is not required. The 3.0.0 candidate remains unpublished until its protected
 release workflow completes.
 
 The action-history compatibility regression affects signed `listActions` values
@@ -561,7 +591,7 @@ const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 - **BRC-62** — BEEF (transaction envelope format)
 - **BRC-100** — Wallet interface standard
 - **SPV** — Full merkle proof verification support
-- **Bitcoin Script** — Full consensus-rule-compliant interpreter
+- **Bitcoin Script** — Script construction and configurable evaluation
 
 ## Common pitfalls
 

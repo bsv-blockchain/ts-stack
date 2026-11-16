@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { PublicKey, SignActionSpend, Transaction } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -66,9 +67,7 @@ export async function completeSignedTransaction(
   /// //////////////////
   // Insert SABPPP unlock templates for wallet signed inputs
   /// //////////////////
-  const prepareUnlockingTemplates = (
-    keys: ReturnType<Wallet['getClientChangeKeyPair']>
-  ): void => {
+  const prepareUnlockingTemplates = (keys: ReturnType<Wallet['getClientChangeKeyPair']>): void => {
     guard?.()
     const counterparties = new Map<string, PublicKey>()
     const counterparty = (publicKey: string): PublicKey => {
@@ -93,12 +92,11 @@ export async function completeSignedTransaction(
       keyID: template.getKeyID(),
       counterparty: unlockerPubKey
     }))
-    const derivedPrivateKeys = wallet.keyDeriver.derivePrivateKeys?.(derivations) ??
-      derivations.map(derivation => wallet.keyDeriver.derivePrivateKey(
-        derivation.protocolID,
-        derivation.keyID,
-        derivation.counterparty
-      ))
+    const derivedPrivateKeys =
+      wallet.keyDeriver.derivePrivateKeys?.(derivations) ??
+      derivations.map(derivation =>
+        wallet.keyDeriver.derivePrivateKey(derivation.protocolID, derivation.keyID, derivation.counterparty)
+      )
     for (let index = 0; index < prepared.length; index++) {
       const { pdi, template } = prepared[index]
       const unlockTemplate = template.unlockWithDerivedPrivateKey(
@@ -128,7 +126,10 @@ export async function completeSignedTransaction(
         const keys = await wallet.telemetry.withSpan(
           'wallet.crypto.client_change_key',
           { component: 'wallet-toolbox', parent: span.context },
-          () => { guard?.(); return wallet.getClientChangeKeyPair() }
+          () => {
+            guard?.()
+            return wallet.getClientChangeKeyPair()
+          }
         )
         await wallet.telemetry.withSpan(
           'wallet.crypto.derive_unlocking_templates',
@@ -159,7 +160,15 @@ export async function completeSignedTransaction(
           'crypto.input_count': prior.tx.inputs.length
         }
       },
-      async () => { guard?.(); await prior.tx.sign(); guard?.() }
+      () => {
+        guard?.()
+        return mapAwaitFromSync(
+          () => prior.tx.sign(),
+          () => {
+            guard?.()
+          }
+        )
+      }
     )
   } else {
     guard?.()
