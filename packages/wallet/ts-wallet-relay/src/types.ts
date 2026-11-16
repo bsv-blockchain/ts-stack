@@ -63,8 +63,8 @@ export interface SessionInfo {
   status: SessionStatus
   relay?: string // present on status resolution; validated before WebSocket use
   backendIdentityKey?: string // present on status resolution from 0.6.0; must equal the QR key
-  topic?: string // present on status resolution from 0.7.1; equals the QR topic (the session id)
-  protocolID?: string // present on status resolution from 0.7.1; the QR's canonical protocolID JSON
+  topic?: string // present on status resolution from 0.8.0; equals the QR topic (the session id)
+  protocolID?: string // present on status resolution from 0.8.0; the QR's canonical protocolID JSON
   qrDataUrl?: string // present on session creation
   pairingUri?: string // present on session creation — use with QRPairingCode / useQRPairing
   desktopToken?: string // present on session creation — send as X-Desktop-Token header on POST /api/request/:id
