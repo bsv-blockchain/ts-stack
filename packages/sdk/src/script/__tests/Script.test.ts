@@ -221,6 +221,32 @@ describe('Script', () => {
       expect(script.chunks[2].op).toEqual(buf[buf.length - 1])
       expect(script.toASM()).toEqual('OP_0 010203 OP_0')
     })
+
+    it('prints a top-level OP_RETURN so fromASM restores the same bytes', () => {
+      const cases = [
+        { hex: '6a0568656c6c6f', asm: 'OP_RETURN 68656c6c6f' },
+        { hex: '006a0568656c6c6f', asm: 'OP_0 OP_RETURN 68656c6c6f' },
+        { hex: '6a', asm: 'OP_RETURN' },
+        { hex: '006a', asm: 'OP_0 OP_RETURN' }
+      ]
+      for (const { hex, asm } of cases) {
+        const script = Script.fromHex(hex)
+        expect(script.toASM()).toEqual(asm)
+        expect(Script.fromASM(script.toASM()).toHex()).toEqual(hex)
+      }
+
+      const falseReturn = Script.fromASM('OP_FALSE OP_RETURN 68656c6c6f')
+      expect(falseReturn.toHex()).toEqual('006a0568656c6c6f')
+      expect(Script.fromASM(falseReturn.toASM()).toHex()).toEqual(falseReturn.toHex())
+
+      const pushes = 'OP_RETURN 026d02 0568656c6c6f'
+      const pushHex = Script.fromASM(pushes).toHex()
+      const parsed = Script.fromHex(pushHex)
+      expect(parsed.chunks).toHaveLength(1)
+      expect(parsed.chunks[0].op).toEqual(OP.OP_RETURN)
+      expect(parsed.toASM()).toEqual(pushes)
+      expect(Script.fromASM(parsed.toASM()).toHex()).toEqual(pushHex)
+    })
   })
 
   describe('fromASM', () => {

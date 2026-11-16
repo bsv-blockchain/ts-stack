@@ -666,6 +666,17 @@ export default class Script {
   }
 
   #_chunkToString(chunk: ScriptChunk): string {
+    // A top-level OP_RETURN folds every following byte into chunk.data. Name the
+    // opcode, then disassemble those bytes as further instructions so
+    // Script.fromASM(script.toASM()) restores the same script.
+    if (chunk.op === OP.OP_RETURN && chunk.data !== undefined) {
+      let str = ` ${OP[chunk.op] as string}`
+      if (chunk.data.length > 0) {
+        str += Script.#disassembleBytes(chunk.data)
+      }
+      return str
+    }
+
     const op = chunk.op
     let str = ''
     if (chunk.data === undefined) {
@@ -673,6 +684,30 @@ export default class Script {
       str = `${str} ${val}`
     } else {
       str = `${str} ${toHex(chunk.data)}`
+    }
+    return str
+  }
+
+  /**
+   * ASM suffix for raw script bytes, with one leading space per instruction.
+   * OP_RETURN is a single opcode and parsing continues, matching fromASM.
+   * Pushes print as the hex of their payload, the same as ordinary chunks.
+   */
+  static #disassembleBytes(bytes: ArrayLike<number>): string {
+    let str = ''
+    const length = bytes.length
+    let pos = 0
+    while (pos < length) {
+      const op = bytes[pos++] ?? 0
+      if (op > 0 && op <= OP.OP_PUSHDATA4) {
+        const { len, newPos } = Script.#readPushdataLength(op, bytes, pos, length)
+        pos = newPos
+        const end = Math.min(pos + len, length)
+        str += ` ${toHex(Script.#copyRange(bytes, pos, end))}`
+        pos = end
+      } else {
+        str += ` ${OP[op] as string}`
+      }
     }
     return str
   }
