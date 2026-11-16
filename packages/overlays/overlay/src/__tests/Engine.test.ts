@@ -2287,6 +2287,273 @@ describe('BSV Overlay Services Engine', () => {
         expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
       })
 
+      it('updates an unproven child and skips a proven grandchild that spends it', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const grandchild = spend([child], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        const { engine, updates } = engineOver([a, b, c])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, b.txid].sort())
+        const carried = Transaction.fromBEEF(updates[b.txid]).inputs[0].sourceTransaction
+        expect(carried?.merklePath?.toHex()).toBe(proof.toHex())
+      })
+
+      it('skips proven descendants that spend the ancestor only through each other', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        const grandchild = spend([child], [1], true)
+        const greatGrandchild = spend([grandchild], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        const d = outputOf(greatGrandchild, greatGrandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+      })
+
+      it('refuses a proven grandchild that spends no transaction already checked', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const unrelated = spend([{ txid: '33'.repeat(32), outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const u = outputOf(unrelated, unrelated.toBEEF())
+        link(a, b)
+        link(b, u)
+        const { engine } = engineOver([a, b, u])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses a grandchild that references a checked child without carrying it, beside a proven spender', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1, 1], true)
+        const proven = spend([ancestor, { txid: '33'.repeat(32), outputIndex: 0 }], [1], true)
+        const grandchild = spend([{ txid: child.id('hex'), outputIndex: 0 }, proven], [1])
+        const beef = new Beef()
+        beef.mergeTransaction(proven)
+        const subject = beef.mergeRawTx(grandchild.toBinary())
+        beef.sortTxs()
+        beef.txs = [...beef.txs.filter(tx => tx !== subject), subject]
+        const incomplete = beef.toBinary()
+        expect(Transaction.fromBEEF(incomplete).inputs[0].sourceTransaction).toBeUndefined()
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, incomplete)
+        link(a, b)
+        link(b, c)
+        const { engine } = engineOver([a, b, c])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      const incompleteBeef = (
+        carried: Transaction[],
+        subject: Transaction,
+        raws: Transaction[] = []
+      ): number[] => {
+        const beef = new Beef()
+        for (const tx of carried) beef.mergeTransaction(tx)
+        for (const tx of raws) beef.mergeRawTx(tx.toBinary())
+        const last = beef.mergeRawTx(subject.toBinary())
+        beef.sortTxs()
+        beef.txs = [...beef.txs.filter(tx => tx !== last), last]
+        return beef.toBinary()
+      }
+
+      it('refuses a proven spender of a transaction that only a storage relation names', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const named = '44'.repeat(32)
+        const spender = spend([{ txid: named, outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const d = outputOf(spender, spender.toBEEF())
+        link(a, b)
+        // Storage claims the child was spent by `named`, which it holds no output for.
+        b.consumedBy.push({ txid: named, outputIndex: 0 })
+        link(b, d)
+        const { engine } = engineOver([a, b, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('binds a descendant stored under an uppercase transaction ID', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const grandchild = spend([child], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = { ...outputOf(child, child.toBEEF()), txid: child.id('hex').toUpperCase() }
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        const { engine, updates } = engineOver([a, b, c])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, b.txid].sort())
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(2)
+      })
+
+      it('skips proven descendants that storage returns before the proven ones that bind them', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        const grandchild = spend([child], [1], true)
+        const greatGrandchild = spend([grandchild], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        const d = outputOf(greatGrandchild, greatGrandchild.toBEEF())
+        // These relations come first, so the descendants are checked deepest first.
+        a.consumedBy.push({ txid: d.txid, outputIndex: 0 }, { txid: c.txid, outputIndex: 0 })
+        link(a, b)
+        link(b, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(1)
+      })
+
+      it('refuses a stored output whose BEEF does not match its transaction ID before it can bind anything', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const claimed = '55'.repeat(32)
+        const spender = spend([{ txid: claimed, outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        // Storage files the child's BEEF, which carries the ancestor, under another ID.
+        const mislabelled = { ...outputOf(child, child.toBEEF()), txid: claimed }
+        const d = outputOf(spender, spender.toBEEF())
+        link(a, mislabelled)
+        link(mislabelled, d)
+        const { engine } = engineOver([a, mislabelled, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not match its transaction ID'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses an unresolved reference to a descendant that is bound only after it is checked', async () => {
+        // A -> X -> P -> D and A -> Y -> Z -> B -> D, P and B proven. D's BEEF
+        // carries P but only names B, which is collected after D.
+        const ancestor = root()
+        const x = spend([ancestor], [1])
+        const p = spend([x], [1], true)
+        const y = spend([{ txid: ancestor.id('hex'), outputIndex: 1 }], [1])
+        y.inputs[0].sourceTransaction = ancestor
+        const z = spend([y], [1])
+        const b = spend([z], [1], true)
+        const d = spend([p, { txid: b.id('hex'), outputIndex: 0 }], [1])
+        const stored = (tx: Transaction, beef: number[] = tx.toBEEF()): Output => outputOf(tx, beef)
+        const [sa, sx, sp, sy, sz, sb] = [ancestor, x, p, y, z, b].map(tx => stored(tx))
+        const sd = stored(d, incompleteBeef([p], d))
+        expect(
+          Transaction.fromBEEF(sd.beef as number[]).inputs[1].sourceTransaction
+        ).toBeUndefined()
+        link(sa, sx)
+        link(sa, sy)
+        link(sx, sp)
+        link(sy, sz)
+        link(sp, sd)
+        link(sz, sb)
+        link(sb, sd)
+        const { engine } = engineOver([sa, sx, sp, sy, sz, sb, sd])
+
+        await expect(engine.handleNewMerkleProof(sa.txid, leafPath(sa.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses a descendant whose unproven transaction lacks an unrelated source, beside a proven spender', async () => {
+        const ancestor = root()
+        const proven = spend([ancestor], [1], true)
+        const descendant = spend([proven, { txid: '66'.repeat(32), outputIndex: 0 }], [1])
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const d = outputOf(descendant, incompleteBeef([proven], descendant))
+        expect(Transaction.fromBEEF(d.beef as number[]).inputs[1].sourceTransaction).toBeUndefined()
+        link(a, d)
+        const { engine } = engineOver([a, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('still updates a descendant that carries the ancestor beside an unresolved reference to a bound one', async () => {
+        const ancestor = root()
+        const proven = spend([ancestor], [1], true)
+        const descendant = new Transaction()
+        descendant.addInput({
+          sourceTransaction: ancestor,
+          sourceOutputIndex: 1,
+          unlockingScript: opTrue()
+        })
+        descendant.addInput({
+          sourceTXID: proven.id('hex'),
+          sourceOutputIndex: 0,
+          unlockingScript: opTrue()
+        })
+        descendant.addOutput({ satoshis: 1, lockingScript: opTrue() })
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const b = outputOf(proven, proven.toBEEF())
+        const d = outputOf(descendant, incompleteBeef([ancestor], descendant))
+        expect(Transaction.fromBEEF(d.beef as number[]).inputs[1].sourceTransaction).toBeUndefined()
+        link(a, b)
+        link(a, d)
+        link(b, d)
+        const { engine, updates } = engineOver([a, b, d])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, d.txid].sort())
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(2)
+      })
+
+      it('refuses when one of two stored rows of a descendant does not carry the ancestor', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const complete = outputOf(child, child.toBEEF())
+        const partial = { ...outputOf(child, incompleteBeef([], child)), topic: 'world' }
+        // One relation reaches both rows: storage returns every output of the child.
+        link(a, complete)
+        const { engine } = engineOver([a, complete, partial])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
       it('refuses a proven descendant BEEF that neither carries nor spends the proven transaction', async () => {
         const ancestor = root()
         const other = spend([{ txid: '11'.repeat(32), outputIndex: 0 }], [1], true)
