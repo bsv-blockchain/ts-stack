@@ -1,5 +1,9 @@
 # 4.1.1 unpublished patch candidate
 
+- `Transaction.fee(..., 'random')` draws its change-split digit uniformly.
+  Bytes 252–255 are discarded, so each digit 1–9 is equally likely. The
+  logarithmic share formula, fee total, and output order are unchanged.
+  No migration is required.
 - A non-array tag container raises TypeError (an Error subclass) with the existing
   diagnostic; valid tag arrays and other validation errors are unchanged.
 - Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries
