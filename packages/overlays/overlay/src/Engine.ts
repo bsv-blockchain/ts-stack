@@ -4031,16 +4031,28 @@ export class Engine {
   /**
    * Given a new transaction proof (txid, proof),
    * update tx.merklePath if appropriate,
-   * and if not, recurse through all input sourceTransactions.
+   * and if not, recurse through the linked inputs of unproven transactions,
+   * stopping at proven ones.
    *
    * @param tx transaction which may benefit from new proof.
    * @param txid BE hex string double hash of transaction proven by proof.
    * @param proof for txid
+   * @returns 'updated' when txid is reached; otherwise 'missing' when an
+   * unproven transaction's input names txid without linking it; otherwise
+   * 'behind-proof' when a proven transaction reached directly spends txid
+   * (proven, or admitted already mined, before this proof arrived, so the
+   * BEEF already ends at its proof); otherwise 'missing'.
    */
-  private updateInputProofs(tx: Transaction, txid: string, proof: MerklePath): boolean {
+  private updateInputProofs(
+    tx: Transaction,
+    txid: string,
+    proof: MerklePath
+  ): 'updated' | 'behind-proof' | 'missing' {
     const pending: Transaction[] = [tx]
     const visited = new WeakSet<object>()
     let found = false
+    let behindProof = false
+    let unresolved = false
     for (let cursor = 0; cursor < pending.length; cursor++) {
       if (pending.length > MAX_PROOF_UPDATE_OUTPUTS) {
         throw new RangeError('Merkle-proof source traversal exceeded its work budget')
@@ -4055,8 +4067,20 @@ export class Engine {
       }
       // A mined transaction's source graph is no longer part of its BEEF. Do
       // not replace an unrelated transaction's proof with an ancestor proof.
-      if (current.merklePath !== undefined) continue
+      if (current.merklePath !== undefined) {
+        if (
+          current.inputs.some(
+            input => (input.sourceTXID ?? input.sourceTransaction?.id('hex')) === txid
+          )
+        ) {
+          behindProof = true
+        }
+        continue
+      }
       for (const input of current.inputs) {
+        // An unproven spender that names txid without carrying it is an
+        // incomplete BEEF, whatever a proven branch elsewhere shows.
+        if (input.sourceTransaction === undefined && input.sourceTXID === txid) unresolved = true
         if (typeof input.sourceTransaction === 'object') {
           if (pending.length >= MAX_PROOF_UPDATE_OUTPUTS) {
             throw new RangeError('Merkle-proof source traversal exceeded its work budget')
@@ -4065,10 +4089,20 @@ export class Engine {
         }
       }
     }
-    return found
+    if (found) return 'updated'
+    return behindProof && !unresolved ? 'behind-proof' : 'missing'
   }
 
-  private prepareMerkleProofUpdate(output: Output, txid: string, proof: MerklePath): number[] {
+  /**
+   * The output's updated BEEF, or undefined when it needs no update because
+   * its BEEF already ends at a proven transaction that directly spends the
+   * proven one (see updateInputProofs).
+   */
+  private prepareMerkleProofUpdate(
+    output: Output,
+    txid: string,
+    proof: MerklePath
+  ): number[] | undefined {
     this.assertStoredOutputRelations(output, 'Merkle-proof output')
     if (
       !Array.isArray(output.beef) ||
@@ -4085,7 +4119,9 @@ export class Engine {
     if (output.outputIndex >= tx.outputs.length) {
       throw new TypeError('Stored Merkle-proof output index is outside its transaction')
     }
-    if (!this.updateInputProofs(tx, txid, proof)) {
+    const update = this.updateInputProofs(tx, txid, proof)
+    if (update === 'behind-proof') return undefined
+    if (update === 'missing') {
       throw new TypeError('Stored descendant BEEF does not contain the proven transaction')
     }
     return tx.toBEEF()
@@ -4190,10 +4226,11 @@ export class Engine {
     }
 
     const graphOutputs = await this.collectMerkleProofOutputs(outputs)
-    const preparedUpdates = graphOutputs.map(output => ({
-      output,
-      beef: this.prepareMerkleProofUpdate(output, txid, proof)
-    }))
+    const preparedUpdates: Array<{ output: Output; beef: number[] }> = []
+    for (const output of graphOutputs) {
+      const beef = this.prepareMerkleProofUpdate(output, txid, proof)
+      if (beef !== undefined) preparedUpdates.push({ output, beef })
+    }
     for (const update of preparedUpdates) {
       await this.storage.updateTransactionBEEF(update.output.txid, update.beef)
       update.output.beef = update.beef
