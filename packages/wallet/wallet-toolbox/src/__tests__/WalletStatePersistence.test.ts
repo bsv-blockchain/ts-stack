@@ -333,6 +333,130 @@ describe('awaited wallet state continuity', () => {
     expect(f.saved).toBeUndefined()
     expect(f.manager.authenticated).toBe(false)
   })
+  test('unchanged and absent verified lookups remain distinguishable and local save retry never publishes', async () => {
+    const f = await fixture()
+    expect(f.manager.getUMPTokenSyncStatus()).toBe('unknown')
+    expect(await f.manager.syncUMPToken()).toBe(false)
+    expect(f.manager.getUMPTokenSyncStatus()).toBe('not-found')
+    f.visible(f.state.currentUMPToken)
+    expect(await f.manager.syncUMPToken()).toBe(false)
+    expect(f.manager.getUMPTokenSyncStatus()).toBe('unchanged')
+    f.failSave(true)
+    await expect(f.manager.retryStatePersistence()).rejects.toBeInstanceOf(WalletStateTransitionError)
+    f.failSave(false)
+    await f.manager.retryStatePersistence()
+    expect(f.saved).toBeDefined()
+    expect(f.publish).not.toHaveBeenCalled()
+    expect(f.republish).not.toHaveBeenCalled()
+    await f.manager.recoverPendingUMPUpdate()
+  })
+  test('checkpoint storage cannot be replaced after attaching, and recovery requires its original authenticated root', async () => {
+    const f = await fixture()
+    f.manager.setStatePersistence(f.persistence)
+    expect(() => f.manager.setStatePersistence({ ...f.persistence })).toThrow('already attached')
+    f.failSave(true)
+    await expect(f.manager.addProfile('Work')).rejects.toThrow()
+    const checkpoint = f.pending!
+    const other = await fixture()
+    other.manager.destroy()
+    expect(() => other.manager.loadPendingUMPUpdate(checkpoint)).toThrow('another account')
+    f.manager.destroy()
+    await expect(f.manager.recoverPendingUMPUpdate()).rejects.toThrow()
+    expect(f.republish).not.toHaveBeenCalled()
+  })
+  test('prepared-only intent can be retired without publication, while an incomplete signed protocol remains pending', async () => {
+    const f = await fixture()
+    f.failSave(true)
+    await expect(f.manager.addProfile('Work')).rejects.toThrow()
+    const { transaction: _transaction, outpoint: _outpoint, ...checkpoint } = f.pending!
+    const reopened = await fixture()
+    await reopened.manager.loadSnapshot(checkpoint.previousSnapshot)
+    reopened.manager.loadPendingUMPUpdate({ ...checkpoint, stage: 'prepared' })
+    await reopened.manager.recoverPendingUMPUpdate()
+    expect(reopened.events).toEqual(['snapshot', 'clear'])
+    expect(reopened.publish).not.toHaveBeenCalled()
+    expect(reopened.republish).not.toHaveBeenCalled()
+    const omitted = await fixture()
+    omitted.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, pending) => {
+      await pending!.onStarting?.()
+      return nextOutpoint
+    })
+    await expect(omitted.manager.addProfile('Work')).rejects.toThrow('needs reconciliation')
+    expect(omitted.pending?.stage).toBe('submitting')
+    expect(omitted.manager.listProfiles().map(profile => profile.name)).toEqual(['default'])
+    const unsupported = await fixture()
+    delete unsupported.interactor.checkpointVersion
+    await expect(unsupported.manager.addProfile('Work')).rejects.toThrow('cannot retain recoverable')
+    expect(unsupported.publish).not.toHaveBeenCalled()
+  })
+  test('recovery refuses conflicting overlay successors and restores the selected identity after re-publication failure', async () => {
+    const f = await fixture()
+    f.failSave(true)
+    await expect(f.manager.addProfile('Work')).rejects.toThrow()
+    const checkpoint = f.pending!
+    const reopened = await fixture()
+    await reopened.manager.loadSnapshot(checkpoint.previousSnapshot)
+    reopened.manager.loadPendingUMPUpdate(checkpoint)
+    reopened.visible({ ...f.state.currentUMPToken, currentOutpoint: '03'.repeat(32) + '.0' })
+    await expect(reopened.manager.recoverPendingUMPUpdate()).rejects.toThrow('needs reconciliation')
+    expect(reopened.republish).not.toHaveBeenCalled()
+    reopened.visible({ ...reopened.state.currentUMPToken, currentOutpoint: '04'.repeat(32) + '.0' })
+    await expect(reopened.manager.recoverPendingUMPUpdate()).rejects.toThrow('needs reconciliation')
+    expect(reopened.republish).not.toHaveBeenCalled()
+    reopened.visible(undefined)
+    reopened.republish.mockRejectedValueOnce(new Error('publication unavailable'))
+    const key = new PrivateKey(root).toPublicKey().toString()
+    await expect(reopened.manager.recoverPendingUMPUpdate()).rejects.toThrow('needs reconciliation')
+    expect(reopened.manager.listProfiles().find(profile => profile.active)?.identityKey).toBe(key)
+    expect(reopened.publish).not.toHaveBeenCalled()
+    expect(reopened.republish).toHaveBeenCalledTimes(1)
+  })
+  test('invalid selection and unauthenticated mutations cannot publish or persist a replacement', async () => {
+    const f = await fixture()
+    for (const id of [[], Array(16).fill(-1), Array(16).fill(256), Array(16).fill(1.5)]) {
+      await expect(f.manager.switchProfile(id)).rejects.toThrow('Invalid wallet profile ID')
+    }
+    await expect(f.manager.deleteProfile(Array(16).fill(0))).rejects.toThrow('Cannot delete the default')
+    await expect(f.manager.changePresentationKey([1])).rejects.toThrow('must be 32 bytes')
+    f.manager.destroy()
+    await expect(f.manager.syncUMPToken()).rejects.toThrow('not authenticated')
+    await expect(f.manager.addProfile('Work')).rejects.toThrow('not fully initialized')
+    await expect(f.manager.deleteProfile(Array(16).fill(1))).rejects.toThrow('not fully initialized')
+    await expect(f.manager.changePresentationKey(Array(32).fill(2))).rejects.toThrow('Not authenticated')
+    expect(f.publish).not.toHaveBeenCalled()
+    expect(f.saved).toBeUndefined()
+  })
+  test('checkpoint validation rejects malformed and stage-inconsistent durable capability data', () => {
+    const checkpoint: PendingUMPUpdate = {
+      version: 1,
+      operationId: '01'.repeat(16),
+      rootIdentityKey: new PrivateKey(root).toPublicKey().toString(),
+      previousSnapshot: [1],
+      proposedToken: [1],
+      activeProfileId: Array(16).fill(0),
+      stage: 'prepared'
+    }
+    expect(() => validatePendingUMPUpdate(checkpoint)).not.toThrow()
+    for (const invalid of [
+      null,
+      [],
+      'checkpoint',
+      {},
+      { ...checkpoint, version: 2 },
+      { ...checkpoint, operationId: 'ff' },
+      { ...checkpoint, rootIdentityKey: '04' + '01'.repeat(32) },
+      { ...checkpoint, previousSnapshot: [] },
+      { ...checkpoint, proposedToken: [-1] },
+      { ...checkpoint, activeProfileId: [1] },
+      { ...checkpoint, stage: 'unknown' },
+      { ...checkpoint, stage: 'signed' },
+      { ...checkpoint, stage: 'signed', transaction: [1], outpoint: 'bad' },
+      { ...checkpoint, transaction: [1] },
+      { ...checkpoint, outpoint: firstOutpoint }
+    ]) {
+      expect(() => validatePendingUMPUpdate(invalid)).toThrow('Invalid pending wallet update')
+    }
+  })
   test('malformed or foreign checkpoints do not replace the authenticated account', async () => {
     const f = await fixture()
     expect(() => validatePendingUMPUpdate({})).toThrow('Invalid pending')
@@ -385,6 +509,52 @@ describe('original signed UMP checkpoint binding', () => {
     Object.assign(subject, { broadcaster: { broadcast } })
     return { wallet, subject, sourceToken, nextToken, transaction, checkpoint, broadcast, outpoint }
   }
+  test('verifies discovered proof ownership and refuses absent proof before recovery', async () => {
+    const f = await signedFixture()
+    const find = jest.fn(async () => ({ beef: f.transaction.toAtomicBEEF(), outputIndex: 0 }))
+    Object.assign(f.subject, { findByOutpoint: find })
+    await f.subject.verifyToken(f.wallet, 'admin.invalid', { ...f.nextToken, currentOutpoint: f.outpoint })
+    await expect(f.subject.verifyToken(f.wallet, 'admin.invalid', f.nextToken)).rejects.toThrow('no outpoint')
+    find.mockResolvedValueOnce(undefined as never)
+    await expect(
+      f.subject.verifyToken(f.wallet, 'admin.invalid', { ...f.nextToken, currentOutpoint: f.outpoint })
+    ).rejects.toThrow('proof is unavailable')
+    await expect(
+      f.subject.publishCheckpoint(f.wallet as WalletInterface, 'admin.invalid', f.nextToken, f.nextToken, f.checkpoint)
+    ).rejects.toThrow('needs reconciliation')
+    expect(f.broadcast).not.toHaveBeenCalled()
+  })
+  test('captures the exact completed receipt before broadcast and refuses ambiguous token outputs', async () => {
+    const f = await signedFixture()
+    const events: string[] = []
+    Object.assign(f.subject, { completeUMPAction: jest.fn(async () => f.transaction) })
+    f.broadcast.mockImplementation(async () => {
+      events.push('broadcast')
+      return { status: 'success', txid: f.transaction.id('hex'), message: 'published' }
+    })
+    const completed = jest.fn(async (transaction: number[], outpoint: string) => {
+      events.push('completed')
+      expect(transaction).toEqual(f.transaction.toAtomicBEEF())
+      expect(outpoint).toBe(f.outpoint)
+    })
+    await f.subject.buildAndSend(f.wallet as WalletInterface, 'admin.invalid', f.nextToken, undefined, {
+      operationId: f.checkpoint.operationId,
+      onStarting: async () => {
+        events.push('starting')
+      },
+      onCompleted: completed
+    })
+    expect(events).toEqual(['starting', 'completed', 'broadcast'])
+    f.transaction.outputs.push(f.transaction.outputs[0])
+    await expect(
+      f.subject.buildAndSend(f.wallet as WalletInterface, 'admin.invalid', f.nextToken, undefined, {
+        operationId: f.checkpoint.operationId,
+        onCompleted: completed
+      })
+    ).rejects.toThrow('exactly one requested token output')
+    expect(f.broadcast).toHaveBeenCalledTimes(1)
+    expect(completed).toHaveBeenCalledTimes(1)
+  })
   test('re-publishes the identical authenticated transaction without creating another action', async () => {
     const f = await signedFixture()
     await expect(
