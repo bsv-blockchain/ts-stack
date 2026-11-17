@@ -1695,6 +1695,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   private transitionTail: Promise<unknown> = Promise.resolve()
   private stateGeneration = 0
   private stateTransitionActive = false
+  private stateTransitionGeneration = 0
   private statePersistencePending = false
   private umpSyncStatus: 'unknown' | 'unchanged' | 'updated' | 'not-found' = 'unknown'
 
@@ -1738,8 +1739,11 @@ export class CWIStyleWalletManager implements WalletInterface {
         if (!recovery && this.pendingUMPUpdate != null)
           throw new WalletStateTransitionError(this.pendingUMPUpdate.stage, undefined)
         this.stateTransitionActive = true
+        this.stateTransitionGeneration = generation
         try {
-          return await operation()
+          const result = await operation()
+          this.assertTransitionCurrent()
+          return result
         } catch (error) {
           if (this.pendingUMPUpdate != null && !(error instanceof WalletStateTransitionError))
             throw new WalletStateTransitionError(this.pendingUMPUpdate.stage, error)
@@ -1752,13 +1756,24 @@ export class CWIStyleWalletManager implements WalletInterface {
     return pending
   }
 
+  private assertTransitionCurrent(): void {
+    if (
+      this.statePersistence != null &&
+      this.stateTransitionActive &&
+      this.stateTransitionGeneration !== this.stateGeneration
+    )
+      throw new Error('Wallet session changed during the state transition.')
+  }
+
   private async persistState(profileId = this.activeProfileId): Promise<void> {
     if (this.statePersistence == null) return
+    this.assertTransitionCurrent()
     const snapshot = this.saveSnapshot()
     // Snapshot v2 deliberately keeps the device selection outside its payload.
     snapshot.splice(33, 16, ...profileId)
     try {
       await this.statePersistence.saveSnapshot(snapshot)
+      this.assertTransitionCurrent()
       this.statePersistencePending = false
     } catch (error) {
       this.statePersistencePending = true
@@ -1799,6 +1814,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       if (toHex(root) !== toHex(authenticatedRoot)) throw new Error('Pending wallet update root mismatch.')
       const previousToken = this.deserializeUMPToken(payload.read(payload.readVarIntNumStrict(false)))
       const outpoint = await this.resolvePendingUpdateOutpoint(root, pending, token, previousToken)
+      this.assertTransitionCurrent()
       token.currentOutpoint = outpoint
       this.currentUMPToken = token
       await this.setupRoot(root)
@@ -2745,6 +2761,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
   /** Build an internal profile wallet while an unpublished registration is not yet authenticated. */
   private async activateProfile(profileId: number[]): Promise<void> {
+    this.assertTransitionCurrent()
     if (this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null) {
       throw new Error('Cannot activate profile: root keys are missing.')
     }
@@ -3130,6 +3147,9 @@ export class CWIStyleWalletManager implements WalletInterface {
       )
       if (this.pendingUMPUpdate != null && this.pendingUMPUpdate.transaction == null)
         throw new Error('UMP interactor omitted the completed transaction checkpoint.')
+      // A completed original transaction remains recoverable after teardown,
+      // but it cannot restore the old account or replace a newer session.
+      this.assertTransitionCurrent()
       // Update the manager's state
       this.currentUMPToken = newTokenData
       // Keep the profiles in step with the token that now holds them. Callers
@@ -3165,6 +3185,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   private async prepareUMPUpdate(token: UMPToken, rootPrimaryKey: number[]): Promise<void> {
+    this.assertTransitionCurrent()
     if (this.statePersistence != null) {
       if (this.UMPTokenInteractor.checkpointVersion !== 1)
         throw new Error('This UMP interactor cannot retain recoverable updates.')
@@ -3192,11 +3213,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       : {
           operationId: this.pendingUMPUpdate.operationId,
           onStarting: async () => {
+            this.assertTransitionCurrent()
             const pending = this.pendingUMPUpdate
             if (pending == null) throw new Error('Wallet update checkpoint is missing.')
             this.pendingUMPUpdate = { ...pending, stage: 'submitting' }
             try {
               await this.statePersistence?.savePendingUpdate(this.pendingUMPUpdate)
+              this.assertTransitionCurrent()
             } catch (error) {
               this.pendingUMPUpdate = pending
               throw error

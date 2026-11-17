@@ -264,6 +264,75 @@ describe('awaited wallet state continuity', () => {
     await expect(f.manager.syncUMPToken()).rejects.toThrow('Choose a profile explicitly')
     expect(f.manager.listProfiles().find(profile => profile.active)?.id).toEqual(id)
   })
+  test('destroy during reconciliation cannot restore the old account after lookup returns', async () => {
+    const f = await fixture()
+    f.failSave(true)
+    await expect(f.manager.addProfile('Work')).rejects.toBeInstanceOf(WalletStateTransitionError)
+    f.failSave(false)
+    const current = f.state.currentUMPToken
+    const entered = deferred<void>(),
+      gate = deferred<void>()
+    f.interactor.findByPresentationKeyHash = async () => {
+      entered.resolve()
+      await gate.promise
+      return current
+    }
+    const recovery = f.manager.recoverPendingUMPUpdate()
+    await entered.promise
+    f.manager.destroy()
+    gate.resolve()
+    await expect(recovery).rejects.toThrow()
+    expect(f.manager.authenticated).toBe(false)
+    await expect(f.manager.getPublicKey({ identityKey: true }, 'app.invalid')).rejects.toThrow()
+  })
+  test('destroy while saving admission cannot start a financial action', async () => {
+    const f = await fixture()
+    const entered = deferred<void>(),
+      gate = deferred<void>()
+    const save = (f.persistence.savePendingUpdate as jest.Mock).getMockImplementation()!
+    ;(f.persistence.savePendingUpdate as jest.Mock).mockImplementation(async pending => {
+      await save(pending)
+      if (pending?.stage === 'submitting') {
+        entered.resolve()
+        await gate.promise
+      }
+    })
+    let admitted = 0
+    f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
+      await checkpoint!.onStarting?.()
+      admitted++
+      await checkpoint!.onCompleted([1], nextOutpoint)
+      return nextOutpoint
+    })
+    const creation = f.manager.addProfile('Work')
+    await entered.promise
+    f.manager.destroy()
+    gate.resolve()
+    await expect(creation).rejects.toThrow()
+    expect(admitted).toBe(0)
+    expect(f.pending).toBeNull()
+    expect(f.manager.authenticated).toBe(false)
+  })
+  test('destroy during publication retains its original receipt without restoring the account', async () => {
+    const f = await fixture()
+    const entered = deferred<void>(),
+      gate = deferred<void>()
+    f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
+      await checkpoint!.onStarting?.()
+      await checkpoint!.onCompleted([1], nextOutpoint)
+      entered.resolve()
+      await gate.promise
+      return nextOutpoint
+    })
+    const creation = f.manager.addProfile('Work')
+    await entered.promise
+    f.manager.destroy()
+    gate.resolve()
+    await expect(creation).rejects.toThrow()
+    expect(f.pending?.stage).toBe('signed')
+    expect(f.saved).toBeUndefined()
+    expect(f.manager.authenticated).toBe(false)
+  })
   test('malformed or foreign checkpoints do not replace the authenticated account', async () => {
     const f = await fixture()
     expect(() => validatePendingUMPUpdate({})).toThrow('Invalid pending')
