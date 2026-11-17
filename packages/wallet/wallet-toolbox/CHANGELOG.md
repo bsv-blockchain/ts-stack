@@ -1,5 +1,14 @@
 # 2.17.0 source candidate
 
+Add optional awaited host persistence, serialized profile/root transitions, atomic
+profile activation, explicit UMP refresh status and owner checks, and checkpointed
+recovery of the original UMP update. Snapshots and BRC-100/UMP wire formats are
+unchanged. Existing callers retain manual snapshot ownership. Opted-in hosts must
+retain private checkpoints through local write, broadcast and activation failures;
+reconcile them before retry or rollback. See Optional durable profile state in the
+README. This extends the existing unpublished minor candidate; no publication or
+application release is performed.
+
 Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages
 report offset plus page length; full pages and empty later pages use an unpaged
 count with the same user, deletion, type and certifier filters. SQL aggregate

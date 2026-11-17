@@ -1,5 +1,62 @@
 # @bsv/wallet-toolbox-mobile
 
+## Optional durable profile state (2.17.0 source candidate)
+
+`CWIStyleWalletManager` and its `WalletAuthenticationManager` subclass accept an
+optional host store through `setStatePersistence`. Attach it before authentication.
+The host awaits and verifies its own durable commits; `saveSnapshot()` continues
+to return bytes and does not itself write device storage. Existing callers that
+do not attach a store keep that contract. Snapshot v1/v2 and on-chain UMP formats,
+KDFs, BRC-100 calls, defaults and peer ranges are unchanged.
+
+```ts
+import type { WalletAuthenticationManager, WalletStatePersistence } from '@bsv/wallet-toolbox-mobile'
+
+declare const manager: WalletAuthenticationManager
+declare const durableDeviceStore: WalletStatePersistence
+manager.setStatePersistence(durableDeviceStore)
+```
+
+The host must store both snapshot and pending-update capabilities privately,
+partitioned by account, network and service configuration. Never log those bytes.
+Fence application requests while changing profiles. Activation publishes the new
+profile ID and underlying wallet together after construction succeeds. Opted-in
+root/profile operations serialize, await persistence and refuse public wallet calls
+while their state is changing or needs recovery. A failed builder retains the
+previous SDK identity; a host builder with external side effects must additionally
+restore or withhold its own serving runtime.
+
+A UMP update records `prepared`, `submitting`, `signed` and `published` stages.
+The signed stage retains the exact transaction before overlay publication. Store
+callbacks are awaited; custom interactors opt in with `checkpointVersion: 1` and
+must implement the action checkpoint and original-transaction publication contract.
+A submitting-stage error may have spent the predecessor: do not repeat the
+operation. After restart, authenticate/restore the original account, call
+`loadPendingUMPUpdate` with its retained checkpoint, then
+`recoverPendingUMPUpdate`. Recovery accepts the verified exact successor or
+re-publishes the retained original transaction after checking its owner, fields,
+unique token output and predecessor input. It never creates another wallet action.
+A merely prepared operation can be cleared because execution was not admitted.
+A submitting operation without a signed receipt remains explicitly unresolved
+until the original wallet action is reconciled; absence from discovery cannot
+prove that action never occurred.
+
+`syncUMPToken()` retains its boolean return. `getUMPTokenSyncStatus()` additionally
+distinguishes unchanged, updated, authoritative not-found and unknown results.
+Refresh verifies the discovered owner where the interactor supports it, rebuilds
+the selected runtime and persists through the attached store. An unavailable
+selected profile requires an explicit choice; it does not silently activate the
+default. Lookup errors preserve prior state. Applications may retain offline reads
+from a committed cache, but should block new UMP mutations without a verified
+current account. `retryStatePersistence()` retries a device save without publishing.
+
+Adoption is optional and is a minor additive API change. There is no automatic
+schema migration: the host owns its storage and upgrade/restore tests. Before
+rolling back, stop new operations, reconcile pending updates with the original
+qualified artifact, retain their checkpoints and export a current legacy-compatible
+snapshot. Do not discard a checkpoint or restore a spent predecessor as current.
+Source merge, package publication and application release remain separate actions.
+
 ## Certificate pagination
 
 The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
