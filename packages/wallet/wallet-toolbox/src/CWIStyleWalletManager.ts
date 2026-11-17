@@ -1798,42 +1798,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       const root = payload.read(32)
       if (toHex(root) !== toHex(authenticatedRoot)) throw new Error('Pending wallet update root mismatch.')
       const previousToken = this.deserializeUMPToken(payload.read(payload.readVarIntNumStrict(false)))
-      const options = { pinnedOutpoint: previousToken.currentOutpoint }
-      const refreshed =
-        (await this.UMPTokenInteractor.findByPresentationKeyHash(token.presentationHash, options)) ??
-        (await this.UMPTokenInteractor.findByRecoveryKeyHash(token.recoveryHash, options))
-      const sameFields = (candidate: UMPToken) =>
-        toHex(this.serializeUMPToken({ ...candidate, currentOutpoint: '' }, true)) === toHex(pending.proposedToken)
-      let outpoint: string
-      if (refreshed != null && sameFields(refreshed) && refreshed.currentOutpoint != null) {
-        if (pending.outpoint != null && pending.outpoint !== refreshed.currentOutpoint)
-          throw new Error('Discovered update does not match the original signed transaction.')
-        await this.UMPTokenInteractor.verifyToken?.(
-          new ProtoWallet(new PrivateKey(root)),
-          this.adminOriginator,
-          refreshed
-        )
-        outpoint = refreshed.currentOutpoint
-      } else {
-        if (refreshed != null && refreshed.currentOutpoint !== previousToken.currentOutpoint)
-          throw new Error('A different account update must be reconciled before continuing.')
-        if (pending.transaction == null || this.UMPTokenInteractor.publishCheckpoint == null)
-          throw new WalletStateTransitionError(pending.stage, undefined)
-        const selected = [...this.activeProfileId]
-        await this.activateProfile(DEFAULT_PROFILE_ID)
-        try {
-          outpoint = await this.UMPTokenInteractor.publishCheckpoint(
-            this.underlying!,
-            this.adminOriginator,
-            token,
-            previousToken,
-            pending
-          )
-        } catch (error) {
-          await this.activateProfile(selected).catch(() => {})
-          throw error
-        }
-      }
+      const outpoint = await this.resolvePendingUpdateOutpoint(root, pending, token, previousToken)
       token.currentOutpoint = outpoint
       this.currentUMPToken = token
       await this.setupRoot(root)
@@ -1842,6 +1807,49 @@ export class CWIStyleWalletManager implements WalletInterface {
       await this.statePersistence?.savePendingUpdate(null)
       this.pendingUMPUpdate = undefined
     }, true)
+  }
+
+  private async resolvePendingUpdateOutpoint(
+    root: number[],
+    pending: PendingUMPUpdate,
+    token: UMPToken,
+    previousToken: UMPToken
+  ): Promise<string> {
+    const options = { pinnedOutpoint: previousToken.currentOutpoint }
+    const refreshed =
+      (await this.UMPTokenInteractor.findByPresentationKeyHash(token.presentationHash, options)) ??
+      (await this.UMPTokenInteractor.findByRecoveryKeyHash(token.recoveryHash, options))
+    const sameFields = (candidate: UMPToken) =>
+      toHex(this.serializeUMPToken({ ...candidate, currentOutpoint: '' }, true)) === toHex(pending.proposedToken)
+    if (refreshed != null && sameFields(refreshed) && refreshed.currentOutpoint != null) {
+      if (pending.outpoint != null && pending.outpoint !== refreshed.currentOutpoint)
+        throw new Error('Discovered update does not match the original signed transaction.')
+      await this.UMPTokenInteractor.verifyToken?.(
+        new ProtoWallet(new PrivateKey(root)),
+        this.adminOriginator,
+        refreshed
+      )
+      return refreshed.currentOutpoint
+    } else {
+      if (refreshed != null && refreshed.currentOutpoint !== previousToken.currentOutpoint)
+        throw new Error('A different account update must be reconciled before continuing.')
+      if (pending.transaction == null || this.UMPTokenInteractor.publishCheckpoint == null)
+        throw new WalletStateTransitionError(pending.stage, undefined)
+      const selected = [...this.activeProfileId]
+      await this.activateProfile(DEFAULT_PROFILE_ID)
+      try {
+        return await this.UMPTokenInteractor.publishCheckpoint(
+          this.underlying!,
+          this.adminOriginator,
+          token,
+          previousToken,
+          pending
+        )
+      } catch (error) {
+        await this.activateProfile(selected).catch(() => {})
+        throw error
+      }
+    }
   }
 
   /** Retry only local persistence. This never creates or publishes a transaction. */
