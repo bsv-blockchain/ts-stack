@@ -1719,7 +1719,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       new PrivateKey(this.rootPrimaryKey).toPublicKey().toString() !== checkpoint.rootIdentityKey
     )
       throw new Error('Pending wallet update belongs to another account.')
-    this.pendingUMPUpdate = JSON.parse(JSON.stringify(checkpoint)) as PendingUMPUpdate
+    this.pendingUMPUpdate = {
+      ...checkpoint,
+      previousSnapshot: [...checkpoint.previousSnapshot],
+      proposedToken: [...checkpoint.proposedToken],
+      activeProfileId: [...checkpoint.activeProfileId],
+      ...(checkpoint.transaction == null ? {} : { transaction: [...checkpoint.transaction] })
+    }
   }
 
   private runStateTransition<T>(operation: () => Promise<T>, recovery = false): Promise<T> {
@@ -1760,18 +1766,23 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
   }
 
+  private pendingUpdateRoot(pending: PendingUMPUpdate): number[] {
+    if (
+      this.rootPrimaryKey == null ||
+      !this.authenticated ||
+      new PrivateKey(this.rootPrimaryKey).toPublicKey().toString() !== pending.rootIdentityKey
+    )
+      throw new Error('Pending wallet update belongs to another account.')
+    return this.rootPrimaryKey
+  }
+
   /** Reconcile or re-publish the original update. Never constructs a replacement action. */
   recoverPendingUMPUpdate(): Promise<void> {
     return this.runStateTransition(async () => {
       const pending = this.pendingUMPUpdate
       if (pending == null) return
       validatePendingUMPUpdate(pending)
-      if (
-        this.rootPrimaryKey == null ||
-        !this.authenticated ||
-        new PrivateKey(this.rootPrimaryKey).toPublicKey().toString() !== pending.rootIdentityKey
-      )
-        throw new Error('Pending wallet update belongs to another account.')
+      const authenticatedRoot = this.pendingUpdateRoot(pending)
       if (pending.stage === 'prepared') {
         await this.statePersistence?.savePendingUpdate(null)
         this.pendingUMPUpdate = undefined
@@ -1785,7 +1796,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       savedReader.read(16)
       const payload = new Reader(new SymmetricKey(key).decrypt(savedReader.read()) as number[])
       const root = payload.read(32)
-      if (toHex(root) !== toHex(this.rootPrimaryKey)) throw new Error('Pending wallet update root mismatch.')
+      if (toHex(root) !== toHex(authenticatedRoot)) throw new Error('Pending wallet update root mismatch.')
       const previousToken = this.deserializeUMPToken(payload.read(payload.readVarIntNumStrict(false)))
       const options = { pinnedOutpoint: previousToken.currentOutpoint }
       const refreshed =
@@ -2990,6 +3001,12 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Recomputes UMP token fields with updated factors and profiles, then publishes the update.
    * This operation requires the *root* privileged key and the *default* profile wallet.
    */
+  private async clearUnsubmittedUMPUpdate(): Promise<void> {
+    if (this.pendingUMPUpdate?.stage !== 'prepared') return
+    await this.statePersistence?.savePendingUpdate(null)
+    this.pendingUMPUpdate = undefined
+  }
+
   private async updateFactors(
     passwordSalt: number[],
     passwordKey: number[],
@@ -3119,10 +3136,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       }
       await this.persistState(currentActiveId)
     } catch (error) {
-      if (this.pendingUMPUpdate?.stage === 'prepared') {
-        await this.statePersistence?.savePendingUpdate(null)
-        this.pendingUMPUpdate = undefined
-      }
+      await this.clearUnsubmittedUMPUpdate()
       throw error
     } finally {
       // Switch back if we temporarily switched

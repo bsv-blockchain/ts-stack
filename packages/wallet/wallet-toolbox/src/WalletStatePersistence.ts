@@ -63,7 +63,7 @@ export function validatePendingUMPUpdate(value: unknown): asserts value is Pendi
     ((item.stage === 'signed' || item.stage === 'published') &&
       (!bytes(item.transaction, 16 * 1024 * 1024) ||
         typeof item.outpoint !== 'string' ||
-        !/^[0-9a-f]{64}\.(0|[1-9][0-9]*)$/.test(item.outpoint))) ||
+        !/^[0-9a-f]{64}\.(0|[1-9]\d*)$/.test(item.outpoint))) ||
     ((item.stage === 'prepared' || item.stage === 'submitting') &&
       (item.transaction !== undefined || item.outpoint !== undefined))
   ) {
