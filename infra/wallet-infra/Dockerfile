@@ -1,5 +1,5 @@
-# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+# Base version 24.22.3-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS build
 
 RUN apk add --no-cache g++ make python3
 
@@ -14,7 +14,7 @@ COPY src ./src
 RUN npm run build \
  && npm prune --omit=dev
 
-FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 # Install the reviewed Alpine libcrypto3/libssl3 3.5.9-r0 pin for
 # CVE-2026-84782 together with nginx.
