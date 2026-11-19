@@ -259,13 +259,15 @@ describe('R1Comb: encodings and refusals', () => {
   it('pushData uses the minimal push opcode for every size class', () => {
     expect(R1Comb.pushData([])).toEqual([0x00])
     expect(R1Comb.pushData([1, 2])).toEqual([2, 1, 2])
-    expect(R1Comb.pushData(new Array(76).fill(7)).slice(0, 2)).toEqual([0x4c, 76])
-    expect(R1Comb.pushData(new Array(300).fill(7)).slice(0, 3)).toEqual([
+    expect(R1Comb.pushData(Array.from({ length: 76 }, () => 7)).slice(0, 2)).toEqual([0x4c, 76])
+    expect(R1Comb.pushData(Array.from({ length: 300 }, () => 7)).slice(0, 3)).toEqual([
       0x4d,
       300 & 0xff,
       300 >>> 8
     ])
-    expect(R1Comb.pushData(new Array(0x10000).fill(7)).slice(0, 5)).toEqual([0x4e, 0, 0, 1, 0])
+    expect(R1Comb.pushData(Array.from({ length: 0x10000 }, () => 7)).slice(0, 5)).toEqual([
+      0x4e, 0, 0, 1, 0
+    ])
   })
 
   it('scriptNum is minimal little-endian sign-magnitude', () => {
@@ -328,7 +330,7 @@ describe('R1Comb: encodings and refusals', () => {
       R1Comb.buildLock({ commitments: 'x' as unknown as string[], saltHex64: salt })
     ).toThrow(R1CombError)
     expect(() =>
-      R1Comb.buildLock({ commitments: new Array(6).fill(c[0]), saltHex64: salt })
+      R1Comb.buildLock({ commitments: Array.from({ length: 6 }, () => c[0]), saltHex64: salt })
     ).toThrow(R1CombError)
     expect(() => R1Comb.buildLock({ commitments: ['00'], saltHex64: salt })).toThrow(R1CombError)
     expect(() =>
