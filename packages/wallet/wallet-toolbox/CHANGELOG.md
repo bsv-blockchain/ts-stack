@@ -29,6 +29,11 @@ unchanged. No wire or schema change, and no consumer migration.
   deriver may answer with a Promise (a native or off-thread deriver). The
   signing guard runs again after it.
 
+- Bound the Wallet Storage Monitor’s status, proof, and reorg review work so
+  other tasks can continue. Resume ARC events from the last durably handled
+  event and reconcile exact outpoints when a confirmed spender has a verified
+  Merkle proof.
+
 # 2.17.0 — published
 
 Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages

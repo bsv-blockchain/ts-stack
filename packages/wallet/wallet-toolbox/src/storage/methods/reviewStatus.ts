@@ -173,41 +173,47 @@ interface ReviewStatusQuery {
 export async function reviewStatus(storage: StorageKnex, args: StorageStatusReviewArgs): Promise<{ log: string }> {
   if (args.trx != null || !(await storage.supportsPrimaryWriteFences())) return await reviewStatusLegacy(storage, args)
   let log = ''
-  let afterUser = 0
   const admit: StorageWriterAdmission = args.admission ?? (async operation => await operation())
-  for (;;) {
+  const reviewTransactions = async (
+    user: AuthId & { userId: number },
+    write: StorageActiveWrite,
+    afterTransaction: number
+  ): Promise<void> => {
+    const ids: Array<{ transactionId: number }> = await storage
+      .knex('transactions')
+      .select('transactionId')
+      .where({ userId: user.userId })
+      .where('transactionId', '>', afterTransaction)
+      .orderBy('transactionId')
+      .limit(100)
+    const last = ids.at(-1)
+    if (last == null) return
+    await runInSeries(ids, async ({ transactionId }) => {
+      log += await reviewFencedTransaction(storage, args, user, transactionId, write, admit)
+    })
+    await reviewTransactions(user, write, last.transactionId)
+  }
+  const reviewUsers = async (afterUser: number): Promise<void> => {
     const users: Array<{ userId: number; identityKey: string }> = await storage
       .knex('users')
       .select('userId', 'identityKey')
       .where('userId', '>', afterUser)
       .orderBy('userId')
       .limit(100)
-    if (!users.length) break
-    for (const user of users) {
-      afterUser = user.userId
+    const last = users.at(-1)
+    if (last == null) return
+    await runInSeries(users, async user => {
       try {
         const write = await storage.activeWriteTransaction(user)
-        let afterTransaction = 0
-        for (;;) {
-          const ids: Array<{ transactionId: number }> = await storage
-            .knex('transactions')
-            .select('transactionId')
-            .where({ userId: user.userId })
-            .where('transactionId', '>', afterTransaction)
-            .orderBy('transactionId')
-            .limit(100)
-          if (!ids.length) break
-          await runInSeries(ids, async ({ transactionId }) => {
-            log += await reviewFencedTransaction(storage, args, user, transactionId, write, admit)
-            afterTransaction = transactionId
-          })
-        }
+        await reviewTransactions(user, write, 0)
       } catch (error) {
         if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
         log += `user ${user.userId} review deferred to its current primary\n`
       }
-    }
+    })
+    await reviewUsers(last.userId)
   }
+  await reviewUsers(0)
   return { log }
 }
 
