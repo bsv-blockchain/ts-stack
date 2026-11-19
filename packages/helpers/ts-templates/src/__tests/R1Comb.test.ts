@@ -100,7 +100,7 @@ describe('R1Comb: byte-identical to the BSV Wallet Vault', () => {
         commitments: l.commitments,
         saltHex64: V.keys[0].salt
       }).toBinary()
-      expect(bin.length).toBe(l.length)
+      expect(bin).toHaveLength(l.length)
       expect(hex(bin.slice(0, 400))).toBe(l.head)
       expect(sha(bin)).toBe(l.sha256)
       expect(R1Comb.bakedCommitments(LockingScript.fromBinary(bin))).toEqual(l.commitments)

@@ -126,7 +126,7 @@ export function scriptNum(v: bigint): number[] {
     b.push(Number(m & 0xffn))
     m >>= 8n
   }
-  if ((b[b.length - 1] & 0x80) !== 0) b.push(neg ? 0x80 : 0x00)
+  if (((b.at(-1) as number) & 0x80) !== 0) b.push(neg ? 0x80 : 0x00)
   else if (neg) b[b.length - 1] |= 0x80
   return b
 }
@@ -151,32 +151,26 @@ const MACROS: Record<string, string> = {
 export type AsmParam = bigint | number | number[]
 const OPCODES = OP as unknown as Record<string, number | undefined>
 
+/** One asm token: macro, {PARAM}, <hex> raw push, decimal number, or opcode name. */
+function asmToken(tok: string, params: Record<string, AsmParam>): number[] {
+  const macro = MACROS[tok]
+  if (macro !== undefined) return asm(macro, params)
+  if (tok.startsWith('{') && tok.endsWith('}')) {
+    const v = params[tok.slice(1, -1)]
+    if (v === undefined) throw invalid(`asm: missing param ${tok}`)
+    return typeof v === 'bigint' || typeof v === 'number' ? encNum(v) : pushData(v)
+  }
+  if (tok.startsWith('<') && tok.endsWith('>')) return pushData(bytesOf(tok.slice(1, -1)))
+  if (/^-?\d+$/.test(tok)) return encNum(BigInt(tok))
+  const op = OPCODES[tok]
+  if (op === undefined) throw invalid(`asm: unknown opcode ${tok}`)
+  return [op]
+}
+
 export function asm(text: string, params: Record<string, AsmParam> = {}): number[] {
   const out: number[] = []
   for (const tok of text.trim().split(/\s+/)) {
-    if (tok === '') continue
-    const macro = MACROS[tok]
-    if (macro !== undefined) {
-      out.push(...asm(macro, params))
-      continue
-    }
-    if (tok.startsWith('{') && tok.endsWith('}')) {
-      const v = params[tok.slice(1, -1)]
-      if (v === undefined) throw invalid(`asm: missing param ${tok}`)
-      out.push(...(typeof v === 'bigint' || typeof v === 'number' ? encNum(v) : pushData(v)))
-      continue
-    }
-    if (tok.startsWith('<') && tok.endsWith('>')) {
-      out.push(...pushData(bytesOf(tok.slice(1, -1))))
-      continue
-    }
-    if (/^-?\d+$/.test(tok)) {
-      out.push(...encNum(BigInt(tok)))
-      continue
-    }
-    const op = OPCODES[tok]
-    if (op === undefined) throw invalid(`asm: unknown opcode ${tok}`)
-    out.push(op)
+    if (tok !== '') out.push(...asmToken(tok, params))
   }
   return out
 }
@@ -262,7 +256,7 @@ const copyTable = (table: readonly AffinePoint[]): AffinePoint[] =>
   table.map(({ x, y }) => ({ x, y }))
 /** table(G) — computed once on first use (32 scalar multiplications), then constant. */
 export function gTable(): AffinePoint[] {
-  if (gTableCache === null) gTableCache = tableOf(curve.g as AffinePoint)
+  gTableCache ??= tableOf(curve.g as AffinePoint)
   // Never expose the cache itself: callers may freely mutate the returned table
   // without changing future locks or commitments.
   return copyTable(gTableCache)
@@ -334,26 +328,24 @@ const K_Q = 2 * TABLE_SIZE
 let headerBeforeSaltCache: number[] | null = null
 function emitHeaderBeforeSalt(): number[] {
   if (headerBeforeSaltCache !== null) return headerBeforeSaltCache
-  const out: number[] = []
-  // Canonical witness shape: reject extra bottom pushes as well as missing fields.
-  out.push(...asm('OP_DEPTH {DEPTH} OP_NUMEQUALVERIFY', { DEPTH: 3 + K_Q + 4 }))
-  // H0: bind withdrawals to transaction version 1 at consensus level, then
-  // e = unsigned-LE(hash256(preimage)); preimage -> alt. OP_PUSH_TX later binds
-  // this exact preimage to the transaction being evaluated.
-  out.push(
+  const one = 'OP_DUP 2 OP_MOD OP_NOTIF {N} OP_ADD OP_ENDIF {C} OP_ADD 2 OP_DIV OP_SWAP'
+  const out: number[] = [
+    // Canonical witness shape: reject extra bottom pushes as well as missing fields.
+    ...asm('OP_DEPTH {DEPTH} OP_NUMEQUALVERIFY', { DEPTH: 3 + K_Q + 4 }),
+    // H0: bind withdrawals to transaction version 1 at consensus level, then
+    // e = unsigned-LE(hash256(preimage)); preimage -> alt. OP_PUSH_TX later binds
+    // this exact preimage to the transaction being evaluated.
     ...asm(`
     OP_OVER 4 OP_SPLIT OP_DROP <01000000> OP_EQUALVERIFY
     OP_OVER OP_HASH256 <00> OP_CAT OP_BIN2NUM
     2 OP_ROLL OP_TOALTSTACK OP_SWAP OP_TOALTSTACK
-  `)
-  )
-  // H1: n -> alt; enforce canonical r, low-S s and sInv before any modular
-  // arithmetic; s*sInv == 1; u1 = e*sInv; u2 = r*sInv. The r checks are
-  // consensus-critical: without 1 <= r < p and r != n, CRT can give r one
-  // residue modulo n for scalar multiplication and another modulo p for the
-  // final affine-x check, permitting a signature-free spend.
-  //     [.. s sInv u1]: u1(0) sInv(1) s(2) Q63(3) .. Q0(2+K) u1'(3+K) u2'(4+K) r(5+K)
-  out.push(
+  `),
+    // H1: n -> alt; enforce canonical r, low-S s and sInv before any modular
+    // arithmetic; s*sInv == 1; u1 = e*sInv; u2 = r*sInv. The r checks are
+    // consensus-critical: without 1 <= r < p and r != n, CRT can give r one
+    // residue modulo n for scalar multiplication and another modulo p for the
+    // final affine-x check, permitting a signature-free spend.
+    //     [.. s sInv u1]: u1(0) sInv(1) s(2) Q63(3) .. Q0(2+K) u1'(3+K) u2'(4+K) r(5+K)
     ...asm(
       `
     {N} OP_TOALTSTACK
@@ -367,18 +359,15 @@ function emitHeaderBeforeSalt(): number[] {
     2 OP_ROLL OP_DROP 2 OP_ROLL OP_DROP
   `,
       { N: P256_N, HALFP1: P256_LOW_S_MAX + 1n, P: P256_P, RDEPTH: K_Q + 5 }
-    )
-  )
-  // H2: recode u2 then u1 -> [.. Q63 u1' u2']
-  const one = 'OP_DUP 2 OP_MOD OP_NOTIF {N} OP_ADD OP_ENDIF {C} OP_ADD 2 OP_DIV OP_SWAP'
-  out.push(...asm(`${one} ${one}`, { N: P256_N, C: RECODE_CONST }))
-  // H3: computed u2' == pushed u2' (depth K+3), then computed u1' == pushed u1' (depth K+1) -> [r u2' u1' Q..]
-  out.push(
+    ),
+    // H2: recode u2 then u1 -> [.. Q63 u1' u2']
+    ...asm(`${one} ${one}`, { N: P256_N, C: RECODE_CONST }),
+    // H3: computed u2' == pushed u2' (depth K+3), then computed u1' == pushed u1' (depth K+1) -> [r u2' u1' Q..]
     ...asm('{DU2} OP_PICK OP_NUMEQUALVERIFY {DU1} OP_PICK OP_NUMEQUALVERIFY', {
       DU2: K_Q + 3,
       DU1: K_Q + 1
     })
-  )
+  ]
   headerBeforeSaltCache = out
   return out
 }
@@ -418,7 +407,7 @@ function emitH5(commitments: number[][]): number[] {
   }
   for (let i = 0; i < commitments.length - 1; i++)
     out.push(...asm('OP_DUP {C} OP_EQUAL OP_SWAP', { C: commitments[i] }))
-  out.push(...asm('{C} OP_EQUAL', { C: commitments[commitments.length - 1] }))
+  out.push(...asm('{C} OP_EQUAL', { C: commitments.at(-1) as number[] }))
   for (let i = 0; i < commitments.length - 1; i++) out.push(OP.OP_BOOLOR)
   out.push(OP.OP_VERIFY)
   return out
@@ -561,9 +550,8 @@ function emitAdd(half: 0 | 1, c: number): number[] {
 function emitCombLoop(): number[] {
   const out: number[] = []
   for (let c = 0; c < COMB_COLS; c++) {
-    out.push(...asm(DOUBLE))
-    out.push(...emitAdd(0, c)) // index-1 scalar (u2') with C[0..63] (Q)
-    out.push(...emitAdd(1, c)) // index-2 scalar (u1') with C[64..127] (G)
+    // index-1 scalar (u2') with C[0..63] (Q), then index-2 scalar (u1') with C[64..127] (G)
+    out.push(...asm(DOUBLE), ...emitAdd(0, c), ...emitAdd(1, c))
   }
   return out
 }
@@ -663,8 +651,7 @@ function emitTail(): number[] {
 let sharedSuffixCache: number[] | null = null
 /** G table + pre-loop + complete comb loop + total covenant tail: 44,388 B. Computed once. */
 export function sharedSuffix(): number[] {
-  if (sharedSuffixCache === null)
-    sharedSuffixCache = [...emitGTable(), ...emitPreloop(), ...emitCombLoop(), ...emitTail()]
+  sharedSuffixCache ??= [...emitGTable(), ...emitPreloop(), ...emitCombLoop(), ...emitTail()]
   return sharedSuffixCache.slice()
 }
 

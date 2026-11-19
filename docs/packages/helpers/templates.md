@@ -6,7 +6,7 @@ domain: helpers
 version: '2.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-11-19'
-last_verified: '2026-10-22'
+last_verified: '2026-11-19'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -22,7 +22,9 @@ before adopting it.
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
 
-The 2.2.0 source candidate is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
+The 2.3.0 source candidate is additive and needs no migration. It adds the subpath `@bsv/templates/R1Comb.ts`, the R1C vault lock of the BSV Wallet (see below); the root entry is unchanged.
+
+2.2.0 (published) is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
 
 The 2.0.0 source candidate is a breaking release: `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL` are removed, and [BRC-162](https://brc.dev/162) token outputs and their strict CBOR payloads move to `Bsv21Binary`. The SDK peer range is unchanged in source, and 2.0.0 is the first release to publish `^3.0.0` alongside `^2.1.6`.
 
@@ -50,11 +52,9 @@ console.log(decodedData) // ['APP', '{"action":"vote"}']
 
 ## CommonJS compatibility
 
-The 1.10.3 candidate fixes SDK default-import double wrapping in CommonJS.
-Both module formats retain the same root/wildcard exports and script encodings.
-Packed acceptance constructs and signs scripts, including Mandala, multisig,
-MultiPushDrop and R1K1 recovery, with published SDK 2.8.0 and the candidate SDK.
-This source candidate is not yet published.
+Since 1.10.3, SDK classes are imported by name, so CommonJS consumers no longer
+hit SDK default-import double wrapping. Both module formats export the same
+root and subpath entries and build the same script bytes.
 
 ## What it provides
 
@@ -258,10 +258,11 @@ until it spends. Every refusal throws `R1CombError`.
 ## When to use this
 
 - Creating standard locking scripts for transactions
-- Building applications that need P2PKH or multisig payment flows
+- Building applications that need multisig payment flows (P2PKH itself is in `@bsv/sdk`)
 - Storing data on-chain with OP_RETURN
 - Implementing multi-owner token systems with PushDrop
 - Building hardware-backed outputs with an intentionally inconvenient K1 recovery path
+- Locking funds to any one of up to five P-256 hardware keys (R1Comb)
 - Learning Bitcoin Script patterns
 
 ## When NOT to use this
