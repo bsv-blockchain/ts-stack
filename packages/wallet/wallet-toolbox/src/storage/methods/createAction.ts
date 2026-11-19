@@ -60,6 +60,7 @@ import { beefForTxids } from '../../utility/beefForTxids'
 import { repairBeefProofs } from './repairBeefProofs'
 import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
 import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
+import { isAdminOriginatorAction } from '../../utility/adminOriginator'
 import {
   resumeActionRecoveryPlan,
   validateRecoveryConstruction,
@@ -1106,6 +1107,10 @@ async function resolveInputScript(
   } else {
     await applyBeefInputScript(storage, beef, input)
   }
+  // The host's input policy runs only now, after the source output is resolved
+  // from authenticated storage or verified BEEF: a caller cannot misstate the
+  // source locking script to pass it.
+  if (storage.validateResolvedActionInput != null) await storage.validateResolvedActionInput(vargs, input)
 }
 
 async function validateNoSendChange(
@@ -1241,6 +1246,13 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
   const { storage, vargs, xinputs, xoutputs, changeBasket, feeModel, healthyChangeCount, compatibilityFallback } = args
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
   const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
+  // An admin-originator action (Wallet.setAdminOriginator) keeps a minimal
+  // plan: no pool growth, surplus shaping or migration inputs, and a first
+  // change output that takes the surplus as it is. Such hosts often approve
+  // an exact input set (a vault spend, for example); any input the planner
+  // adds on its own, to reach a preferred change size or to migrate change,
+  // would change what was approved.
+  const admin = isAdminOriginatorAction(vargs)
   return {
     fixedInputs: xinputs.map(input => ({
       satoshis: input.satoshis,
@@ -1255,10 +1267,10 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     // The final compatibility shape uses the allocator's economic floor. This
     // remains at least as permissive as every historical basket preference,
     // including an exact 144/32 basket that has just migrated to 144/5000.
-    changeFirstSatoshis: compatibilityFallback ? 1 : preferredSatoshis,
+    changeFirstSatoshis: compatibilityFallback || admin ? 1 : preferredSatoshis,
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
-    targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
+    targetNetCount: admin ? undefined : changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
     // The planner requires a positive cap; surplusToFee below keeps the
     // protected action change-free regardless.
     maxChangeOutputs: brc177?.kind === 'protected' ? 1 : storage.managedChangePolicy.maxOutputsPerAction,
@@ -1266,8 +1278,8 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     // protected action carries no change, so any surplus is fee.
     // validateBrc177FundingPlan below independently rejects any change.
     surplusToFee: brc177?.kind === 'protected',
-    surplusPoolShaping: !compatibilityFallback,
-    maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
+    surplusPoolShaping: !compatibilityFallback && !admin,
+    maxMigrationInputs: compatibilityFallback || admin ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals
   }
 }
