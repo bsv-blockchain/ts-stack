@@ -1,0 +1,74 @@
+// Scratch generator (not committed): R1C vectors from the toolbox's own r1comb.ts.
+import fs from 'fs'
+import { Hash, P2PKH, PrivateKey, Transaction, Utils } from '@bsv/sdk'
+import { p256 } from '@noble/curves/nist.js'
+import * as R from '../../core/services/vault/r1comb'
+
+const hex = (b: ArrayLike<number>) => Utils.toHex(Array.from(b))
+const sha = (b: number[]) => Utils.toHex(Hash.sha256(b))
+// Deterministic P-256 keys and salts from a counter, so the vectors are reproducible.
+const seedBytes = (tag: string, i: number) => Hash.sha256(Utils.toArray(`r1c-vectors/${tag}/${i}`, 'utf8'))
+const p256Key = (i: number) => {
+  const d = BigInt('0x' + hex(seedBytes('key', i))) % (p256.Point.CURVE().n - 1n) + 1n
+  return d.toString(16).padStart(64, '0')
+}
+const pubOf = (dHex: string, compressed: boolean) => hex(p256.getPublicKey(Uint8Array.from(Utils.toArray(dHex, 'hex')), compressed))
+const salt = (i: number) => hex(seedBytes('salt', i))
+const throwsMsg = (f: () => unknown): string | null => { try { f(); return null } catch (e) { return (e as Error).message } }
+
+it('writes r1c vectors', () => {
+  const keys = Array.from({ length: 6 }, (_, i) => p256Key(i))
+  const pubs = keys.map(d => pubOf(d, true))
+  const out: Record<string, unknown> = { generator: '@bsv/expo-wallet-toolbox core/services/vault/r1comb.ts (noble), 0.26.0 candidate' }
+  out.keys = keys.map((d, i) => ({ d, compressed: pubs[i], uncompressed: pubOf(d, false), commitment: R.commitment(pubs[i], salt(i)), salt: salt(i), canonicalTableSha256: sha(R.canonicalTableBytes(pubs[i])) }))
+  out.gTableSha256 = sha(R.gTable().flatMap(({ x, y }) => [...R.le33(x), ...R.le33(y)]))
+  out.sharedSuffix = { length: R.sharedSuffix().length, sha256: sha(R.sharedSuffix()) }
+  out.completeMixedAddScriptSha256 = sha(R.completeMixedAddScript())
+  out.locks = [1, 2, 3, 4, 5].map(n => {
+    const commitments = pubs.slice(0, n).map((p, i) => R.commitment(p, salt(i)))
+    const bin = R.buildLock({ commitments, saltHex64: salt(0) }).toBinary()
+    return { n, commitments, length: bin.length, sha256: sha(bin), head: hex(bin.slice(0, 400)) }
+  })
+  // compressPubkey refusals: off-curve, x >= p, y >= p, bad prefixes, non-residue x.
+  const P = p256.Point.CURVE().p
+  const g = p256.Point.BASE.toAffine()
+  const h64 = (v: bigint) => v.toString(16).padStart(64, '0')
+  let nonResidueX = 1n
+  for (;;) { try { p256.Point.fromHex('02' + h64(nonResidueX)); nonResidueX++ } catch { break } }
+  const bad = [
+    '02' + h64(P), '02' + h64(P + 1n), '04' + h64(g.x + P) + h64(g.y), '04' + h64(g.x) + h64(g.y + P),
+    '04' + h64(g.x) + h64(g.y + 1n), '05' + h64(g.x), '04' + h64(g.x), '02' + h64(nonResidueX), '00', ''
+  ]
+  out.compressRejects = bad.map(b => ({ input: b, error: throwsMsg(() => R.compressPubkey(b)) }))
+  out.compressAccepts = out.keys.map((k: any) => ({ input: k.uncompressed.toUpperCase(), output: R.compressPubkey(k.uncompressed.toUpperCase()) }))
+  // Spends: a version-1 tx spending each lock, signed low-S and high-S.
+  out.spends = (out.locks as any[]).map((l, i) => {
+    const lock = R.buildLock({ commitments: l.commitments, saltHex64: salt(0) })
+    const src = new Transaction(1, [], [{ lockingScript: lock, satoshis: 100_000 + i }], 0)
+    const tx = new Transaction(1, [{ sourceTransaction: src, sourceOutputIndex: 0, sequence: 0xfffffffe - i }], [
+      { lockingScript: new P2PKH().lock(new PrivateKey('11'.repeat(32), 16).toAddress()), satoshis: 90_000 }
+    ], 7 + i)
+    // The salt in the lock is only validated; each key's commitment uses its own salt, so key j unlocks with salt(j).
+    const j = i % l.n
+    const pre = R.sighashPreimage(tx, 0, 100_000 + i)
+    const digest = R.signerDigest(pre)
+    const sig = p256.Signature.fromBytes(p256.sign(Uint8Array.from(Utils.toArray(digest, 'hex')), Uint8Array.from(Utils.toArray(keys[j], 'hex')), { prehash: false, lowS: true })).toBytes('der')
+    const { r, s } = R.decodeDerSignature(Array.from(sig))
+    const hs = new p256.Signature(r, p256.Point.CURVE().n - s)
+    const derHigh = Array.from(hs.toBytes('der'))
+    const unlockLow = R.buildUnlock({ preimage: pre, derSig: Array.from(sig), pubkeyHex33: pubs[j], saltHex64: salt(j) })
+    const unlockHigh = R.buildUnlock({ preimage: pre, derSig: derHigh, pubkeyHex33: pubs[j], saltHex64: salt(j) })
+    tx.inputs[0].unlockingScript = unlockLow
+    const ok = R.verifyVaultInput({ tx, inputIndex: 0, sourceSatoshis: 100_000 + i, lockingScript: lock, unlockingScript: unlockLow })
+    return {
+      n: l.n, signer: j, sourceSatoshis: 100_000 + i, txSha256: sha(tx.toBinary()), sourceSha256: sha(src.toBinary()), sequence: 0xfffffffe - i, lockTime: 7 + i,
+      preimage: hex(pre), digest, derLow: hex(sig), derHigh: hex(derHigh),
+      fullR: R.fullR({ preimage: pre, rSig: r, s, pubkeyHex33: pubs[j] })!.toString(16),
+      pushTxS: R.pushTxSignatureS(pre).toString(16), pushTxOk: R.pushTxDerCheck(pre).ok,
+      unlockLow: unlockLow.toHex(), unlockHighEqualsLow: unlockHigh.toHex() === unlockLow.toHex(), verified: ok
+    }
+  })
+  out.recode = [0n, 1n, 2n, R.P256_N - 1n, R.P256_N - 2n, 1n << 200n].map(u => ({ u: u.toString(16), out: R.recode(u).toString(16) }))
+  out.scriptNum = [0n, 1n, -1n, 127n, 128n, -128n, 255n, 256n, (1n << 255n) + 5n, -(1n << 255n)].map(v => ({ v: v.toString(), enc: hex(R.encNum(v)) }))
+  fs.writeFileSync(process.env.R1_OUT!, JSON.stringify(out, null, 1) + '\n')
+})
