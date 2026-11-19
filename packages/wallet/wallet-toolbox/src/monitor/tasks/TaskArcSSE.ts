@@ -1,3 +1,5 @@
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync } from '../../utility/promiseFromSync'
 import { WalletError } from '../../sdk/WalletError'
 import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
@@ -36,6 +38,7 @@ interface ArcadeStatusNote extends ReqHistoryNote {
 export class TaskArcadeSSE extends WalletMonitorTask {
   static readonly taskName = 'ArcadeSSE'
 
+  private cursorEvent: string | undefined
   private reconnectAfter: number | undefined
   private reconnectDelay = Monitor.oneSecond * 5
   sseClient: ArcSSEClient | null = null
@@ -69,9 +72,23 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
+    this.cursorEvent = `ArcadeSSECursor.${toHex(sha256(toArray(JSON.stringify([arcadeUrl, callbackToken]), 'utf8')))}`
     let lastEventId: string | undefined
     try {
-      lastEventId = await this.monitor.options.loadLastSSEEventId?.()
+      if (this.monitor.options.loadLastSSEEventId != null) {
+        lastEventId = await this.monitor.options.loadLastSSEEventId()
+      } else {
+        const events = await this.storage.runAsStorageProvider(
+          async sp =>
+            await sp.findMonitorEvents({
+              partial: { event: this.cursorEvent },
+              paged: { limit: 1 },
+              orderDescending: true
+            })
+        )
+        const cursor: unknown = JSON.parse(events[0]?.details ?? 'null')
+        if (typeof cursor === 'string') lastEventId = cursor
+      }
     } catch (e) {
       await this.logSetupEvent(`failed to load lastEventId: ${safeDiagnostic(e)}`)
     }
@@ -154,7 +171,11 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       log += await this.processStatusEvent(pending.event)
       if (pending.event.eventId != null) {
         try {
-          await this.monitor.options.saveLastSSEEventId?.(pending.event.eventId)
+          if (this.monitor.options.saveLastSSEEventId != null) {
+            await this.monitor.options.saveLastSSEEventId(pending.event.eventId)
+          } else if (this.cursorEvent != null && this.monitor.options.loadLastSSEEventId == null) {
+            await this.monitor.logEvent(this.cursorEvent, JSON.stringify(pending.event.eventId))
+          }
         } catch (e) {
           await this.logSetupEvent(`failed to persist lastEventId: ${safeDiagnostic(e)}`)
           throw e

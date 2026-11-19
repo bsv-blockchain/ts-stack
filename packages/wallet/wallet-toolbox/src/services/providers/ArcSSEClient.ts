@@ -357,6 +357,16 @@ export class ArcSSEClient {
     try {
       source = new this.options.EventSourceClass(this.url, {
         headers,
+        // EventSource v4 delivers request options through its own fetch hook.
+        // Keep the legacy header option for React Native implementations.
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
+          if (url.origin !== new URL(this.url).origin) throw new Error('Arcade SSE changed request origin.')
+          const outbound = new Headers(init?.headers)
+          outbound.set('Last-Event-ID', this._lastEventId ?? '0')
+          if (this.options.arcApiKey != null) outbound.set('Authorization', `Bearer ${this.options.arcApiKey}`)
+          return await fetch(input, { ...init, headers: outbound, redirect: 'error' })
+        },
         // Third-party debug output can include the URL token and Authorization header.
         debug: false,
         pollingInterval: 0

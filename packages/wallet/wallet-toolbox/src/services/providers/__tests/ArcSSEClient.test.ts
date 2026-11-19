@@ -341,6 +341,20 @@ describe('ArcSSEClient', () => {
       expect(errors).toHaveLength(1)
     })
 
+    test('uses the acknowledged resume cursor and bearer authorization through the native fetch hook', async () => {
+      const { client } = makeClient({ lastEventId: 'saved-1', arcApiKey: 'test-key' })
+      client.connect()
+      const source = FakeEventSource.instances[0]
+      const request = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response())
+      await source.opts.fetch(source.url, { headers: { 'Last-Event-ID': 'unacknowledged' } })
+      const init = request.mock.calls[0][1]
+      expect(new Headers(init?.headers).get('Last-Event-ID')).toBe('saved-1')
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-key')
+      expect(init?.redirect).toBe('error')
+      await expect(source.opts.fetch('https://invalid.example/events')).rejects.toThrow('changed request origin')
+      expect(request).toHaveBeenCalledTimes(1)
+    })
+
     test('fails the stream closed on malformed event JSON', () => {
       const { client, events, errors } = makeClient()
       client.connect()
