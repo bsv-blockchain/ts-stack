@@ -374,6 +374,41 @@ describe('R1Comb: encodings and refusals', () => {
     expect(R1Comb.sighashPreimage(withSource, 0, 1)).toHaveLength(R1Comb.R1C_PREIMAGE_LEN)
   })
 
+  const alter = (at: number, value: number): number[] => {
+    const p = [...preimage]
+    p[at] = value
+    return p
+  }
+  it.each([
+    ['scope 0x01 (ALL without FORKID)', alter(154, 0x01)],
+    ['scope 0x43 (SINGLE|FORKID)', alter(154, 0x43)],
+    ['scope 0xc1 (ALL|FORKID|ANYONECANPAY)', alter(154, 0xc1)],
+    ['scope 0x61 (ALL|FORKID|CHRONICLE)', alter(154, 0x61)],
+    ['scope with a high byte set', alter(155, 0x01)],
+    ['scriptCode OP_CHECKSIGVERIFY', alter(105, 0xad)],
+    ['scriptCode length 2', alter(104, 0x02)]
+  ])('refuses a preimage with %s before any signer is asked', (_label, p) => {
+    const der = Utils.toArray(sp.derLow, 'hex')
+    const { r, s } = R1Comb.decodeDerSignature(der)
+    expect(() => R1Comb.signerDigest(p)).toThrow(R1CombError)
+    expect(() => R1Comb.pushTxDerCheck(p)).toThrow(R1CombError)
+    expect(() => R1Comb.fullR({ preimage: p, rSig: r, s, pubkeyHex33: key.compressed })).toThrow(
+      R1CombError
+    )
+    expect(() =>
+      R1Comb.buildUnlock({
+        preimage: p,
+        derSig: der,
+        pubkeyHex33: key.compressed,
+        saltHex64: key.salt
+      })
+    ).toThrow(R1CombError)
+  })
+
+  it('accepts the unaltered vector preimage', () => {
+    expect(R1Comb.signerDigest(preimage)).toBe(sp.digest)
+  })
+
   it('decodeDerSignature refuses every malformed DER form', () => {
     const der = Utils.toArray(sp.derLow, 'hex')
     const bad: number[][] = [

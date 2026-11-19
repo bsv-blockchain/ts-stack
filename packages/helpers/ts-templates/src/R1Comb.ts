@@ -715,6 +715,11 @@ export function bakedCommitments(lock: Script): string[] {
 /** OP_CODESEPARATOR OP_CHECKSIG ⇒ the scriptCode the lock's CHECKSIG hashes is the single byte `ac`. */
 const SUBSCRIPT = Script.fromHex('ac')
 
+/** Offsets in the 158-byte preimage: version 4, hashPrevouts 32, hashSequence 32, outpoint 36. */
+const PREIMAGE_SCRIPT_CODE_AT = 104
+/** The last 4 bytes: the sighash scope, little-endian. */
+const PREIMAGE_SCOPE_AT = R1C_PREIMAGE_LEN - 4
+
 function requirePreimage(preimage: number[], where: string): void {
   if (!Array.isArray(preimage) || preimage.length !== R1C_PREIMAGE_LEN) {
     throw invalid(`${where}: preimage must be ${R1C_PREIMAGE_LEN} bytes`)
@@ -723,6 +728,21 @@ function requirePreimage(preimage: number[], where: string): void {
   if (version !== 1)
     throw invalid(
       `${where}: vault withdrawals require transaction version 1; this preimage carries version ${version}`
+    )
+  // The lock's CHECKSIG follows OP_CODESEPARATOR, so its scriptCode is the one
+  // byte OP_CHECKSIG (serialized 01 ac), and the covenant signs only scope
+  // 0x41. Refuse any other preimage before a signer is asked to sign it: its
+  // witness could never satisfy the lock.
+  if (
+    preimage[PREIMAGE_SCRIPT_CODE_AT] !== 0x01 ||
+    preimage[PREIMAGE_SCRIPT_CODE_AT + 1] !== OP.OP_CHECKSIG
+  ) {
+    throw invalid(`${where}: preimage scriptCode must be the single byte OP_CHECKSIG (01 ac)`)
+  }
+  const scope = new Reader(preimage.slice(PREIMAGE_SCOPE_AT)).readUInt32LE()
+  if (scope !== R1C_SIGHASH)
+    throw invalid(
+      `${where}: preimage sighash scope must be 0x41 (ALL|FORKID); this preimage carries 0x${scope.toString(16)}`
     )
 }
 
