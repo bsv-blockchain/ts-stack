@@ -182,7 +182,8 @@ import { purgeData } from './methods/purgeData'
 import { listActions } from './methods/listActionsKnex'
 import { listOutputs } from './methods/listOutputsKnex'
 import { DBType } from './StorageReader'
-import { reviewStatus } from './methods/reviewStatus'
+import { reviewStatus, reviewStatusPage } from './methods/reviewStatus'
+import { reviewConfirmedSpendPage, reviewConfirmedSpendRecoveries } from './methods/reconcileConfirmedSpends'
 import { ServicesCallHistory, WalletServices } from '../sdk/WalletServices.interfaces'
 import {
   AuthId,
@@ -4133,8 +4134,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return await captureKnexActiveWrite(this, auth, () => !this.snapshotAdmissionStopped)
   }
 
-  protected override async *completedProofRequests(): AsyncIterable<TableProvenTxReq> {
-    let after = 0
+  protected override async *completedProofRequests(after = 0): AsyncIterable<TableProvenTxReq> {
     for (;;) {
       const ids: Array<{ provenTxReqId: number }> = await this.knex('proven_tx_reqs')
         .select('provenTxReqId')
@@ -4312,6 +4312,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
     return await purgeData(this, params, trx)
+  }
+
+  override reviewConfirmedSpendPage(after: number, tipHeight: number, admission?: StorageWriterAdmission) {
+    return reviewConfirmedSpendPage(this, after, tipHeight, admission)
+  }
+
+  override reviewConfirmedSpendRecoveries(after: number, admission?: StorageWriterAdmission) {
+    return reviewConfirmedSpendRecoveries(this, after, admission)
+  }
+
+  override reviewStatusPage(args: StorageStatusReviewArgs, after: number) {
+    return reviewStatusPage(this, args, after)
   }
 
   override async reviewStatus(args: StorageStatusReviewArgs): Promise<{ log: string }> {

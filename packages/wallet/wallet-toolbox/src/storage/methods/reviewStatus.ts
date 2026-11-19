@@ -1,5 +1,5 @@
 import { StorageReqWrite } from '../StorageReqWrite'
-import type { StorageStatusReviewArgs, StorageWriterAdmission } from '../StorageActiveWrite'
+import type { StorageActiveWrite, StorageStatusReviewArgs, StorageWriterAdmission } from '../StorageActiveWrite'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
 import { quarantineRecordedTerminalInputs } from './reconcileFailedTransactionInputs'
 import { Knex } from 'knex'
@@ -8,6 +8,7 @@ import { WalletError } from '../../sdk/WalletError'
 import type { ProvenTxReqStatus } from '../../sdk/types'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { TableOutput } from '../schema/tables/TableOutput'
+import type { AuthId } from '../../sdk/WalletStorage.interfaces'
 
 const provenTxReqStatusesSafeForInputRestore: ProvenTxReqStatus[] = ['invalid', 'doubleSpend']
 
@@ -196,81 +197,7 @@ export async function reviewStatus(storage: StorageKnex, args: StorageStatusRevi
             .limit(100)
           if (!ids.length) break
           for (const { transactionId } of ids) {
-            const rows = await storage.findTransactions({
-              partial: { transactionId, userId: user.userId },
-              noRawTx: true
-            })
-            const row = rows[0]
-            if (row == null) {
-              afterTransaction = transactionId
-              continue
-            }
-            if (row.status === 'failed' && row.txid != null) {
-              const proven = (await storage.findProvenTxs({ partial: { txid: row.txid } }))[0]
-              const req = await EntityProvenTxReq.fromStorageTxid(storage, row.txid)
-              if (proven != null && req != null) {
-                const writes = await StorageReqWrite.capture(
-                  storage,
-                  [row.txid],
-                  { userId: user.userId, write },
-                  args.admission
-                )
-                await storage.updateProvenTxReqWithNewProvenTx(
-                  {
-                    provenTxReqId: req.id,
-                    txid: req.txid,
-                    status: req.status,
-                    attempts: req.attempts,
-                    history: req.apiHistory,
-                    height: proven.height,
-                    index: proven.index,
-                    blockHash: proven.blockHash,
-                    merkleRoot: proven.merkleRoot,
-                    merklePath: proven.merklePath
-                  },
-                  proven,
-                  writes
-                )
-              }
-            }
-            log += await admit(
-              async () =>
-                await write.transaction(async trx => {
-                  const current = (
-                    await storage.findTransactions({
-                      partial: { transactionId, userId: user.userId },
-                      noRawTx: true,
-                      trx
-                    })
-                  )[0]
-                  if (current == null) return ''
-                  const req =
-                    current.txid == null
-                      ? undefined
-                      : await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
-                  if (req?.status === 'unmined' && ['nosend', 'unprocessed', 'sending'].includes(current.status))
-                    await storage.updateTransactionStatus('unproven', transactionId, user.userId, undefined, trx)
-                  const protectedTargets =
-                    current.txid == null
-                      ? []
-                      : await storage.findTransactions({
-                          partial: { userId: user.userId, noSendExpiryReclaimTxid: current.txid },
-                          noRawTx: true,
-                          trx
-                        })
-                  const repaired = await reviewStatusLegacy(
-                    storage,
-                    { ...args, trx },
-                    {
-                      userId: user.userId,
-                      transactionId,
-                      protectInputs: protectedTargets.length > 0
-                    }
-                  )
-                  if (req != null) await quarantineRecordedTerminalInputs(req, storage, user.userId, trx)
-                  return repaired.log
-                })
-            )
+            log += await reviewFencedTransaction(storage, args, user, transactionId, write, admit)
             afterTransaction = transactionId
           }
         }
@@ -281,4 +208,161 @@ export async function reviewStatus(storage: StorageKnex, args: StorageStatusRevi
     }
   }
   return { log }
+}
+
+/** Read a bounded physical keyset before testing repair predicates. A
+ * transaction that needs no repair must never open a financial writer. */
+export async function reviewStatusPage(
+  storage: StorageKnex,
+  args: StorageStatusReviewArgs,
+  after: number
+): Promise<{ log: string; after: number; complete: boolean; examined: number; failed: number }> {
+  const limit = 1024
+  const deadline = performance.now() + 1200
+  const db = storage.knex
+  const activeStorage = storage.getSettings().storageIdentityKey
+  const window = db('transactions')
+    .select('transactionId', 'userId', 'txid', 'status', 'provenTxId')
+    .where('transactionId', '>', after)
+    .orderBy('transactionId')
+    .limit(limit)
+    .as('t')
+  const rows = await db(window)
+    .join('users as u', 'u.userId', 't.userId')
+    .leftJoin('proven_tx_reqs as r', 'r.txid', 't.txid')
+    .select<
+      {
+        transactionId: number
+        userId: number
+        identityKey: string
+        activeStorage: string
+        needsRepair: number | boolean
+      }[]
+    >(
+      't.transactionId',
+      't.userId',
+      'u.identityKey',
+      'u.activeStorage',
+      db.raw(
+        `CASE WHEN
+        r.status IN ('invalid','doubleSpend')
+        OR (r.status = 'unmined' AND t.status IN ('nosend','unprocessed','sending'))
+        OR (t.status = 'failed' AND r.provenTxReqId IS NULL AND (
+          EXISTS (SELECT 1 FROM outputs o WHERE o.spentBy = t.transactionId AND o.userId = t.userId)
+          OR EXISTS (SELECT 1 FROM outputs o WHERE o.transactionId = t.transactionId AND o.userId = t.userId
+            AND (o.spendable = ? OR o.spentBy IS NOT NULL))
+        ))
+        OR ((t.provenTxId IS NULL OR (t.status = 'failed' AND r.provenTxReqId IS NOT NULL))
+          AND EXISTS (SELECT 1 FROM proven_txs p WHERE p.txid = t.txid))
+        THEN 1 ELSE 0 END AS ??`,
+        [true, 'needsRepair']
+      )
+    )
+    .orderBy('t.transactionId')
+  const admit: StorageWriterAdmission = args.admission ?? (async operation => await operation())
+  let log = ''
+  let examined = 0
+  let attempted = 0
+  let failed = 0
+  for (const row of rows) {
+    if (attempted >= 32 || (examined > 0 && performance.now() >= deadline)) break
+    if (row.activeStorage === activeStorage && row.needsRepair) {
+      attempted++
+      try {
+        const write = await storage.activeWriteTransaction(row)
+        const outcome = await reviewFencedTransaction(storage, args, row, row.transactionId, write, admit)
+        if (log.length < 2048) log += outcome.slice(0, 2048 - log.length)
+      } catch (error) {
+        if (WalletError.fromUnknown(error).code === 'WERR_NOT_ACTIVE') {
+          // The current primary owns repair. Reconsider it on the next pass.
+        } else {
+          // A failing row is retried on the next pass without blocking later rows.
+          failed++
+          if (log.length < 1920)
+            log += `transaction ${row.transactionId} review failed
+`
+        }
+      }
+    }
+    after = row.transactionId
+    examined++
+  }
+  return { log, after, complete: examined === rows.length && rows.length < limit, examined, failed }
+}
+
+async function reviewFencedTransaction(
+  storage: StorageKnex,
+  args: StorageStatusReviewArgs,
+  user: AuthId & { userId: number },
+  transactionId: number,
+  write: StorageActiveWrite,
+  admit: StorageWriterAdmission
+): Promise<string> {
+  const rows = await storage.findTransactions({
+    partial: { transactionId, userId: user.userId },
+    noRawTx: true
+  })
+  const row = rows[0]
+  if (row == null) {
+    return ''
+  }
+  if (row.status === 'failed' && row.txid != null) {
+    const proven = (await storage.findProvenTxs({ partial: { txid: row.txid } }))[0]
+    const req = await EntityProvenTxReq.fromStorageTxid(storage, row.txid)
+    if (proven != null && req != null) {
+      const writes = await StorageReqWrite.capture(storage, [row.txid], { userId: user.userId, write }, args.admission)
+      await storage.updateProvenTxReqWithNewProvenTx(
+        {
+          provenTxReqId: req.id,
+          txid: req.txid,
+          status: req.status,
+          attempts: req.attempts,
+          history: req.apiHistory,
+          height: proven.height,
+          index: proven.index,
+          blockHash: proven.blockHash,
+          merkleRoot: proven.merkleRoot,
+          merklePath: proven.merklePath
+        },
+        proven,
+        writes
+      )
+    }
+  }
+  return await admit(
+    async () =>
+      await write.transaction(async trx => {
+        const current = (
+          await storage.findTransactions({
+            partial: { transactionId, userId: user.userId },
+            noRawTx: true,
+            trx
+          })
+        )[0]
+        if (current == null) return ''
+        const req =
+          current.txid == null ? undefined : await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
+        if (req?.status === 'unmined' && ['nosend', 'unprocessed', 'sending'].includes(current.status))
+          await storage.updateTransactionStatus('unproven', transactionId, user.userId, undefined, trx)
+        const protectedTargets =
+          current.txid == null
+            ? []
+            : await storage.findTransactions({
+                partial: { userId: user.userId, noSendExpiryReclaimTxid: current.txid },
+                noRawTx: true,
+                trx
+              })
+        const repaired = await reviewStatusLegacy(
+          storage,
+          { ...args, trx },
+          {
+            userId: user.userId,
+            transactionId,
+            protectInputs: protectedTargets.length > 0
+          }
+        )
+        if (req != null) await quarantineRecordedTerminalInputs(req, storage, user.userId, trx)
+        return repaired.log
+      })
+  )
 }

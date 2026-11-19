@@ -1841,9 +1841,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * This is called by TaskReviewStatus so a completed request with
    * `notified = false` is retried and can become eligible for normal purge.
    */
-  async reconcileCompletedProvenTxReqs(admission?: StorageWriterAdmission): Promise<{ log: string }> {
+  async reconcileCompletedProvenTxReqs(
+    admission?: StorageWriterAdmission,
+    page?: { after: number; limit: number; deadline: number }
+  ): Promise<{ log: string; after?: number; complete: boolean }> {
     let log = ''
-    for await (const reqApi of this.completedProofRequests()) {
+    let after = page?.after ?? 0
+    let processed = 0
+    for await (const reqApi of this.completedProofRequests(after)) {
+      if (page != null && (processed >= page.limit || (processed > 0 && performance.now() >= page.deadline)))
+        return { log, after, complete: false }
+      after = reqApi.provenTxReqId
+      processed++
       const req = new EntityProvenTxReq(reqApi)
       if (req.provenTxId == null || req.provenTxId <= 0) {
         log += `completed req ${req.id} cannot reconcile without provenTxId\n`
@@ -1865,13 +1874,37 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (req.notified) log += `completed req ${req.id} transaction notifications reconciled\n`
     }
 
-    return { log }
+    return { log, after, complete: true }
   }
 
   /** Older providers keep their existing serialized scan. SQL providers can
    * override with a metadata keyset, hydrating one bounded request at a time. */
-  protected async *completedProofRequests(): AsyncIterable<TableProvenTxReq> {
-    for (const req of await this.findProvenTxReqs({ partial: { status: 'completed', notified: false } })) yield req
+  protected async *completedProofRequests(after = 0): AsyncIterable<TableProvenTxReq> {
+    for (const req of await this.findProvenTxReqs({ partial: { status: 'completed', notified: false } }))
+      if (req.provenTxReqId > after) yield req
+  }
+
+  async reviewConfirmedSpendPage(
+    _after: number,
+    _tipHeight: number,
+    _admission?: StorageWriterAdmission
+  ): Promise<{ after: number; examined: number; repaired: number; unavailable: number } | undefined> {
+    return undefined
+  }
+
+  async reviewConfirmedSpendRecoveries(
+    _after: number,
+    _admission?: StorageWriterAdmission
+  ): Promise<{ after: number; restored: number; unavailable: number } | undefined> {
+    return undefined
+  }
+
+  /** Providers with indexed financial scopes can return a bounded repair page. */
+  async reviewStatusPage(
+    _args: StorageStatusReviewArgs,
+    _after: number
+  ): Promise<{ log: string; after: number; complete: boolean; examined: number; failed: number } | undefined> {
+    return undefined
   }
 
   private async prepareProofRecoveryOutputVerdicts(

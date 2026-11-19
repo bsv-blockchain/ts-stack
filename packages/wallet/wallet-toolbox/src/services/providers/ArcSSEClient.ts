@@ -299,10 +299,21 @@ function normalizeStatusEvent(value: unknown, eventId: string | undefined): ArcS
   }
 }
 
-function readEventData(event: unknown, key: string): unknown {
+const nativeMessageEvent = typeof MessageEvent === 'undefined' ? undefined : MessageEvent.prototype
+const nativeData =
+  nativeMessageEvent == null ? undefined : Object.getOwnPropertyDescriptor(nativeMessageEvent, 'data')?.get
+const nativeLastEventId =
+  nativeMessageEvent == null ? undefined : Object.getOwnPropertyDescriptor(nativeMessageEvent, 'lastEventId')?.get
+
+function readEventData(event: unknown, key: 'data' | 'lastEventId'): unknown {
   if (event == null || (typeof event !== 'object' && typeof event !== 'function')) return undefined
   try {
-    return ownDataValue(event as object, key)
+    const record = event as object
+    if (Object.hasOwn(record, key)) return ownDataValue(record, key)
+    // EventSource v4 uses native, brand-checked MessageEvents. Read only
+    // the platform's captured getter, never an arbitrary inherited accessor.
+    const getter = key === 'data' ? nativeData : nativeLastEventId
+    return getter == null ? undefined : Reflect.apply(getter, record, [])
   } catch {
     return undefined
   }

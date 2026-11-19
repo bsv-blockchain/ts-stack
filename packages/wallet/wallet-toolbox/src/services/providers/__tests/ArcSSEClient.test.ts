@@ -309,6 +309,38 @@ describe('ArcSSEClient', () => {
       expect(client.lastEventId).toBe('initial')
     })
 
+    test('accepts a native EventSource MessageEvent and advances its cursor after processing', async () => {
+      const { client, events, errors, lastEventIds } = makeClient()
+      client.connect()
+      FakeEventSource.instances[0].emit(
+        'status',
+        new MessageEvent('status', {
+          data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }),
+          lastEventId: 'native-1'
+        })
+      )
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(events.map(event => event.txid)).toEqual([TXID_A])
+      expect(lastEventIds).toEqual(['native-1'])
+      expect(errors).toEqual([])
+    })
+
+    test('does not invoke a supplied accessor in place of the platform getter', () => {
+      const { client, errors } = makeClient()
+      const getter = jest.fn()
+      client.connect()
+      FakeEventSource.instances[0].emit(
+        'status',
+        Object.create({
+          get data() {
+            return getter()
+          }
+        })
+      )
+      expect(getter).not.toHaveBeenCalled()
+      expect(errors).toHaveLength(1)
+    })
+
     test('fails the stream closed on malformed event JSON', () => {
       const { client, events, errors } = makeClient()
       client.connect()

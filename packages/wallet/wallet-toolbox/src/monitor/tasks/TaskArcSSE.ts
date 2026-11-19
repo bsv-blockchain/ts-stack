@@ -36,6 +36,8 @@ interface ArcadeStatusNote extends ReqHistoryNote {
 export class TaskArcadeSSE extends WalletMonitorTask {
   static readonly taskName = 'ArcadeSSE'
 
+  private reconnectAfter: number | undefined
+  private reconnectDelay = Monitor.oneSecond * 5
   sseClient: ArcSSEClient | null = null
   private readonly pendingEvents: Array<{
     event: ArcSSEEvent
@@ -99,11 +101,22 @@ export class TaskArcadeSSE extends WalletMonitorTask {
             })
         ),
       onError: err => {
+        this.scheduleReconnect()
         void this.logSetupEvent(`SSE error: ${safeDiagnostic(err)}`)
       }
     })
 
-    this.sseClient.connect()
+    try {
+      this.sseClient.connect()
+    } catch {
+      this.scheduleReconnect()
+      await this.logSetupEvent('SSE initialization failed; retry scheduled')
+    }
+  }
+
+  private scheduleReconnect(): void {
+    this.reconnectAfter = Date.now() + this.reconnectDelay
+    this.reconnectDelay = Math.min(Monitor.oneMinute, this.reconnectDelay * 2)
   }
 
   private async logSetupEvent(details: string): Promise<void> {
@@ -114,13 +127,24 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     }
   }
 
-  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
-    return { run: this.pendingEvents.length > 0 }
+  trigger(now: number): { run: boolean } {
+    return { run: this.pendingEvents.length > 0 || (this.reconnectAfter != null && now >= this.reconnectAfter) }
   }
 
   async runTask(): Promise<string> {
     const eventCount = this.pendingEvents.length
-    if (eventCount === 0) return ''
+    if (eventCount === 0) {
+      if (this.reconnectAfter != null && Date.now() >= this.reconnectAfter) {
+        this.reconnectAfter = undefined
+        try {
+          await this.fetchNow()
+        } catch {
+          this.scheduleReconnect()
+          await this.logSetupEvent('SSE reconnect failed; retry scheduled')
+        }
+      }
+      return ''
+    }
 
     let log = ''
     for (let i = 0; i < eventCount; i++) {
@@ -138,6 +162,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       }
       this.pendingEvents.shift()
       pending.acknowledge()
+      this.reconnectDelay = Monitor.oneSecond * 5
     }
     return log
   }
@@ -149,6 +174,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
   /** Close the live stream and reject any unacknowledged monitor event. */
   close(): void {
+    this.reconnectAfter = undefined
     this.sseClient?.close()
     this.sseClient = null
     const error = new Error('Arcade SSE monitor task closed.')
