@@ -1,4 +1,5 @@
 import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
+import { normalizeOriginator as normalizeOriginatorDomain } from './utility/normalizeOriginator'
 import { validateCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import {
   WalletInterface,
@@ -6015,30 +6016,10 @@ export class WalletPermissionsManager implements WalletInterface {
   /**
    * Normalizes originator domains to their lowercase hostname. BRC-100
    * permission authority is hostname-scoped, so every port shares the same
-   * grants and admin status.
+   * grants and admin status. Wallet admin checks use this same helper.
    */
   private normalizeOriginator(originator?: string): string {
-    if (!originator) return ''
-    const trimmed = originator.trim()
-    if (!trimmed) {
-      return ''
-    }
-
-    try {
-      const hasScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed)
-      const candidate = hasScheme ? trimmed : `https://${trimmed}`
-      const url = new URL(candidate)
-      if (!url.hostname) {
-        return trimmed.toLowerCase()
-      }
-      const hostname = url.hostname.toLowerCase()
-      const needsBrackets = hostname.includes(':')
-      const baseHost = needsBrackets ? `[${hostname}]` : hostname
-      return baseHost
-    } catch {
-      // Fall back to a conservative lowercase trim if URL parsing fails.
-      return trimmed.toLowerCase()
-    }
+    return normalizeOriginatorDomain(originator)
   }
 
   private isWhitelistedCounterpartyProtocol(counterparty: string, protocolID: WalletProtocol): boolean {

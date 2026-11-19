@@ -2,6 +2,13 @@ import { PrivateKey, PublicKey, SymmetricKey } from '../../primitives/index'
 import CachedKeyDeriver from '../../wallet/CachedKeyDeriver'
 import KeyDeriver from '../../wallet/KeyDeriver'
 
+function syncKeys(value: PrivateKey[] | Promise<PrivateKey[]>): PrivateKey[] {
+  if (typeof (value as Promise<PrivateKey[]>).then === 'function') {
+    throw new Error('expected synchronous private keys')
+  }
+  return value as PrivateKey[]
+}
+
 describe('CachedKeyDeriver', () => {
   let mockKeyDeriver: jest.Mocked<KeyDeriver>
   let cachedKeyDeriver: CachedKeyDeriver
@@ -122,19 +129,44 @@ describe('CachedKeyDeriver', () => {
         .mockReturnValueOnce([firstKey, secondKey])
         .mockReturnValueOnce([thirdKey])
 
-      const initial = cachedKeyDeriver.derivePrivateKeys([first, second])
+      const initial = syncKeys(cachedKeyDeriver.derivePrivateKeys([first, second]))
       expect(initial[0]).toBe(firstKey)
       expect(initial[1]).toBe(secondKey)
-      const reordered = cachedKeyDeriver.derivePrivateKeys([second, first])
+      const reordered = syncKeys(cachedKeyDeriver.derivePrivateKeys([second, first]))
       expect(reordered[0].toHex()).toBe(secondKey.toHex())
       expect(reordered[1].toHex()).toBe(firstKey.toHex())
       expect(mockKeyDeriver.derivePrivateKeys).toHaveBeenCalledTimes(1)
 
       const third = { protocolID, keyID: 'three', counterparty: 'anyone' as const }
-      const partiallyCached = cachedKeyDeriver.derivePrivateKeys([first, third])
+      const partiallyCached = syncKeys(cachedKeyDeriver.derivePrivateKeys([first, third]))
       expect(partiallyCached[0].toHex()).toBe(firstKey.toHex())
       expect(partiallyCached[1]).toBe(thirdKey)
       expect(mockKeyDeriver.derivePrivateKeys).toHaveBeenLastCalledWith([third])
+    })
+
+    it('awaits an asynchronous deriver and does not cache a rejection', async () => {
+      const protocolID: [1, string] = [1, 'testprotocol']
+      const first = { protocolID, keyID: 'async', counterparty: 'anyone' as const }
+      const firstKey = new PrivateKey(21)
+      const derive = jest
+        .fn<
+          Promise<PrivateKey[]>,
+          [readonly { protocolID: [1, string]; keyID: string; counterparty: 'anyone' }[]]
+        >()
+        .mockRejectedValueOnce(new Error('native failed'))
+        .mockResolvedValueOnce([firstKey])
+      mockKeyDeriver.derivePrivateKeys = derive as unknown as KeyDeriver['derivePrivateKeys']
+
+      await expect(Promise.resolve(cachedKeyDeriver.derivePrivateKeys([first]))).rejects.toThrow(
+        'native failed'
+      )
+      const resolved = await Promise.resolve(cachedKeyDeriver.derivePrivateKeys([first]))
+      expect(resolved[0]).toBe(firstKey)
+      expect(derive).toHaveBeenCalledTimes(2)
+
+      const cached = syncKeys(cachedKeyDeriver.derivePrivateKeys([first]))
+      expect(cached[0].toHex()).toBe(firstKey.toHex())
+      expect(derive).toHaveBeenCalledTimes(2)
     })
   })
 

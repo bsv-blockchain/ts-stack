@@ -13,10 +13,8 @@ describe('ScriptTemplateBRC29', () => {
     const differentObjectRoot = new PrivateKey(40)
 
     expect(template.getKeyDeriver(cachedRoot)).toBe(template.params.keyDeriver)
-    expect(template.getKeyDeriver(differentStringRoot.toHex()).rootKey.toHex())
-      .toBe(differentStringRoot.toHex())
-    expect(template.getKeyDeriver(differentObjectRoot).rootKey.toHex())
-      .toBe(differentObjectRoot.toHex())
+    expect(template.getKeyDeriver(differentStringRoot.toHex()).rootKey.toHex()).toBe(differentStringRoot.toHex())
+    expect(template.getKeyDeriver(differentObjectRoot).rootKey.toHex()).toBe(differentObjectRoot.toHex())
   })
 
   it('preserves string-key signing bytes when passed cached key objects', async () => {
@@ -48,12 +46,19 @@ describe('ScriptTemplateBRC29', () => {
     const template = new ScriptTemplateBRC29({ ...params, keyDeriver: new CachedKeyDeriver(rootKey) })
     const stringKeyBytes = await sign(template.unlock(rootKey.toHex(), counterparty.toString()))
     const objectKeyBytes = await sign(template.unlock(rootKey, PublicKey.fromString(counterparty.toString())))
-    const batchDerived = template.params.keyDeriver.derivePrivateKeys?.([{
-      protocolID: brc29ProtocolID,
-      keyID,
-      counterparty
-    }])[0]
-    const batchBytes = await sign(template.unlockWithDerivedPrivateKey(batchDerived!, 2, source.outputs[0].lockingScript))
+    const batchKeys = await Promise.resolve(
+      template.params.keyDeriver.derivePrivateKeys?.([
+        {
+          protocolID: brc29ProtocolID,
+          keyID,
+          counterparty
+        }
+      ])
+    )
+    const batchDerived = batchKeys?.[0]
+    const batchBytes = await sign(
+      template.unlockWithDerivedPrivateKey(batchDerived!, 2, source.outputs[0].lockingScript)
+    )
     const baselineBytes = await sign(new P2PKH().unlock(derived, 'all', false, 2, source.outputs[0].lockingScript))
 
     expect(objectKeyBytes).toBe(stringKeyBytes)

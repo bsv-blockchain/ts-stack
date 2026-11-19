@@ -19,6 +19,7 @@ import {
 import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
 import { WERR_ACTION_BATCH_STATE, WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import { isAdminOriginatorAction } from '../../utility/adminOriginator'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import {
@@ -73,13 +74,42 @@ function isActionBatchCapacityError(error: unknown): boolean {
   if (error == null || typeof error !== 'object') return false
   const candidate = error as { name?: unknown; code?: unknown; parameter?: unknown; message?: unknown }
   const code = candidate.name === 'Error' ? candidate.code : (candidate.name ?? candidate.code)
-  if (code === 'WERR_INVALID_PARAMETER' && candidate.parameter === 'firstAction') return true
+  // `resolvedInputHook` is storage refusing to accept explicit inputs on the
+  // batch path while a host hook is configured. The legacy createAction path
+  // verifies BEEF and then runs the hook.
+  if (
+    code === 'WERR_INVALID_PARAMETER' &&
+    (candidate.parameter === 'firstAction' || candidate.parameter === 'resolvedInputHook')
+  )
+    return true
   return (
     code === 'WERR_INVALID_OPERATION' &&
     typeof candidate.message === 'string' &&
     candidate.message.includes('action batch') &&
     (candidate.message.includes('maximum') || candidate.message.includes('reserve'))
   )
+}
+
+function isResolvedInputHookFallback(error: unknown): boolean {
+  if (error == null || typeof error !== 'object') return false
+  const candidate = error as { name?: unknown; code?: unknown; parameter?: unknown }
+  const code = candidate.name === 'Error' ? candidate.code : (candidate.name ?? candidate.code)
+  return code === 'WERR_INVALID_PARAMETER' && candidate.parameter === 'resolvedInputHook'
+}
+
+function activeStorageHasResolvedInputHook(wallet: Wallet): boolean {
+  if (!wallet.storage.isAvailable()) return false
+  const active = wallet.storage.getActive() as { validateResolvedActionInput?: unknown }
+  return typeof active.validateResolvedActionInput === 'function'
+}
+
+function leavesBatchForInputPolicy(wallet: Wallet, args: ValidCreateActionArgs): boolean {
+  // Admin actions stay on legacy createAction: that path keeps the minimal
+  // funding plan and persists a noSend result before a later spend. Explicit
+  // inputs also stay there when the host configured validateResolvedActionInput,
+  // so the hook still runs only after BEEF verification.
+  if (isAdminOriginatorAction(args)) return true
+  return activeStorageHasResolvedInputHook(wallet) && args.inputs.length > 0
 }
 
 function nextGeometricTarget(value: number): number {
@@ -1017,13 +1047,22 @@ export class ActionBatchController {
     return awaitFromSync(() => {
       return this.runExclusive(async () => {
         if (!args.isNewTx) return undefined
+        if (leavesBatchForInputPolicy(this.wallet, args)) return undefined
         const workspace = this.workspace
         if (workspace != null) {
           // Workspace membership is an explicit transaction-graph relationship.
           // Time adjacency, a shared Wallet instance, or a shared originator are
           // not sufficient: unrelated work must remain on the legacy path.
           if (!workspace.references(args)) return undefined
-          return await this.recover(workspace, args)
+          try {
+            return await this.recover(workspace, args)
+          } catch (error) {
+            // A later explicit input cannot be accepted on this batch while the
+            // host hook is set. Leave the workspace in place and use legacy
+            // createAction, which verifies BEEF before the hook.
+            if (isResolvedInputHookFallback(error)) return undefined
+            throw error
+          }
         }
         if (!args.isNoSend) return undefined
         let begun: ActionBatchWorkspace | undefined

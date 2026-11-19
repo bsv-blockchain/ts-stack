@@ -665,7 +665,9 @@ export interface KeyDeriverApi {
     keyID: string,
     counterparty: Counterparty
   ) => PrivateKey
-  derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
+  derivePrivateKeys?: (
+    derivations: readonly PrivateKeyDerivation[]
+  ) => PrivateKey[] | Promise<PrivateKey[]>
   deriveSymmetricKey: (
     protocolID: WalletProtocol,
     keyID: string,
@@ -710,8 +712,13 @@ Derives several private keys while sharing each counterparty ECDH result.
 Implementations that do not provide this additive lane retain the
 per-key `derivePrivateKey` contract.
 
+The result may be a Promise. A synchronous `PrivateKey[]` implementation
+remains valid. Callers must await the result.
+
 ```ts
-derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
+derivePrivateKeys?: (
+  derivations: readonly PrivateKeyDerivation[]
+) => PrivateKey[] | Promise<PrivateKey[]>
 ```
 
 See also: [PrivateKey](./primitives.md#class-privatekey), [PrivateKeyDerivation](./wallet.md#interface-privatekeyderivation)
@@ -2878,7 +2885,9 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     keyID: string,
     counterparty: Counterparty
   ): PrivateKey
-  derivePrivateKeys(derivations: readonly PrivateKeyDerivation[]): PrivateKey[]
+  derivePrivateKeys(
+    derivations: readonly PrivateKeyDerivation[]
+  ): PrivateKey[] | Promise<PrivateKey[]>
   deriveSymmetricKey(
     protocolID: WalletProtocol,
     keyID: string,

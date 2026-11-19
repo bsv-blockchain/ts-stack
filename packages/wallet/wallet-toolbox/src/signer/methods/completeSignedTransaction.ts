@@ -1,5 +1,5 @@
 import { mapAwaitFromSync } from '../../utility/promiseFromSync'
-import { PublicKey, SignActionSpend, Transaction, type PrivateKey } from '@bsv/sdk'
+import { PublicKey, SignActionSpend, Transaction } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
@@ -94,9 +94,9 @@ export async function completeSignedTransaction(
     }))
     // derivePrivateKeys may be asynchronous (a native or off-thread batch
     // deriver): its result is awaited, and the signing guard runs again after.
+    // A synchronous array is unchanged by await.
     const derivedPrivateKeys =
-      (await (wallet.keyDeriver.derivePrivateKeys?.(derivations) as
-        PrivateKey[] | Promise<PrivateKey[]> | undefined)) ??
+      (await wallet.keyDeriver.derivePrivateKeys?.(derivations)) ??
       derivations.map(derivation =>
         wallet.keyDeriver.derivePrivateKey(derivation.protocolID, derivation.keyID, derivation.counterparty)
       )

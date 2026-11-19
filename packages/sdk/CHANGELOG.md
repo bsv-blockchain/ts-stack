@@ -1,3 +1,13 @@
+# 4.2.0 unpublished minor candidate
+
+- `KeyDeriverApi.derivePrivateKeys` may return `PrivateKey[]` or
+  `Promise<PrivateKey[]>`. A synchronous implementation remains assignable.
+  Callers must await the result; `await` leaves an array unchanged.
+- `CachedKeyDeriver.derivePrivateKeys` awaits a promised result and caches
+  keys only after that promise fulfills. A rejection is not cached.
+- The concrete `KeyDeriver.derivePrivateKeys` stays synchronous. No wire or
+  BRC-100 change. Includes the unpublished 4.1.1 candidate below.
+
 # 4.1.1 unpublished patch candidate
 
 - A non-array tag container raises TypeError (an Error subclass) with the existing

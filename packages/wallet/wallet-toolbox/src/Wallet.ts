@@ -151,6 +151,7 @@ import {
   WERR_REVIEW_ACTIONS
 } from './sdk/WERR_errors'
 import type { AdminValidCreateActionArgs } from './utility/adminOriginator'
+import { canonicalOriginator } from './utility/normalizeOriginator'
 import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
@@ -659,7 +660,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
-    validateOriginator(originator)
+    validateOriginator(canonicalOriginator(originator))
     const { vargs } = this.validateAuthAndArgs(args, validateListActionsArgs)
     const storageArgs = this.actionBatch.hasWorkspace ? { ...vargs, limit: 10000, offset: 0 } : vargs
     const r = this.actionBatch.overlayListActions(await this.storage.listActions(storageArgs), vargs)
@@ -679,8 +680,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
   }
 
   /**
-   * The host's own originator (the domain its WalletPermissionsManager uses as
-   * adminOriginator), if the host set one. Undefined by default.
+   * The host's own originator, normalized to the same lowercase hostname
+   * WalletPermissionsManager uses. Undefined until the host sets one.
    */
   get adminOriginator(): string | undefined {
     return this.adminOriginatorValue
@@ -688,8 +689,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   /**
    * Names the host's own originator. Trusted host code calls this once, where
-   * it builds the wallet; it cannot be changed afterwards. For calls from this
-   * originator only:
+   * it builds the wallet; it cannot be changed afterwards. Scheme, port and
+   * letter case are ignored: the stored value is the lowercase hostname, the
+   * same normalization WalletPermissionsManager uses. A value that does not
+   * normalize to a canonical hostname is rejected.
+   *
+   * Admin privilege is only as trustworthy as the originator argument later
+   * passed into Wallet. Wallet does not authenticate that string. A host that
+   * exposes Wallet directly, without WalletPermissionsManager, must choose the
+   * originator itself and must not forward an application-controlled value.
+   * WalletPermissionsManager normalizes the caller and passes only its own
+   * result; skipping that manager leaves both the value and its trustworthiness
+   * entirely to the host.
+   *
+   * For calls from this originator only:
    * - listActions returns output customInstructions (redacted for every other
    *   originator, as before);
    * - createAction tells storage the action is the admin's
@@ -697,20 +710,25 @@ export class Wallet implements WalletInterface, ProtoWallet {
    *   plan minimal and lets a storage validateResolvedActionInput hook allow
    *   inputs that other originators may not spend.
    * The flag is derived from the originator argument, never from action fields.
+   * Comparison fails closed: a missing, empty, or different hostname is not admin.
    */
   setAdminOriginator(originator: OriginatorDomainNameStringUnder250Bytes): void {
-    validateOriginator(originator)
-    if (typeof originator !== 'string' || originator === '') {
+    const normalized = canonicalOriginator(originator)
+    validateOriginator(normalized)
+    if (normalized == null) {
       throw new WERR_INVALID_PARAMETER('originator', 'a non-empty originator domain')
     }
     if (this.adminOriginatorValue !== undefined) {
       throw new WERR_INVALID_OPERATION('The admin originator is already set')
     }
-    this.adminOriginatorValue = originator
+    this.adminOriginatorValue = normalized
   }
 
   private isAdminOriginator(originator?: OriginatorDomainNameStringUnder250Bytes): boolean {
-    return this.adminOriginatorValue !== undefined && originator === this.adminOriginatorValue
+    const admin = this.adminOriginatorValue
+    if (admin == null || admin === '') return false
+    const normalized = canonicalOriginator(originator)
+    return normalized != null && normalized === admin
   }
 
   get storageParty(): string {
@@ -1204,7 +1222,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   ): Promise<CreateActionResult> {
     const logger = this.logMakeLogger('createAction', args)
     try {
-      validateOriginator(originator)
+      validateOriginator(canonicalOriginator(originator))
 
       args.options ??= {}
       args.options.trustSelf ||= this.trustSelf
@@ -1214,6 +1232,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
       logger?.log('validated args')
 
       // Decided from the originator argument only, never from action fields.
+      // Wallet does not authenticate that argument. A host that exposes Wallet
+      // without WalletPermissionsManager must pass a trustworthy originator;
+      // an application-supplied string is not authority. Scheme, port and case
+      // variants of the configured hostname match. Anything else fails closed.
       ;(vargs as AdminValidCreateActionArgs).isAdminOriginator = this.isAdminOriginator(originator)
       vargs.includeAllSourceTransactions = this.includeAllSourceTransactions
       if (this.randomVals != null && this.randomVals.length > 1) {

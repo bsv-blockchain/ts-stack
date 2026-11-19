@@ -1,3 +1,4 @@
+import { Beef } from '@bsv/sdk'
 import * as generateChange from '../../../src/storage/methods/generateChange'
 import type { GenerateChangeSdkParams } from '../../../src/storage/methods/generateChange'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
@@ -7,12 +8,20 @@ const ADMIN = 'admin.wallet.example'
 const APP = 'app.example'
 const LOCK = '76a914111111111111111111111111111111111111111188ac'
 
-describe('Wallet admin originator', () => {
-  jest.setTimeout(60000)
+function signableInputCount(tx: number[] | Uint8Array): number {
+  const beef = Beef.fromBinary(tx)
+  const atomicId = beef.atomicTxid
+  const atomic = atomicId == null ? undefined : beef.findTxid(atomicId)?.tx
+  if (atomic == null) throw new Error('signable transaction is missing its atomic transaction')
+  return atomic.inputs.length
+}
+
+describe.each(['legacy', 'auto'] as const)('Wallet admin originator (%s)', mode => {
+  jest.setTimeout(120000)
   let ctx: TestWalletNoSetup
 
   beforeAll(async () => {
-    ctx = await _tu.createLegacyWalletSQLiteCopy('adminOriginator', 'legacy')
+    ctx = await _tu.createLegacyWalletSQLiteCopy(`adminOriginator-${mode}`, mode)
     ctx.wallet.setAdminOriginator(ADMIN)
   })
 
@@ -33,10 +42,15 @@ describe('Wallet admin originator', () => {
 
   test('createAction tells storage whose action it is from the originator argument alone', async () => {
     const seen: Array<boolean | undefined> = []
-    const real = ctx.activeStorage.createAction.bind(ctx.activeStorage)
+    const realCreate = ctx.activeStorage.createAction.bind(ctx.activeStorage)
     jest.spyOn(ctx.activeStorage, 'createAction').mockImplementation(async (auth, vargs) => {
       seen.push((vargs as AdminValidCreateActionArgs).isAdminOriginator)
-      return await real(auth, vargs)
+      return await realCreate(auth, vargs)
+    })
+    const realBegin = ctx.activeStorage.beginActionBatch.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'beginActionBatch').mockImplementation(async (auth, args) => {
+      seen.push((args.firstAction as AdminValidCreateActionArgs).isAdminOriginator)
+      return await realBegin(auth, args)
     })
     const args = () => ({
       description: 'admin flag check',
@@ -81,6 +95,34 @@ describe('Wallet admin originator', () => {
     expect(app.surplusPoolShaping).toBe(true)
   })
 
+  test('an admin exact input set does not gain funding inputs', async () => {
+    const staged = await ctx.wallet.createAction(
+      {
+        description: 'stage an exact admin input',
+        outputs: [{ satoshis: 5000, lockingScript: LOCK, outputDescription: 'exact', basket: 'admin exact' }],
+        options: { noSend: true, randomizeOutputs: false }
+      },
+      ADMIN
+    )
+    const spent = await ctx.wallet.createAction(
+      {
+        description: 'spend the exact admin input',
+        inputBEEF: staged.tx,
+        inputs: [
+          {
+            outpoint: `${staged.txid!}.0`,
+            inputDescription: 'exact',
+            unlockingScriptLength: 107
+          }
+        ],
+        outputs: [{ satoshis: 1000, lockingScript: LOCK, outputDescription: 'exact spend' }],
+        options: { noSend: true, randomizeOutputs: false, signAndProcess: false }
+      },
+      ADMIN
+    )
+    expect(signableInputCount(spent.signableTransaction!.tx!)).toBe(1)
+  })
+
   test('only the admin originator reads output customInstructions', async () => {
     // Knex and IndexedDB storage do not return customInstructions; a host
     // storage may. The Wallet redacts them for every originator but the admin.
@@ -115,7 +157,9 @@ describe('Wallet admin originator', () => {
         .flatMap(a => a.outputs ?? [])
         .map(o => o.customInstructions)
     expect(await read(ADMIN)).toEqual(['{"secret":"metadata"}'])
+    expect(await read('HTTPS://Admin.Wallet.Example:443')).toEqual(['{"secret":"metadata"}'])
     expect(await read(APP)).toEqual([undefined])
+    expect(await read('https://admin.wallet.example.evil.com')).toEqual([undefined])
     expect(await read()).toEqual([undefined])
   })
 
@@ -149,5 +193,50 @@ describe('Wallet admin originator', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].admin).toBe(false)
     expect(calls[0].outputId).toBeGreaterThan(0)
+    calls.length = 0
+    const allowed = await spend('https://ADMIN.WALLET.EXAMPLE:8443')
+    expect(signableInputCount(allowed.signableTransaction!.tx!)).toBeGreaterThan(0)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].admin).toBe(true)
+  })
+})
+
+describe.each(['legacy', 'auto'] as const)('admin originator normalization (%s)', mode => {
+  jest.setTimeout(120000)
+
+  test('matches scheme, port and case, and fails closed for any other host', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy(`adminOriginatorNorm-${mode}`, mode)
+    try {
+      ctx.wallet.setAdminOriginator('https://Admin.Wallet.Example:8443')
+      expect(ctx.wallet.adminOriginator).toBe(ADMIN)
+
+      const seen: Array<boolean | undefined> = []
+      const realCreate = ctx.activeStorage.createAction.bind(ctx.activeStorage)
+      jest.spyOn(ctx.activeStorage, 'createAction').mockImplementation(async (auth, vargs) => {
+        seen.push((vargs as AdminValidCreateActionArgs).isAdminOriginator)
+        return await realCreate(auth, vargs)
+      })
+      const realBegin = ctx.activeStorage.beginActionBatch.bind(ctx.activeStorage)
+      jest.spyOn(ctx.activeStorage, 'beginActionBatch').mockImplementation(async (auth, args) => {
+        seen.push((args.firstAction as AdminValidCreateActionArgs).isAdminOriginator)
+        return await realBegin(auth, args)
+      })
+      const args = () => ({
+        description: 'originator normalization',
+        outputs: [{ satoshis: 1000, lockingScript: LOCK, outputDescription: 'payment' }],
+        options: { noSend: true, randomizeOutputs: false }
+      })
+      await ctx.wallet.createAction(args(), 'ADMIN.WALLET.EXAMPLE:443')
+      await ctx.wallet.createAction(args(), 'https://admin.wallet.example')
+      await ctx.wallet.createAction(args(), 'https://admin.wallet.example.evil.com')
+      await ctx.wallet.createAction(args(), 'https://evil.example')
+      await ctx.wallet.createAction(args(), 'https://admin.wallet.example@evil.example')
+      await ctx.wallet.createAction(args())
+      expect(seen).toEqual([true, true, false, false, false, false])
+      await expect(ctx.wallet.createAction(args(), 'not a host')).rejects.toThrow()
+      expect(seen).toEqual([true, true, false, false, false, false])
+    } finally {
+      await ctx.storage.destroy()
+    }
   })
 })
