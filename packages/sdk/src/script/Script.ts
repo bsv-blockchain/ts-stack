@@ -5,8 +5,8 @@ import BigNumber from '../primitives/BigNumber.js'
 
 /**
  * Prefix of the final ASM token that carries raw script bytes verbatim. toASM
- * prints it only for bytes after a top-level OP_RETURN that no instruction
- * token can restore exactly (for example a truncated push).
+ * prints it only for the bytes after a top-level OP_RETURN from a truncated
+ * push on (a push whose data or length bytes run past the end of the script).
  */
 const RAW_BYTES_PREFIX = '0x'
 
@@ -73,8 +73,8 @@ export default class Script {
    * @method fromASM
    * Static method to construct a Script instance from an ASM (Assembly) formatted string.
    * A final token of the form `0x<hex>` appends those bytes verbatim after the
-   * preceding instructions. `toASM` prints this token for bytes after a
-   * top-level OP_RETURN that no instruction token restores exactly.
+   * preceding instructions. `toASM` prints this token for the bytes after a
+   * top-level OP_RETURN from a truncated push on.
    * @param asm - The script in ASM string format.
    * @returns A new Script instance.
    * @example
@@ -722,8 +722,8 @@ export default class Script {
    * ASM suffix for raw script bytes, with one leading space per instruction.
    * OP_RETURN is a single opcode and parsing continues, matching fromASM.
    * Pushes print as the hex of their payload, the same as ordinary chunks.
-   * From the first instruction that fromASM cannot restore byte for byte, the
-   * remaining bytes print as one final `0x<hex>` raw-bytes token.
+   * From a truncated push on, the remaining bytes print as one final
+   * `0x<hex>` raw-bytes token, so the original length bytes survive.
    */
   static #disassembleBytes(bytes: ArrayLike<number>): string {
     let str = ''
@@ -732,26 +732,20 @@ export default class Script {
     while (pos < length) {
       const start = pos
       const op = bytes[pos++] ?? 0
-      let token: string | undefined
       if (op > 0 && op <= OP.OP_PUSHDATA4) {
         const { len, newPos, hasLength } = Script.#readPushdataLength(op, bytes, pos, length)
         pos = newPos
         const end = Math.min(pos + len, length)
-        // fromASM writes the minimal push for a hex token. Any other push
-        // (truncated, missing length, non-minimal) cannot be read back.
-        if (hasLength && end - pos === len && op === Script.#pushdataOpCodeNum(len)) {
-          token = toHex(Script.#copyRange(bytes, pos, end))
+        if (!hasLength || end - pos !== len) {
+          // A truncated push, or one with a missing or partial length, has no
+          // hex form. Keep the remainder exactly, from the push opcode on.
+          return `${str} ${RAW_BYTES_PREFIX}${toHex(Script.#copyRange(bytes, start, length))}`
         }
+        str += ` ${toHex(Script.#copyRange(bytes, pos, end))}`
         pos = end
       } else {
-        const name = OP[op]
-        if (typeof name === 'string' && OP[name] === op) token = name
+        str += ` ${OP[op] as string}`
       }
-      if (token === undefined) {
-        // Keep the opaque remainder exactly, from this instruction's first byte.
-        return `${str} ${RAW_BYTES_PREFIX}${toHex(Script.#copyRange(bytes, start, length))}`
-      }
-      str += ` ${token}`
     }
     return str
   }

@@ -248,7 +248,7 @@ describe('Script', () => {
       expect(Script.fromASM(parsed.toASM()).toHex()).toEqual(pushHex)
     })
 
-    it('keeps an OP_RETURN suffix that instructions cannot restore as a raw 0x token', () => {
+    it('keeps an OP_RETURN suffix from a truncated push on as a raw 0x token', () => {
       const cases = [
         // Truncated short push: the length byte must survive.
         { hex: '006a02ab', asm: 'OP_0 OP_RETURN 0x02ab' },
@@ -256,9 +256,8 @@ describe('Script', () => {
         { hex: '006a4c', asm: 'OP_0 OP_RETURN 0x4c' },
         // OP_PUSHDATA2 with a partial length.
         { hex: '006a4d01', asm: 'OP_0 OP_RETURN 0x4d01' },
-        // Empty and non-minimal pushes are complete but not minimal.
-        { hex: '006a4c00', asm: 'OP_0 OP_RETURN 0x4c00' },
-        { hex: '006a4c01ab', asm: 'OP_0 OP_RETURN 0x4c01ab' },
+        // OP_PUSHDATA1 with fewer data bytes than its length.
+        { hex: '006a4c03abcd', asm: 'OP_0 OP_RETURN 0x4c03abcd' },
         // Exact instructions print as before; only the rest is raw.
         { hex: '6a0568656c6c6f02ab', asm: 'OP_RETURN 68656c6c6f 0x02ab' }
       ]
@@ -271,6 +270,8 @@ describe('Script', () => {
       }
 
       expect(Script.fromHex('006a01ab').toASM()).toEqual('OP_0 OP_RETURN ab')
+      // A complete non-minimal push still prints as hex, as before.
+      expect(Script.fromHex('006a4c0568656c6c6f').toASM()).toEqual('OP_0 OP_RETURN 68656c6c6f')
       expect(Script.fromHex('006a02ab').toASM()).not.toEqual(Script.fromHex('006a01ab').toASM())
     })
   })
