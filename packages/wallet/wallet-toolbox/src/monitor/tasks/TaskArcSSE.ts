@@ -72,7 +72,9 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
-    this.cursorEvent = `ArcadeSSECursor.${toHex(sha256(toArray(JSON.stringify([arcadeUrl, callbackToken]), 'utf8')))}`
+    // SQL stores monitor event names in a 64-character column.
+    const fingerprint = toHex(sha256(toArray(JSON.stringify([arcadeUrl, callbackToken]), 'utf8'))).slice(0, 40)
+    this.cursorEvent = `ArcadeSSECursor.${fingerprint}`
     let lastEventId: string | undefined
     try {
       if (this.monitor.options.loadLastSSEEventId != null) {
@@ -177,7 +179,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
             await this.monitor.logEvent(this.cursorEvent, JSON.stringify(pending.event.eventId))
           }
         } catch (e) {
-          await this.logSetupEvent(`failed to persist lastEventId: ${safeDiagnostic(e)}`)
+          await this.logSetupEvent('Failed to persist acknowledged Arcade cursor')
           throw e
         }
       }

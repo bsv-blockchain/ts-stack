@@ -442,13 +442,16 @@ describe('ArcSSEClient', () => {
       })
       client.connect()
       const es = FakeEventSource.instances[0]
-      es.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }) })
+      es.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }), lastEventId: '1' })
       es.emit('status', { data: JSON.stringify({ txid: TXID_B, txStatus: 'MINED', timestamp: '' }) })
 
       expect(es.closed).toBe(true)
-      expect(errors[0].message).toBe('Arcade SSE supplied an invalid or excessive status event.')
+      expect(errors[0].message).toContain('queue capacity reached')
       release()
       await new Promise(resolve => setTimeout(resolve, 0))
+      expect(client.lastEventId).toBe('1')
+      await client.fetchEvents()
+      expect(FakeEventSource.instances[1].opts.headers['Last-Event-ID']).toBe('1')
     })
 
     test('rejects oversized and noncanonical event fields without retaining their content', () => {

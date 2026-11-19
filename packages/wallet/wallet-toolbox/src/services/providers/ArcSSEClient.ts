@@ -328,6 +328,7 @@ export class ArcSSEClient {
   private connecting = false
   private generation = 0
   private processingGeneration: number | undefined
+  private detachedGeneration: number | undefined
   private readonly pendingEvents: PendingEvent[] = []
   private pendingBytes = 0
 
@@ -390,7 +391,7 @@ export class ArcSSEClient {
         // Error objects can contain the credential-bearing request URL and
         // headers. Do not inspect or forward remote diagnostic fields.
         void event
-        this.terminateSource(source, new Error('Arcade SSE connection error.'), true)
+        this.terminateSource(source, new Error('Arcade SSE connection error.'), true, true)
       })
       this.emitLog('Arcade SSE connecting.')
     } catch {
@@ -427,7 +428,15 @@ export class ArcSSEClient {
         this.pendingEvents.length >= this.options.maxPendingEvents ||
         this.pendingBytes + bytes > this.options.maxPendingBytes
       ) {
-        throw new Error('Arcade SSE pending-event capacity was exceeded.')
+        if (this.es != null) {
+          this.terminateSource(
+            this.es,
+            new Error('Arcade SSE queue capacity reached; replay will resume after the acknowledged prefix.'),
+            true,
+            true
+          )
+        }
+        return
       }
       this.pendingEvents.push({ event: normalized, bytes })
       this.pendingBytes += bytes
@@ -444,46 +453,56 @@ export class ArcSSEClient {
     this.processingGeneration = generation
     void this.drainEvents(generation).finally(() => {
       if (this.processingGeneration === generation) this.processingGeneration = undefined
+      if (this.detachedGeneration === generation) this.detachedGeneration = undefined
       if (this.es != null && this.pendingEvents.length > 0) this.startDrain(this.generation)
     })
   }
 
   private async drainEvents(generation: number): Promise<void> {
-    while (this.generation === generation && this.es != null && this.pendingEvents.length > 0) {
+    const canCommit = (): boolean =>
+      this.generation === generation && (this.es != null || this.detachedGeneration === generation)
+    while (canCommit() && this.pendingEvents.length > 0) {
       const pending = this.pendingEvents[0]
       try {
         await this.options.onEvent({ ...pending.event })
-        if (this.generation !== generation || this.es == null) return
+        if (!canCommit()) return
         const eventId = pending.event.eventId
         if (eventId != null) {
           await this.options.onLastEventIdChanged?.(eventId)
-          if (this.generation !== generation || this.es == null) return
+          if (!canCommit()) return
           this._lastEventId = eventId
         }
         if (this.pendingEvents[0] !== pending) return
         this.pendingEvents.shift()
         this.pendingBytes -= pending.bytes
       } catch (error) {
-        if (this.es != null) {
-          this.terminateSource(
-            this.es,
-            error instanceof Error ? error : new Error('Arcade SSE event processing failed.'),
-            true
-          )
+        const failure = error instanceof Error ? error : new Error('Arcade SSE event processing failed.')
+        if (this.es != null) this.terminateSource(this.es, failure, true)
+        else if (this.detachedGeneration === generation) {
+          this.invalidatePending()
+          this.reportError(failure)
         }
         return
       }
     }
   }
 
-  private terminateSource(source: any, error: Error, notify: boolean): void {
+  private invalidatePending(): void {
+    this.generation += 1
+    this.detachedGeneration = undefined
+    this.pendingEvents.length = 0
+    this.pendingBytes = 0
+  }
+
+  private terminateSource(source: any, error: Error, notify: boolean, drainPrefix = false): void {
     if (this.es !== source) return
     this.es = null
     this.connected = false
     this.connecting = false
-    this.generation += 1
-    this.pendingEvents.length = 0
-    this.pendingBytes = 0
+    // Backpressure and transport loss stop further input, but keep the
+    // validated prefix until its durable acknowledgements complete.
+    if (drainPrefix && this.processingGeneration === this.generation) this.detachedGeneration = this.generation
+    else this.invalidatePending()
     try {
       source.close()
     } catch {
@@ -518,9 +537,7 @@ export class ArcSSEClient {
     } else {
       this.connected = false
       this.connecting = false
-      this.generation += 1
-      this.pendingEvents.length = 0
-      this.pendingBytes = 0
+      this.invalidatePending()
     }
   }
 
