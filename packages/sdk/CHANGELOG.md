@@ -3,7 +3,10 @@
 - `Script.toASM` names a top-level `OP_RETURN` and then disassembles the bytes
   the parser folded into that chunk. `Script.fromASM` of that text restores the
   same bytes for `OP_RETURN <data>`, `OP_FALSE OP_RETURN <data>`, and a bare
-  `OP_RETURN`. Chunk parsing and script bytes are unchanged.
+  `OP_RETURN`. From the first suffix instruction that ASM cannot restore byte
+  for byte (a truncated, empty or non-minimal push), `toASM` prints the rest as
+  one final `0x<hex>` raw-bytes token, which `fromASM` appends verbatim.
+  Chunk parsing and script bytes are unchanged.
 - A non-array tag container raises TypeError (an Error subclass) with the existing
   diagnostic; valid tag arrays and other validation errors are unchanged.
 - Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries

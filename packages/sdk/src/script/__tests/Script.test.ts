@@ -247,9 +247,44 @@ describe('Script', () => {
       expect(parsed.toASM()).toEqual(pushes)
       expect(Script.fromASM(parsed.toASM()).toHex()).toEqual(pushHex)
     })
+
+    it('keeps an OP_RETURN suffix that instructions cannot restore as a raw 0x token', () => {
+      const cases = [
+        // Truncated short push: the length byte must survive.
+        { hex: '006a02ab', asm: 'OP_0 OP_RETURN 0x02ab' },
+        // OP_PUSHDATA1 with its length byte missing.
+        { hex: '006a4c', asm: 'OP_0 OP_RETURN 0x4c' },
+        // OP_PUSHDATA2 with a partial length.
+        { hex: '006a4d01', asm: 'OP_0 OP_RETURN 0x4d01' },
+        // Empty and non-minimal pushes are complete but not minimal.
+        { hex: '006a4c00', asm: 'OP_0 OP_RETURN 0x4c00' },
+        { hex: '006a4c01ab', asm: 'OP_0 OP_RETURN 0x4c01ab' },
+        // Exact instructions print as before; only the rest is raw.
+        { hex: '6a0568656c6c6f02ab', asm: 'OP_RETURN 68656c6c6f 0x02ab' }
+      ]
+      for (const { hex, asm } of cases) {
+        const script = Script.fromHex(hex)
+        expect(script.toASM()).toEqual(asm)
+        const back = Script.fromASM(asm)
+        expect(back.toHex()).toEqual(hex)
+        expect(back.toASM()).toEqual(asm)
+      }
+
+      expect(Script.fromHex('006a01ab').toASM()).toEqual('OP_0 OP_RETURN ab')
+      expect(Script.fromHex('006a02ab').toASM()).not.toEqual(Script.fromHex('006a01ab').toASM())
+    })
   })
 
   describe('fromASM', () => {
+    it('appends a final 0x raw-bytes token verbatim and rejects malformed ones', () => {
+      expect(Script.fromASM('OP_RETURN 0x02AB').toHex()).toEqual('6a02ab')
+      expect(() => Script.fromASM('OP_RETURN 0x')).toThrow('invalid raw bytes token in script')
+      expect(() => Script.fromASM('OP_RETURN 0x0')).toThrow('invalid raw bytes token in script')
+      expect(() => Script.fromASM('OP_RETURN 0xzz')).toThrow()
+      // Only the final token may carry raw bytes.
+      expect(() => Script.fromASM('OP_RETURN 0x02ab OP_1')).toThrow()
+    })
+
     it('should parse these known scripts', () => {
       expect(Script.fromASM('OP_0 010203 OP_0').toASM()).toEqual('OP_0 010203 OP_0')
       expect(
