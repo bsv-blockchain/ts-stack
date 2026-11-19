@@ -47,7 +47,7 @@ export class TaskReviewConfirmedSpends extends WalletMonitorTask {
   async runTask(): Promise<string> {
     const tip = this.monitor.lastNewHeader
     if (tip == null) return ''
-    const provider = await this.storage.runAsStorageProvider(async sp => sp)
+    const provider = await this.storage.runAsStorageProvider(sp => Promise.resolve(sp))
     const admission: StorageWriterAdmission = async operation =>
       await this.storage.runAsStorageProvider(async current => {
         if (current !== provider) throw new WERR_NOT_ACTIVE('Spend review belongs to a replaced provider')

@@ -1,3 +1,4 @@
+import { runInSeries } from '../../utility/runInSeries'
 import { StorageReqWrite } from '../StorageReqWrite'
 import type { StorageActiveWrite, StorageStatusReviewArgs, StorageWriterAdmission } from '../StorageActiveWrite'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
@@ -196,10 +197,10 @@ export async function reviewStatus(storage: StorageKnex, args: StorageStatusRevi
             .orderBy('transactionId')
             .limit(100)
           if (!ids.length) break
-          for (const { transactionId } of ids) {
+          await runInSeries(ids, async ({ transactionId }) => {
             log += await reviewFencedTransaction(storage, args, user, transactionId, write, admit)
             afterTransaction = transactionId
-          }
+          })
         }
       } catch (error) {
         if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
@@ -264,8 +265,13 @@ export async function reviewStatusPage(
   let examined = 0
   let attempted = 0
   let failed = 0
-  for (const row of rows) {
-    if (attempted >= 32 || (examined > 0 && performance.now() >= deadline)) break
+  function* budgetedRows() {
+    for (const row of rows) {
+      if (attempted >= 32 || (examined > 0 && performance.now() >= deadline)) return
+      yield row
+    }
+  }
+  await runInSeries(budgetedRows(), async row => {
     if (row.activeStorage === activeStorage && row.needsRepair) {
       attempted++
       try {
@@ -273,10 +279,9 @@ export async function reviewStatusPage(
         const outcome = await reviewFencedTransaction(storage, args, row, row.transactionId, write, admit)
         if (log.length < 2048) log += outcome.slice(0, 2048 - log.length)
       } catch (error) {
-        if (WalletError.fromUnknown(error).code === 'WERR_NOT_ACTIVE') {
-          // The current primary owns repair. Reconsider it on the next pass.
-        } else {
-          // A failing row is retried on the next pass without blocking later rows.
+        // A replacement primary owns its writes. Other failures are retried
+        // on the next pass without blocking later transaction IDs.
+        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') {
           failed++
           if (log.length < 1920)
             log += `transaction ${row.transactionId} review failed
@@ -286,7 +291,7 @@ export async function reviewStatusPage(
     }
     after = row.transactionId
     examined++
-  }
+  })
   return { log, after, complete: examined === rows.length && rows.length < limit, examined, failed }
 }
 

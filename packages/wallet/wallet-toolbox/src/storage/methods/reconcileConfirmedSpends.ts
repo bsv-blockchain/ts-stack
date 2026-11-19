@@ -1,7 +1,9 @@
+import { runInSeries } from '../../utility/runInSeries'
 import { Transaction } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
 import type { StorageWriterAdmission } from '../StorageActiveWrite'
 import type { TableProvenTx } from '../schema/tables/TableProvenTx'
+import type { WalletServices } from '../../sdk/WalletServices.interfaces'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { sameSyncProof, validateSyncProof } from './validateSyncProof'
 import { classifyOutputUtxo } from '../../services/classifyOutputUtxo'
@@ -59,54 +61,51 @@ export async function reconcileConfirmedSpender(
     const observed = currentProof == null ? undefined : await storage.findProvenTxById(proof.provenTxId, trx)
     if (observed == null || !sameSyncProof(observed, proof)) return 0
     let changed = 0
-    for (const target of targets.slice().sort((a, b) => a.outputId - b.outputId)) {
-      const output = await db('outputs')
-        .where({ outputId: target.outputId, userId: target.userId })
-        .select('outputId', 'txid', 'vout', 'basketId', 'spendable', 'spentBy', 'updated_at', 'transactionId')
-        .forUpdate()
-        .first()
-      if (
-        output == null ||
-        !output.spendable ||
-        output.basketId == null ||
-        output.txid !== target.txid ||
-        output.vout !== target.vout
-      )
-        continue
-      const source = await db('transactions')
-        .where({ transactionId: output.transactionId, userId: target.userId })
-        .select('status')
-        .first()
-      if (source == null || !confirmedSourceStatuses.includes(source.status)) continue
-      // This is a chain observation shared by all copies of the same outpoint.
-      // Keep ownership, existing local reservations and the wallet's history intact.
-      const now = new Date(Math.max(Date.now(), new Date(output.updated_at).getTime() + 1))
-      if ((await storage.updateOutput(target.outputId, { spendable: false, updated_at: now }, trx)) !== 1)
-        throw new Error('Confirmed spend lost its locked output')
-      await storage.insertMonitorEvent(
-        {
-          id: 0,
-          created_at: now,
-          updated_at: now,
-          event: 'ConfirmedOutputSpend',
-          details: JSON.stringify({
-            outputId: target.outputId,
-            userId: target.userId,
-            txid: target.txid,
-            vout: target.vout,
-            previousUpdatedAt: output.updated_at,
-            observedUpdatedAt: now,
-            provenTxId: proof.provenTxId,
-            spendingTxid: proof.txid,
-            height: proof.height,
-            blockHash: proof.blockHash,
-            vin: inputs.get(`${target.txid}.${target.vout}`)
-          })
-        },
-        trx
-      )
-      changed++
-    }
+    await runInSeries(
+      targets.slice().sort((a, b) => a.outputId - b.outputId),
+      async target => {
+        const output = await db('outputs')
+          .where({ outputId: target.outputId, userId: target.userId })
+          .select('outputId', 'txid', 'vout', 'basketId', 'spendable', 'spentBy', 'updated_at', 'transactionId')
+          .forUpdate()
+          .first()
+        if (!output?.spendable || output.basketId == null || output.txid !== target.txid || output.vout !== target.vout)
+          return
+        const source = await db('transactions')
+          .where({ transactionId: output.transactionId, userId: target.userId })
+          .select('status')
+          .first()
+        if (source == null || !confirmedSourceStatuses.includes(source.status)) return
+        // This is a chain observation shared by all copies of the same outpoint.
+        // Keep ownership, existing local reservations and the wallet's history intact.
+        const now = new Date(Math.max(Date.now(), new Date(output.updated_at).getTime() + 1))
+        if ((await storage.updateOutput(target.outputId, { spendable: false, updated_at: now }, trx)) !== 1)
+          throw new Error('Confirmed spend lost its locked output')
+        await storage.insertMonitorEvent(
+          {
+            id: 0,
+            created_at: now,
+            updated_at: now,
+            event: 'ConfirmedOutputSpend',
+            details: JSON.stringify({
+              outputId: target.outputId,
+              userId: target.userId,
+              txid: target.txid,
+              vout: target.vout,
+              previousUpdatedAt: output.updated_at,
+              observedUpdatedAt: now,
+              provenTxId: proof.provenTxId,
+              spendingTxid: proof.txid,
+              height: proof.height,
+              blockHash: proof.blockHash,
+              vin: inputs.get(`${target.txid}.${target.vout}`)
+            })
+          },
+          trx
+        )
+        changed++
+      }
+    )
     return changed
   }
   return admission == null
@@ -117,8 +116,12 @@ export async function reconcileConfirmedSpender(
 async function findTargets(storage: StorageKnex, inputs: Map<string, number>): Promise<ConfirmedSpendTarget[]> {
   const keys = [...inputs.keys()]
   const targets: ConfirmedSpendTarget[] = []
-  for (let start = 0; start < keys.length && targets.length < matchLimit; start += 128) {
-    const batch = keys.slice(start, start + 128).map(key => [key.slice(0, 64), Number(key.slice(65))])
+  function* unmatchedBatches() {
+    for (let start = 0; start < keys.length && targets.length < matchLimit; start += 128) {
+      yield keys.slice(start, start + 128).map(key => [key.slice(0, 64), Number(key.slice(65))])
+    }
+  }
+  await runInSeries(unmatchedBatches(), async batch => {
     const txids = [...new Set(batch.map(([txid]) => String(txid)))]
     const rows = await storage
       .knex('transactions as t')
@@ -133,7 +136,7 @@ async function findTargets(storage: StorageKnex, inputs: Map<string, number>): P
       .orderBy('o.outputId')
       .limit(matchLimit - targets.length)
     targets.push(...rows)
-  }
+  })
   return targets
 }
 
@@ -238,78 +241,102 @@ export async function reviewConfirmedSpendRecoveries(
   let processed = 0
   const services = storage.getServices()
   const headers = new Map<number, string>()
-  for (const { id } of ids) {
-    if (processed > 0 && performance.now() - started >= workMsecs) break
+  function* budgetedReceipts() {
+    for (const entry of ids) {
+      if (processed > 0 && performance.now() - started >= workMsecs) return
+      yield entry.id
+    }
+  }
+  await runInSeries(budgetedReceipts(), async id => {
     after = id
     processed++
     try {
-      const observation = await storage.findMonitorEventById(id)
-      const receipt = readReceipt(observation?.details)
-      if (receipt == null) continue
-      const row = await storage.findOutputById(receipt.outputId, undefined, true)
-      if (row == null || !stillQuarantined(row, receipt)) continue
-      let activeHash = headers.get(receipt.height)
-      if (activeHash == null) {
-        const header = await services.getHeaderForHeight(receipt.height)
-        if (header.length !== 80) throw new Error('Active header unavailable')
-        activeHash = asString(doubleSha256BE(header))
-        headers.set(receipt.height, activeHash)
-      }
-      if (activeHash === receipt.blockHash) continue
-
-      const funding = (await storage.findProvenTxs({ partial: { txid: receipt.txid } }))[0]
-      if (funding == null) continue
-      await validateSyncProof(storage, funding)
-      const scripted = await storage.findOutputById(receipt.outputId)
-      if (scripted == null || !stillQuarantined(scripted, receipt)) continue
-      const verdict = await classifyOutputUtxo(services, scripted)
-      if (verdict.verdict !== 'unspent') continue
-      const recheck = await services.getHeaderForHeight(receipt.height)
-      if (recheck.length !== 80 || asString(doubleSha256BE(recheck)) !== activeHash) continue
-
-      const apply = async (trx: TrxToken): Promise<number> => {
-        const sql = storage.toDb(trx)
-        const fundingLock = await sql('proven_txs')
-          .where('provenTxId', funding.provenTxId)
-          .select('provenTxId')
-          .forUpdate()
-          .first()
-        if (fundingLock == null) return 0
-        const storedFunding = await storage.findProvenTxById(funding.provenTxId, trx)
-        if (storedFunding == null || !sameSyncProof(storedFunding, funding)) return 0
-        const locked = await sql('outputs')
-          .where('outputId', receipt.outputId)
-          .select('userId', 'txid', 'vout', 'transactionId', 'spendable', 'spentBy', 'updated_at')
-          .forUpdate()
-          .first()
-        if (locked == null || !stillQuarantined(locked, receipt)) return 0
-        const source = await sql('transactions')
-          .where({ transactionId: locked.transactionId, userId: receipt.userId })
-          .select('status', 'provenTxId')
-          .first()
-        if (source?.status !== 'completed' || source.provenTxId !== funding.provenTxId) return 0
-        const now = new Date(Math.max(Date.now(), Date.parse(receipt.observedUpdatedAt) + 1))
-        const changed = await storage.updateOutput(receipt.outputId, { spendable: true, updated_at: now }, trx)
-        if (changed !== 1) throw new Error('Confirmed spend recovery lost its locked output')
-        await storage.insertMonitorEvent(
-          {
-            id: 0,
-            created_at: now,
-            updated_at: now,
-            event: 'ConfirmedOutputSpendRestored',
-            details: JSON.stringify({ observationId: id, outputId: receipt.outputId, blockHash: activeHash })
-          },
-          trx
-        )
-        return changed
-      }
-      restored +=
-        admission == null
-          ? await storage.transaction(apply)
-          : await admission(async () => await storage.transaction(apply))
+      restored += await reviewSpendReceipt(storage, id, services, headers, admission)
     } catch {
       unavailable++
     }
-  }
+  })
   return { after: processed === ids.length && ids.length < limit ? 0 : after, restored, unavailable }
+}
+
+async function reviewSpendReceipt(
+  storage: StorageKnex,
+  id: number,
+  services: WalletServices,
+  headers: Map<number, string>,
+  admission?: StorageWriterAdmission
+): Promise<number> {
+  const observation = await storage.findMonitorEventById(id)
+  const receipt = readReceipt(observation?.details)
+  if (receipt == null) return 0
+  const row = await storage.findOutputById(receipt.outputId, undefined, true)
+  if (row == null || !stillQuarantined(row, receipt)) return 0
+  let activeHash = headers.get(receipt.height)
+  if (activeHash == null) {
+    const header = await services.getHeaderForHeight(receipt.height)
+    if (header.length !== 80) throw new Error('Active header unavailable')
+    activeHash = asString(doubleSha256BE(header))
+    headers.set(receipt.height, activeHash)
+  }
+  if (activeHash === receipt.blockHash) return 0
+
+  const funding = (await storage.findProvenTxs({ partial: { txid: receipt.txid } }))[0]
+  if (funding == null) return 0
+  await validateSyncProof(storage, funding)
+  const scripted = await storage.findOutputById(receipt.outputId)
+  if (scripted == null || !stillQuarantined(scripted, receipt)) return 0
+  const verdict = await classifyOutputUtxo(services, scripted)
+  if (verdict.verdict !== 'unspent') return 0
+  const recheck = await services.getHeaderForHeight(receipt.height)
+  if (recheck.length !== 80 || asString(doubleSha256BE(recheck)) !== activeHash) return 0
+
+  const apply = async (trx: TrxToken): Promise<number> =>
+    await restoreReceiptedOutput(storage, id, receipt, funding, activeHash, trx)
+  return admission == null
+    ? await storage.transaction(apply)
+    : await admission(async () => await storage.transaction(apply))
+}
+
+async function restoreReceiptedOutput(
+  storage: StorageKnex,
+  id: number,
+  receipt: ConfirmedSpendReceipt,
+  funding: TableProvenTx,
+  activeHash: string,
+  trx: TrxToken
+): Promise<number> {
+  const sql = storage.toDb(trx)
+  const fundingLock = await sql('proven_txs')
+    .where('provenTxId', funding.provenTxId)
+    .select('provenTxId')
+    .forUpdate()
+    .first()
+  if (fundingLock == null) return 0
+  const storedFunding = await storage.findProvenTxById(funding.provenTxId, trx)
+  if (storedFunding == null || !sameSyncProof(storedFunding, funding)) return 0
+  const locked = await sql('outputs')
+    .where('outputId', receipt.outputId)
+    .select('userId', 'txid', 'vout', 'transactionId', 'spendable', 'spentBy', 'updated_at')
+    .forUpdate()
+    .first()
+  if (locked == null || !stillQuarantined(locked, receipt)) return 0
+  const source = await sql('transactions')
+    .where({ transactionId: locked.transactionId, userId: receipt.userId })
+    .select('status', 'provenTxId')
+    .first()
+  if (source?.status !== 'completed' || source.provenTxId !== funding.provenTxId) return 0
+  const now = new Date(Math.max(Date.now(), Date.parse(receipt.observedUpdatedAt) + 1))
+  const changed = await storage.updateOutput(receipt.outputId, { spendable: true, updated_at: now }, trx)
+  if (changed !== 1) throw new Error('Confirmed spend recovery lost its locked output')
+  await storage.insertMonitorEvent(
+    {
+      id: 0,
+      created_at: now,
+      updated_at: now,
+      event: 'ConfirmedOutputSpendRestored',
+      details: JSON.stringify({ observationId: id, outputId: receipt.outputId, blockHash: activeHash })
+    },
+    trx
+  )
+  return changed
 }

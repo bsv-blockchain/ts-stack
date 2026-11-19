@@ -150,43 +150,43 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return { run: this.pendingEvents.length > 0 || (this.reconnectAfter != null && now >= this.reconnectAfter) }
   }
 
-  async runTask(): Promise<string> {
-    const eventCount = this.pendingEvents.length
-    if (eventCount === 0) {
-      if (this.reconnectAfter != null && Date.now() >= this.reconnectAfter) {
-        this.reconnectAfter = undefined
-        try {
-          await this.fetchNow()
-        } catch {
-          this.scheduleReconnect()
-          await this.logSetupEvent('SSE reconnect failed; retry scheduled')
-        }
+  private async reconnectIfDue(): Promise<void> {
+    if (this.reconnectAfter == null || Date.now() < this.reconnectAfter) return
+    this.reconnectAfter = undefined
+    try {
+      await this.fetchNow()
+    } catch {
+      this.scheduleReconnect()
+      await this.logSetupEvent('SSE reconnect failed; retry scheduled')
+    }
+  }
+
+  private async saveCursor(id: string): Promise<void> {
+    try {
+      if (this.monitor.options.saveLastSSEEventId != null) {
+        await this.monitor.options.saveLastSSEEventId(id)
+      } else if (this.cursorEvent != null && this.monitor.options.loadLastSSEEventId == null) {
+        await this.monitor.logEvent(this.cursorEvent, JSON.stringify(id))
       }
+    } catch (error) {
+      await this.logSetupEvent('Failed to persist acknowledged Arcade cursor')
+      throw error
+    }
+  }
+
+  async runTask(): Promise<string> {
+    // The admission callback holds at most one event in this task. Storage
+    // failure leaves it at the head and prevents the cursor from advancing.
+    const pending = this.pendingEvents[0]
+    if (pending == null) {
+      await this.reconnectIfDue()
       return ''
     }
-
-    let log = ''
-    for (let i = 0; i < eventCount; i++) {
-      // Do not remove or acknowledge an event until its storage work succeeds.
-      // A thrown storage error leaves this event at the head for the next run.
-      const pending = this.pendingEvents[0]
-      log += await this.processStatusEvent(pending.event)
-      if (pending.event.eventId != null) {
-        try {
-          if (this.monitor.options.saveLastSSEEventId != null) {
-            await this.monitor.options.saveLastSSEEventId(pending.event.eventId)
-          } else if (this.cursorEvent != null && this.monitor.options.loadLastSSEEventId == null) {
-            await this.monitor.logEvent(this.cursorEvent, JSON.stringify(pending.event.eventId))
-          }
-        } catch (e) {
-          await this.logSetupEvent('Failed to persist acknowledged Arcade cursor')
-          throw e
-        }
-      }
-      this.pendingEvents.shift()
-      pending.acknowledge()
-      this.reconnectDelay = Monitor.oneSecond * 5
-    }
+    const log = await this.processStatusEvent(pending.event)
+    if (pending.event.eventId != null) await this.saveCursor(pending.event.eventId)
+    this.pendingEvents.shift()
+    pending.acknowledge()
+    this.reconnectDelay = Monitor.oneSecond * 5
     return log
   }
 

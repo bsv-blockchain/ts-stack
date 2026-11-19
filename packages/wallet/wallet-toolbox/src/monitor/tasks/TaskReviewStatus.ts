@@ -1,5 +1,6 @@
 import { awaitFromSync } from '../../utility/promiseFromSync'
 import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
+import type { StorageProvider } from '../../storage/StorageProvider'
 import type { StorageWriterAdmission } from '../../storage/StorageActiveWrite'
 import { Monitor } from '../Monitor'
 import { optionalMonitorInteger } from '../monitorValidation'
@@ -73,65 +74,68 @@ export class TaskReviewStatus extends WalletMonitorTask {
   }
 
   async runTask(): Promise<string> {
-    let log = ''
-
     const agedLimit = new Date(Date.now() - this.agedMsecs)
     const selected = await this.storage.runAsStorageProvider(async sp => ({
       provider: sp,
       independent: typeof sp.supportsPrimaryWriteFences === 'function' && (await sp.supportsPrimaryWriteFences())
     }))
-    let r: { log: string }
-    if (selected.independent) {
-      const admission: StorageWriterAdmission = async operation =>
-        await this.storage.runAsStorageProvider(
-          current =>
-            awaitFromSync(() => {
-              if (current !== selected.provider)
-                throw new WERR_NOT_ACTIVE('Review preparation belongs to a replaced provider')
-              return operation()
-            }),
-          true
-        )
-      const started = performance.now()
-      const page = await selected.provider.reviewStatusPage?.({ agedLimit, admission }, this.progress.transaction)
-      if (page != null) {
-        const notices =
-          Date.now() >= this.requestReviewAfter
-            ? await selected.provider.reconcileCompletedProvenTxReqs(admission, {
-                after: this.progress.request,
-                limit: 8,
-                deadline: performance.now() + 800
-              })
-            : undefined
-        const progress = {
-          transaction: page.complete ? 0 : page.after,
-          request: notices == null ? this.progress.request : notices.complete ? 0 : (notices.after ?? 0)
-        }
-        await this.monitor.logEvent(
-          TaskReviewStatus.progressEvent,
-          JSON.stringify({
-            ...progress,
-            examined: page.examined,
-            failed: page.failed,
-            durationMsecs: Math.round(performance.now() - started)
+    if (!selected.independent)
+      return await this.storage.runAsStorageProvider(async sp => await this.reviewLegacy(sp, agedLimit))
+
+    const admission: StorageWriterAdmission = async operation =>
+      await this.storage.runAsStorageProvider(
+        current =>
+          awaitFromSync(() => {
+            if (current !== selected.provider)
+              throw new WERR_NOT_ACTIVE('Review preparation belongs to a replaced provider')
+            return operation()
+          }),
+        true
+      )
+    const bounded = await this.reviewPage(selected.provider, agedLimit, admission)
+    return bounded ?? (await this.reviewLegacy(selected.provider, agedLimit, admission))
+  }
+
+  private async reviewLegacy(
+    provider: StorageProvider,
+    agedLimit: Date,
+    admission?: StorageWriterAdmission
+  ): Promise<string> {
+    const notices = await provider.reconcileCompletedProvenTxReqs(admission)
+    const review = await provider.reviewStatus({ agedLimit, admission })
+    return notices.log + review.log
+  }
+
+  private async reviewPage(
+    provider: StorageProvider,
+    agedLimit: Date,
+    admission: StorageWriterAdmission
+  ): Promise<string | undefined> {
+    const started = performance.now()
+    const page = await provider.reviewStatusPage?.({ agedLimit, admission }, this.progress.transaction)
+    if (page == null) return undefined
+    const notices =
+      Date.now() >= this.requestReviewAfter
+        ? await provider.reconcileCompletedProvenTxReqs(admission, {
+            after: this.progress.request,
+            limit: 8,
+            deadline: performance.now() + 800
           })
-        )
-        if (notices?.complete === true) this.requestReviewAfter = Date.now() + Monitor.oneMinute
-        this.progress = progress
-        return page.log + (notices?.log ?? '')
-      }
-      const reconciliation = await selected.provider.reconcileCompletedProvenTxReqs(admission)
-      const review = await selected.provider.reviewStatus({ agedLimit, admission })
-      r = { log: reconciliation.log + review.log }
-    } else
-      r = await this.storage.runAsStorageProvider(async sp => {
-        const reconciliation = await sp.reconcileCompletedProvenTxReqs()
-        const review = await sp.reviewStatus({ agedLimit })
-        return { log: reconciliation.log + review.log }
+        : undefined
+    let request = this.progress.request
+    if (notices != null) request = notices.complete ? 0 : (notices.after ?? 0)
+    const progress = { transaction: page.complete ? 0 : page.after, request }
+    await this.monitor.logEvent(
+      TaskReviewStatus.progressEvent,
+      JSON.stringify({
+        ...progress,
+        examined: page.examined,
+        failed: page.failed,
+        durationMsecs: Math.round(performance.now() - started)
       })
-
-    if (r.log.length > 0) log += `${r.log}`
-
-    return log
+    )
+    if (notices?.complete === true) this.requestReviewAfter = Date.now() + Monitor.oneMinute
+    this.progress = progress
+    return page.log + (notices?.log ?? '')
   }
 }

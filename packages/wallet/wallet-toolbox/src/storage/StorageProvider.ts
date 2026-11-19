@@ -1884,27 +1884,27 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (req.provenTxReqId > after) yield req
   }
 
-  async reviewConfirmedSpendPage(
+  reviewConfirmedSpendPage(
     _after: number,
     _tipHeight: number,
     _admission?: StorageWriterAdmission
   ): Promise<{ after: number; examined: number; repaired: number; unavailable: number } | undefined> {
-    return undefined
+    return Promise.resolve(undefined)
   }
 
-  async reviewConfirmedSpendRecoveries(
+  reviewConfirmedSpendRecoveries(
     _after: number,
     _admission?: StorageWriterAdmission
   ): Promise<{ after: number; restored: number; unavailable: number } | undefined> {
-    return undefined
+    return Promise.resolve(undefined)
   }
 
   /** Providers with indexed financial scopes can return a bounded repair page. */
-  async reviewStatusPage(
+  reviewStatusPage(
     _args: StorageStatusReviewArgs,
     _after: number
   ): Promise<{ log: string; after: number; complete: boolean; examined: number; failed: number } | undefined> {
-    return undefined
+    return Promise.resolve(undefined)
   }
 
   private async prepareProofRecoveryOutputVerdicts(
