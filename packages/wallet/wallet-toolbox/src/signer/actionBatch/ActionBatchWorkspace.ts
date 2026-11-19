@@ -1044,47 +1044,55 @@ export class ActionBatchController {
   }
 
   plan(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
-    return awaitFromSync(() => {
-      return this.runExclusive(async () => {
-        if (!args.isNewTx) return undefined
-        if (leavesBatchForInputPolicy(this.wallet, args)) return undefined
-        const workspace = this.workspace
-        if (workspace != null) {
-          // Workspace membership is an explicit transaction-graph relationship.
-          // Time adjacency, a shared Wallet instance, or a shared originator are
-          // not sufficient: unrelated work must remain on the legacy path.
-          if (!workspace.references(args)) return undefined
-          try {
-            return await this.recover(workspace, args)
-          } catch (error) {
-            // A later explicit input cannot be accepted on this batch while the
-            // host hook is set. Leave the workspace in place and use legacy
-            // createAction, which verifies BEEF before the hook.
-            if (isResolvedInputHookFallback(error)) return undefined
-            throw error
-          }
-        }
-        if (!args.isNoSend) return undefined
-        let begun: ActionBatchWorkspace | undefined
-        try {
-          begun = await this.begin(args)
-        } catch (error) {
-          // The reservation ceiling bounds the optimization, not the public
-          // createAction contract. A first action that cannot fit must retain
-          // the pre-batch persistence path.
-          if (isActionBatchCapacityError(error)) return undefined
-          throw error
-        }
-        if (begun == null) return undefined
-        try {
-          return await begun.plan(args)
-        } catch (error) {
-          await this.retire(begun)
-          if (isActionBatchCapacityError(error)) return undefined
-          throw error
-        }
-      })
-    })
+    return awaitFromSync(() => this.runExclusive(() => this.planExclusive(args)))
+  }
+
+  private async planExclusive(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
+    if (!args.isNewTx || leavesBatchForInputPolicy(this.wallet, args)) return undefined
+    const workspace = this.workspace
+    if (workspace != null) return await this.planJoinedAction(workspace, args)
+    return await this.planFirstAction(args)
+  }
+
+  private async planJoinedAction(
+    workspace: ActionBatchWorkspace,
+    args: ValidCreateActionArgs
+  ): Promise<StorageCreateActionResult | undefined> {
+    // Workspace membership is an explicit transaction-graph relationship.
+    // Time adjacency, a shared Wallet instance, or a shared originator are
+    // not sufficient: unrelated work must remain on the legacy path.
+    if (!workspace.references(args)) return undefined
+    try {
+      return await this.recover(workspace, args)
+    } catch (error) {
+      // A later explicit input cannot be accepted on this batch while the
+      // host hook is set. Leave the workspace in place and use legacy
+      // createAction, which verifies BEEF before the hook.
+      if (isResolvedInputHookFallback(error)) return undefined
+      throw error
+    }
+  }
+
+  private async planFirstAction(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
+    if (!args.isNoSend) return undefined
+    let begun: ActionBatchWorkspace | undefined
+    try {
+      begun = await this.begin(args)
+    } catch (error) {
+      // The reservation ceiling bounds the optimization, not the public
+      // createAction contract. A first action that cannot fit must retain
+      // the pre-batch persistence path.
+      if (isActionBatchCapacityError(error)) return undefined
+      throw error
+    }
+    if (begun == null) return undefined
+    try {
+      return await begun.plan(args)
+    } catch (error) {
+      await this.retire(begun)
+      if (isActionBatchCapacityError(error)) return undefined
+      throw error
+    }
   }
 
   process(
