@@ -123,7 +123,7 @@ export class TaskReviewStatus extends WalletMonitorTask {
           })
         : undefined
     let request = this.progress.request
-    if (notices != null) request = notices.complete ? 0 : (notices.after ?? 0)
+    if (notices != null) request = notices.complete === false ? (notices.after ?? 0) : 0
     const progress = { transaction: page.complete ? 0 : page.after, request }
     await this.monitor.logEvent(
       TaskReviewStatus.progressEvent,
@@ -134,7 +134,7 @@ export class TaskReviewStatus extends WalletMonitorTask {
         durationMsecs: Math.round(performance.now() - started)
       })
     )
-    if (notices?.complete === true) this.requestReviewAfter = Date.now() + Monitor.oneMinute
+    if (notices != null && notices.complete !== false) this.requestReviewAfter = Date.now() + Monitor.oneMinute
     this.progress = progress
     return page.log + (notices?.log ?? '')
   }

@@ -1862,7 +1862,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async reconcileCompletedProvenTxReqs(
     admission?: StorageWriterAdmission,
     page?: { after: number; limit: number; deadline: number }
-  ): Promise<{ log: string; after?: number; complete: boolean }> {
+  ): Promise<{ log: string; after?: number; complete?: boolean }> {
     let log = ''
     let after = page?.after ?? 0
     let processed = 0
@@ -1892,7 +1892,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (req.notified) log += `completed req ${req.id} transaction notifications reconciled\n`
     }
 
-    return { log, after, complete: true }
+    return page == null ? { log } : { log, after, complete: true }
   }
 
   /** Older providers keep their existing serialized scan. SQL providers can
