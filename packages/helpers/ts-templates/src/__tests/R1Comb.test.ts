@@ -247,3 +247,184 @@ describe('R1Comb: round trip with an @bsv/sdk P-256 key', () => {
     }
   })
 })
+
+describe('R1Comb: encodings and refusals', () => {
+  const key = V.keys[0]
+  const salt = key.salt as string
+  const sp = V.spends[0]
+  const preimage = Utils.toArray(sp.preimage, 'hex')
+  const P = R1Comb.P256_P
+  const h64 = (v: bigint): string => v.toString(16).padStart(64, '0')
+
+  it('pushData uses the minimal push opcode for every size class', () => {
+    expect(R1Comb.pushData([])).toEqual([0x00])
+    expect(R1Comb.pushData([1, 2])).toEqual([2, 1, 2])
+    expect(R1Comb.pushData(new Array(76).fill(7)).slice(0, 2)).toEqual([0x4c, 76])
+    expect(R1Comb.pushData(new Array(300).fill(7)).slice(0, 3)).toEqual([
+      0x4d,
+      300 & 0xff,
+      300 >>> 8
+    ])
+    expect(R1Comb.pushData(new Array(0x10000).fill(7)).slice(0, 5)).toEqual([0x4e, 0, 0, 1, 0])
+  })
+
+  it('scriptNum is minimal little-endian sign-magnitude', () => {
+    expect(R1Comb.scriptNum(0n)).toEqual([])
+    expect(R1Comb.scriptNum(-1n)).toEqual([0x81])
+    expect(R1Comb.scriptNum(127n)).toEqual([0x7f])
+    expect(R1Comb.scriptNum(128n)).toEqual([0x80, 0x00])
+    expect(R1Comb.scriptNum(-128n)).toEqual([0x80, 0x80])
+    expect(R1Comb.scriptNum(-255n)).toEqual([0xff, 0x80])
+  })
+
+  it('asm refuses a missing parameter and an unknown opcode, and skips blank text', () => {
+    expect(R1Comb.asm('   ')).toEqual([])
+    expect(() => R1Comb.asm('{X} OP_DROP')).toThrow(R1CombError)
+    expect(() => R1Comb.asm('OP_NOT_AN_OPCODE')).toThrow(R1CombError)
+  })
+
+  it('compressPubkey refuses non-hex, bad prefixes and out-of-range coordinates', () => {
+    const g = new Secp256r1().g!
+    expect(() => R1Comb.compressPubkey(42 as unknown as string)).toThrow(R1CombError)
+    expect(() => R1Comb.compressPubkey('05' + h64(g.x) + h64(g.y))).toThrow(R1CombError)
+    expect(() => R1Comb.compressPubkey('04' + h64(g.x) + h64(g.y + P))).toThrow(R1CombError)
+    expect(R1Comb.compressPubkey('04' + h64(g.x) + h64(g.y))).toBe(
+      ((g.y & 1n) === 0n ? '02' : '03') + h64(g.x)
+    )
+  })
+
+  it('comb table scalars and the per-key table cache', () => {
+    expect(R1Comb.combTableScalar(0)).toBe(
+      (1n << 215n) - (1n << 172n) - (1n << 129n) - (1n << 86n) - (1n << 43n) - 1n
+    )
+    expect(R1Comb.combTableScalar(31)).toBe(
+      (1n << 215n) + (1n << 172n) + (1n << 129n) + (1n << 86n) + (1n << 43n) + 1n
+    )
+    // More keys than the cache holds: the oldest entry is evicted, results stay equal.
+    const curve = new Secp256r1()
+    const keys = Array.from({ length: 10 }, (_, i) =>
+      curve.pointToHex(curve.multiplyBase(BigInt(i + 2)), true)
+    )
+    const first = R1Comb.combTable(keys[0])
+    for (const k of keys) R1Comb.combTable(k)
+    expect(R1Comb.combTable(keys[0])).toEqual(first)
+    const copy = R1Comb.combTable(keys[0])
+    copy[0].x = 0n
+    expect(R1Comb.combTable(keys[0])).toEqual(first)
+  })
+
+  it('le33, salts and commitments refuse bad input', () => {
+    expect(R1Comb.le33(1n)).toHaveLength(33)
+    expect(() => R1Comb.le33(-1n)).toThrow(R1CombError)
+    expect(() => R1Comb.le33(1n << 264n)).toThrow(R1CombError)
+    expect(() => R1Comb.commitment(key.compressed, 'zz')).toThrow(R1CombError)
+    expect(() => R1Comb.commitment(key.compressed, 7 as unknown as string)).toThrow(R1CombError)
+  })
+
+  it('buildLock refuses bad commitment lists', () => {
+    const c = V.locks[1].commitments as string[]
+    expect(() => R1Comb.buildLock({ commitments: [], saltHex64: salt })).toThrow(R1CombError)
+    expect(() =>
+      R1Comb.buildLock({ commitments: 'x' as unknown as string[], saltHex64: salt })
+    ).toThrow(R1CombError)
+    expect(() =>
+      R1Comb.buildLock({ commitments: new Array(6).fill(c[0]), saltHex64: salt })
+    ).toThrow(R1CombError)
+    expect(() => R1Comb.buildLock({ commitments: ['00'], saltHex64: salt })).toThrow(R1CombError)
+    expect(() =>
+      R1Comb.buildLock({ commitments: [c[0], c[0].toUpperCase()], saltHex64: salt })
+    ).toThrow(R1CombError)
+    expect(() => R1Comb.buildLock({ commitments: c, saltHex64: 'nope' })).toThrow(R1CombError)
+  })
+
+  it('bakedCommitments refuses a script that is not an exact R1C lock', () => {
+    expect(() => R1Comb.bakedCommitments(LockingScript.fromHex('51'))).toThrow(R1CombError)
+    const bin = R1Comb.buildLock({
+      commitments: V.locks[0].commitments,
+      saltHex64: salt
+    }).toBinary()
+    bin[bin.length - 3] ^= 0xff
+    expect(() => R1Comb.bakedCommitments(LockingScript.fromBinary(bin))).toThrow(R1CombError)
+  })
+
+  it('preimages: refuses a short preimage, a version-2 preimage and bad spend inputs', () => {
+    expect(() => R1Comb.signerDigest(preimage.slice(1))).toThrow(R1CombError)
+    const v2 = [...preimage]
+    v2[0] = 2
+    expect(() => R1Comb.signerDigest(v2)).toThrow(/version 1/)
+    const tx = new Transaction(1, [], [], 0)
+    expect(() => R1Comb.sighashPreimage(tx, 0, 1)).toThrow(R1CombError)
+    const noSource = new Transaction(
+      1,
+      [{ sourceOutputIndex: 0, sequence: 0xffffffff } as never],
+      [],
+      0
+    )
+    expect(() => R1Comb.sighashPreimage(noSource, 0, 1)).toThrow(R1CombError)
+    const withSource = new Transaction(
+      1,
+      [{ sourceTXID: '00'.repeat(32), sourceOutputIndex: 0 } as never],
+      [],
+      0
+    )
+    expect(() => R1Comb.sighashPreimage(withSource, 0, -1)).toThrow(R1CombError)
+    expect(() => R1Comb.sighashPreimage(withSource, 0, 1.5)).toThrow(R1CombError)
+    expect(R1Comb.sighashPreimage(withSource, 0, 1)).toHaveLength(R1Comb.R1C_PREIMAGE_LEN)
+  })
+
+  it('decodeDerSignature refuses every malformed DER form', () => {
+    const der = Utils.toArray(sp.derLow, 'hex')
+    const bad: number[][] = [
+      [],
+      [0x31, ...der.slice(1)],
+      [der[0], der[1] + 1, ...der.slice(2)],
+      [der[0], der[1], 0x03, ...der.slice(3)],
+      [0x30, 6, 0x02, 0, 0x02, 1, 1, 0],
+      [0x30, 6, 0x02, 1, 0x80, 0x02, 1, 1],
+      [0x30, 7, 0x02, 2, 0x00, 0x01, 0x02, 1, 1],
+      [0x30, 7, 0x02, 1, 1, 0x02, 1, 1, 0],
+      [0x30, 6, 0x02, 1, 0, 0x02, 1, 1]
+    ]
+    for (const b of bad) expect(() => R1Comb.decodeDerSignature(b)).toThrow(R1CombError)
+    expect(() => R1Comb.decodeDerSignature('x' as unknown as number[])).toThrow(R1CombError)
+  })
+
+  it('fullR refuses s = 0 and handles a zero u2', () => {
+    expect(() => R1Comb.fullR({ preimage, rSig: 5n, s: 0n, pubkeyHex33: key.compressed })).toThrow(
+      R1CombError
+    )
+    expect(R1Comb.fullR({ preimage, rSig: 0n, s: 1n, pubkeyHex33: key.compressed })).toEqual(
+      expect.any(BigInt)
+    )
+  })
+
+  it('verifyVaultInput refuses a missing input, a missing source, and a failing script', () => {
+    const l = V.locks[0]
+    const lock = R1Comb.buildLock({ commitments: l.commitments, saltHex64: salt })
+    const unlock = R1Comb.buildUnlock({
+      preimage,
+      derSig: Utils.toArray(sp.derLow, 'hex'),
+      pubkeyHex33: key.compressed,
+      saltHex64: key.salt
+    })
+    const args = {
+      inputIndex: 0,
+      sourceSatoshis: sp.sourceSatoshis,
+      lockingScript: lock,
+      unlockingScript: unlock
+    }
+    expect(() => R1Comb.verifyVaultInput({ ...args, tx: new Transaction(1, [], [], 0) })).toThrow(
+      R1CombError
+    )
+    const bare = new Transaction(1, [{ sourceOutputIndex: 0 } as never], [], 0)
+    expect(() => R1Comb.verifyVaultInput({ ...args, tx: bare })).toThrow(R1CombError)
+    // Right shape, wrong transaction: the interpreter refuses it.
+    const other = new Transaction(
+      1,
+      [{ sourceTXID: '11'.repeat(32), sourceOutputIndex: 0 } as never],
+      [],
+      0
+    )
+    expect(() => R1Comb.verifyVaultInput({ ...args, tx: other })).toThrow()
+  })
+})
