@@ -1,4 +1,35 @@
-# 2.17.0 source candidate
+# 2.18.0 source candidate
+
+Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
+app's patch of 2.15.3. Every change is opt-in; with none of it set, behaviour is
+unchanged. No wire or schema change, and no consumer migration.
+
+- `Wallet.setAdminOriginator(originator)` names the host's own originator (the
+  domain its `WalletPermissionsManager` uses as `adminOriginator`) once; it
+  cannot be changed. `Wallet.adminOriginator` reads it.
+  - `listActions` keeps output `customInstructions` for that originator only.
+    Every other originator still sees them redacted. (Knex and IndexedDB
+    storage do not return them; a host storage may.)
+  - `createAction` marks the validated storage arguments `isAdminOriginator`
+    (`AdminValidCreateActionArgs`). It comes from the originator argument,
+    never from action fields.
+  - An admin action keeps a minimal funding plan: no change-pool growth
+    (`targetNetCount`), no surplus shaping, no migration inputs, and a first
+    change output that takes the surplus as it is. A host that approves an
+    exact input set (a vault spend, for example) keeps it exact.
+- `StorageProvider.validateResolvedActionInput` (optional,
+  `ValidateResolvedActionInput`): called for each `createAction` input after its
+  source output is resolved from authenticated storage or verified BEEF. Throw
+  to refuse the action.
+- `StorageProviderOptions.refuseOfflineNosendAbort` (default false): when true,
+  `abortAction` refuses to invalidate a signed nosend action while the chain
+  service gives no answer, and asks for a retry. The default keeps the offline
+  fallback and its `abortAction-offline-fallback` note.
+- `completeSignedTransaction` awaits `keyDeriver.derivePrivateKeys`, so a batch
+  deriver may answer with a Promise (a native or off-thread deriver). The
+  signing guard runs again after it.
+
+# 2.17.0 — published
 
 Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages
 report offset plus page length; full pages and empty later pages use an unpaged

@@ -171,3 +171,56 @@ test.each([false, true])(
     if (guarded) expect(authority).toHaveBeenCalled()
   }
 )
+
+test('awaits an asynchronous derivePrivateKeys and signs with its keys', async () => {
+  const root = new PrivateKey(11),
+    keyDeriver = new KeyDeriver(root),
+    publicKey = root.toPublicKey().toString(),
+    template = new ScriptTemplateBRC29({
+      derivationPrefix: 'async-prefix',
+      derivationSuffix: 'async-suffix',
+      keyDeriver
+    }),
+    lockingScript = template.lock(root.toHex(), publicKey),
+    source = new Transaction()
+  // A native or off-thread batch deriver answers with a Promise.
+  const batch = jest.fn(async (derivations: Array<{ protocolID: any; keyID: string; counterparty: any }>) =>
+    derivations.map(d => keyDeriver.derivePrivateKey(d.protocolID, d.keyID, d.counterparty))
+  )
+  Object.defineProperty(keyDeriver, 'derivePrivateKeys', { value: batch })
+  source.addInput({
+    sourceTXID: '00'.repeat(32),
+    sourceOutputIndex: 0xffffffff,
+    unlockingScript: Script.fromASM('OP_TRUE')
+  })
+  source.addOutput({ satoshis: 10, lockingScript })
+  source.addOutput({ satoshis: 10, lockingScript })
+  const tx = new Transaction()
+  for (let index = 0; index < 2; index++) tx.addInput({ sourceTransaction: source, sourceOutputIndex: index })
+  tx.addOutput({ satoshis: 18, lockingScript: Script.fromASM('OP_TRUE') })
+  const prior = {
+      tx,
+      args: { inputs: [] },
+      pdi: [0, 1].map(vin => ({
+        vin,
+        derivationPrefix: 'async-prefix',
+        derivationSuffix: 'async-suffix',
+        unlockerPubKey: publicKey,
+        sourceSatoshis: 10,
+        lockingScript: lockingScript.toHex()
+      }))
+    } as unknown as PendingSignAction,
+    wallet = {
+      keyDeriver,
+      telemetry: new Telemetry(),
+      getClientChangeKeyPair: () => ({ privateKey: root.toHex(), publicKey })
+    } as Wallet,
+    authority = jest.fn(() => undefined)
+  await expect(completeSignedTransaction(prior, {}, wallet, authority)).resolves.toBe(tx)
+  expect(batch).toHaveBeenCalledTimes(1)
+  // The signing guard runs again after the asynchronous derivation.
+  expect(authority.mock.calls.length).toBeGreaterThanOrEqual(2)
+  const beef = new Beef()
+  beef.mergeTransaction(tx)
+  await expect(verifyUnlockScripts(tx.id('hex'), beef)).resolves.toEqual({ verifiedInputs: 2, skippedInputs: 0 })
+})

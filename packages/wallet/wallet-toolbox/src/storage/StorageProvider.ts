@@ -1,4 +1,5 @@
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync, mapAwaitFromSync } from '../utility/promiseFromSync'
+import type { ValidateResolvedActionInput } from '../utility/adminOriginator'
 import type { PrimaryHandoffControl, PrimaryHandoffControlOptions } from './PrimaryHandoffControl'
 import type { ReqHistoryNote } from '../sdk/types'
 import { StorageReqWrite } from './StorageReqWrite'
@@ -181,6 +182,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   readonly actionBatchMaxReservedOutputs: number
   readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: WalletScriptVerifier
+  /** See StorageProviderOptions.refuseOfflineNosendAbort. */
+  readonly refuseOfflineNosendAbort: boolean
+  /**
+   * Optional host policy for each createAction input, run after the input's
+   * source output is resolved. See ValidateResolvedActionInput.
+   */
+  validateResolvedActionInput?: ValidateResolvedActionInput
 
   /**
    * Safe lower bound for the proof audit. Built-in providers return the minimum
@@ -230,6 +238,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.actionBatchMaxReservedOutputs = maxReservedOutputs
     this.managedChangePolicy = validateManagedChangePolicy(options.managedChangePolicy)
     this.scriptVerifier = options.scriptVerifier
+    this.refuseOfflineNosendAbort = options.refuseOfflineNosendAbort === true
   }
 
   /** @internal Capture once before preparation; supported providers fence each
@@ -975,12 +984,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const write = await this.activeWriteTransaction(auth)
     const userId = auth.userId
     let r: AbortActionStorageResult | undefined
+    let chainUnanswered = false
     for (let attempt = 0; attempt < 2; attempt++) {
       // IndexedDB write transactions can auto-commit while awaiting non-database
       // promises. Observe the chain before opening the write transaction, then
       // bind the observation to the exact row and txid re-read below.
       const preflight = await this.findAbortableTransaction(userId, args)
       const chainObservation = await this.observeAbortChainProtection(preflight.tx)
+      chainUnanswered = this.refuseOfflineNosendAbort && chainObservation?.serviceUnreachable === true
       r = await write.transaction(async trx => {
         const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
         if (tx.noSendExpiryState != null && auth.isActive !== true) {
@@ -1048,7 +1059,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         // and propagating in mempool returns 'known' (depth===0) and
         // protecting it avoids orphaning during the propagation window.
         //
-        // Service-unreachable handling: proceed with abort. Refusal is
+        // Service-unreachable handling: proceed with abort, unless the host
+        // set refuseOfflineNosendAbort, which asks the caller to retry. Refusal is
         // reserved for positive on-chain confirmation. When the network
         // confirmation pathway is itself unavailable (services throw or
         // gracefully return r.status !== 'success'), confirmation is not
@@ -1063,7 +1075,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           if (
             chainObservation == null ||
             chainObservation.transactionId !== tx.transactionId ||
-            chainObservation.txid !== tx.txid
+            chainObservation.txid !== tx.txid ||
+            (this.refuseOfflineNosendAbort && chainObservation.serviceUnreachable)
           ) {
             return { __abortAction: 'retry-chain-check' as const }
           }
@@ -1093,6 +1106,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (!('__abortAction' in r) || r.__abortAction !== 'retry-chain-check') break
     }
     if (r == null || ('__abortAction' in r && r.__abortAction === 'retry-chain-check')) {
+      if (chainUnanswered) {
+        throw new WERR_INVALID_OPERATION(
+          'The chain service did not answer, so this signed action may already be on chain; retry abortAction when it answers'
+        )
+      }
       throw new WERR_INVALID_OPERATION('Action changed while its chain status was being checked; retry abortAction')
     }
     if ('__abortAction' in r) {
@@ -2231,6 +2249,15 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * limit accepts -1 for an explicit operator-selected unlimited mode.
    */
   managedChangePolicy?: ManagedChangePolicyOptions
+  /**
+   * When true, abortAction refuses to invalidate a signed nosend transaction
+   * while the chain service gives no answer, and asks the caller to retry.
+   * Default false: the abort proceeds offline and writes an
+   * 'abortAction-offline-fallback' history note. A host that holds funds a
+   * wrong abort could strand (outputs of a transaction that is in fact on
+   * chain) can choose the refusal.
+   */
+  refuseOfflineNosendAbort?: boolean
 }
 
 export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel {
