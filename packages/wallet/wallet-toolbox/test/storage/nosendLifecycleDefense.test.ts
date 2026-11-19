@@ -307,6 +307,43 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
+    test('refuseOfflineNosendAbort leaves an unsigned action abortable without a chain check', async () => {
+      for (const storage of storages) {
+        Object.assign(storage, { refuseOfflineNosendAbort: true })
+        const { tx, user } = await _tu.insertTestTransaction(storage, undefined as never, false, {
+          status: 'unsigned'
+        })
+        const lookups = jest.fn(() => {
+          throw new Error('indexer down')
+        })
+        storage.setServices(mockServices(lookups))
+        await expect(
+          storage.abortAction({ userId: user.userId!, identityKey: user.identityKey }, { reference: tx.reference! })
+        ).resolves.toMatchObject({ aborted: true })
+        expect(lookups).not.toHaveBeenCalled()
+      }
+    })
+
+    test('asks for a retry when the action changes during both chain checks', async () => {
+      for (const storage of storages) {
+        Object.assign(storage, { refuseOfflineNosendAbort: true })
+        const seed = await seedNoSendTx(storage, '58'.repeat(32))
+        // An observation of another row, as if the action changed between the
+        // chain check and the write transaction: the chain did answer.
+        jest.spyOn(storage as never, 'observeAbortChainProtection').mockResolvedValue({
+          transactionId: -1,
+          txid: '58'.repeat(32),
+          chainStatus: 'unknown',
+          serviceUnreachable: false
+        } as never)
+        await expect(storage.abortAction(seed.auth, { reference: seed.reference })).rejects.toMatchObject({
+          code: 'WERR_INVALID_OPERATION',
+          message: expect.stringContaining('chain status was being checked')
+        })
+        await expectStatuses(storage, seed, 'nosend')
+      }
+    })
+
     test('records an abortAction-skipped-onchain history note on the proven_tx_req', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '66'.repeat(32))

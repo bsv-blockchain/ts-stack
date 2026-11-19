@@ -27,6 +27,8 @@ describe('Wallet admin originator', () => {
 
   test('is set once, by trusted host code', () => {
     expect(ctx.wallet.adminOriginator).toBe(ADMIN)
+    expect(() => ctx.wallet.setAdminOriginator(undefined as unknown as string)).toThrow('originator')
+    expect(() => ctx.wallet.setAdminOriginator('' as unknown as string)).toThrow()
     expect(() => ctx.wallet.setAdminOriginator('other.example')).toThrow('already set')
     expect(ctx.wallet.adminOriginator).toBe(ADMIN)
   })
