@@ -616,9 +616,11 @@ function validateDiagnosticSource(root, cwd, selection) {
   if (!selection.requiresMongo) {
     assert.match(testSource, /MIN_PROPERTY_RUNS = 300/)
     assert.match(testSource, /seed : 3242026/)
-    assert.match(testSource, /interruptAfterTimeLimit: 300000/)
-    assert.match(testSource, /markInterruptAsFailure: true/)
-    assert.match(testSource, /}, 360000\)/)
+    assert.match(
+      testSource,
+      /OUTPUT_KNOWLEDGE_MONOTONIC_FILE\s*\? measuredPropertyCampaign\(cases, 300000\)\s*:\s*propertyTestBatches\(cases\)/
+    )
+    assert.match(testSource, /},\s*360000\s*\)/)
     return
   }
   validateNativeDiagnosticCases(testSource, selection)
