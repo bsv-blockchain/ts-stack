@@ -70,7 +70,8 @@ function detectCertificate({
   )
     return undefined
   // A certificate names the local checkout, so hosted checkout must test the same tree.
-  const git = (...args) => execFileSync('git', args, { encoding: 'utf8', timeout: 5000 }).trim()
+  const git = (...args) =>
+    execFileSync('/usr/bin/git', args, { encoding: 'utf8', timeout: 5000 }).trim()
   if (
     git('merge-base', PR_BASE_SHA, PR_HEAD_SHA) !== PR_BASE_SHA ||
     git('rev-parse', 'HEAD^{tree}') !== git('rev-parse', `${PR_HEAD_SHA}^{tree}`)
@@ -78,7 +79,7 @@ function detectCertificate({
     return undefined
   const pages = JSON.parse(
     execFileSync(
-      'gh',
+      '/usr/bin/gh',
       [
         'api',
         'graphql',
