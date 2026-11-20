@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { SQLiteTransactionDomain } from '../src/storage/SQLiteTransactionDomain.js'
 import {
   lookupIndexDefinition,
@@ -97,10 +98,16 @@ describe('durable SQLite lookup index', () => {
       edits: [{ key: '01', previous: '1', next: { data: { label: 'new' }, expiresAt: null } }],
       event: { reason: 'replaced' }
     }
-    await expect(store.commit(replacement)).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(store.commit(replacement)).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'Drain due lookup timers before assessment'
+    })
     expect((await store.head()).sequence).toBe('1')
     await store.advanceTime('1100', 1)
-    await expect(store.commit(replacement)).rejects.toMatchObject({ code: 'conflict' })
+    await expect(store.commit(replacement)).rejects.toMatchObject({
+      code: 'conflict',
+      message: 'Lookup index changed after assessment'
+    })
     await expect(
       store.commit({ ...replacement, base: '2', evaluatedAt: '1099' })
     ).rejects.toMatchObject({ code: 'context-changed' })
@@ -163,7 +170,10 @@ describe('durable SQLite lookup index', () => {
 
   it.each([0, 1025, 1.5, Number.NaN])('bounds timer work (%s)', async maximum => {
     const { store } = await fixture()
-    await expect(store.advanceTime('1000', maximum)).rejects.toMatchObject({ code: 'invalid' })
+    await expect(store.advanceTime('1000', maximum)).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Invalid lookup timer work bound'
+    })
   })
 
   it('recovers lost expiry commit acknowledgement without another withdrawal', async () => {
@@ -292,17 +302,25 @@ describe('durable SQLite lookup index', () => {
     expect(page).toEqual(first)
     await expect(
       store.snapshot('2', null, { records: 10, bytes: length(first) - 1 })
-    ).rejects.toMatchObject({ code: 'limited' })
+    ).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Next whole lookup row exceeds its page budget'
+    })
     const firstGroup = await store.changes('0', { records: 1, bytes: 65536 })
     expect(await store.changes('0', { records: 10, bytes: length(firstGroup) })).toEqual(firstGroup)
     await expect(
       store.changes('0', { records: 10, bytes: length(firstGroup) - 1 })
-    ).rejects.toMatchObject({ code: 'limited' })
+    ).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Next whole lookup group exceeds its page budget'
+    })
     await expect(store.snapshot('0', null, { records: 1, bytes: 1 })).rejects.toMatchObject({
-      code: 'limited'
+      code: 'limited',
+      message: 'Lookup snapshot page envelope exceeds its budget'
     })
     await expect(store.changes('2', { records: 1, bytes: 1 })).rejects.toMatchObject({
-      code: 'limited'
+      code: 'limited',
+      message: 'Lookup log page envelope exceeds its budget'
     })
     expect((await store.head()).sequence).toBe('2')
   })
@@ -316,7 +334,10 @@ describe('durable SQLite lookup index', () => {
     { records: 1, bytes: 65536, extra: true }
   ])('rejects unbounded or malformed page requests (%j)', async limits => {
     const { store } = await fixture()
-    await expect(store.snapshot('0', null, limits)).rejects.toMatchObject({ code: 'invalid' })
+    await expect(store.snapshot('0', null, limits)).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Invalid lookup index read limits'
+    })
     await expect(store.changes('0', limits)).rejects.toMatchObject({ code: 'invalid' })
   })
 
@@ -462,7 +483,10 @@ describe('durable SQLite lookup index', () => {
     } else {
       const first = await store.commit(mutation())
       const before = await store.head()
-      await expect(store.commit(mutation('02', '1'))).rejects.toMatchObject({ code: 'limited' })
+      await expect(store.commit(mutation('02', '1'))).rejects.toMatchObject({
+        code: 'limited',
+        message: 'Lookup index retained capacity is full'
+      })
       expect(await store.head()).toEqual(before)
       expect(await store.group('1')).toEqual(first)
       expect(await store.row('02', '1')).toBeNull()
@@ -476,10 +500,16 @@ describe('durable SQLite lookup index', () => {
     stores.push(retry)
     expect((await retry.head()).sequence).toBe('1')
     expect(() => SQLiteLookupIndex.open(path, 'other', binding)).toThrow(
-      expect.objectContaining({ code: 'reset-required' })
+      expect.objectContaining({
+        code: 'reset-required',
+        message: 'Lookup index namespace is missing'
+      })
     )
     expect(() => SQLiteLookupIndex.open(path, 'index', { ...binding, epoch: 'new' })).toThrow(
-      expect.objectContaining({ code: 'context-changed' })
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Lookup index configuration changed'
+      })
     )
     expect(() =>
       SQLiteLookupIndex.open(path, 'index', binding, { capacity: { groups: 1 } })
@@ -487,7 +517,10 @@ describe('durable SQLite lookup index', () => {
     expect(() => SQLiteLookupIndex.open(path + '.missing', 'index', binding)).toThrow()
     await expect(stat(path + '.missing')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(() => SQLiteLookupIndex.create(':memory:', 'index', binding)).toThrow(
-      'ordinary file path'
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Durable lookup index requires an ordinary file path'
+      })
     )
     expect(() => SQLiteLookupIndex.create('file:temp', 'index', binding)).toThrow(
       'ordinary file path'
@@ -515,15 +548,24 @@ describe('durable SQLite lookup index', () => {
   it('rejects future watermarks, stale time, changed predicates and closed storage', async () => {
     const { store } = await fixture()
     await store.commit(mutation())
-    await expect(store.row('01', '2')).rejects.toMatchObject({ code: 'revision-unavailable' })
+    await expect(store.row('01', '2')).rejects.toMatchObject({
+      code: 'revision-unavailable',
+      message: 'Lookup watermark is not committed'
+    })
     await expect(store.group('0')).rejects.toMatchObject({ code: 'revision-unavailable' })
-    await expect(store.group('2')).rejects.toMatchObject({ code: 'revision-unavailable' })
+    await expect(store.group('2')).rejects.toMatchObject({
+      code: 'revision-unavailable',
+      message: 'Lookup group is not committed'
+    })
     await expect(store.commit({ ...mutation('02', '1'), evaluatedAt: '99' })).rejects.toMatchObject(
-      { code: 'context-changed' }
+      { code: 'context-changed', message: 'Lookup evaluation time moved backwards' }
     )
     await expect(store.commit(mutation('01', '1'))).rejects.toMatchObject({ code: 'conflict' })
     await store.close()
-    await expect(store.head()).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(store.head()).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'Lookup index is closed'
+    })
     await store.close()
   })
 })
@@ -540,54 +582,62 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('matches a row-map model across generated updates, deletions and exact lost-ack retries', async () => {
-  const { store } = await fixture()
-  const expected = new Map<string, { revision: string; label: string }>()
-  let sequence = 0n
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 0, max: 7 }),
-      fc.boolean(),
-      fc.string({ maxLength: 40 }),
-      async (number, remove, label) => {
-        const key = number.toString(16).padStart(2, '0'),
-          before = expected.get(key)
-        const change: LookupIndexMutation = {
-          base: sequence.toString(),
-          evaluatedAt: '100',
-          event: { reason: 'model' },
-          edits: [
-            {
-              key,
-              previous: before?.revision ?? null,
-              next: remove ? null : { data: { label }, expiresAt: null }
-            }
-          ]
+it.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
+  'matches a row-map model across generated updates, deletions and exact lost-ack retries (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const { store } = await fixture()
+    const expected = new Map<string, { revision: string; label: string }>()
+    let sequence = 0n
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 7 }),
+        fc.boolean(),
+        fc.string({ maxLength: 40 }),
+        async (number, remove, label) => {
+          const key = number.toString(16).padStart(2, '0'),
+            before = expected.get(key)
+          const change: LookupIndexMutation = {
+            base: sequence.toString(),
+            evaluatedAt: '100',
+            event: { reason: 'model' },
+            edits: [
+              {
+                key,
+                previous: before?.revision ?? null,
+                next: remove ? null : { data: { label }, expiresAt: null }
+              }
+            ]
+          }
+          const committed = await store.commit(change)
+          sequence++
+          expect(committed.sequence).toBe(sequence.toString())
+          expect(await store.commit(change)).toEqual(committed)
+          if (remove) expected.delete(key)
+          else expected.set(key, { revision: sequence.toString(), label })
+          const page = await store.snapshot(sequence.toString(), null, {
+            records: 128,
+            bytes: 65536
+          })
+          expect(page.complete).toBe(true)
+          expect(
+            page.rows.map(row => ({
+              key: row.key,
+              revision: row.revision,
+              label: row.value.data.label
+            }))
+          ).toEqual(
+            [...expected]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => ({ key, ...value }))
+          )
+          expect((await store.head()).sequence).toBe(sequence.toString())
         }
-        const committed = await store.commit(change)
-        sequence++
-        expect(committed.sequence).toBe(sequence.toString())
-        expect(await store.commit(change)).toEqual(committed)
-        if (remove) expected.delete(key)
-        else expected.set(key, { revision: sequence.toString(), label })
-        const page = await store.snapshot(sequence.toString(), null, { records: 128, bytes: 65536 })
-        expect(page.complete).toBe(true)
-        expect(
-          page.rows.map(row => ({
-            key: row.key,
-            revision: row.revision,
-            label: row.value.data.label
-          }))
-        ).toEqual(
-          [...expected]
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => ({ key, ...value }))
-        )
-        expect((await store.head()).sequence).toBe(sequence.toString())
-      }
+      ),
+      propertyBatch
     )
-  )
-}, 120000)
+  },
+  120000
+)
 
 it('validates every capacity and binding before opening a durable file', async () => {
   const { path, store } = await fixture()

@@ -305,6 +305,21 @@ it('authenticates with the original buyer and rejects changed wallet capability 
   await expect(other.client.send()).rejects.toThrow('original buyer')
   expect(send).not.toHaveBeenCalled()
 })
+it('refuses a wallet capability replaced while its authenticated response was pending', async () => {
+  const f = paidTransportFixture('quote')
+  const replacement = new CompletedProtoWallet(paidBuyer)
+  const send = jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(async () => {
+    f.options.wallet.getPublicKey = replacement.getPublicKey.bind(replacement)
+    return f.response()
+  })
+  await expect(f.client.send()).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Paid lookup wallet capability changed'
+  })
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(f.fetchClient).not.toHaveBeenCalled()
+})
+
 it('retains physical capacity for a timed-out identity lookup before any HTTP effect', async () => {
   let settle!: (value: { publicKey: string }) => void
   const wallet = new CompletedProtoWallet(paidBuyer)

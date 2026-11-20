@@ -24,7 +24,12 @@ it('accepts the exact conservative bound and rejects either envelope one byte sh
   expect(() => assertProposalFeedRecordBounds({ entryBytes: 4096 }, records)).not.toThrow()
   expect(() =>
     assertProposalFeedRecordBounds({ entryBytes: 4096 }, { ...records, rowBytes: 4607 })
-  ).toThrow(/representation/)
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Proposal journal records exceed the sealed feed representation'
+    })
+  )
   expect(() =>
     assertProposalFeedRecordBounds({ entryBytes: 4096 }, { ...records, groupBytes: 9727 })
   ).toThrow(/representation/)
@@ -133,7 +138,12 @@ it('checks withdrawals, reservation, future clocks and terminal recovery separat
   ).toThrow(/expired/)
   const backwards = structuredClone(reserve)
   backwards.next.state.recordedAt = '9'
-  expect(() => assertProposalFeedCommitTime(first.next, backwards, '11')).toThrow(/backwards/)
+  expect(() => assertProposalFeedCommitTime(first.next, backwards, '11')).toThrow(
+    expect.objectContaining({
+      code: 'context-changed',
+      message: 'Proposal lifecycle time moved backwards'
+    })
+  )
   const terminal = structuredClone(reserve)
   terminal.next.state = {
     status: 'finalization-failed',
@@ -153,7 +163,12 @@ it('seals complete wire capacity before a future terminal event can be promised'
   expect(minimal.maxBytes).toBe(266240)
   expect(() =>
     proposalFeedWireLimits({ ...minimal, maxBytes: minimal.maxBytes - 1 }, 4096)
-  ).toThrow(/future wire group/)
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Proposal feed cannot guarantee a complete future wire group'
+    })
+  )
   for (const maxBytes of [NaN, Infinity, 4194305, 1.5])
     expect(() => proposalFeedWireLimits({ maxBytes }, 4096)).toThrow()
   for (const maxObservations of [2, 0, NaN, 1025, 1.5])
@@ -161,7 +176,12 @@ it('seals complete wire capacity before a future terminal event can be promised'
   expect(() => proposalFeedWireLimits({ extra: 1 } as never, 4096)).toThrow()
   const value = proposalFeedValue(initial().next)
   expect(() => assertProposalFeedWireGroup([value], minimal)).not.toThrow()
-  expect(() => assertProposalFeedWireGroup([value, value], minimal)).toThrow(/wire reservation/)
+  expect(() => assertProposalFeedWireGroup([value, value], minimal)).toThrow(
+    expect.objectContaining({
+      code: 'limited',
+      message: 'Proposal domain group exceeds its complete wire reservation'
+    })
+  )
   const enoughObservations = { ...minimal, maxObservations: 1024 }
   expect(() => assertProposalFeedWireGroup([value, value], enoughObservations)).toThrow(
     /wire reservation/

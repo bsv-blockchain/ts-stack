@@ -5,6 +5,7 @@ import { resolve, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { acceptsPeerVersion } from './peer-version-range.mjs'
 import { listWorkspacePackages } from './sync-versions.mjs'
+import { jestArguments } from './jest-project-coverage.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEPENDENCY_FIELDS = [
@@ -98,12 +99,26 @@ function checkPublishSurface(pkg, projectPolicies) {
   return checkRuntimeTools(pkg, dependencies) + checkDeclarationDependencies(pkg, dependencies)
 }
 
-function checkCoverageSemantics(pkg) {
+function coverageRuntimeCommand(command, packageDirectory) {
+  // Follow only the exact owned, argument-free wrapper. Arbitrary commands,
+  // lookalike paths and additional shell operations retain direct flag checks.
+  const invocation = /^(?:pnpm build && )?node ([./\w-]+)$/.exec(command)
+  if (
+    packageDirectory &&
+    invocation &&
+    resolve(packageDirectory, invocation[1]) === resolve(ROOT, 'scripts/jest-project-coverage.mjs')
+  )
+    return jestArguments('governance', 'coverage').join(' ')
+  return command
+}
+
+export function checkCoverageSemantics(pkg, packageDirectory) {
   const testCommand = pkg.scripts?.test
   const coverageCommand = pkg.scripts?.['test:coverage']
   if (typeof testCommand !== 'string' || typeof coverageCommand !== 'string') return 0
+  const runtimeCommand = coverageRuntimeCommand(coverageCommand, packageDirectory)
   const missing = ['--passWithNoTests', '--experimental-vm-modules'].filter(
-    option => testCommand.includes(option) && !coverageCommand.includes(option)
+    option => testCommand.includes(option) && !runtimeCommand.includes(option)
   )
   if (
     coverageCommand.includes('--coverageReporters') &&
@@ -205,7 +220,7 @@ export function checkVersions({ root = ROOT, packageList } = {}) {
     const manifest = readPackageIfPresent(pkg.path)
     if (manifest === undefined) continue
     problems.runtimeToolLeaks += checkPublishSurface(manifest, policies)
-    problems.coverageMismatches += checkCoverageSemantics(manifest)
+    problems.coverageMismatches += checkCoverageSemantics(manifest, pkg.path)
     problems.stale += checkWorkspaceReferences(manifest, versions)
   }
   reportProblems({ ...problems, mismatched: checkNestedLockstep(packages) })

@@ -1,4 +1,5 @@
-import { type ValidInternalizeActionArgs, validateInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { validateInternalizeActionArgs } from '../../utility/validateInternalizeActionArgs'
+import { type ValidInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { InternalizeActionArgs, InternalizeOutput, P2PKH, WalletProtocol } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { AuthId, StorageInternalizeActionResult } from '../../sdk/WalletStorage.interfaces'

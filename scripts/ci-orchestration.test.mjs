@@ -1,28 +1,28 @@
 import assert from 'node:assert/strict'
+
 import { execFileSync, spawnSync } from 'node:child_process'
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+
 import { dirname, join } from 'node:path'
+
 import test from 'node:test'
+
 import { isDeepStrictEqual } from 'node:util'
 
-import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { planShards } from './ci-shard-plan.mjs'
-import { mutationExecutionMatrix, partitionedMutationTargets } from './mutation-partitions.mjs'
 import { APPLICATION_COVERAGE_SHARDS } from './output-knowledge-coverage-validation.mjs'
+
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
+import { walletCoverageMatrix } from './wallet-composed-native-ci.mjs'
+
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
+
 const CONFORMANCE_PATH = join(REPOSITORY_ROOT, '.github/workflows/conformance.yml')
+
 const RUNTIME_PATH = join(REPOSITORY_ROOT, '.github/workflows/container-runtime-contract.yml')
+
 const WALLET_MOBILE_COVERAGE_PATH = join(
   REPOSITORY_ROOT,
   'packages/wallet/wallet-toolbox/mobile/vitest.config.ts'
@@ -77,33 +77,70 @@ function workflowJobBlocks(workflow) {
   }))
 }
 
-test('installed engine regressions run unconditionally after frozen installation and before build reuse', () => {
-  const workflow = readFileSync(CI_PATH, 'utf8')
-  const policy = workflowJobBlocks(workflow).find(job => job.name === 'policy').source
-  const steps = policy.split(/\n {6}- /)
-  const installed = steps.findIndex(step =>
-    step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
+test('property campaigns cover each heavy suite shard and continue collecting evidence after failures', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/property-tests.yml', import.meta.url),
+    'utf8'
   )
-  const engine = steps.findIndex(step =>
-    step.startsWith('name: Test installed mutation engine controls\n')
-  )
-  const rebuild = steps.findIndex(step =>
-    step.startsWith('name: Rebuild the audited workspace build tool\n')
-  )
-  const reuse = steps.findIndex(step => step.startsWith('uses: actions/download-artifact@'))
-  assert.ok(installed >= 0 && engine > installed && rebuild > engine && reuse > engine)
+  const matrix = viewPropertyMatrix(workflow)
+  assert.deepEqual(matrix, [
+    'other-packages/all',
+    ...Array.from({ length: 8 }, (_, index) => 'output-knowledge/' + (index + 1)),
+    ...Array.from({ length: 4 }, (_, index) => 'wallet-toolbox/' + (index + 1)),
+    'lch/1',
+    'lch/2'
+  ])
+  assert.match(workflow, /fail-fast: false/)
+  assert.match(workflow, /run: pnpm test:governance/)
+  const provision = workflow.indexOf('bash scripts/provision-wallet-native-tests.sh')
+  const execute = workflow.indexOf('Build and run the assigned property campaign')
+  assert.ok(provision > 0 && provision < execute)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/\$shard_count"/)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/2"/)
   assert.match(
-    steps[engine],
-    /run: node --test scripts\/mutation-partitions-engine\.integration\.mjs(?:\n|$)/
+    workflow,
+    /--filter '!@bsv\/output-knowledge' --filter '!@bsv\/wallet-toolbox' --filter '!@bsv\/lch'/
   )
-  assert.doesNotMatch(steps[engine], /(?:if:|continue-on-error:)/)
-  assert.equal(
-    workflow.match(/node --test scripts\/mutation-partitions-engine\.integration\.mjs/g)?.length,
-    1
+  assert.match(workflow, /name: property-fuzzing-failure-.*matrix.suite.*matrix.shard/)
+})
+
+function viewPropertyMatrix(workflow) {
+  return Array.from(workflow.matchAll(/- suite: ([\w-]+)\n +shard: '(\w+)'/g), match =>
+    match.slice(1).join('/')
   )
-  const health = workflowJobBlocks(workflow).find(job => job.name === 'repository-health').source
-  assert.match(health, /node --test scripts\/\*\.test\.mjs/)
-  assert.doesNotMatch(health, /mutation-partitions-engine\.integration|pnpm install/)
+}
+
+test('mutation planning and engine controls stay in the explicit background audit', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const background = readFileSync(
+    new URL('../.github/workflows/mutation-tests.yml', import.meta.url),
+    'utf8'
+  )
+  assert.doesNotMatch(workflow, /background-tests|mutation-partitions-engine\.integration\.mjs/)
+  assert.ok(
+    background.includes(
+      'node --test scripts/background-tests/*.test.mjs scripts/mutation-partitions-engine.integration.mjs'
+    )
+  )
+  for (const file of [
+    'mutation-partitions.test.mjs',
+    'mutation-execution-batches.test.mjs',
+    'ci-integration/sdk-auth-partitions.test.mjs'
+  ])
+    assert.throws(() => readFileSync(new URL('./' + file, import.meta.url)))
+})
+
+test('repository health installs real locked wallet compiler dependencies before config regressions', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const job = workflowJobBlocks(workflow).find(value => value.name === 'repository-health').source
+  const setup = job.indexOf('uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413')
+  const install = job.indexOf(
+    'run: pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack --filter @bsv/wallet-toolbox --filter @bsv/wallet-toolbox-mobile\n'
+  )
+  const rebuild = job.indexOf('run: pnpm rebuild esbuild')
+  const testControls = job.indexOf('run: node --test scripts/*.test.mjs')
+  assert.ok(setup >= 0 && install > setup && rebuild > install && testControls > rebuild)
+  assert.doesNotMatch(job, /continue-on-error/)
 })
 
 test('CI shares one audited build across coverage and browser consumer lanes', () => {
@@ -149,15 +186,15 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
 
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
@@ -183,14 +220,13 @@ test('CI contributes mobile and type-only wallet surfaces to aggregate patch cov
 })
 
 const APPLICATION_PACKAGE = '@bsv/output-knowledge'
+const APPLICATION_TEST_SHARDS = 10
 
-// Run a prepare-step jq that appends the application's shard rows to a planned
-// matrix, and check every selection keeps each other package exactly once.
 function assertApplicationMatrix(
   scope,
   variable,
   packagesVariable,
-  { applicationPackages, emptySelection, uniqueIds }
+  { applicationPackages, emptySelection, uniqueIds, shards }
 ) {
   const command = scope.match(
     new RegExp(
@@ -216,13 +252,13 @@ function assertApplicationMatrix(
     assert.deepEqual(
       application.map(row => row.application),
       selected.includes(APPLICATION_PACKAGE)
-        ? Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) => index + 1)
+        ? Array.from({ length: shards }, (_, index) => index + 1)
         : []
     )
     assert.ok(
       application.every(
         row =>
-          row.total === APPLICATION_COVERAGE_SHARDS &&
+          row.total === shards &&
           row.shard === row.application &&
           isDeepStrictEqual(row.packages, applicationPackages)
       )
@@ -244,14 +280,20 @@ test('application dependent-test shards run the complete suite beside the planne
   assertApplicationMatrix(jobs.scope, 'DEPENDENT_TEST_MATRIX', 'DEPENDENT_TEST_PACKAGES', {
     applicationPackages: [APPLICATION_PACKAGE],
     emptySelection: false,
-    uniqueIds: false
+    uniqueIds: false,
+    shards: APPLICATION_TEST_SHARDS
   })
   assert.match(jobs['dependent-tests'], /^    timeout-minutes: 30$/m)
   assert.match(jobs['dependent-tests'], /^        if: matrix\.application == 0$/m)
   assert.match(jobs['dependent-tests'], /^        if: matrix\.application != 0$/m)
   assert.match(
     jobs['dependent-tests'],
-    /--script test --jest-shard "\$\{\{ matrix\.application \}\}\/\$\{\{ matrix\.total \}\}"/
+    /--script test --jest-shard "\$\{\{ matrix\.application \}\}\/\$\{\{ matrix\.total \}\}"\n {10}--jest-sequencer "\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(jobs['dependent-tests'], /^ {10}JEST_SHARD_LANE: output-knowledge-tests$/m)
+  assert.match(
+    jobs['dependent-tests'],
+    /^ {10}JEST_SHARD_DURATIONS: \$\{\{ github\.workspace \}\}\/governance\/ci-lane-durations\.json$/m
   )
 })
 
@@ -261,7 +303,8 @@ test('application coverage shards retain the complete selection and a required m
   assertApplicationMatrix(jobs.scope, 'COVERAGE_OTHER_MATRIX', 'COVERAGE_OTHER_PACKAGES', {
     applicationPackages: [],
     emptySelection: true,
-    uniqueIds: true
+    uniqueIds: true,
+    shards: APPLICATION_COVERAGE_SHARDS
   })
   assert.match(jobs['coverage-other'], /^    timeout-minutes: 35$/m)
   assert.match(jobs['coverage-other'], /node scripts\/output-knowledge-coverage.mjs collect/)
@@ -270,10 +313,15 @@ test('application coverage shards retain the complete selection and a required m
   assert.match(jobs['coverage-upload'], /output-knowledge.lcov.info/)
   assert.match(jobs['coverage-upload'], /needs.coverage-other.result == 'success'/)
   assert.match(jobs['merge-gate'], /^      - coverage-upload$/m)
-  assert.doesNotMatch(
-    jobs['coverage-other'] + jobs['coverage-upload'],
-    /continue-on-error|passWithNoTests/
-  )
+  assert.doesNotMatch(jobs['coverage-other'], /continue-on-error|passWithNoTests/)
+  const aggregate = jobs['coverage-upload']
+    .split(/\n {6}- /)
+    .find(step => step.includes('node scripts/output-knowledge-coverage.mjs aggregate'))
+  assert.doesNotMatch(aggregate, /continue-on-error|passWithNoTests/)
+  const patch = jobs['coverage-upload']
+    .split(/\n {6}- /)
+    .find(step => step.includes('node scripts/patch-coverage.mjs'))
+  assert.match(patch, /continue-on-error: true/)
   const steps = jobs.policy.split(/\n {6}- /)
   const installed = steps.findIndex(step =>
     step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
@@ -327,34 +375,8 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
-    if (job.name === 'mutation-tests') {
-      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}`
-      const executor = readFileSync(
-        join(REPOSITORY_ROOT, '.github/workflows/mutation-execution.yml'),
-        'utf8'
-      )
-      const executionJob = workflowJobBlocks(executor).find(
-        candidate => candidate.name === 'execution'
-      )
-      const actualTimeout = executionJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0]
-      const qualificationPrefix = `inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile","lch-overlay-acquisition","lch-overlay-covenant","lch-overlay-covenant-candidate","private-purchase-evidence","private-purchase-coordination","private-purchase-state","private-purchase-native-clock","private-purchase-disclosure","private-publication-coordination","protected-ledger","private-purchase-buyer","protected-operation-objects","lch-overlay-covenant-terms","private-purchase-alias-state","private-purchase-alias-custody","output-knowledge-proposal-core","private-purchase-alias-coordinator","private-purchase-alias-owner","private-purchase-alias-disclosure","private-purchase-buyer-alias","overlay-integrity"]'), matrix.target) && 180 || `
-      assert.equal(actualTimeout, expected.replace('${{ ', '${{ ' + qualificationPrefix))
-      assert.equal(actualTimeout.replace(qualificationPrefix, ''), expected)
-      const dedicated = readFileSync(
-        join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
-        'utf8'
-      )
-      const dedicatedJob = workflowJobBlocks(dedicated).find(
-        candidate => candidate.name === 'mutation-tests'
-      )
-      for (const caller of [job, dedicatedJob]) {
-        assert.ok(caller)
-        assert.match(caller.source, /^ {4}uses: \.\/\.github\/workflows\/mutation-execution\.yml$/m)
-        assert.doesNotMatch(caller.source, /^ {4}(?:timeout-minutes|runs-on):/m)
-      }
-    } else {
-      assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
-    }
+    if (job.name === 'coverage-wallet') assertNativeWalletJob(job.source)
+    else assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
   }
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
   assert.match(
@@ -369,7 +391,11 @@ test('specialized workflows are bounded and required conformance checks always r
   const runtime = readFileSync(RUNTIME_PATH, 'utf8')
 
   assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 1)
-  assert.match(conformance, /^  pull_request:\n    branches: \[main\]\n\nconcurrency:/m)
+  // Neither PR nor merge-queue runs take a path filter: the required check must always report.
+  assert.match(
+    conformance,
+    /^  pull_request:\n    branches: \[main\]\n  # [^\n]*\n  merge_group:\n\nconcurrency:/m
+  )
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)
@@ -381,7 +407,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   const selected = jobs.filter(
     job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
   )
-  assert.equal(selected.length, 15)
+  assert.equal(selected.length, 14)
   for (const job of selected) {
     if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
     assert.match(
@@ -415,13 +441,13 @@ test('fork PRs retain advisory Codecov reports without a privileged workflow', (
   assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
 })
 
-test('analysis gates mutation without serializing the shared build or external reporting', () => {
+test('analysis and artifact gates remain independent of background mutation audits', () => {
   const jobs = Object.fromEntries(
     workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
   )
   assert.doesNotMatch(jobs['early-gates'], /sonar-zero-findings|SONAR_RESULT/)
   assert.doesNotMatch(jobs.prepare, /      - sonar-zero-findings/)
-  assert.match(jobs['mutation-tests'], /      - sonar-zero-findings/)
+  assert.equal(jobs['mutation-tests'], undefined)
   assert.match(jobs['merge-gate'], /      - sonar-zero-findings/)
   assert.match(jobs['merge-gate'], /      - package-artifacts/)
   assert.doesNotMatch(jobs.prepare, /name: Verify changed package artifacts/)
@@ -434,116 +460,6 @@ test('analysis gates mutation without serializing the shared build or external r
   assert.doesNotMatch(jobs['coverage-upload'], /Wait for Codecov/)
   assert.match(jobs['coverage-report'], /continue-on-error: true/)
   assert.doesNotMatch(jobs['merge-gate'], /      - coverage-report/)
-})
-
-function mutationEligibility(options = {}) {
-  const { event, prepare, sonar, targets, labels, diagnosticInput, workflowCancelled } = {
-    event: 'pull_request',
-    prepare: 'success',
-    sonar: 'success',
-    targets: '["selected"]',
-    labels: [],
-    diagnosticInput: false,
-    workflowCancelled: false,
-    ...options
-  }
-  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    candidate => candidate.name === 'mutation-tests'
-  ).source
-  const folded = /^    if: >-\n((?:      .*\n)+)/m.exec(job)
-  const source = folded
-    ? folded[1]
-        .trim()
-        .split('\n')
-        .map(line => line.trim())
-        .join(' ')
-    : /^    if: (.*)$/m.exec(job)[1]
-  // Evaluate the actual authored job expression, not a second copy of the policy.
-  const expression = source
-    .replaceAll(
-      'needs.prepare.outputs.mutation-targets',
-      'needs.prepare.outputs["mutation-targets"]'
-    )
-    .replaceAll('needs.sonar-zero-findings.result', 'needs["sonar-zero-findings"].result')
-    .replaceAll('github.event.pull_request.labels.*.name', 'labels')
-    .replaceAll('inputs.mutation-diagnostics', 'inputs["mutation-diagnostics"]')
-  const evaluate = new Function(
-    'needs',
-    'github',
-    'inputs',
-    'labels',
-    'always',
-    'cancelled',
-    'contains',
-    `return Boolean(${expression})`
-  )
-  return evaluate(
-    {
-      prepare: { result: prepare, outputs: { 'mutation-targets': targets } },
-      'sonar-zero-findings': { result: sonar }
-    },
-    { event_name: event },
-    { 'mutation-diagnostics': diagnosticInput },
-    labels,
-    () => true,
-    () => workflowCancelled,
-    (values, value) => values.includes(value)
-  )
-}
-
-test('mutation defaults to successful exact-head PR analysis and a successful shared build', () => {
-  assert.equal(mutationEligibility(), true)
-  for (const sonar of ['failure', 'cancelled', 'skipped', 'in_progress', undefined, '']) {
-    assert.equal(mutationEligibility({ sonar }), false, `PR analysis: ${sonar}`)
-  }
-  for (const prepare of ['failure', 'cancelled', 'skipped', undefined]) {
-    assert.equal(mutationEligibility({ prepare, labels: ['ci:mutation-diagnostics'] }), false)
-  }
-  for (const targets of ['[]', '', undefined]) {
-    assert.equal(mutationEligibility({ targets }), false)
-  }
-  assert.equal(mutationEligibility({ workflowCancelled: true }), false)
-})
-
-test('main and full manual mutation survive only the intentional PR analysis skip', () => {
-  for (const event of ['push', 'workflow_dispatch']) {
-    assert.equal(mutationEligibility({ event, sonar: 'skipped' }), true)
-    for (const sonar of ['failure', 'cancelled', undefined]) {
-      assert.equal(mutationEligibility({ event, sonar }), false)
-    }
-  }
-})
-
-test('explicit diagnostics collect analyzer failures without bypassing build or cancellation', () => {
-  for (const sonar of ['failure', 'cancelled', 'skipped', undefined]) {
-    assert.equal(mutationEligibility({ sonar, labels: ['ci:mutation-diagnostics'] }), true)
-    assert.equal(mutationEligibility({ sonar, diagnosticInput: true }), false)
-    assert.equal(
-      mutationEligibility({ event: 'workflow_dispatch', sonar, diagnosticInput: true }),
-      true
-    )
-  }
-  assert.equal(mutationEligibility({ sonar: 'failure', labels: ['unrelated'] }), false)
-  assert.equal(
-    mutationEligibility({
-      sonar: 'failure',
-      labels: ['ci:mutation-diagnostics'],
-      workflowCancelled: true
-    }),
-    false
-  )
-  assert.equal(
-    mutationEligibility({ event: 'workflow_dispatch', prepare: 'failure', diagnosticInput: true }),
-    false
-  )
-  assert.equal(
-    mutationEligibility({ event: 'workflow_dispatch', targets: '[]', diagnosticInput: true }),
-    false
-  )
-  const workflow = readFileSync(CI_PATH, 'utf8')
-  assert.match(workflow, /^      mutation-diagnostics:\n/m)
-  assert.match(workflow, /mutation-diagnostics:[\s\S]*?type: boolean\n        default: false/)
-  assert.doesNotMatch(workflow, /pull_request_target/)
 })
 
 test('every HTTP latency scenario retains its own required coverage execution', () => {
@@ -559,330 +475,36 @@ test('every HTTP latency scenario retains its own required coverage execution', 
     'utf8'
   )
   const latencies = JSON.parse(suite.match(/test\.each\((\[[\d, ]+\])\)/)[1])
-  const selected = [...wallet.matchAll(/id: sync-http-(\d+), latency: (\d+)/g)]
+  const matrix = walletCoverageMatrix().include
+  const selected = matrix.filter(value => value.latency !== undefined)
   assert.deepEqual(
-    selected.map(match => Number(match[2])),
+    selected.map(value => value.latency),
     latencies
   )
-  assert.ok(selected.every(match => match[1] === match[2]))
-  // Every planned shard has a matrix row, so no test file can go unrun.
-  const shardRows = wallet.match(/id: shard-\d+, shard: \d+/g).length
-  assert.equal(Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]), shardRows)
+  assert.ok(selected.every(value => value.id === 'sync-http-' + value.latency))
+  assert.equal(matrix.filter(value => value.shard).length, 6)
+  assert.equal(
+    Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]),
+    matrix.filter(value => value.shard).length
+  )
   assert.match(
     wallet,
     /--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
   )
-  assert.match(wallet, /JEST_SHARD_LANE=wallet-toolbox-coverage/)
+  assert.match(wallet, /JEST_SHARD_LANE: wallet-toolbox-coverage/)
   assert.match(
     wallet,
-    /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/
+    /--runInBand\n\s+--runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/
   )
   assert.match(wallet, /--testNamePattern="with \$SYNC_LATENCY ms request latency"/)
-  assert.match(wallet, /args=\(--coverage --coverageDirectory=coverage\/\$\{\{ matrix\.id \}\}\)/)
+  assert.match(
+    wallet,
+    /args=\(--coverage --coverageDirectory=coverage\/\$\{\{ matrix\.id \}\} --maxWorkers=3\n\s+--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"\)/
+  )
   assert.match(wallet, /name: coverage-wallet-\$\{\{ matrix\.id \}\}/)
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
 
-function mutationQualityGateScript(job) {
-  return / {8}run: \|\n([\s\S]*?)(?=\n {6}-|$)/
-    .exec(job)[1]
-    .split('\n')
-    .map(line => line.replace(/^ {10}/, ''))
-    .join('\n')
-}
-
-test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
-  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    candidate => candidate.name === 'mutation-quality'
-  ).source
-  assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
-  const script = mutationQualityGateScript(job)
-  for (const targets of ['[]', '["selected"]', '']) {
-    for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
-      const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: {
-          NODE_EXECUTABLE: process.execPath,
-          MUTATION_MATRIX: '{"include":[]}',
-          MUTATION_BATCHES: '{"include":[]}',
-          PARTITION_TARGETS: '[]',
-          PREPARE_RESULT: 'success',
-          MUTATION_TARGETS: targets,
-          MUTATION_RESULT: result,
-          MUTATION_CLASSIFICATION: '{"deferred":[]}',
-          GITHUB_STEP_SUMMARY: '/dev/null',
-          PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
-        },
-        encoding: 'utf8'
-      })
-      assert.equal(execution.error, undefined)
-      const permitted = result === 'success' || (result === 'skipped' && targets === '[]')
-      assert.equal(execution.status === 0, permitted, `${targets}: ${result}`)
-    }
-  }
-  const failedBuild = spawnSync('/bin/bash', ['-e', '-c', script], {
-    env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
-  })
-  assert.notEqual(failedBuild.status, 0)
-})
-
-test('the actual required mutation gate rejects missing, altered and unordered execution batches', () => {
-  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    candidate => candidate.name === 'mutation-quality'
-  ).source
-  const script = mutationQualityGateScript(job)
-  const matrix = {
-    include: Array.from({ length: 257 }, (_, index) => ({
-      target: `fixture-${index}`,
-      partition: 'whole'
-    }))
-  }
-  const batches = {
-    include: [
-      { batch: 1, executionMatrix: { include: matrix.include.slice(0, 256) } },
-      { batch: 2, executionMatrix: { include: matrix.include.slice(256) } }
-    ]
-  }
-  const execute = value =>
-    spawnSync('/bin/bash', ['-e', '-c', script], {
-      env: {
-        NODE_EXECUTABLE: process.execPath,
-        MUTATION_MATRIX: JSON.stringify(matrix),
-        MUTATION_BATCHES: JSON.stringify(value),
-        PARTITION_TARGETS: '[]',
-        PREPARE_RESULT: 'success',
-        MUTATION_TARGETS: '["selected"]',
-        MUTATION_RESULT: 'success',
-        MUTATION_CLASSIFICATION: '{"deferred":[]}',
-        GITHUB_STEP_SUMMARY: '/dev/null',
-        PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
-      },
-      encoding: 'utf8'
-    })
-  assert.equal(execute(batches).status, 0)
-  for (const altered of [
-    {},
-    { include: [] },
-    { include: batches.include.slice(0, 1) },
-    { include: [...batches.include].reverse() },
-    { include: [...batches.include, batches.include[0]] },
-    { include: batches.include, unknown: true },
-    { include: [{ batch: 1, executionMatrix: matrix }] }
-  ])
-    assert.notEqual(execute(altered).status, 0)
-  for (const change of [
-    value => {
-      value.include[1].batch = 1
-    },
-    value => {
-      value.include[0].executionMatrix.include.pop()
-    },
-    value => {
-      value.include[0].executionMatrix.include[0] = value.include[0].executionMatrix.include[1]
-    },
-    value => {
-      value.include[1].executionMatrix.include[0].target = 'unexpected'
-    }
-  ]) {
-    const altered = structuredClone(batches)
-    change(altered)
-    assert.notEqual(execute(altered).status, 0)
-  }
-})
-
-function assertPartitionDownload(aggregate, id) {
-  const downloads = aggregate
-    .split(/\n {6}- /)
-    .filter(
-      step =>
-        step.startsWith('uses: actions/download-artifact@') &&
-        step.includes('pattern: mutation-*\n')
-    )
-  assert.equal(downloads.length, 1, id)
-  assert.ok(downloads[0].includes("if: needs.prepare.outputs.partition-targets != '[]'"), id)
-  assert.ok(downloads[0].includes('path: .mutation-parts-raw'), id)
-  const verify = aggregate.indexOf('name: Require every selected canonical partition target gate')
-  assert.ok(verify > aggregate.indexOf(downloads[0]), id)
-  const staging = aggregate.slice(verify)
-  assert.match(staging, /MUTATION_MATRIX:/)
-  assert.match(staging, /select\(\.target == \$target and \.partition != "whole"\)/)
-  assert.match(staging, /\.mutation-parts-raw\/mutation-\$target-\$partition/)
-  assert.match(staging, /Missing mutation partition evidence/)
-  assert.match(staging, /--target "\$target" --directory "\.mutation-parts\/\$target"/)
-}
-
-test('canonical staging requires exact selected artifacts and excludes prefix neighbours', () => {
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  const body = aggregate.slice(
-    aggregate.indexOf('name: Require every selected canonical partition target gate')
-  )
-  const script = body.match(/ {8}run: \|\n([\s\S]*?)(?=\n {6}- )/)[1]
-  const directory = mkdtempSync(join(tmpdir(), 'stack-mutation-staging-'))
-  const targets = buildMutationTargets(REPOSITORY_ROOT)
-  const selected = partitionedMutationTargets(Object.keys(targets), targets)
-  const matrix = mutationExecutionMatrix(selected, targets)
-  const rows = matrix.include.filter(row => row.partition !== 'whole')
-  const artifact = row =>
-    join(directory, '.mutation-parts-raw', `mutation-${row.target}-${row.partition}`)
-  const run = () =>
-    spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', 'node() { :; }\n' + script], {
-      cwd: directory,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PARTITION_TARGETS: JSON.stringify(selected),
-        MUTATION_MATRIX: JSON.stringify(matrix)
-      }
-    })
-  try {
-    for (const row of rows) mkdirSync(artifact(row), { recursive: true })
-    mkdirSync(artifact({ target: rows[0].target + '-foreign', partition: rows[0].partition }), {
-      recursive: true
-    })
-    const passed = run()
-    assert.equal(passed.status, 0, passed.stderr)
-    for (const target of selected)
-      assert.deepEqual(
-        readdirSync(join(directory, '.mutation-parts', target)).sort(),
-        rows
-          .filter(row => row.target === target)
-          .map(row => `mutation-${row.target}-${row.partition}`)
-          .sort()
-      )
-    rmSync(join(directory, '.mutation-parts'), { recursive: true })
-    rmSync(artifact(rows.at(-1)), { recursive: true })
-    const missing = run()
-    assert.notEqual(missing.status, 0)
-    assert.match(missing.stdout, /Missing mutation partition evidence/)
-  } finally {
-    rmSync(directory, { recursive: true, force: true })
-  }
-})
-
-test('every selected application and LCH execution part is downloaded before canonical aggregation', () => {
-  const targets = buildMutationTargets(REPOSITORY_ROOT)
-  const application = Object.keys(targets).filter(
-    id => targets[id].packageDirectory === 'packages/application/output-knowledge'
-  )
-  const selected = partitionedMutationTargets(
-    [
-      ...application,
-      'lch-overlay-covenant-terms',
-      'wallet-recovery-codec',
-      'overlay-proposal-admission'
-    ],
-    targets
-  )
-  assert.ok(selected.includes('output-knowledge-proposal-core'))
-  assert.ok(selected.includes('proposal-journal-send'))
-  assert.ok(selected.includes('proposal-channel-storage'))
-  for (const id of [
-    'lch-overlay-covenant-terms',
-    'private-purchase-state',
-    'private-purchase-coordination',
-    'private-purchase-native-clock',
-    'revenue-listing-purchase',
-    'wallet-recovery-codec',
-    'overlay-proposal-admission'
-  ]) {
-    assert.ok(selected.includes(id), id)
-  }
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  for (const id of selected) assertPartitionDownload(aggregate, id)
-  assert.ok(
-    aggregate.includes('node scripts/mutation-partition-evidence.mjs verify --mode diagnostic')
-  )
-  assert.ok(aggregate.includes('--target "$target" --directory ".mutation-parts/$target"'))
-})
-
-test('wallet recovery encoding downloads all complete execution parts before canonical aggregation', () => {
-  const id = 'wallet-recovery-encoding'
-  const selected = partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT))
-  assert.deepEqual(selected, [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('protected ledger aggregation requires selected complete execution artifacts', () => {
-  const id = 'protected-ledger'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('private publication aggregation requires selected complete execution artifacts', () => {
-  const id = 'private-publication-state'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('lineage graph aggregation requires selected complete execution artifacts', () => {
-  const id = 'revenue-lineage-graph'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('verified publication service aggregation requires selected complete execution artifacts', () => {
-  const id = 'private-publication-service'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('private publication coordination aggregation requires selected complete execution artifacts', () => {
-  const id = 'private-publication-coordination'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('private publication HTTP aggregation requires selected complete execution artifacts', () => {
-  const id = 'private-publication-http'
-  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-    job => job.name === 'mutation-quality'
-  ).source
-  assertPartitionDownload(aggregate, id)
-})
-
-test('acquisition and proposal HTTP aggregation require every selected part artifact', () => {
-  for (const id of [
-    'private-acquisition-foundation',
-    'private-acquisition-state',
-    'private-acquisition-coordination',
-    'private-acquisition-http',
-    'sdk-paid-lookup-http',
-    'protected-operation-state',
-    'protected-operation-objects',
-    'overlay-proposal-http'
-  ]) {
-    assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
-    const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
-      job => job.name === 'mutation-quality'
-    ).source
-    assertPartitionDownload(aggregate, id)
-  }
-})
-
-// Extract one step's `run: |` block from the raw workflow text, as the other
-// checks here read the workflow without a YAML dependency.
 function stepScript(workflow, name) {
   const lines = workflow.split('\n')
   const at = lines.findIndex(line => line.trim() === `- name: ${name}`)
@@ -944,4 +566,195 @@ test('infra image builds back off longer only for registry rate limits', () => {
     calls: 3,
     sleeps: [5, 10]
   })
+})
+
+function nativeWalletFixtureSteps() {
+  const wallet = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'coverage-wallet'
+  ).source
+  const matches = [...wallet.matchAll(/^ {6}- /gm)]
+  const steps = matches.map((match, index) =>
+    wallet.slice(match.index, matches[index + 1]?.index ?? wallet.length)
+  )
+  return { wallet, steps }
+}
+
+test('actual wallet timeout expression is finite and covers every declared case budget', () => {
+  const { wallet } = nativeWalletFixtureSteps()
+  const expression = wallet.match(/^ {4}timeout-minutes: \$\{\{ (.*?) \}\}$/m)[1]
+  const evaluate = new Function('matrix', `return (${expression})`)
+  for (const lane of walletCoverageMatrix().include) {
+    // GitHub treats absent matrix keys as empty values.
+    const minutes = evaluate({
+      native_cohort: '',
+      native_merge_minutes: 0,
+      native_auth_minutes: 0,
+      ...lane
+    })
+    assert.ok(
+      Number.isSafeInteger(minutes) && minutes > 0,
+      `${lane.id} must have a finite positive timeout`
+    )
+    const minimum = Math.max(lane.native_merge_minutes ?? 0, lane.native_auth_minutes ?? 0)
+    assert.ok(minutes >= minimum, `${lane.id} must cover its declared case budget`)
+  }
+})
+
+function onlyFixtureStep(steps, command) {
+  const matches = steps.filter(step => step.split('\n').includes(`        run: ${command}`))
+  assert.equal(matches.length, 1)
+  const step = matches[0]
+  assert.match(step, /^ {8}if: matrix.id == 'shard-1'$/m)
+  assert.match(step, /^ {8}working-directory: packages\/wallet\/wallet-toolbox$/m)
+  assert.doesNotMatch(step, /continue-on-error/)
+  return steps.indexOf(step)
+}
+
+function assertNativeWalletJob(wallet) {
+  assert.match(wallet, /^ {4}needs: prepare$/m)
+  assert.match(wallet, /^ {4}timeout-minutes: \$\{\{ [^\n]+ \}\}$/m)
+  assert.match(wallet, /^ {4}runs-on: ubuntu-24\.04-arm$/m)
+  assert.match(wallet, /^ {4}permissions:\n {6}contents: read\n {4}strategy:/m)
+  assert.doesNotMatch(wallet, /continue-on-error/)
+  assert.match(
+    wallet,
+    /^ {4}strategy:\n {6}fail-fast: false\n {6}max-parallel: 8\n {6}matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.wallet-test-matrix\) \}\}\n {4}services:$/m
+  )
+  assert.match(wallet, /node-version: 24\.22\.1/)
+  assert.match(wallet, /run: bash scripts\/provision-wallet-native-tests\.sh/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs capture/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs pair-capture/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs pair-pattern/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs merge-capture/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs merge-pattern/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs auth-capture/)
+  assert.match(wallet, /wallet-composed-native-ci\.mjs auth-pattern/)
+  assert.match(wallet, /NATIVE_AUTH_COHORT: \$\{\{ matrix\.native_auth_cohort \}\}/)
+  assert.match(
+    wallet,
+    /--runTestsByPath src\/storage\/portable\/Brc38NativeAuthenticatedMergeContractsNode\.test\.ts/
+  )
+  assert.match(
+    wallet,
+    /testPathIgnorePatterns=.*src\/storage\/portable\/Brc38NativeAuthenticatedMergeContractsNode\.test\.ts/
+  )
+  assert.match(
+    wallet,
+    /--runTestsByPath src\/storage\/portable\/Brc38NativeMergeContractsNode\.test\.ts/
+  )
+  assert.match(
+    wallet,
+    /testPathIgnorePatterns=.*src\/storage\/portable\/Brc38NativeMergeContractsNode\.test\.ts/
+  )
+  assert.match(wallet, /NATIVE_MERGE_COHORT: \$\{\{ matrix\.native_merge_cohort \}\}/)
+  assert.match(
+    wallet,
+    /--runTestsByPath src\/storage\/snapshot\/NativeSnapshotMergeContractsNode\.test\.ts/
+  )
+  assert.match(
+    wallet,
+    /testPathIgnorePatterns=.*src\/storage\/snapshot\/NativeSnapshotMergeContractsNode\.test\.ts/
+  )
+  assert.match(wallet, /NATIVE_PAIR_COHORT: \$\{\{ matrix\.native_pair_cohort \}\}/)
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  assert.match(workflow, /wallet-test-matrix: \$\{\{ steps\.wallet-matrix\.outputs\.matrix \}\}/)
+  assert.match(workflow, /wallet-composed-native-ci\.mjs matrix/)
+  assert.match(workflow, /wallet-composed-native-ci\.mjs verify \.coverage-artifacts/)
+  assert.match(workflow, /wallet-composed-native-ci\.mjs pair-verify \.coverage-artifacts/)
+  assert.match(workflow, /wallet-composed-native-ci\.mjs merge-verify \.coverage-artifacts/)
+  assert.match(workflow, /wallet-composed-native-ci\.mjs auth-verify \.coverage-artifacts/)
+  assert.match(
+    wallet,
+    /^ {6}postgres:\n {8}image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef(?: #[^\n]*)?$/m
+  )
+  assert.match(wallet, /^ {8}ports:\n {10}- 5432:5432\n {8}options: >-$/m)
+}
+
+test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const proof = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const restored = steps.findIndex(step =>
+    step.includes('run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz')
+  )
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.ok(restored >= 0 && restored < proof && proof < coverage)
+  assertNativeWalletJob(wallet)
+})
+
+test('native MySQL uses a bounded pinned fixture in the existing required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const provision = onlyFixtureStep(
+    steps,
+    'node test/storage/snapshotArchiveDocker.cjs provision-hosted-image'
+  )
+  const proof = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  for (const index of [provision, proof]) {
+    assert.match(steps[index], /^ {8}timeout-minutes: 5$/m)
+    assert.match(steps[index], /^ {8}env:\n {10}TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'\n {8}run:/m)
+  }
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.ok(sqlite < provision && provision < proof && proof < coverage)
+  assertNativeWalletJob(wallet)
+})
+
+test('journal native recovery remains mandatory alongside all archive fixture families', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const archive = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotJournalSqliteCrash.cjs')
+  const mysql = onlyFixtureStep(steps, 'node test/storage/runSnapshotJournalMysql.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.match(steps[sqlite], /^ {8}timeout-minutes: 3$/m)
+  assert.match(steps[mysql], /^ {8}timeout-minutes: 10$/m)
+  assert.ok(steps[mysql].includes("TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'"))
+  assert.ok(archive < sqlite && sqlite < mysql && mysql < coverage)
+  assertNativeWalletJob(wallet)
+})
+
+test('all original privileged root-copy cases run once as installer with mandatory report and coverage', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const root = steps.find(step =>
+    step.includes('name: Qualify the original privileged native root-copy fixtures')
+  )
+  assert.ok(root)
+  assert.match(root, /if: matrix\.id == 'shard-1'/)
+  assert.match(root, /timeout-minutes: 3/)
+  assert.match(root, /sudo --preserve-env=TS_STACK_NATIVE_TEST_EXECUTABLE/)
+  assert.match(
+    root,
+    /--runInBand --watchman=false --testPathIgnorePatterns=man\.test\.ts --runTestsByPath/
+  )
+  assert.match(root, /src\/storage\/portable\/native\/RootNativeCopyContracts\.test\.cjs/)
+  assert.match(
+    root,
+    /node scripts\/wallet-native-root-copy-ci\.mjs < native-root-copy-result\.json/
+  )
+  assert.match(root, /\.coverage-output\/wallet-native-root-copy\.lcov\.info/)
+  assert.doesNotMatch(root, /testNamePattern|continue-on-error|passWithNoTests/)
+  assert.match(
+    wallet,
+    /--testPathIgnorePatterns='[^']*\|src\/storage\/portable\/native\/RootNativeCopyContracts\.test\.cjs(?:\||')/
+  )
+})
+
+test('native browser jobs always release only their delivered exact-path sandbox attachment', () => {
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  for (const name of ['coverage-wallet']) {
+    const source = jobs[name]
+    assert.ok(source, name)
+    assert.match(source, /if: always\(\) && matrix\.id == 'shard-4'/)
+    assert.match(source, /run: node scripts\/provision-wallet-native-browser\.mjs --cleanup/)
+    assert.doesNotMatch(
+      source,
+      /--no-sandbox|apparmor_restrict_unprivileged_userns=0|service apparmor/
+    )
+  }
 })

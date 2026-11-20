@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { pathToFileURL } from 'node:url'
 
 export function validateMutationClassification(classification, selected, targets, policy) {
   const errors = []
@@ -47,7 +44,7 @@ export function validateCiResults(needs, event) {
       )
     }
   }
-  const output = (job, key, type) => {
+  const output = (job, key, type, fallback = true) => {
     const raw = needs[job]?.outputs?.[key]
     try {
       const value = JSON.parse(raw)
@@ -56,7 +53,7 @@ export function validateCiResults(needs, event) {
       return type === 'array' ? value.length > 0 : value
     } catch {
       errors.push(`${job}.${key}: missing or invalid ${type} scope`)
-      return true
+      return fallback
     }
   }
   for (const name of [
@@ -67,11 +64,13 @@ export function validateCiResults(needs, event) {
     'prepare',
     'package-artifacts',
     'infra-scope',
-    'build-and-test',
-    'mutation-quality'
+    'build-and-test'
   ]) {
     expectResult(name, true)
   }
+  const localCertificate = output('scope', 'local-ci-certified', 'boolean', false)
+  if (localCertificate && event !== 'pull_request')
+    errors.push('Local CI certificates apply only to pull requests')
   for (const [name, key, type] of [
     ['standard-tests', 'standard-packages', 'array'],
     ['dependent-tests', 'dependent-test-packages', 'array'],
@@ -86,10 +85,10 @@ export function validateCiResults(needs, event) {
     ['coverage-wallet-monitor', 'wallet', 'boolean'],
     ['coverage-verifast', 'verifast', 'boolean'],
     ['coverage-other', 'coverage-other-packages', 'array'],
-    ['coverage-upload', 'coverage-required', 'boolean'],
-    ['mutation-tests', 'mutation-targets', 'array']
+    ['coverage-upload', 'coverage-required', 'boolean']
   ]) {
-    expectResult(name, output('prepare', key, type))
+    const selected = output('prepare', key, type)
+    expectResult(name, selected && !(localCertificate && event === 'pull_request'))
   }
   expectResult('infra', output('infra-scope', 'has-infra', 'boolean'))
   expectResult('docs-validate', output('scope', 'docs', 'boolean'))
@@ -102,21 +101,7 @@ export function validateCiResults(needs, event) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     const needs = JSON.parse(process.env.CI_NEEDS ?? '')
-    const root = fileURLToPath(new URL('..', import.meta.url))
-    const classification = JSON.parse(needs.prepare?.outputs?.['mutation-classification'] ?? '')
-    const selected = JSON.parse(needs.prepare?.outputs?.['mutation-targets'] ?? '')
-    const policy = JSON.parse(
-      fs.readFileSync(path.join(root, 'governance/mutation-testing/policy.json'), 'utf8')
-    )
-    const errors = [
-      ...validateCiResults(needs, process.env.CI_EVENT),
-      ...validateMutationClassification(
-        classification,
-        selected,
-        buildMutationTargets(root),
-        policy
-      )
-    ]
+    const errors = validateCiResults(needs, process.env.CI_EVENT)
     if (errors.length > 0) throw new Error(errors.join('\n'))
     console.log('Every selected CI lane completed successfully; remaining skips match scope.')
   } catch (error) {

@@ -79,7 +79,9 @@ it('requires a wallet, supported operation, and exact request service/policy', (
         ...f.options,
         request: { ...f.requests.get, service: 'other' }
       })
-  ).toThrow('service changed')
+  ).toThrow(
+    expect.objectContaining({ code: 'context-changed', message: 'Proposal service changed' })
+  )
   expect(
     () =>
       new OutputProposalTransport({
@@ -89,7 +91,12 @@ it('requires a wallet, supported operation, and exact request service/policy', (
           policy: { ...f.requests.get.policy, digest: 'ff'.repeat(32) }
         }
       })
-  ).toThrow('not enabled')
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Proposal policy is not enabled by the selected contract'
+    })
+  )
 })
 
 it.each(['service', 'chain', 'policy', 'signature', 'lifetime'] as const)(
@@ -105,7 +112,20 @@ it.each(['service', 'chain', 'policy', 'signature', 'lifetime'] as const)(
     if (kind === 'signature') proposal.body.payload = 'AA=='
     expect(
       () => new OutputProposalTransport({ ...f.options, request: { version: 1, proposal } })
-    ).toThrow()
+    ).toThrow(
+      expect.objectContaining(
+        {
+          service: { code: 'context-changed', message: 'Proposal service changed' },
+          chain: { code: 'context-changed', message: 'Proposal chain changed' },
+          policy: {
+            code: 'unsupported',
+            message: 'Proposal policy is not enabled by the selected contract'
+          },
+          signature: { code: 'unauthorized', message: 'Invalid proposal author signature' },
+          lifetime: { code: 'limited', message: 'Proposal exceeds selected lifetime' }
+        }[kind]
+      )
+    )
   }
 )
 
@@ -115,7 +135,10 @@ it.each(['proposalId', 'expiresAt'] as const)(
     const f = proposalTransportFixture('put')
     const value = { ...f.results.put, [key]: key === 'proposalId' ? 'ff'.repeat(32) : '121' }
     jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(async () => f.response(value))
-    await expect(f.client.send()).rejects.toMatchObject({ code: 'context-changed' })
+    await expect(f.client.send()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Proposal acknowledgement changed the saved publication'
+    })
   }
 )
 
@@ -124,12 +147,18 @@ it('binds get to the signed channel and rejects stale active state while preserv
   let value: unknown = f.results.get
   jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(async () => f.response(value))
   value = { ...f.results.get, proposal: transportProposal({ channel: 'ff'.repeat(32) }) }
-  await expect(f.client.send()).rejects.toMatchObject({ code: 'context-changed' })
+  await expect(f.client.send()).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Proposal response changed the queried channel'
+  })
   value = f.results.get
   f.state.now = '119'
   expect(await f.client.send()).toEqual(f.results.get)
   f.state.now = '120'
-  await expect(f.client.send()).rejects.toMatchObject({ code: 'expired' })
+  await expect(f.client.send()).rejects.toMatchObject({
+    code: 'expired',
+    message: 'Active proposal has expired'
+  })
   value = { ...f.results.get, state: { status: 'expired', recordedAt: '120' } }
   expect(await f.client.send()).toEqual(value)
 })

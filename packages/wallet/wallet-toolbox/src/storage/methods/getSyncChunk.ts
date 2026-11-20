@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import { StorageReader } from '../StorageReader'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
@@ -89,9 +90,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableProvenTx) => {
         r.provenTxs!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.getProvenTxsForUser(args)
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() => storage.getProvenTxsForUser(args))
     },
     {
       name: 'outputBasket',
@@ -102,13 +102,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableOutputBasket) => {
         r.outputBaskets!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findOutputBaskets({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findOutputBaskets({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'outputTag',
@@ -119,13 +120,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableOutputTag) => {
         r.outputTags!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findOutputTags({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findOutputTags({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'txLabel',
@@ -136,13 +138,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableTxLabel) => {
         r.txLabels!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findTxLabels({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findTxLabels({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'transaction',
@@ -153,13 +156,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableTransaction) => {
         r.transactions!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findTransactions({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findTransactions({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'output',
@@ -170,13 +174,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableOutput) => {
         r.outputs!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findOutputs({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findOutputs({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'txLabelMap',
@@ -187,9 +192,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableTxLabelMap) => {
         r.txLabelMaps!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.getTxLabelMapsForUser(args)
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() => storage.getTxLabelMapsForUser(args))
     },
     {
       name: 'outputTagMap',
@@ -200,9 +204,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableOutputTagMap) => {
         r.outputTagMaps!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.getOutputTagMapsForUser(args)
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() => storage.getOutputTagMapsForUser(args))
     },
     {
       name: 'certificate',
@@ -213,13 +216,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableCertificate) => {
         r.certificates!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findCertificates({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findCertificates({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'certificateField',
@@ -230,13 +234,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableCertificateField) => {
         r.certificateFields!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findCertificateFields({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findCertificateFields({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'commission',
@@ -247,13 +252,14 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableCommission) => {
         r.commissions!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.findCommissions({
-          partial: { userId: args.userId },
-          since: args.since,
-          paged: args.paged
-        })
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() =>
+          storage.findCommissions({
+            partial: { userId: args.userId },
+            since: args.since,
+            paged: args.paged
+          })
+        )
     },
     {
       name: 'provenTxReq',
@@ -264,9 +270,8 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       addItem: (i: TableProvenTxReq) => {
         r.provenTxReqs!.push(i)
       },
-      findItems: async (storage: StorageReader, args: FindForUserSincePagedArgs) => {
-        return await storage.getProvenTxReqsForUser(args)
-      }
+      findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) =>
+        awaitFromSync(() => storage.getProvenTxReqsForUser(args))
     }
   ]
 

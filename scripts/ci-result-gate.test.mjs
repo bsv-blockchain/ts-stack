@@ -12,8 +12,7 @@ function evidence(selected = true) {
     'prepare',
     'package-artifacts',
     'infra-scope',
-    'build-and-test',
-    'mutation-quality'
+    'build-and-test'
   ]
   const lanes = [
     'standard-tests',
@@ -30,7 +29,6 @@ function evidence(selected = true) {
     'coverage-verifast',
     'coverage-other',
     'coverage-upload',
-    'mutation-tests',
     'infra',
     'docs-validate',
     'conformance'
@@ -46,8 +44,7 @@ function evidence(selected = true) {
       'standard-packages',
       'dependent-test-packages',
       'browser-packages',
-      'coverage-other-packages',
-      'mutation-targets'
+      'coverage-other-packages'
     ].map(key => [key, selected ? '["selected"]' : '[]'])
   )
   Object.assign(
@@ -64,7 +61,11 @@ function evidence(selected = true) {
       ].map(key => [key, String(selected)])
     )
   )
-  needs.scope.outputs = { docs: String(selected), conformance: String(selected) }
+  needs.scope.outputs = {
+    docs: String(selected),
+    conformance: String(selected),
+    'local-ci-certified': 'false'
+  }
   needs['infra-scope'].outputs = { 'has-infra': String(selected) }
   needs['sonar-zero-findings'] = { result: 'skipped' }
   needs['dependency-review'] = { result: 'skipped' }
@@ -115,26 +116,67 @@ test('PRs require real analysis and dependency review; out-of-scope failures sti
   assert.match(validateCiResults(needs, 'pull_request').join('\n'), /coverage-sdk/)
 })
 
-test('failed PR prerequisites cannot turn suppressed mutation into qualified scope skips', () => {
-  for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
-    const needs = evidence()
-    needs['dependency-review'].result = 'success'
-    needs['sonar-zero-findings'].result = result
-    needs['mutation-tests'].result = 'skipped'
-    const errors = validateCiResults(needs, 'pull_request')
-    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
-    assert.ok(errors.some(error => error.startsWith('mutation-tests:')))
+test('a verified PR certificate admits only selected test and coverage skips', () => {
+  const needs = evidence()
+  needs.scope.outputs['local-ci-certified'] = 'true'
+  needs['sonar-zero-findings'].result = 'success'
+  needs['dependency-review'].result = 'success'
+  const testLanes = [
+    'standard-tests',
+    'dependent-tests',
+    'browser-packages',
+    'wallet-browser-platform',
+    'wallet-mobile-platform',
+    'coverage-sdk',
+    'coverage-sdk-thresholds',
+    'sdk-browser-contract',
+    'coverage-did',
+    'coverage-wallet',
+    'coverage-wallet-monitor',
+    'coverage-verifast',
+    'coverage-other',
+    'coverage-upload'
+  ]
+  for (const lane of testLanes) needs[lane].result = 'skipped'
+  assert.deepEqual(validateCiResults(needs, 'pull_request'), [])
+  assert.ok(
+    validateCiResults(needs, 'push').includes('Local CI certificates apply only to pull requests')
+  )
+  for (const lane of [
+    'sonar-zero-findings',
+    'dependency-review',
+    'package-artifacts',
+    'infra',
+    'docs-validate',
+    'conformance'
+  ]) {
+    const failed = structuredClone(needs)
+    failed[lane].result = 'skipped'
+    assert.ok(validateCiResults(failed, 'pull_request').some(error => error.startsWith(`${lane}:`)))
   }
+  needs.scope.outputs['local-ci-certified'] = undefined
+  assert.ok(
+    validateCiResults(needs, 'pull_request').some(error =>
+      error.startsWith('scope.local-ci-certified:')
+    )
+  )
+  assert.ok(
+    validateCiResults(needs, 'pull_request').some(error => error.startsWith('coverage-wallet:'))
+  )
 })
 
-test('successful diagnostic mutation never bypasses a failed required PR gate', () => {
+test('background mutation failures, cancellations and missing results never enter admission', () => {
   for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
     const needs = evidence()
-    needs['dependency-review'].result = 'success'
-    needs['sonar-zero-findings'].result = result
-    needs['mutation-tests'].result = 'success'
-    const errors = validateCiResults(needs, 'pull_request')
-    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
+    needs['mutation-tests'] = { result }
+    needs['mutation-quality'] = { result }
+    assert.deepEqual(validateCiResults(needs, 'push'), [])
+    needs['sonar-zero-findings'].result = 'failure'
+    assert.ok(
+      validateCiResults(needs, 'pull_request').some(error =>
+        error.startsWith('sonar-zero-findings:')
+      )
+    )
   }
 })
 

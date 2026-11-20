@@ -1,3 +1,4 @@
+import { awaitVoidFromSync, promiseFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, Chain } from '../../../../sdk'
 import {
   InsertHeaderResult,
@@ -208,17 +209,23 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     }
   }
 
-  async shutdown(): Promise<void> {
-    /* base class does notning */
+  shutdown(): Promise<void> {
+    return promiseFromSync(() => {
+      /* base class does notning */
+    })
   }
 
-  async makeAvailable(): Promise<void> {
-    if (this.isAvailable) return
-    this.isAvailable = true
+  makeAvailable(): Promise<void> {
+    return promiseFromSync(() => {
+      if (this.isAvailable) return
+      this.isAvailable = true
+    })
   }
 
-  async migrateLatest(): Promise<void> {
-    this.hasMigrated = true
+  migrateLatest(): Promise<void> {
+    return promiseFromSync(() => {
+      this.hasMigrated = true
+    })
   }
 
   async dropAllData(): Promise<void> {
@@ -296,14 +303,18 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     return data
   }
 
-  async getHeaders(height: number, count: number): Promise<BaseBlockHeader[]> {
-    const data = await this.getHeadersUint8Array(height, count)
-    const headers = deserializeBaseBlockHeaders(data)
-    return headers
+  getHeaders(height: number, count: number): Promise<BaseBlockHeader[]> {
+    return mapAwaitFromSync(
+      () => this.getHeadersUint8Array(height, count),
+      data => {
+        const headers = deserializeBaseBlockHeaders(data)
+        return headers
+      }
+    )
   }
 
-  async deleteBulkBlockHeaders(): Promise<void> {
-    await this.bulkManager.deleteBulkFiles()
+  deleteBulkBlockHeaders(): Promise<void> {
+    return awaitVoidFromSync(() => this.bulkManager.deleteBulkFiles())
   }
 
   async getAvailableHeightRanges(): Promise<{ bulk: HeightRange; live: HeightRange }> {

@@ -84,8 +84,13 @@ describe('installed BRC-194 proposal policies', () => {
           { policy, parameters: { maxTextBytes: 2 } }
         ])
     ).toThrow('duplicate')
-    for (const maximum of [0, 4097, 1.5])
-      expect(() => policy.parameters({ maxTextBytes: maximum })).toThrow()
+    for (const maximum of [0, 4097])
+      expect(() => policy.parameters({ maxTextBytes: maximum })).toThrow(
+        expect.objectContaining({ code: 'invalid', message: 'Invalid document text limit' })
+      )
+    expect(() => policy.parameters({ maxTextBytes: 1.5 })).toThrow(
+      expect.objectContaining({ code: 'invalid' })
+    )
     expect(policy.parameters({ maxTextBytes: 4096 })).toEqual({ maxTextBytes: 4096 })
     expect(() => policy.parameters({ maxTextBytes: 1, other: true })).toThrow('Unknown')
     const invalid = Object.assign(new AuthorDocumentPolicy(), { id: 'not-an-iri' })
@@ -218,15 +223,17 @@ describe('author-document-v1', () => {
   })
 
   it('rejects alternate JSON, extra fields, duplicate keys, invalid UTF-8 and embedded transactions', () => {
-    for (const text of [
-      '{ "text":"x"}',
-      '{"text":"\\u0078"}',
-      '{"text":"x","other":1}',
-      '{"text":"a","text":"b"}',
-      '{"text":1}',
-      '{}'
-    ])
-      expect(() => registry.validate(signed({ payload: bytes(text) }), scope)).toThrow()
+    for (const [text, message] of [
+      ['{ "text":"x"}', 'Document payload must be canonical UTF-8 JSON'],
+      ['{"text":"\\u0078"}', 'Document payload must be canonical UTF-8 JSON'],
+      ['{"text":"x","other":1}', undefined],
+      ['{"text":"a","text":"b"}', undefined],
+      ['{"text":1}', 'Document text must be a string'],
+      ['{}', undefined]
+    ] as const)
+      expect(() => registry.validate(signed({ payload: bytes(text) }), scope)).toThrow(
+        expect.objectContaining({ code: 'invalid', ...(message === undefined ? {} : { message }) })
+      )
     expect(() => registry.validate(signed({ payload: '/w==' }), scope)).toThrow()
     expect(() => registry.validate(signed({ payload: bytes(' '.repeat(204)) }), scope)).toThrow(
       'limit'

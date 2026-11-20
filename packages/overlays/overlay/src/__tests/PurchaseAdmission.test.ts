@@ -10,6 +10,8 @@ import {
   outputPacketDigest,
   retainOutputCapability,
   signOutputPacket,
+  Transaction,
+  UnlockingScript,
   Utils,
   type OutputCapabilities,
   type OutputRetainedCapability
@@ -162,7 +164,10 @@ test('a different topical projection cannot establish the required admitted succ
   const original = f.original()
   original.receipt.steak = JSON.stringify({ [topic]: { outputsToAdmit: [], coinsToRetain: [] } })
   f.read.mockResolvedValue({ state: 'committed', admission: original })
-  await expect(f.run()).rejects.toMatchObject({ code: 'invalid' })
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Purchase successor was not admitted by the selected topic'
+  })
   expect(f.submit).not.toHaveBeenCalled()
 })
 
@@ -177,6 +182,84 @@ test('original-context checks prevent scheduling effects after an awaited author
     return { state: 'unresolved' }
   })
   await expect(f.run()).rejects.toThrow('intent revoked')
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('committed history cannot publish admission after the original authority is revoked during its read', async () => {
+  const f = fixture()
+  let authorized = true
+  f.context.checkCurrent.mockImplementation(() => {
+    if (!authorized) throw new Error('intent revoked')
+  })
+  f.read.mockImplementation(async () => {
+    authorized = false
+    return { state: 'committed', admission: f.original() }
+  })
+  await expect(f.run()).rejects.toThrow('intent revoked')
+  expect(f.read).toHaveBeenCalledTimes(1)
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('rejects a plain BEEF whose final transaction differs from the requested candidate before history work', async () => {
+  const f = fixture(),
+    beef = Beef.fromBinaryStrict(transaction.toBEEF()),
+    extra = new Transaction()
+  // An unsigned synthetic descendant frames only this negative envelope.
+  // The requested public BRC62 transaction and its raw bytes stay unchanged;
+  // this extra record is not Script-valid purchase or admission evidence.
+  extra.addInput({
+    sourceTransaction: transaction,
+    sourceOutputIndex: 0,
+    unlockingScript: new UnlockingScript()
+  })
+  extra.addOutput({ ...transaction.outputs[0], satoshis: 1 })
+  beef.mergeTransaction(extra)
+  const bytes = beef.toBinary(),
+    decoded = Beef.fromBinaryStrict(bytes)
+  expect(decoded.atomicTxid).toBeUndefined()
+  expect(decoded.findTransactionForSigning(f.job.candidate.txid)!.toBinary()).toEqual(
+    transaction.toBinary()
+  )
+  expect(decoded.txs.at(-1)!.txid).toBe(extra.id('hex'))
+  f.job.candidate.beef = Utils.toBase64(bytes)
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Purchase BEEF target differs'
+  })
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('rechecks the domain commitment after completed read-only recovery before returning eligibility', async () => {
+  const f = fixture(),
+    signal = new AbortController().signal,
+    rejection = {
+      status: 'rejected' as const,
+      operationId: f.job.operationId,
+      txid: f.job.candidate.txid,
+      reason: 'local-test-policy',
+      evidence: ''
+    },
+    context = { ...f.context, purchaseCommitment: 'a1'.repeat(32) }
+  let changed = false
+  f.read.mockImplementation(async () => {
+    // Native FIFO microtasks change the installed premise after the history
+    // continuation settles and before its caller resumes. No clock or retained
+    // admission record is changed, and the real recovery path still executes.
+    queueMicrotask(() =>
+      queueMicrotask(() => {
+        context.purchaseCommitment = 'b2'.repeat(32)
+        changed = true
+      })
+    )
+    return { state: 'committed', admission: f.original() }
+  })
+  await expect(f.bridge.assessRecovery(f.job, rejection, signal, context)).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Admission recovery domain context changed'
+  })
+  expect(changed).toBe(true)
+  expect(f.read).toHaveBeenCalledTimes(1)
   expect(f.submit).not.toHaveBeenCalled()
 })
 

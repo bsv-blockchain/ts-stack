@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { describe, it, expect } from '@jest/globals'
 import fc from 'fast-check'
 import {
@@ -140,35 +141,39 @@ async function receipt(
 }
 
 describe('saved lookup source transitions', () => {
-  it('preserves the original operation and exact receipt under arbitrary captured cursors and journal minima', async () => {
-    const { codec, packet, original } = fixture()
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: 0, max: 1000000 }),
-        fc
-          .array(fc.constantFrom('a', 'z', '\\', '\n', 'é'), { minLength: 1, maxLength: 16 })
-          .map(parts => parts.join('')),
-        async (minimum, cursor) => {
-          const initial = codec.initial(String(minimum))
-          const captured = codec.capture(initial, { ...packet, cursor }, '1000')
-          expect(() => codec.advance(captured, { status: 'absent' })).toThrow(
-            expect.objectContaining({ code: 'conflict' })
-          )
-          const committed = await receipt(captured.pending!)
-          const advanced = codec.advance(captured, committed)
-          expect(advanced.original).toEqual(original)
-          expect(advanced.previous?.cursor).toBe(cursor)
-          expect(advanced.previousReceipt?.received).toBe('1')
-          expect(advanced.minimumReceived).toBe(String(Math.max(minimum, 1)))
-          expect(advanced.job).toBe('1')
-          expect(advanced.pending).toBeNull()
-          expect(codec.advance(captured, committed)).toEqual(advanced)
-          expect(captured.previous).toBeNull()
-          expect(initial.pending).toBeNull()
-        }
+  it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+    'preserves the original operation and exact receipt under arbitrary captured cursors and journal minima (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const { codec, packet, original } = fixture()
+      await fc.assert(
+        fc.asyncProperty(
+          fc.integer({ min: 0, max: 1000000 }),
+          fc
+            .array(fc.constantFrom('a', 'z', '\\', '\n', 'é'), { minLength: 1, maxLength: 16 })
+            .map(parts => parts.join('')),
+          async (minimum, cursor) => {
+            const initial = codec.initial(String(minimum))
+            const captured = codec.capture(initial, { ...packet, cursor }, '1000')
+            expect(() => codec.advance(captured, { status: 'absent' })).toThrow(
+              expect.objectContaining({ code: 'conflict' })
+            )
+            const committed = await receipt(captured.pending!)
+            const advanced = codec.advance(captured, committed)
+            expect(advanced.original).toEqual(original)
+            expect(advanced.previous?.cursor).toBe(cursor)
+            expect(advanced.previousReceipt?.received).toBe('1')
+            expect(advanced.minimumReceived).toBe(String(Math.max(minimum, 1)))
+            expect(advanced.job).toBe('1')
+            expect(advanced.pending).toBeNull()
+            expect(codec.advance(captured, committed)).toEqual(advanced)
+            expect(captured.previous).toBeNull()
+            expect(initial.pending).toBeNull()
+          }
+        ),
+        propertyBatch
       )
-    )
-  })
+    }
+  )
 
   it('rejects invalid control capacities and an unknown local state format', () => {
     for (const capacity of [0, -1, 1.5, Number.NaN, 4194305])
@@ -305,7 +310,10 @@ describe('saved lookup source transitions', () => {
       })
     )
     expect(() => codec.advance(pending, { status: 'unavailable', reason: 'offline' })).toThrow(
-      'cannot be established'
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Lookup receipt cannot be established'
+      })
     )
     expect(() => codec.capture(pending, packet, '1001')).toThrow(
       expect.objectContaining({
@@ -389,6 +397,17 @@ describe('saved lookup source transitions', () => {
     expect(repeated.pending).toEqual(pending.pending)
     expect(codec.advance(repeated, saved).minimumReceived).toBe('9')
     expect(codec.advance(repeated, saved).job).toBe('3')
+  })
+
+  it('rejects a malformed retained job even when its committed predecessor is intact', async () => {
+    const { codec, packet } = fixture()
+    const captured = codec.capture(codec.initial('0'), packet, '1000')
+    const committed = codec.advance(captured, await receipt(captured.pending!))
+    expect(codec.parse(committed)).toEqual(committed)
+    for (const job of ['01', '-1', '1.5', '18446744073709551616'])
+      expect(() => codec.parse({ ...committed, job })).toThrow(
+        expect.objectContaining({ code: 'invalid' })
+      )
   })
 
   it('rejects rollback, changed originals and invalid job/predecessor pairs', async () => {

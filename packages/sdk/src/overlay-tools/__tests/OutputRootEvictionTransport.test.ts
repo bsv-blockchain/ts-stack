@@ -2,6 +2,7 @@ import { jest } from '@jest/globals'
 import { getEventListeners } from 'node:events'
 import {
   AuthFetch,
+  CompletedProtoWallet,
   OUTPUT_PROFILES,
   SimplifiedFetchTransport,
   signOutputPacket
@@ -13,6 +14,7 @@ import {
 import { rootTransportFixture } from './OutputRootEvictionTransport.fixture.js'
 import {
   rootKey,
+  requesterKey,
   otherKey,
   rootPolicy,
   rootRequestBody,
@@ -207,22 +209,62 @@ it('rejects payment and changed selected headers without accepting any result', 
   })
 })
 
+it('cancels a listener-registration race before a native wallet operation settles', async () => {
+  const wallet = new CompletedProtoWallet(requesterKey)
+  const actual = wallet.getPublicKey.bind(wallet)
+  let release!: () => void
+  const held = new Promise<void>(resolve => {
+    release = resolve
+  })
+  wallet.getPublicKey = async (...args) => {
+    const result = await actual(...args)
+    await held
+    return result
+  }
+  const f = rootTransportFixture({ wallet })
+  const send = jest.spyOn(AuthFetch.prototype, 'fetch')
+  const stop = new AbortController()
+  const listen = stop.signal.addEventListener.bind(stop.signal)
+  jest.spyOn(stop.signal, 'addEventListener').mockImplementation((...args) => {
+    stop.abort()
+    listen(...args)
+  })
+  try {
+    await expect(f.client.submit(stop.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Root request cancelled'
+    })
+    await expect(f.client.status()).rejects.toMatchObject({ code: 'limited' })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(f.fetchClient).not.toHaveBeenCalled()
+    expect(getEventListeners(stop.signal, 'abort')).toHaveLength(0)
+  } finally {
+    release()
+    await new Promise<void>(resolve => setImmediate(resolve))
+  }
+  send.mockImplementation(async () => f.response())
+  expect(await f.client.status()).toEqual(f.result)
+})
+
 it('retains physical capacity after cancellation until the actual authentication operation settles', async () => {
   const f = rootTransportFixture()
-  let resolve!: (value: Response) => void
+  const settlements: ((value: Response) => void)[] = []
   const send = jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(
     () =>
       new Promise(done => {
-        resolve = done
+        settlements.push(done)
       })
   )
   const stop = new AbortController()
   const pending = f.client.submit(stop.signal)
   stop.abort()
-  await expect(pending).rejects.toThrow('Root request cancelled')
-  await expect(f.client.status()).rejects.toThrow('Root request or earlier I/O is still active')
-  resolve(f.response())
-  await new Promise<void>(done => setImmediate(done))
+  try {
+    await expect(pending).rejects.toThrow('Root request cancelled')
+    await expect(f.client.status()).rejects.toThrow('Root request or earlier I/O is still active')
+  } finally {
+    for (const settle of settlements) settle(f.response())
+    await new Promise<void>(done => setImmediate(done))
+  }
   send.mockImplementation(async () => f.response())
   expect(await f.client.status()).toEqual(f.result)
 })
@@ -281,17 +323,20 @@ it('requires the HTTP error status to agree with the authenticated error code', 
 
 it('retains physical ownership after a deadline until the pending dependency settles', async () => {
   const f = rootTransportFixture({ requestTimeoutMs: 5 })
-  let settle!: (value: Response) => void
+  const settlements: ((value: Response) => void)[] = []
   jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(
     () =>
       new Promise(resolve => {
-        settle = resolve
+        settlements.push(resolve)
       })
   )
-  await expect(f.client.submit()).rejects.toThrow('Root request deadline')
-  await expect(f.client.status()).rejects.toThrow('Root request or earlier I/O is still active')
-  settle(f.response())
-  await new Promise<void>(resolve => setImmediate(resolve))
+  try {
+    await expect(f.client.submit()).rejects.toThrow('Root request deadline')
+    await expect(f.client.status()).rejects.toThrow('Root request or earlier I/O is still active')
+  } finally {
+    for (const settle of settlements) settle(f.response())
+    await new Promise<void>(resolve => setImmediate(resolve))
+  }
 })
 
 it('accepts a selected success larger than the separate error allowance', async () => {

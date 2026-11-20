@@ -8,13 +8,16 @@ import {
   canonicalOutputJSON,
   OutputProtocolError,
   outputServiceErrorHTTPStatus,
+  selectOutputCapability,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { context } from './evidence-fixture.js'
 import { LiveLookupSource, type LiveLookupSourceOptions } from '../src/sources/LiveLookupSource.js'
 import {
   prepareLiveLookupSource,
-  liveLookupSourceBinding
+  liveLookupSourceBinding,
+  liveLookupFraming,
+  normalizeLiveLookupConfiguration
 } from '../src/sources/LiveLookupConfiguration.js'
 import { MemoryOperationStateStore } from '../src/operations/MemoryOperationStateStore.js'
 import { knowledgeMutation } from '../src/storage/Journal.js'
@@ -87,6 +90,75 @@ function liveResponses(h: Awaited<ReturnType<typeof harness>>) {
 }
 
 describe('durable live lookup source', () => {
+  it.each(['none', 'brc103'] as const)(
+    'retains selected %s provenance in native framing',
+    authentication => {
+      const f = liveFixture({}, undefined, authentication)
+      const framing = liveLookupFraming(
+        normalizeLiveLookupConfiguration(f.config),
+        selectOutputCapability(f.options.manifest, f.selection),
+        f.options.query
+      )
+      const batch = framing.fromLookup(f.packet, f.open.limits.maxBytes, '1000')
+      expect(batch.provenance.authentication).toBe(
+        authentication === 'brc103' ? 'brc103' : 'configured-transport'
+      )
+      expect(batch.provenance.peer).toBe(f.config.scope.provider)
+    }
+  )
+
+  it('rejects equal or larger polling than the operation deadline before opening storage', () => {
+    for (const minimumPollMs of [20, 21])
+      expect(() => liveFixture({ minimumPollMs, operationTimeoutMs: 20 })).toThrow(
+        expect.objectContaining({
+          code: 'invalid',
+          message: 'Live source polling must fit its operation deadline'
+        })
+      )
+  })
+
+  it('closes when cancellation wins the subscription listener-registration race', async () => {
+    const h = await harness()
+    const request = await h.source.connect()
+    const abort = new AbortController()
+    const add = abort.signal.addEventListener.bind(abort.signal)
+    jest.spyOn(abort.signal, 'addEventListener').mockImplementation((...args) => {
+      abort.abort()
+      add(...args)
+    })
+    const iterator = h.source.open(request, abort.signal)[Symbol.asyncIterator]()
+    expect(await iterator.next()).toEqual({ done: true, value: undefined })
+    const replacement = h.source.open(request, new AbortController().signal)[Symbol.asyncIterator]()
+    await replacement.return!()
+    expect(h.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears a real pacing timer when cancellation precedes listener registration', async () => {
+    const h = await harness({ minimumPollMs: 100 })
+    liveResponses(h)
+    const request = await h.source.connect()
+    const abort = new AbortController()
+    const iterator = h.source.open(request, abort.signal)[Symbol.asyncIterator]()
+    await receive(h, (await iterator.next()).value as SourceBatch)
+    await receive(h, (await iterator.next()).value as SourceBatch)
+    const schedule = globalThis.setTimeout
+    let pacingTimer: ReturnType<typeof setTimeout> | undefined
+    const clear = jest.spyOn(globalThis, 'clearTimeout')
+    jest.spyOn(globalThis, 'setTimeout').mockImplementation((...args) => {
+      const timer = schedule(...args)
+      if (args[1] === 100) {
+        pacingTimer = timer
+        abort.abort()
+      }
+      return timer
+    })
+    await expect(iterator.next()).rejects.toMatchObject({ code: 'cancelled' })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(pacingTimer).toBeDefined()
+    expect(clear).toHaveBeenCalledWith(pacingTimer)
+    expect(h.fetch).toHaveBeenCalledTimes(2)
+  })
+
   it('binds private lookup recovery to the authenticated provider identity', () => {
     const f = liveFixture({}, undefined, 'brc103')
     expect(f.config.scope.provider).toBe(f.selection.identity)
@@ -115,7 +187,16 @@ describe('durable live lookup source', () => {
     const request = await h.source.connect()
     const iterator = h.source.open(request, new AbortController().signal)[Symbol.asyncIterator]()
     const read = iterator.next()
-    await expect(iterator.next()).rejects.toMatchObject({ code: 'limited' })
+    await expect(iterator.next()).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Live source pull is already pending'
+    })
+    expect(() => h.source.open(request, new AbortController().signal)).toThrow(
+      expect.objectContaining({
+        code: 'limited',
+        message: 'Live source subscription is already active'
+      })
+    )
     expect((await read).done).toBe(false)
     expect(await iterator.return!()).toEqual({ done: true, value: undefined })
     expect(await iterator.next()).toEqual({ done: true, value: undefined })
@@ -343,14 +424,18 @@ describe('durable live lookup source', () => {
       h.fixture.prepared.limits
     )
     await expect(resumeLookupSource({ ...h.options, control: memory })).rejects.toMatchObject({
-      code: 'unsupported'
+      code: 'unsupported',
+      message: 'Live lookup requires durable control storage'
     })
     await expect(
       resumeLookupSource({
         ...h.options,
         configuration: { ...h.fixture.config, generation: '4' }
       })
-    ).rejects.toMatchObject({ code: 'context-changed' })
+    ).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Live lookup control binding changed'
+    })
     expect(h.fetch).not.toHaveBeenCalled()
     const { source, request } = await resumeLookupSource(h.source)
     expect(() =>
@@ -689,8 +774,18 @@ describe('durable live lookup source', () => {
     jest.spyOn(h.stores.control, 'read').mockImplementationOnce(() => held.promise)
     const connecting = h.source.connect()
     try {
-      expect(() => h.source.open(request, new AbortController().signal)).toThrow('still active')
-      await expect(h.source.connect()).rejects.toThrow('connection or subscription')
+      expect(() => h.source.open(request, new AbortController().signal)).toThrow(
+        expect.objectContaining({
+          code: 'limited',
+          message: 'Live source connection is still active'
+        })
+      )
+      await expect(h.source.connect()).rejects.toThrow(
+        expect.objectContaining({
+          code: 'limited',
+          message: 'Live source connection or subscription is active'
+        })
+      )
     } finally {
       held.resolve(saved)
       await connecting
@@ -709,7 +804,11 @@ describe('durable live lookup source', () => {
     const cas = jest
       .spyOn(h.stores.control, 'compareAndSwap')
       .mockResolvedValue({ status: 'conflict', revision: '1' })
-    await expect(h.source.connect()).rejects.toMatchObject({ code: 'limited', retryable: true })
+    await expect(h.source.connect()).rejects.toMatchObject({
+      code: 'limited',
+      retryable: true,
+      message: 'Live lookup control contention budget'
+    })
     expect(cas).toHaveBeenCalledTimes(8)
     expect(h.fetch).not.toHaveBeenCalled()
     expect((await h.stores.control.read()).value.minimumReceived).toBe('1')
@@ -736,7 +835,11 @@ describe('durable live lookup source', () => {
           fault === 'unavailable' ? { status: 'unavailable', reason: 'Offline' } : lookup
         )
       await expect(iterator.next()).rejects.toMatchObject({
-        code: fault === 'unavailable' ? 'unavailable' : 'equivocation'
+        code: fault === 'unavailable' ? 'unavailable' : 'equivocation',
+        message:
+          fault === 'unavailable'
+            ? 'Previously delivered lookup batch has no durable receipt'
+            : 'Previously delivered lookup receipt changed'
       })
       expect(h.fetch).toHaveBeenCalledTimes(1)
       expect((await h.stores.control.read()).value.job).toBe('0')
@@ -746,10 +849,17 @@ describe('durable live lookup source', () => {
   it('rejects a bad host clock and a clock jump between response validation and capture', async () => {
     const h = await harness()
     const invalid = new LiveLookupSource({ ...h.options, now: () => -1 })
-    await expect(invalid.connect()).rejects.toThrow('source clock')
+    await expect(invalid.connect()).rejects.toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid live source clock' })
+    )
     const now = jest.fn<() => number>().mockReturnValueOnce(1000000).mockReturnValue(1300000)
     const jumped = new LiveLookupSource({ ...h.options, now })
-    await expect(jumped.connect()).rejects.toThrow('expired before capture')
+    await expect(jumped.connect()).rejects.toThrow(
+      expect.objectContaining({
+        code: 'reset-required',
+        message: 'Lookup response expired before capture'
+      })
+    )
     expect((await h.stores.control.read()).value.pending).toBeNull()
   })
 
@@ -787,7 +897,10 @@ describe('durable live lookup source', () => {
       .open(resumed.request, new AbortController().signal)
       [Symbol.asyncIterator]()
     expect((await replay.next()).value).toEqual(reset)
-    await expect(replay.next()).rejects.toMatchObject({ code: 'reset-required' })
+    await expect(replay.next()).rejects.toMatchObject({
+      code: 'reset-required',
+      message: 'Live lookup requires a new generation'
+    })
     expect(h.fetch).toHaveBeenCalledTimes(1)
     expect((await stores.control.read()).value.previous).toEqual(saved.value.previous)
     expect((await stores.control.read()).value.original).toEqual(saved.value.original)
@@ -910,7 +1023,9 @@ describe('durable live lookup source', () => {
         previousReceipt: { key: '00'.repeat(32), received: '2' }
       })
       response.resolve(h.fixture.response({ ...h.fixture.packet, phase: 'live' }))
-      await expect(next).resolves.toMatchObject({ error: { code: 'reset-required' } })
+      await expect(next).resolves.toMatchObject({
+        error: { code: 'reset-required', message: 'Lookup predecessor changed without a new job' }
+      })
       expect((await h.stores.control.read()).value.pending).toBeNull()
     } finally {
       response.resolve(h.fixture.response({ ...h.fixture.packet, phase: 'live' }))

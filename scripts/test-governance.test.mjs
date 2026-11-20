@@ -1,27 +1,38 @@
 import assert from 'node:assert/strict'
+
 import { spawnSync } from 'node:child_process'
+
 import fs from 'node:fs'
+
 import os from 'node:os'
+
 import path from 'node:path'
+
 import test from 'node:test'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 import { resolveGovernedTest } from './run-governed-test.mjs'
+
 import {
   REPOSITORY_ROOT,
   classifyManualFile,
   evaluateTestGovernance,
   findDirectSkips,
   findEmptyTests,
+  findPropertyDeadlineControls,
   findUnboundedLoops
 } from './test-governance.mjs'
 
 const policyPath = path.join(REPOSITORY_ROOT, 'governance/test-quality/policy.json')
+
 const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+
 const walletManualSuiteInventoryPath = path.join(
   REPOSITORY_ROOT,
   'governance/test-quality/wallet-toolbox-manual-suites.json'
 )
+
 const walletManualSuiteInventory = JSON.parse(
   fs.readFileSync(walletManualSuiteInventoryPath, 'utf8')
 )
@@ -34,20 +45,43 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 156)
+  assert.equal(result.summary.propertySuites, 216)
   assert.equal(result.summary.propertyPackages, 36)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 41)
-  assert.equal(result.summary.mutationTargets, 156)
+  assert.equal(result.summary.mutationTargets, 216)
   assert.equal(result.summary.manualAndLiveFiles, 33)
   assert.equal(result.summary.walletManualSuites, 31)
   assert.equal(result.summary.conformanceSkipFiles, 20)
   assert.equal(result.summary.conformanceSkips, 213)
 })
 
-test('mutation workflow governance follows only the exact local executor and retains every caller gate', () => {
+test('property governance rejects campaign-wide deadlines and permits per-case timeouts', () => {
+  const stop = 'interruptAfterTimeLimit'
+  const skip = 'skipAllAfterTimeLimit'
+  const failure = 'markInterruptAsFailure'
+  const diagnostic = 'measuredPropertyCampaign'
+  const source = [
+    `// ${stop}: 10`,
+    `const comment = "${skip}: 10"`,
+    'fc.configureGlobal({ timeout: 10, numRuns: 300 })',
+    `fc.configureGlobal({ ${stop}: 10 })`,
+    `fc.assert(property, { '${skip}': 10 })`,
+    `config['${failure}'] = true`,
+    `${diagnostic}(options, 100)`
+  ].join('\n')
+
+  assert.deepEqual(findPropertyDeadlineControls(source), [
+    { name: stop, line: 4 },
+    { name: skip, line: 5 },
+    { name: failure, line: 6 },
+    { name: diagnostic, line: 7 }
+  ])
+})
+
+test('mutation governance rejects admission campaigns and enforces bounded finding-only audits', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutation-workflow-governance-'))
-  const files = ['ci.yml', 'mutation-tests.yml', 'mutation-execution.yml']
+  const files = ['ci.yml', 'mutation-tests.yml']
   const original = Object.fromEntries(
     files.map(file => [
       file,
@@ -76,78 +110,31 @@ test('mutation workflow governance follows only the exact local executor and ret
     })
     write(original)
     assert.deepEqual(current().errors, [])
-    const caller = '    uses: ./.github/workflows/mutation-execution.yml'
-    const runner =
-      '        run: node scripts/mutation-testing.mjs --target "$TARGET" --partition "$PARTITION"'
-    for (const replacement of [
-      '    uses: owner/repo/.github/workflows/mutation-execution.yml@main',
-      '    uses: ./.github/workflows/other.yml',
-      `    # ${caller.trim()}`,
-      ''
+    for (const [file, before, after, error] of [
+      [
+        'ci.yml',
+        '  scope:',
+        '  injected:\n    uses: ./.github/workflows/mutation-tests.yml\n\n  scope:',
+        /cannot enter admission/
+      ],
+      ['mutation-tests.yml', '  workflow_dispatch:', '  workflow_call:', /explicit dispatch/],
+      ['mutation-tests.yml', 'timeout-minutes: 30', 'timeout-minutes: 180', /30 minute budget/],
+      [
+        'mutation-tests.yml',
+        'node scripts/mutation-findings.mjs report',
+        'echo no-finding',
+        /raise advisory findings/
+      ],
+      [
+        'mutation-tests.yml',
+        'run: node scripts/mutation-testing.mjs --target',
+        '# node scripts/mutation-testing.mjs --target',
+        /executable audit/
+      ]
     ]) {
-      write({ ...original, 'ci.yml': original['ci.yml'].replace(caller, replacement) })
-      assert.match(
-        current().errors.join('\n'),
-        /workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
-      )
+      write({ ...original, [file]: original[file].replace(before, after) })
+      assert.match(current().errors.join('\n'), error)
     }
-    write({
-      ...original,
-      'ci.yml': original['ci.yml'].replace('\n  mutation-tests:\n', '\n  other-job:\n')
-    })
-    assert.match(
-      current().errors.join('\n'),
-      /workflow .*ci\.yml lacks mutation-tests:|workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
-    )
-    for (const executor of [
-      null,
-      original['mutation-execution.yml'].replace('  workflow_call:', '  workflow_dispatch:'),
-      original['mutation-execution.yml'].replace('\n  execution:\n', '\n  other-job:\n'),
-      original['mutation-execution.yml'].replace(
-        runner,
-        '        run: node scripts/mutation-testing.mjs --list'
-      ),
-      original['mutation-execution.yml'].replace(
-        runner,
-        '        run: node scripts/other.mjs --target "$TARGET"'
-      ),
-      original['mutation-execution.yml'].replace(runner, `        # ${runner.trim()}`)
-    ]) {
-      write({ ...original, 'mutation-execution.yml': executor })
-      assert.match(current().errors.join('\n'), /workflow .* lacks scripts\/mutation-testing\.mjs/)
-    }
-    for (const [file, fragment] of [
-      ['ci.yml', '  mutation-quality:'],
-      ['mutation-tests.yml', '  schedule:'],
-      ['mutation-tests.yml', '  workflow_dispatch:'],
-      ['mutation-tests.yml', '      matrix:']
-    ]) {
-      write({
-        ...original,
-        [file]: original[file].replaceAll(fragment, fragment.replace(':', '-removed:'))
-      })
-      assert.match(current().errors.join('\n'), /workflow .* lacks/)
-    }
-    const start = original['ci.yml'].indexOf('\n  mutation-tests:\n')
-    const end = original['ci.yml'].indexOf('\n  mutation-quality:\n', start)
-    assert.ok(start >= 0 && end > start)
-    const inline =
-      original['ci.yml'].slice(0, start) +
-      '\n  mutation-tests:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Mutation runner\n        run: node scripts/mutation-testing.mjs --all\n' +
-      original['ci.yml'].slice(end)
-    write({ ...original, 'ci.yml': inline })
-    assert.deepEqual(current().errors, [])
-    write({
-      ...original,
-      'ci.yml': inline.replace(
-        '        run: node scripts/mutation-testing.mjs --all',
-        '        # run: node scripts/mutation-testing.mjs --all'
-      )
-    })
-    assert.match(
-      current().errors.join('\n'),
-      /workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
-    )
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
@@ -827,6 +814,7 @@ const retainedBeefTestClosure = [
     'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
   )
 ]
+
 const retainedBeefSourceClosure = [
   'src/**',
   'jest-projects.config.mjs',
@@ -1132,7 +1120,7 @@ test('wallet property command keeps every registered suite after its runner opti
   const manifest = 'packages/wallet/wallet-toolbox/package.json'
   const packageDirectory = path.dirname(path.join(REPOSITORY_ROOT, manifest))
   const wallet = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, manifest), 'utf8'))
-  const prefix = 'node ../../../scripts/check-wallet-property-command.mjs && jest '
+  const prefix = 'pnpm build && node ../../../scripts/check-wallet-property-command.mjs && jest '
   assert.ok(wallet.scripts['test:property'].startsWith(prefix))
   const tokens = wallet.scripts['test:property'].slice(prefix.length).split(' ')
   const options = [

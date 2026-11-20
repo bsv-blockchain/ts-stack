@@ -402,7 +402,8 @@ function validatePropertyWorkflow(root, propertyTesting, errors) {
     'FAST_CHECK_NUM_RUNS',
     'FAST_CHECK_SEED',
     'FAST_CHECK_PATH',
-    'pnpm test:property'
+    'pnpm test:governance',
+    'run test:property'
   ]
   for (const requiredFragment of requiredFragments) {
     if (!workflow.includes(requiredFragment)) {
@@ -522,44 +523,42 @@ function workflowRunsMutation(workflow) {
   )
 }
 
-function hasLocalMutationExecutor(root, workflow) {
-  const caller = workflowJob(workflow, 'mutation-tests')
-  if (!/^ {4}uses: \.\/\.github\/workflows\/mutation-execution\.yml$/m.test(caller)) return false
-  const executorPath = path.join(root, '.github/workflows/mutation-execution.yml')
-  if (!fs.existsSync(executorPath)) return false
-  const executor = fs.readFileSync(executorPath, 'utf8')
-  return (
-    /^on:\n {2}workflow_call:/m.test(executor) &&
-    workflowRunsMutation(workflowJob(executor, 'execution'))
+function validateMutationAdmissionWorkflow(root, file, errors) {
+  if (typeof file !== 'string' || !fs.existsSync(path.join(root, file))) return
+  const source = fs.readFileSync(path.join(root, file), 'utf8')
+  if (
+    workflowRunsMutation(source) ||
+    /uses:.*mutation-(?:tests|execution)\.yml|needs\.(?:full-mutation|mutation-quality)/.test(
+      source
+    )
   )
-}
-
-function validateMutationWorkflow(root, workflowPath, fragments, errors) {
-  if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) return
-  const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
-  for (const fragment of fragments) {
-    const present =
-      fragment === 'scripts/mutation-testing.mjs'
-        ? workflowRunsMutation(workflowJob(workflow, 'mutation-tests')) ||
-          hasLocalMutationExecutor(root, workflow)
-        : workflow.split('\n').some(line => line.trimStart().startsWith(fragment))
-    if (!present) {
-      errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
-    }
-  }
+    errors.push(`mutation campaign cannot enter admission workflow ${file}`)
 }
 
 function validateMutationWorkflows(root, tool, errors) {
-  const workflows = new Map([
-    [tool.ciWorkflow, ['mutation-tests:', 'mutation-quality:', 'scripts/mutation-testing.mjs']],
-    [
-      tool.scheduledWorkflow,
-      ['schedule:', 'workflow_dispatch:', 'matrix:', 'scripts/mutation-testing.mjs']
-    ]
+  if (tool.admission !== 'background-only')
+    errors.push('mutation testing admission must be background-only')
+  for (const file of [
+    tool.ciWorkflow,
+    '.github/workflows/release.yaml',
+    '.github/workflows/infra-release.yaml',
+    '.github/workflows/wab-marketplace-release.yml'
   ])
-  for (const [workflowPath, fragments] of workflows) {
-    validateMutationWorkflow(root, workflowPath, fragments, errors)
-  }
+    validateMutationAdmissionWorkflow(root, file, errors)
+  const file = tool.scheduledWorkflow
+  if (typeof file !== 'string' || !fs.existsSync(path.join(root, file))) return
+  const source = fs.readFileSync(path.join(root, file), 'utf8')
+  if (
+    !/^ {2}workflow_dispatch:/m.test(source) ||
+    /^ {2}(?:workflow_call|push|pull_request|schedule):/m.test(source)
+  )
+    errors.push('background mutation workflow must have only an explicit dispatch entry point')
+  if (!workflowRunsMutation(workflowJob(source, 'audit')))
+    errors.push('background mutation workflow lacks an executable audit')
+  if (!/^ {4}timeout-minutes: 30$/m.test(workflowJob(source, 'audit')))
+    errors.push('background mutation audit must have its 30 minute budget')
+  if (!source.includes('node scripts/mutation-findings.mjs report'))
+    errors.push('background mutation workflow must raise advisory findings')
 }
 
 function validateMutationSuite(target, suite, label, errors) {
@@ -750,6 +749,43 @@ function maskNonCode(source) {
     index = end
   }
   return masked.join('')
+}
+
+const PROPERTY_MEASUREMENT_SUITES = new Set([
+  'packages/application/output-knowledge/test/private-purchase-alias-coordinator.property.test.ts',
+  'packages/application/output-knowledge/test/private-purchase-alias-disclosure.property.test.ts'
+])
+
+export function findPropertyDeadlineControls(source) {
+  const executable = maskNonCode(source)
+  const timer =
+    /\b(?:interruptAfterTimeLimit|skipAllAfterTimeLimit|markInterruptAsFailure)\b|\bmeasuredPropertyCampaign(?=\s*(?:\(|,|\}|as\b))/g
+  const quotedKey =
+    /(['"])(interruptAfterTimeLimit|skipAllAfterTimeLimit|markInterruptAsFailure)\1\s*([:\]])/g
+  const references = [...executable.matchAll(timer)].map(match => ({
+    name: match[0],
+    line: lineNumberAt(source, match.index)
+  }))
+  for (const match of source.matchAll(quotedKey)) {
+    const delimiter = match.index + match[0].length - 1
+    if (executable[delimiter] === match[3]) {
+      references.push({ name: match[2], line: lineNumberAt(source, match.index) })
+    }
+  }
+  return references.sort((left, right) => left.line - right.line)
+}
+
+function validatePropertyDeadlineControls(root, testFiles, errors) {
+  for (const file of testFiles) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8')
+    for (const { name, line } of findPropertyDeadlineControls(source)) {
+      if (name !== 'measuredPropertyCampaign' || !PROPERTY_MEASUREMENT_SUITES.has(file)) {
+        errors.push(
+          `${file}:${line} uses ${name}; run properties in bounded batches with a per-test timeout`
+        )
+      }
+    }
+  }
 }
 
 export function findUnboundedLoops(source) {
@@ -965,6 +1001,16 @@ export function evaluateTestGovernance({
   const warnings = []
   const review = { today, warnings }
   const { manualFiles, requiredFiles } = collectTestInventory(root)
+  validatePropertyDeadlineControls(
+    root,
+    [
+      ...requiredFiles,
+      ...manualFiles,
+      ...walkFiles(root, 'scripts', name => TEST_FILE_PATTERN.test(name)),
+      ...walkFiles(root, 'config', name => TEST_FILE_PATTERN.test(name))
+    ],
+    errors
+  )
   const propertyTesting = policy.propertyTesting
   const { excludedManifestPaths, manifestPaths } = validatePropertyTesting(
     root,

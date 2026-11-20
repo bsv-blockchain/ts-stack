@@ -1,10 +1,126 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
-import { parseOutputPaidLookupChallenge, type OutputJSONObject } from '@bsv/sdk'
+import { parseOutputPaidLookupChallenge, PrivateKey, type OutputJSONObject } from '@bsv/sdk'
+import { WalletToolboxBuyerPayment as NativeBuyerPayment } from '../src/private/WalletToolboxBuyerPayment.js'
 import { acquisitionFixture } from './private-acquisition.fixture.js'
 import { nativeBuyerFixture } from './private-buyer-native.fixture.js'
 afterEach(() => {
   jest.restoreAllMocks()
 })
+it('refuses every changed native recovery binding before allocation', async () => {
+  const f = await nativeBuyerFixture()
+  try {
+    const binding = {
+      wallet: f.native.identities.wallet,
+      storage: f.native.identities.storage,
+      chain: f.selected,
+      originator: 'buyer-reference.local'
+    }
+    const prepare = jest.spyOn(f.actions, 'prepare')
+    for (const changed of [
+      { ...binding, wallet: new PrivateKey(85).toPublicKey().toString() },
+      { ...binding, storage: binding.storage + '-another' },
+      { ...binding, chain: { ...binding.chain, network: 'another-native-network' } },
+      { ...binding, originator: 'another-buyer.local' }
+    ])
+      expect(() => new NativeBuyerPayment(f.actions, f.native.wallet, changed)).toThrow(
+        expect.objectContaining({
+          code: 'context-changed',
+          message: 'Buyer wallet owner differs from original binding'
+        })
+      )
+    expect(prepare).not.toHaveBeenCalled()
+    expect(f.fixture.broadcast).not.toHaveBeenCalled()
+  } finally {
+    await f.close()
+  }
+})
+
+it('refuses altered retained native plans before reading action recovery', async () => {
+  const f = await nativeBuyerFixture(),
+    quote = await acquisitionFixture(f.selected)
+  try {
+    const recover = jest.spyOn(f.actions, 'recover')
+    const payment = new NativeBuyerPayment(f.actions, f.native.wallet, {
+      wallet: f.native.identities.wallet,
+      storage: f.native.identities.storage,
+      chain: f.selected,
+      originator: 'buyer-reference.local'
+    })
+    const signal = new AbortController().signal
+    const plan = await payment.plan(
+      'a6'.repeat(32),
+      quote.challenge,
+      quote.payment().derivationSuffix,
+      signal
+    )
+    const otherKey = new PrivateKey(85).toPublicKey().toString()
+    const variants = [
+      { value: { ...plan, format: 'another-plan' }, code: 'context-changed' },
+      {
+        value: {
+          ...plan,
+          binding: { ...(plan.binding as OutputJSONObject), originator: 'another.local' }
+        },
+        code: 'context-changed'
+      },
+      {
+        value: {
+          ...plan,
+          request: { ...(plan.request as OutputJSONObject), description: 'another request' }
+        },
+        code: 'context-changed'
+      },
+      {
+        value: { ...plan, derivationSuffix: Buffer.from('another suffix').toString('base64') },
+        code: 'context-changed'
+      },
+      { value: { ...plan, sellerPaymentKey: otherKey }, code: 'context-changed' },
+      {
+        value: { ...plan, challenge: { ...(plan.challenge as OutputJSONObject), buyer: otherKey } },
+        code: 'context-changed'
+      },
+      { value: { ...plan, operationId: 'not-hex' }, code: 'invalid' },
+      { value: { ...plan, unexpected: true }, code: 'invalid' }
+    ]
+    for (const { value, code } of variants) {
+      await expect(payment.recover(value, signal)).rejects.toMatchObject({ code })
+      expect(recover).not.toHaveBeenCalled()
+    }
+    expect(await payment.recover(plan, signal)).toEqual({ state: 'absent' })
+    expect(recover).toHaveBeenCalledTimes(1)
+    expect(f.fixture.broadcast).not.toHaveBeenCalled()
+  } finally {
+    await f.close()
+  }
+})
+
+it('refuses non-synchronous or non-void guards before native allocation', async () => {
+  const f = await nativeBuyerFixture(),
+    quote = await acquisitionFixture(f.selected)
+  try {
+    const prepare = jest.spyOn(f.actions, 'prepare')
+    const payment = new NativeBuyerPayment(f.actions, f.native.wallet, {
+      wallet: f.native.identities.wallet,
+      storage: f.native.identities.storage,
+      chain: f.selected,
+      originator: 'buyer-reference.local'
+    })
+    const signal = new AbortController().signal
+    const plan = await payment.plan(
+      'a7'.repeat(32),
+      quote.challenge,
+      quote.payment().derivationSuffix,
+      signal
+    )
+    for (const guard of [async () => undefined, () => true, () => Promise.resolve(), 42 as never])
+      await expect(payment.finish(plan, guard, signal)).rejects.toMatchObject({ code: 'invalid' })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(f.fixture.broadcast).not.toHaveBeenCalled()
+  } finally {
+    await f.close()
+  }
+})
+
 it('uses one actual noSend action and recovers its exact BEEF after reopening without another signature', async () => {
   const f = await nativeBuyerFixture(),
     quote = await acquisitionFixture(f.selected),

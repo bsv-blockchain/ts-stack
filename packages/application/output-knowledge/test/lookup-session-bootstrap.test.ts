@@ -111,7 +111,12 @@ it('requires an active write domain and the same native connection', () => {
     f.domain.transaction(() =>
       bootstrapSQLiteLookupSessions(f.domain, other.bridge, f.codec, () => '1000', {}, true)
     )
-  ).toThrow('same physical connection')
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Session bootstrap requires the same physical connection'
+    })
+  )
 })
 it('reopens original session inventory inside a compound transaction without reinitializing it', async () => {
   const f = fixture()

@@ -32,7 +32,10 @@ afterEach(async () => {
   )
   cleanup.clear()
 })
-export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions> = {}) {
+export async function buyerFixture(
+  overrides: Partial<PrivateLookupBuyerOptions> = {},
+  capacity: { stateBytes?: number; objects?: number; objectBytes?: number } = {}
+) {
   const f = await acquisitionRecordFixture(),
     directory = mkdtempSync(join(tmpdir(), 'durable-buyer-')),
     codec = custody(),
@@ -115,14 +118,14 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
       ...overrides
     },
     binding = privateLookupBuyerBinding(partial),
-    protectedOptions = { binding, maximumValueBytes: 16384 },
+    protectedOptions = { binding, maximumValueBytes: capacity.stateBytes ?? 16384 },
     stateBinding = protectedOperationBinding(protectedOptions, codec),
     objectConfiguration = {
       storeId: '94'.repeat(32),
       recipient: f.f.buyer,
       binding,
-      maximumObjects: 5,
-      maximumObjectBytes: 1048576
+      maximumObjects: capacity.objects ?? 5,
+      maximumObjectBytes: capacity.objectBytes ?? 1048576
     }
   const stores: {
       state: ProtectedOperationStateStore

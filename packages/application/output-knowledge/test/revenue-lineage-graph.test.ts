@@ -40,6 +40,52 @@ it('recognizes authorized genesis as a complete one-node graph with no covenant 
   expect(result.rawTransaction.length).toBeGreaterThan(0)
 })
 
+it('bounds native inspection work when two merge inputs share a split and its ancestry', () => {
+  const assembly = assemble(atListing('merge'))
+  const merge = assembly.transactions.get(assembly.package.target.txid)!
+  const branches = merge.inputs
+    .slice(0, 2)
+    .map(input => assembly.transactions.get(input.sourceTXID!)!)
+  expect(branches[0].inputs[0].sourceTXID).toBe(branches[1].inputs[0].sourceTXID)
+  expect(branches.map(tx => tx.inputs[0].sourceOutputIndex).sort()).toEqual([0, 1])
+
+  // Independently enumerate the actual declared outpoints, preserving both
+  // split outputs but counting their common ancestors once. No txid or native
+  // transaction is substituted for this signed frozen Bitcoin DAG.
+  const points = new Set<string>(),
+    pending = [assembly.package.target]
+  while (pending.length > 0) {
+    const point = pending.pop()!,
+      key = `${point.txid}.${point.outputIndex}`
+    if (points.has(key)) continue
+    points.add(key)
+    for (const input of assembly.transactions.get(point.txid)!.inputs)
+      if (assembly.entries.has(input.sourceTXID!))
+        pending.push({
+          chain: point.chain,
+          txid: input.sourceTXID!,
+          outputIndex: input.sourceOutputIndex
+        })
+  }
+  expect(points.size).toBeGreaterThan(assembly.entries.size)
+  const split = assembly.transactions.get(branches[0].inputs[0].sourceTXID!)!
+  const abi = jest.spyOn(split.inputs[0].unlockingScript!, 'toHex')
+  const decode = jest.spyOn(family, 'decode')
+  const result = inspectLineage(assembly, family)
+  expect(result.complete).toBe(true)
+  if (!result.complete) throw new Error('Shared native ancestry became incomplete')
+  expect(result.transitions).toHaveLength(assembly.entries.size)
+  expect(result.transitions.find(item => item.transaction === merge)?.inputs).toEqual([0, 1])
+  const genesis = assembly.transactions.get(assembly.package.genesis.body.genesis.txid)!
+  // One state decode per reachable outpoint plus classification of ordinary
+  // genesis outputs; shared paths must not multiply this native parsing work.
+  expect(decode.mock.calls.length).toBeLessThanOrEqual(points.size + genesis.outputs.length - 1)
+  // A split's ABI is inspected once for its route and once for its one input,
+  // even when both of its successor outputs are used by the merge.
+  expect(abi.mock.calls.length).toBeLessThanOrEqual(2)
+  expect(abi).toHaveBeenCalled()
+})
+
 it('accepts ordinary zero-valued data and change outputs within genesis dimensions', () => {
   const result = graph(tx => {
     tx.version = 2

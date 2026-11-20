@@ -115,7 +115,7 @@ See [`docs/usage.md`](./docs/usage.md) for fuller examples.
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

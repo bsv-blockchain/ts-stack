@@ -11,7 +11,8 @@ import {
 import { revenueListingChildPublicKey } from '../RevenueListingKeys.js'
 import {
   planRevenueListingProfileSpend,
-  parseRevenueListingProfileAction
+  parseRevenueListingProfileAction,
+  parseRevenueListingProfilePrevious
 } from '../RevenueListingProfilePlan.js'
 
 const fixture: {
@@ -41,6 +42,30 @@ const previous = (rawTransaction: string) => [{ rawTransaction, outputIndex: 0 }
 const plan = (rawTransaction: string, action: unknown) =>
   planRevenueListingProfileSpend(profile, fixture.descriptor, previous(rawTransaction), action)
 
+test.each([
+  ['nonhex', 'gg'],
+  ['prefix', 'gg' + fixture.activation],
+  ['suffix', fixture.activation + 'gg'],
+  ['empty', '']
+])('refuses noncanonical previous transaction hex: %s', (_name, raw) => {
+  expect(parseRevenueListingProfilePrevious(previous(fixture.activation))).toEqual(
+    previous(fixture.activation)
+  )
+  expect(() => parseRevenueListingProfilePrevious(previous(raw))).toThrow(
+    'Expected bounded canonical previous transaction hex'
+  )
+})
+
+test('allows the second split output to retain exactly the signed reserve', () => {
+  const reserve = BigInt(fixture.descriptor.reserve)
+  const firstAmount = (BigInt(purchase.outputs[0].satoshis!) - reserve).toString()
+  const planned = plan(fixture.purchase, { operation: 'split', firstAmount })
+  expect(planned.outputs.slice(0, 2).map(output => output.satoshis)).toEqual([
+    firstAmount,
+    reserve.toString()
+  ])
+})
+
 test('activation recreates only the reserve with the active program and no administrative receipt', () => {
   const planned = plan(fixture.genesis, { operation: 'activate' })
   expect(planned.operationCode).toBe(0)
@@ -59,12 +84,10 @@ test('activation recreates only the reserve with the active program and no admin
 test('purchase reproduces both unchanged corpus mandatory outputs and preserves the full listing value', () => {
   const planned = plan(fixture.activation, fixture.purchaseAction)
   expect(planned.outputs).toEqual(
-    purchase.outputs
-      .slice(0, 2)
-      .map(output => ({
-        satoshis: output.satoshis!.toString(),
-        lockingScript: output.lockingScript.toHex()
-      }))
+    purchase.outputs.slice(0, 2).map(output => ({
+      satoshis: output.satoshis!.toString(),
+      lockingScript: output.lockingScript.toHex()
+    }))
   )
   expect(planned.receiptIndex).toBe(1)
   expect(planned.operationCode).toBe(1)

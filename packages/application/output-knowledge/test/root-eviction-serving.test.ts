@@ -1,4 +1,5 @@
 import { expect, it, jest } from '@jest/globals'
+import { createHash } from 'node:crypto'
 import {
   Beef,
   canonicalOutputJSON,
@@ -33,6 +34,39 @@ async function eligible() {
   await f.store.projected((await f.store.projections(1))[0])
   return { ...f, target, serving: new RootAdvertisementServing(f.store) }
 }
+
+it('retains exact serving byte bounds and rejects partially matching or untyped supplied bytes', async () => {
+  const f = await eligible()
+  try {
+    const send = jest.fn<(bytes: Uint8Array) => undefined>(() => undefined)
+    const exact = new Uint8Array(4194304)
+    f.serving.bind(exact, []).enqueue(exact, () => true, send)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toHaveLength(exact.length)
+    expect(createHash('sha256').update(send.mock.calls[0][0]).digest('hex')).toBe(
+      createHash('sha256').update(exact).digest('hex')
+    )
+    expect(() => f.serving.bind(new Uint8Array(4194305), [])).toThrow(
+      expect.objectContaining({ code: 'limited', message: 'Root serving byte limit' })
+    )
+    expect(() =>
+      f.serving.bind(
+        new Uint8Array(),
+        Array.from({ length: 1025 }, () => f.target)
+      )
+    ).toThrow(expect.objectContaining({ code: 'limited', message: 'Root serving inventory limit' }))
+    const bound = f.serving.bind(new Uint8Array([1, 2]), [f.target])
+    for (const supplied of [new Uint8Array([1, 3]), [1, 2]])
+      expect(() => bound.enqueue(supplied as Uint8Array, () => true, send)).toThrow(
+        'Root serving response bytes changed'
+      )
+    expect(send).toHaveBeenCalledTimes(1)
+    bound.enqueue(new Uint8Array([1, 2]), () => true, send)
+    expect(send).toHaveBeenCalledTimes(2)
+  } finally {
+    await f.cleanup()
+  }
+})
 function batch(ad: Awaited<ReturnType<typeof rootAdvertisementFixture>>): OutputLookupBatch {
   const target = ad.body.targets[0],
     scope = {

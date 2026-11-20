@@ -1,10 +1,150 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
-import { PrivateLookupBuyer } from '../src/private/PrivateLookupBuyer.js'
+import { OutputPaidLookupServiceError, OutputPaidLookupTransport } from '@bsv/sdk'
+import {
+  PrivateLookupBuyer,
+  PRIVATE_LOOKUP_BUYER_INITIAL
+} from '../src/private/PrivateLookupBuyer.js'
+import { MemoryOperationStateStore } from '../src/operations/MemoryOperationStateStore.js'
 import { buyerFixture } from './private-lookup-buyer.fixture.js'
 import { buyerRemote } from './private-lookup-buyer-transport.fixture.js'
 afterEach(() => {
   jest.restoreAllMocks()
 })
+const missingQuote = () =>
+  new OutputPaidLookupServiceError({
+    version: 1,
+    error: { code: 'not-found', message: 'Original quote is absent', retryable: false }
+  })
+
+async function unacknowledgedQuote() {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    owner = await f.open(true)
+  const failure = new Error('Quote failed before reaching the provider')
+  jest.mocked(OutputPaidLookupTransport.prototype.send).mockRejectedValueOnce(failure)
+  await expect(owner.buyer.advance()).rejects.toBe(failure)
+  expect(await owner.buyer.status()).toBe('ready')
+  expect(f.counts.finish).toBe(0)
+  return { f, wire, owner }
+}
+
+it('accepts only SDK-typed not-found as absent recovery before any financial work', async () => {
+  const { f, wire, owner } = await unacknowledgedQuote()
+  jest.mocked(OutputPaidLookupTransport.prototype.send).mockRejectedValueOnce(missingQuote())
+  expect(await owner.buyer.recover()).toBeUndefined()
+  expect(await owner.buyer.status()).toBe('ready')
+  expect(wire.calls).toEqual([])
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+})
+
+it.each(['plain', 'other-code'] as const)(
+  'does not reinterpret a %s recovery failure as absence',
+  async kind => {
+    const { f, owner } = await unacknowledgedQuote()
+    const failure =
+      kind === 'plain'
+        ? Object.assign(new Error('Not an authenticated service error'), { code: 'not-found' })
+        : new OutputPaidLookupServiceError({
+            version: 1,
+            error: {
+              code: 'context-changed',
+              message: 'Original selection changed',
+              retryable: false
+            }
+          })
+    jest.mocked(OutputPaidLookupTransport.prototype.send).mockRejectedValueOnce(failure)
+    await expect(owner.buyer.recover()).rejects.toBe(failure)
+    expect(f.counts.finish).toBe(0)
+  }
+)
+
+it('does not turn a later missing remote record into permission to pay again', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    owner = await f.open(true)
+  wire.lose('pay')
+  await expect(owner.buyer.advance()).rejects.toThrow('Lost original')
+  const failure = missingQuote()
+  jest.mocked(OutputPaidLookupTransport.prototype.send).mockRejectedValueOnce(failure)
+  await expect(owner.buyer.recover()).rejects.toBe(failure)
+  expect(await owner.buyer.status()).toBe('paid')
+  expect(f.counts.finish).toBe(1)
+  expect(wire.calls.filter(operation => operation === 'pay')).toHaveLength(1)
+})
+
+it('retains an already-quoted SDK status without constructing or dispatching a payment', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    owner = await f.open(true)
+  const challenge = f.f.quote.challenge
+  const response = {
+    version: 1 as const,
+    acquisitionId: challenge.acquisitionId,
+    status: 'quoted' as const,
+    challenge,
+    recoveryUntil: challenge.recoveryUntil
+  }
+  jest
+    .mocked(OutputPaidLookupTransport.prototype.send)
+    .mockResolvedValueOnce({ kind: 'status', response })
+  expect(await owner.buyer.advance()).toEqual(response)
+  expect(await owner.buyer.status()).toBe('quoted')
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+  expect(wire.calls).toEqual([])
+})
+it.each([{ stateBytes: 16383 }, { objects: 4 }, { objectBytes: 1048575 }])(
+  'requires the complete reservation from actual protected SQLite owners: %j',
+  async capacity => {
+    const f = await buyerFixture({}, capacity)
+    await expect(f.open(true)).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Buyer lacks complete logical reservation'
+    })
+    expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+  }
+)
+
+it('refuses volatile state even alongside an actual durable protected object owner', async () => {
+  const f = await buyerFixture(),
+    owner = await f.open(true)
+  const memory = new MemoryOperationStateStore(
+    'volatile-buyer',
+    owner.state.configuration.binding,
+    PRIVATE_LOOKUP_BUYER_INITIAL,
+    owner.state.configuration.limits
+  )
+  try {
+    await expect(PrivateLookupBuyer.open({ ...owner.ports, state: memory })).rejects.toMatchObject({
+      code: 'unsupported',
+      message: 'Buyer requires durable protected owners'
+    })
+    expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+  } finally {
+    await memory.close()
+  }
+})
+
+it('refuses either actual protected owner borrowed from another original binding', async () => {
+  const f = await buyerFixture(),
+    first = await f.open(true)
+  const other = await buyerFixture({
+    original: {
+      ...f.partial.original,
+      derivationSuffix: Buffer.from('another original').toString('base64')
+    }
+  })
+  const second = await other.open(true)
+  for (const key of ['state', 'objects'] as const)
+    await expect(
+      PrivateLookupBuyer.open({ ...first.ports, [key]: second.ports[key] })
+    ).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Buyer storage binding differs'
+    })
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+  expect(other.counts).toMatchObject({ plan: 0, finish: 0 })
+})
+
 it('retains originals and complete capacity before paying, then separates receipt, validation and usability', async () => {
   const f = await buyerFixture(),
     wire = buyerRemote(f),

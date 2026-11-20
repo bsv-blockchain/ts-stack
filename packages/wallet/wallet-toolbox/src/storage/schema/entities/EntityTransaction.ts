@@ -8,14 +8,33 @@ import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 import { EntityProvenTx } from './EntityProvenTx'
 import { Transaction as BsvTransaction, TransactionInput } from '@bsv/sdk'
 
-function earliestDefined (a: number | undefined, b: number | undefined): number | undefined {
+function earliestDefined(a: number | undefined, b: number | undefined): number | undefined {
   if (a == null) return b
   if (b == null) return a
   return Math.min(a, b)
 }
 
-type NoSendExpirySnapshot = Pick<
+/** Metadata policy accepts original arrays or field descriptors without
+ * pretending descriptors are complete wallet DTOs. Payloads are selected by
+ * presence/ownership; this helper never parses, verifies or authorizes them. */
+export type TransactionMergeRow<Binary, Text = string> = Omit<
   TableTransaction,
+  | 'rawTx'
+  | 'inputBEEF'
+  | 'noSendExpiryReclaimRawTx'
+  | 'description'
+  | 'noSendExpiryReclaimDerivationPrefix'
+  | 'noSendExpiryReclaimDerivationSuffix'
+> & {
+  rawTx?: Binary
+  inputBEEF?: Binary
+  noSendExpiryReclaimRawTx?: Binary
+  description: Text
+  noSendExpiryReclaimDerivationPrefix?: Text
+  noSendExpiryReclaimDerivationSuffix?: Text
+}
+type NoSendExpirySnapshot<Binary, Text> = Pick<
+  TransactionMergeRow<Binary, Text>,
   | 'noSendExpiryMode'
   | 'noSendExpiryValue'
   | 'noSendExpiryDeadline'
@@ -31,7 +50,9 @@ type NoSendExpirySnapshot = Pick<
   | 'noSendExpiryReclaimSatoshis'
 >
 
-function noSendExpirySnapshot (transaction: TableTransaction): NoSendExpirySnapshot {
+function noSendExpirySnapshot<Binary, Text>(
+  transaction: TransactionMergeRow<Binary, Text>
+): NoSendExpirySnapshot<Binary, Text> {
   return {
     noSendExpiryMode: transaction.noSendExpiryMode,
     noSendExpiryValue: transaction.noSendExpiryValue,
@@ -49,10 +70,10 @@ function noSendExpirySnapshot (transaction: TableTransaction): NoSendExpirySnaps
   }
 }
 
-function mergeNoSendExpiryMetadata (
-  target: TableTransaction,
-  current: NoSendExpirySnapshot,
-  incoming: TableTransaction,
+function mergeNoSendExpiryMetadata<Binary, Text>(
+  target: TransactionMergeRow<Binary, Text>,
+  current: NoSendExpirySnapshot<Binary, Text>,
+  incoming: TransactionMergeRow<Binary, Text>,
   lifecycleAdvanced: boolean,
   targetWinnerSupersedesReclaim: boolean
 ): void {
@@ -66,37 +87,30 @@ function mergeNoSendExpiryMetadata (
 
   target.noSendExpiryAnchorTxid = current.noSendExpiryAnchorTxid ?? incoming.noSendExpiryAnchorTxid
   target.noSendExpiryAnchorVout = current.noSendExpiryAnchorVout ?? incoming.noSendExpiryAnchorVout
-  target.noSendExpiryReleasedAt = earliestDefined(
-    current.noSendExpiryReleasedAt,
-    incoming.noSendExpiryReleasedAt
-  )
-  target.noSendExpiryObservedAt = earliestDefined(
-    current.noSendExpiryObservedAt,
-    incoming.noSendExpiryObservedAt
-  )
+  target.noSendExpiryReleasedAt = earliestDefined(current.noSendExpiryReleasedAt, incoming.noSendExpiryReleasedAt)
+  target.noSendExpiryObservedAt = earliestDefined(current.noSendExpiryObservedAt, incoming.noSendExpiryObservedAt)
   target.noSendExpiryReclaimTxid = current.noSendExpiryReclaimTxid ?? incoming.noSendExpiryReclaimTxid
   target.noSendExpiryReclaimRawTx = current.noSendExpiryReclaimRawTx ?? incoming.noSendExpiryReclaimRawTx
   target.noSendExpiryReclaimDerivationPrefix =
     current.noSendExpiryReclaimDerivationPrefix ?? incoming.noSendExpiryReclaimDerivationPrefix
   target.noSendExpiryReclaimDerivationSuffix =
     current.noSendExpiryReclaimDerivationSuffix ?? incoming.noSendExpiryReclaimDerivationSuffix
-  target.noSendExpiryReclaimSatoshis =
-    current.noSendExpiryReclaimSatoshis ?? incoming.noSendExpiryReclaimSatoshis
+  target.noSendExpiryReclaimSatoshis = current.noSendExpiryReclaimSatoshis ?? incoming.noSendExpiryReclaimSatoshis
 }
 
-function carriesProofEvidence (transaction: TableTransaction): boolean {
+function carriesProofEvidence(transaction: Pick<TableTransaction, 'provenTxId'>): boolean {
   // `completed` is a useful conservative signal, but only a mapped provenTx
   // record carries the proof material that may advance BRC-177 finality.
   return transaction.provenTxId != null
 }
 
-function mappedProvenTxId (incoming: TableTransaction, syncMap: SyncMap): number | undefined {
+function mappedProvenTxId(incoming: Pick<TableTransaction, 'provenTxId'>, syncMap: SyncMap): number | undefined {
   return incoming.provenTxId == null ? undefined : syncMap.provenTx.idMap[incoming.provenTxId]
 }
 
-function mergeOrdinaryTransactionProperties (
-  target: TableTransaction,
-  incoming: TableTransaction,
+function mergeOrdinaryTransactionProperties<Binary, Text>(
+  target: TransactionMergeRow<Binary, Text>,
+  incoming: TransactionMergeRow<Binary, Text>,
   syncMap: SyncMap
 ): void {
   target.version = incoming.version
@@ -111,9 +125,9 @@ function mergeOrdinaryTransactionProperties (
   target.inputBEEF = incoming.inputBEEF
 }
 
-function mergeProofEvidence (
-  target: TableTransaction,
-  incoming: TableTransaction,
+function mergeProofEvidence<Binary, Text>(
+  target: TransactionMergeRow<Binary, Text>,
+  incoming: TransactionMergeRow<Binary, Text>,
   syncMap: SyncMap
 ): void {
   target.status = incoming.status
@@ -122,7 +136,60 @@ function mergeProofEvidence (
   target.inputBEEF ??= incoming.inputBEEF
 }
 
-async function quarantineReclaimOutput (
+/** Shared legacy/packed metadata policy. The caller retains actual payload,
+ * parent-map, destination and proof authority. Existing identity/reference and
+ * timestamp/lifecycle rules are identical for arrays and immutable field DATA. */
+export function planTransactionMerge<Binary, Text = string>(
+  current: TransactionMergeRow<Binary, Text>,
+  ei: TransactionMergeRow<Binary, Text>,
+  syncMap: SyncMap
+): Readonly<{ row: TransactionMergeRow<Binary, Text>; quarantineReclaimTxid?: string }> | undefined {
+  const currentExpiryRank = brc177NoSendExpiryStateRank(current.noSendExpiryState)
+  const incomingExpiryRank = brc177NoSendExpiryStateRank(ei.noSendExpiryState)
+  const lifecycleAdvanced = incomingExpiryRank > currentExpiryRank
+  const incomingCarriesProof = carriesProofEvidence(ei)
+  const addsProofEvidence = incomingCarriesProof && !carriesProofEvidence(current)
+  const targetWinnerSupersedesReclaim =
+    current.noSendExpiryState === 'reclaimed' && (ei.noSendExpiryState === 'target-won' || incomingCarriesProof)
+  const incomingIsNewer = ei.updated_at > current.updated_at
+  const shouldMerge =
+    lifecycleAdvanced ||
+    addsProofEvidence ||
+    (incomingIsNewer && (incomingExpiryRank >= currentExpiryRank || incomingCarriesProof))
+  if (!shouldMerge) return undefined
+
+  const row: TransactionMergeRow<Binary, Text> = { ...current },
+    currentExpiry = noSendExpirySnapshot(current)
+  // Properties that are never updated:
+  // transactionId
+  // userId
+  // reference
+
+  // A stale storage can carry a more advanced BRC-177 state because wall
+  // clocks differ. In that case merge only lifecycle data; overwriting the
+  // rest of the row would regress newer proof and transaction state. The
+  // one exception is positive local proof evidence, which must reach a
+  // reclaiming storage so the race can be resolved safely.
+  const mergeOrdinaryProperties = incomingIsNewer && (incomingExpiryRank >= currentExpiryRank || incomingCarriesProof)
+  if (mergeOrdinaryProperties) {
+    mergeOrdinaryTransactionProperties(row, ei, syncMap)
+  } else if (incomingCarriesProof) {
+    // Proof evidence is independently monotonic and cannot be discarded
+    // merely because the proving store's wall clock is behind. Avoid
+    // copying unrelated stale row fields while retaining the proof link.
+    mergeProofEvidence(row, ei, syncMap)
+  }
+  mergeNoSendExpiryMetadata(row, currentExpiry, ei, lifecycleAdvanced, targetWinnerSupersedesReclaim)
+  row.updated_at = new Date(Math.max(ei.updated_at.getTime(), current.updated_at.getTime()))
+  return {
+    row,
+    ...(targetWinnerSupersedesReclaim && row.noSendExpiryReclaimTxid !== undefined
+      ? { quarantineReclaimTxid: row.noSendExpiryReclaimTxid }
+      : {})
+  }
+}
+
+async function quarantineReclaimOutput(
   storage: EntityStorage,
   target: TableTransaction,
   reclaimTxid: string | undefined,
@@ -145,7 +212,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * @returns @bsv/sdk Transaction object from parsed rawTx.
    * If rawTx is undefined, returns undefined.
    */
-  getBsvTx (): BsvTransaction | undefined {
+  getBsvTx(): BsvTransaction | undefined {
     if (this.rawTx == null) return undefined
     return BsvTransaction.fromBinary(this.rawTx)
   }
@@ -154,7 +221,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * @returns array of @bsv/sdk TransactionInput objects from parsed rawTx.
    * If rawTx is undefined, an empty array is returned.
    */
-  getBsvTxIns (): TransactionInput[] {
+  getBsvTxIns(): TransactionInput[] {
     const tx = this.getBsvTx()
     if (tx == null) return []
     return tx.inputs
@@ -165,7 +232,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * Uses both spentBy and rawTx inputs (if available) to locate inputs from among user's outputs.
    * Not all transaction inputs correspond to prior storage outputs.
    */
-  async getInputs (storage: EntityStorage, trx?: TrxToken): Promise<TableOutput[]> {
+  async getInputs(storage: EntityStorage, trx?: TrxToken): Promise<TableOutput[]> {
     const inputs = await storage.findOutputs({
       partial: { userId: this.userId, spentBy: this.id },
       trx
@@ -183,12 +250,12 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
           trx
         })
       )
-      if ((pso != null) && !inputs.some(i => i.outputId === pso.outputId)) inputs.push(pso)
+      if (pso != null && !inputs.some(i => i.outputId === pso.outputId)) inputs.push(pso)
     }
     return inputs
   }
 
-  constructor (api?: TableTransaction) {
+  constructor(api?: TableTransaction) {
     const now = new Date()
     super(
       api || {
@@ -208,206 +275,206 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     )
   }
 
-  override updateApi (): void {
+  override updateApi(): void {
     /* nothing needed yet... */
   }
 
-  get transactionId () {
+  get transactionId() {
     return this.api.transactionId
   }
 
-  set transactionId (v: number) {
+  set transactionId(v: number) {
     this.api.transactionId = v
   }
 
-  get created_at () {
+  get created_at() {
     return this.api.created_at
   }
 
-  set created_at (v: Date) {
+  set created_at(v: Date) {
     this.api.created_at = v
   }
 
-  get updated_at () {
+  get updated_at() {
     return this.api.updated_at
   }
 
-  set updated_at (v: Date) {
+  set updated_at(v: Date) {
     this.api.updated_at = v
   }
 
-  get version () {
+  get version() {
     return this.api.version
   }
 
-  set version (v: number | undefined) {
+  set version(v: number | undefined) {
     this.api.version = v
   }
 
-  get lockTime () {
+  get lockTime() {
     return this.api.lockTime
   }
 
-  set lockTime (v: number | undefined) {
+  set lockTime(v: number | undefined) {
     this.api.lockTime = v
   }
 
-  get isOutgoing () {
+  get isOutgoing() {
     return this.api.isOutgoing
   }
 
-  set isOutgoing (v: boolean) {
+  set isOutgoing(v: boolean) {
     this.api.isOutgoing = v
   }
 
-  get status () {
+  get status() {
     return this.api.status
   }
 
-  set status (v: TransactionStatus) {
+  set status(v: TransactionStatus) {
     this.api.status = v
   }
 
-  get userId () {
+  get userId() {
     return this.api.userId
   }
 
-  set userId (v: number) {
+  set userId(v: number) {
     this.api.userId = v
   }
 
-  get provenTxId () {
+  get provenTxId() {
     return this.api.provenTxId
   }
 
-  set provenTxId (v: number | undefined) {
+  set provenTxId(v: number | undefined) {
     this.api.provenTxId = v
   }
 
-  get satoshis () {
+  get satoshis() {
     return this.api.satoshis
   }
 
-  set satoshis (v: number) {
+  set satoshis(v: number) {
     this.api.satoshis = v
   }
 
-  get txid () {
+  get txid() {
     return this.api.txid
   }
 
-  set txid (v: string | undefined) {
+  set txid(v: string | undefined) {
     this.api.txid = v
   }
 
-  get reference () {
+  get reference() {
     return this.api.reference
   }
 
-  set reference (v: string) {
+  set reference(v: string) {
     this.api.reference = v
   }
 
-  get inputBEEF () {
+  get inputBEEF() {
     return this.api.inputBEEF
   }
 
-  set inputBEEF (v: number[] | undefined) {
+  set inputBEEF(v: number[] | undefined) {
     this.api.inputBEEF = v
   }
 
-  get description () {
+  get description() {
     return this.api.description
   }
 
-  set description (v: string) {
+  set description(v: string) {
     this.api.description = v
   }
 
-  get rawTx () {
+  get rawTx() {
     return this.api.rawTx
   }
 
-  set rawTx (v: number[] | undefined) {
+  set rawTx(v: number[] | undefined) {
     this.api.rawTx = v
   }
 
-  get noSendExpiryMode () {
+  get noSendExpiryMode() {
     return this.api.noSendExpiryMode
   }
-  set noSendExpiryMode (v) {
+  set noSendExpiryMode(v) {
     this.api.noSendExpiryMode = v
   }
-  get noSendExpiryValue () {
+  get noSendExpiryValue() {
     return this.api.noSendExpiryValue
   }
-  set noSendExpiryValue (v) {
+  set noSendExpiryValue(v) {
     this.api.noSendExpiryValue = v
   }
-  get noSendExpiryDeadline () {
+  get noSendExpiryDeadline() {
     return this.api.noSendExpiryDeadline
   }
-  set noSendExpiryDeadline (v) {
+  set noSendExpiryDeadline(v) {
     this.api.noSendExpiryDeadline = v
   }
-  get noSendExpiryState () {
+  get noSendExpiryState() {
     return this.api.noSendExpiryState
   }
-  set noSendExpiryState (v) {
+  set noSendExpiryState(v) {
     this.api.noSendExpiryState = v
   }
-  get noSendExpiryAnchorTxid () {
+  get noSendExpiryAnchorTxid() {
     return this.api.noSendExpiryAnchorTxid
   }
-  set noSendExpiryAnchorTxid (v) {
+  set noSendExpiryAnchorTxid(v) {
     this.api.noSendExpiryAnchorTxid = v
   }
-  get noSendExpiryAnchorVout () {
+  get noSendExpiryAnchorVout() {
     return this.api.noSendExpiryAnchorVout
   }
-  set noSendExpiryAnchorVout (v) {
+  set noSendExpiryAnchorVout(v) {
     this.api.noSendExpiryAnchorVout = v
   }
-  get noSendExpiryReleasedAt () {
+  get noSendExpiryReleasedAt() {
     return this.api.noSendExpiryReleasedAt
   }
-  set noSendExpiryReleasedAt (v) {
+  set noSendExpiryReleasedAt(v) {
     this.api.noSendExpiryReleasedAt = v
   }
-  get noSendExpiryObservedAt () {
+  get noSendExpiryObservedAt() {
     return this.api.noSendExpiryObservedAt
   }
-  set noSendExpiryObservedAt (v) {
+  set noSendExpiryObservedAt(v) {
     this.api.noSendExpiryObservedAt = v
   }
-  get noSendExpiryReclaimTxid () {
+  get noSendExpiryReclaimTxid() {
     return this.api.noSendExpiryReclaimTxid
   }
-  set noSendExpiryReclaimTxid (v) {
+  set noSendExpiryReclaimTxid(v) {
     this.api.noSendExpiryReclaimTxid = v
   }
-  get noSendExpiryReclaimRawTx () {
+  get noSendExpiryReclaimRawTx() {
     return this.api.noSendExpiryReclaimRawTx
   }
-  set noSendExpiryReclaimRawTx (v) {
+  set noSendExpiryReclaimRawTx(v) {
     this.api.noSendExpiryReclaimRawTx = v
   }
-  get noSendExpiryReclaimDerivationPrefix () {
+  get noSendExpiryReclaimDerivationPrefix() {
     return this.api.noSendExpiryReclaimDerivationPrefix
   }
-  set noSendExpiryReclaimDerivationPrefix (v) {
+  set noSendExpiryReclaimDerivationPrefix(v) {
     this.api.noSendExpiryReclaimDerivationPrefix = v
   }
-  get noSendExpiryReclaimDerivationSuffix () {
+  get noSendExpiryReclaimDerivationSuffix() {
     return this.api.noSendExpiryReclaimDerivationSuffix
   }
-  set noSendExpiryReclaimDerivationSuffix (v) {
+  set noSendExpiryReclaimDerivationSuffix(v) {
     this.api.noSendExpiryReclaimDerivationSuffix = v
   }
-  get noSendExpiryReclaimSatoshis () {
+  get noSendExpiryReclaimSatoshis() {
     return this.api.noSendExpiryReclaimSatoshis
   }
-  set noSendExpiryReclaimSatoshis (v) {
+  set noSendExpiryReclaimSatoshis(v) {
     this.api.noSendExpiryReclaimSatoshis = v
   }
 
@@ -415,28 +482,29 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
   // get labels() { return this.api.labels }
   // set labels(v: string[] | undefined) { this.api.labels = v }
 
-  override get id (): number {
+  override get id(): number {
     return this.api.transactionId
   }
 
-  override set id (v: number) {
+  override set id(v: number) {
     this.api.transactionId = v
   }
 
-  override get entityName (): string {
+  override get entityName(): string {
     return 'transaction'
   }
 
-  override get entityTable (): string {
+  override get entityTable(): string {
     return 'transactions'
   }
 
-  override equals (ei: TableTransaction, syncMap?: SyncMap | undefined): boolean {
+  override equals(ei: TableTransaction, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
     // Properties that are never updated
     if (
-      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
+      eo.transactionId ===
+        (syncMap != null ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
       eo.reference === ei.reference &&
       eo.version === ei.version &&
       eo.lockTime === ei.lockTime &&
@@ -461,19 +529,24 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
       eo.noSendExpiryReclaimDerivationSuffix === ei.noSendExpiryReclaimDerivationSuffix &&
       eo.noSendExpiryReclaimSatoshis === ei.noSendExpiryReclaimSatoshis &&
       (eo.provenTxId == null) === (ei.provenTxId == null) &&
-      !(ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
-    ) { return true }
+      !(
+        ei.provenTxId &&
+        eo.provenTxId !== (syncMap != null ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId)
+      )
+    ) {
+      return true
+    }
 
     return false
   }
 
-  static async mergeFind (
+  static async mergeFind(
     storage: EntityStorage,
     userId: number,
     ei: TableTransaction,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean, eo: EntityTransaction, eiId: number }> {
+  ): Promise<{ found: boolean; eo: EntityTransaction; eiId: number }> {
     // Prefer (userId, txid) when txid is known — txid is a globally stable
     // identifier, whereas `reference` is locally-assigned by whichever
     // storage first ingested the row. Two storages that independently
@@ -486,7 +559,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     if (ei.txid) {
       ef = verifyOneOrNone(await storage.findTransactions({ partial: { txid: ei.txid, userId }, trx }))
     }
-    if ((ef == null) && ei.reference) {
+    if (ef == null && ei.reference) {
       ef = verifyOneOrNone(await storage.findTransactions({ partial: { reference: ei.reference, userId }, trx }))
     }
     return {
@@ -496,73 +569,38 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     }
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     if (this.provenTxId) this.provenTxId = syncMap.provenTx.idMap[this.provenTxId]
     this.userId = userId
     this.transactionId = 0
     this.transactionId = await storage.insertTransaction(this.toApi(), trx)
   }
 
-  override async mergeExisting (
+  override async mergeExisting(
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableTransaction,
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    const currentExpiryRank = brc177NoSendExpiryStateRank(this.noSendExpiryState)
-    const incomingExpiryRank = brc177NoSendExpiryStateRank(ei.noSendExpiryState)
-    const lifecycleAdvanced = incomingExpiryRank > currentExpiryRank
-    const incomingCarriesProof = carriesProofEvidence(ei)
-    const addsProofEvidence = incomingCarriesProof && !carriesProofEvidence(this.api)
-    const targetWinnerSupersedesReclaim =
-      this.noSendExpiryState === 'reclaimed' &&
-      (ei.noSendExpiryState === 'target-won' || incomingCarriesProof)
-    const incomingIsNewer = ei.updated_at > this.updated_at
-    const shouldMerge =
-      lifecycleAdvanced ||
-      addsProofEvidence ||
-      (incomingIsNewer && (incomingExpiryRank >= currentExpiryRank || incomingCarriesProof))
-    if (!shouldMerge) return false
-
-    const currentExpiry = noSendExpirySnapshot(this.api)
-    // Properties that are never updated:
-    // transactionId
-    // userId
-    // reference
-
-    // A stale storage can carry a more advanced BRC-177 state because wall
-    // clocks differ. In that case merge only lifecycle data; overwriting the
-    // rest of the row would regress newer proof and transaction state. The
-    // one exception is positive local proof evidence, which must reach a
-    // reclaiming storage so the race can be resolved safely.
-    const mergeOrdinaryProperties =
-      incomingIsNewer && (incomingExpiryRank >= currentExpiryRank || incomingCarriesProof)
-    if (mergeOrdinaryProperties) {
-      mergeOrdinaryTransactionProperties(this.api, ei, syncMap)
-    } else if (incomingCarriesProof) {
-      // Proof evidence is independently monotonic and cannot be discarded
-      // merely because the proving store's wall clock is behind. Avoid
-      // copying unrelated stale row fields while retaining the proof link.
-      mergeProofEvidence(this.api, ei, syncMap)
-    }
-    mergeNoSendExpiryMetadata(this.api, currentExpiry, ei, lifecycleAdvanced, targetWinnerSupersedesReclaim)
-    this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
+    const prepared = planTransactionMerge(this.api, ei, syncMap)
+    if (prepared === undefined) return false
+    Object.assign(this.api, prepared.row)
     // Knex serialization mutates its update object. Keep this entity's Date
     // and byte-array representation intact for any subsequent sync merge in
     // the same cycle.
     await storage.updateTransaction(this.id, { ...this.toApi() }, trx)
-    if (targetWinnerSupersedesReclaim) {
+    if (prepared.quarantineReclaimTxid !== undefined) {
       // Lifecycle rank deliberately gives a contradictory target proof the
       // conservative precedence. Output rows still use timestamp merging,
       // so quarantine reclaimed liquidity here even when clock skew would
       // otherwise leave that output spendable.
-      await quarantineReclaimOutput(storage, this.api, this.noSendExpiryReclaimTxid, trx)
+      await quarantineReclaimOutput(storage, this.api, prepared.quarantineReclaimTxid, trx)
     }
     return true
   }
 
-  async getProvenTx (storage: EntityStorage, trx?: TrxToken): Promise<EntityProvenTx | undefined> {
+  async getProvenTx(storage: EntityStorage, trx?: TrxToken): Promise<EntityProvenTx | undefined> {
     if (!this.provenTxId) return undefined
     const p = verifyOneOrNone(
       await storage.findProvenTxs({
