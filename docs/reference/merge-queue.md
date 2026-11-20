@@ -26,12 +26,17 @@ retain their normal requirements.
 **Do not enable the queue on `main` yet.** The internal result gate now requires
 both Sonar zero-findings enforcement and dependency review on queue events.
 Sonar is still PR-only, so its skipped queue job deliberately fails admission.
+The standalone `scripts/sonar-queue-gate.mjs` controller is prepared but not yet
+wired into CI: it requires a unique `merge-queue-<full SHA>` short-lived analysis,
+checks the exact revision and stable analysis identity before and after collecting
+complete issue/hotspot inventories, and rejects accepted or false-positive new
+findings. Its unit tests do not establish live vendor support.
 This change does not claim complete queue support. Enabling a queue without the
 remaining Sonar integration would block merges. A generic CI scan must not
 mistake a queue event for `main` and overwrite its analysis.
 
-The November 20 inspection found `SONAR_CI_ENABLED=false`, no repository
-`SONAR_TOKEN`, and these seven required checks, bound to their existing apps:
+The November 20 inspection found `SONAR_CI_ENABLED=false` and these seven
+required checks, bound to their existing apps:
 
 | App             | Required checks                                                                   |
 | --------------- | --------------------------------------------------------------------------------- |
@@ -53,11 +58,29 @@ merged or changed its head. The temporary ruleset and all three canary branches
 were removed, and the unchanged main source and ruleset were verified. See
 [the rollout handle](https://github.com/bsv-blockchain/ts-stack/discussions/1638).
 
+The operator subsequently provisioned repository Actions secret `SONAR_TOKEN`.
+Only its metadata was read. The Sonar credential has Execute analysis permission
+for `bsv-blockchain_ts-stack` alone and expires on **December 20, 2026**. Replace
+it through the secret store before expiry if CI analysis adopts it; never put its
+value in logs, a PR, or a coordination message. Automatic Analysis remains on,
+and organization-wide secretless analysis remains off. The current dormant
+`sonar-project.properties` excludes authored sources that Automatic Analysis
+covers, so enabling the existing CI flag alone is not a safe migration.
+
+Credentialed isolated canaries
+[#1652](https://github.com/bsv-blockchain/ts-stack/pull/1652) and
+[#1653](https://github.com/bsv-blockchain/ts-stack/pull/1653) passed their exact-head
+Sonar, Socket, and checkout checks, plus the repository zero-findings controller.
+Their queued analysis is still pending a coordinated analysis-method window;
+these PR results do not qualify a combined commit. The temporary probe uses
+all repository sources and the Automatic Analysis configuration rather than the
+narrower dormant CI exclusions. See [the active trial record](https://github.com/bsv-blockchain/ts-stack/discussions/1651).
+
 Complete the rollout in this order:
 
 1. Resolve [Sonar administration #402](https://github.com/bsv-blockchain/ts-stack/issues/402)
-   for genuine queue analysis. If switching to CI analysis, obtain project
-   administration and an Execute Analysis credential through the secret store;
+   for genuine queue analysis. Project administration and a scoped analysis
+   credential are available. Coordinate the shared analysis-method transition;
    disable Automatic Analysis before enabling CI analysis. Establish fork-safe
    PR behavior and verify no duplicate scans. Do not print credentials.
 2. Analyze each exact queue revision in an isolated Sonar branch. Enforce the
