@@ -4037,7 +4037,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
 
       // Check if this is a SQLite database by looking at the Knex client config
-      const isSQLite = knexDatabaseSystem(this.knex.client) === 'sqlite'
+      const system = knexDatabaseSystem(this.knex.client)
+      const isSQLite = system === 'sqlite'
 
       // For SQLite, disable transactions during migrations and turn off foreign keys.
       // PRAGMA foreign_keys is silently ignored inside transactions, so we must
@@ -4056,13 +4057,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
 
       try {
-        // An interrupted, unpublished generation has no journal entry to roll back.
-        // Explicit full deletion still removes its owned auxiliary schema first.
-        await dropMonitorStateForDataDeletion(this.knex)
+        // MySQL can commit monitor DDL before the migrator records it.
+        if (system === 'mysql') await dropMonitorStateForDataDeletion(this.knex)
         // The journal migrations exist only on their supported SQL backends.
         // Preserve ordinary migration adapters and PostgreSQL cleanup without
         // routing them through SQLite/MySQL-specific journal DDL.
-        const system = knexDatabaseSystem(this.knex.client)
         if (system === 'sqlite' || system === 'mysql') {
           await dropSnapshotJournalSourceForDataDeletion(this.knex)
           await dropSnapshotJournalDestinationForDataDeletion(this.knex)
