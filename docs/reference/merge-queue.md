@@ -71,10 +71,15 @@ Credentialed isolated canaries
 [#1652](https://github.com/bsv-blockchain/ts-stack/pull/1652) and
 [#1653](https://github.com/bsv-blockchain/ts-stack/pull/1653) passed their exact-head
 Sonar, Socket, and checkout checks, plus the repository zero-findings controller.
-Their queued analysis is still pending a coordinated analysis-method window;
-these PR results do not qualify a combined commit. The temporary probe uses
-all repository sources and the Automatic Analysis configuration rather than the
-narrower dormant CI exclusions. See [the active trial record](https://github.com/bsv-blockchain/ts-stack/discussions/1651).
+The release owner deferred the shared analysis-method window for urgent security
+publication and exact-main validation. Neither canary entered the queue or
+changed its head; both were closed unmerged, and the temporary ruleset and all
+three refs were removed and verified. Automatic Analysis was never switched off.
+No queued analysis ran and no Sonar branch was created. These PR results do not
+qualify a combined commit or prove the new credential works in a scanner. The
+prepared probe uses all repository sources and the Automatic Analysis
+configuration rather than the narrower dormant CI exclusions. See
+[the trial record](https://github.com/bsv-blockchain/ts-stack/discussions/1651).
 
 Complete the rollout in this order:
 

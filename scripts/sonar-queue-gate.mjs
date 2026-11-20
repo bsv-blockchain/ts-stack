@@ -17,6 +17,33 @@ function inventoryTotal(payload) {
   return total
 }
 
+function appendInventoryPage(payload, page, field, keys) {
+  const records = payload?.[field]
+  if (
+    !Array.isArray(records) ||
+    records.length > PAGE_SIZE ||
+    (payload.paging?.pageIndex !== undefined && payload.paging.pageIndex !== page)
+  ) {
+    throw new Error('Malformed Sonar inventory page')
+  }
+  for (const record of records) {
+    if (typeof record?.key !== 'string' || !record.key || keys.has(record.key)) {
+      throw new Error('Missing or duplicate Sonar inventory key')
+    }
+    keys.add(record.key)
+  }
+  return records
+}
+
+async function waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log }) {
+  const analysis = await readAnalysis()
+  if (analysis?.commit?.sha === revision) return analysis
+  if (now() >= deadline) throw new Error(`Timed out waiting for Sonar queue revision ${revision}`)
+  log(`Waiting for Sonar queue revision ${revision}`)
+  await sleep(15_000)
+  return await waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log })
+}
+
 async function inventory(request, path, parameters, field) {
   const keys = new Set()
   let expected
@@ -25,20 +52,7 @@ async function inventory(request, path, parameters, field) {
     const total = inventoryTotal(payload)
     expected ??= total
     if (expected !== total) throw new Error('Sonar inventory changed during pagination')
-    const records = payload?.[field]
-    if (
-      !Array.isArray(records) ||
-      records.length > PAGE_SIZE ||
-      (payload.paging?.pageIndex !== undefined && payload.paging.pageIndex !== page)
-    ) {
-      throw new Error('Malformed Sonar inventory page')
-    }
-    for (const record of records) {
-      if (typeof record?.key !== 'string' || !record.key || keys.has(record.key)) {
-        throw new Error('Missing or duplicate Sonar inventory key')
-      }
-      keys.add(record.key)
-    }
+    const records = appendInventoryPage(payload, page, field, keys)
     if (keys.size > expected) throw new Error('Sonar inventory exceeds its reported total')
     if (keys.size === expected) return expected
     if (records.length === 0) throw new Error('Sonar inventory ended before its reported total')
@@ -72,14 +86,7 @@ export async function enforceSonarQueueGate(revision, dependencies = {}) {
     return matches[0]
   }
 
-  let before
-  while (true) {
-    before = await readAnalysis()
-    if (before?.commit?.sha === revision) break
-    if (now() >= deadline) throw new Error(`Timed out waiting for Sonar queue revision ${revision}`)
-    log(`Waiting for Sonar queue revision ${revision}`)
-    await sleep(15_000)
-  }
+  const before = await waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log })
   if (
     before.type !== 'SHORT' ||
     before.isMain !== false ||
