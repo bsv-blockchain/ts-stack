@@ -793,7 +793,10 @@ test('queue Sonar writes use protected workflow code while admission stays read-
     controller,
     /workflow_run:\n    workflows: \[CI\]\n    types: \[in_progress, completed\]/
   )
-  assert.match(controller, /ref: \$\{\{ github\.workflow_sha \}\}/)
+  assert.match(controller, /repository: bsv-blockchain\/ts-stack/)
+  assert.doesNotMatch(controller, /^\s+ref:/m)
+  assert.match(controller, /EXPECTED_CONTROLLER_SHA: \$\{\{ github\.sha \}\}/)
+  assert.ok(controller.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROLLER_SHA"'))
   assert.match(controller, /persist-credentials: false/)
   assert.match(controller, /contents: write\n      pull-requests: write/)
   assert.match(controller, /run: node scripts\/sonar-queue-analysis\.mjs/)

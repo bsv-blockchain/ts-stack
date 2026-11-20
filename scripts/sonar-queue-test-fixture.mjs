@@ -74,19 +74,27 @@ export function queueFixture({ prs = [PR], ref = null } = {}) {
       return null
     }
   }
-  const query = path => {
-    if (path.startsWith('/compare/'))
-      return {
+  const queries = [
+    [
+      '/compare/',
+      () => ({
         status: state.ancestor ? 'ahead' : 'diverged',
         merge_base_commit: { sha: state.base }
-      }
-    if (path.startsWith('/pulls?')) return structuredClone(state.prs)
-    if (path.startsWith(`/commits/${SHA}/check-runs`))
-      return {
+      })
+    ],
+    ['/pulls?', () => structuredClone(state.prs)],
+    [
+      `/commits/${SHA}/check-runs`,
+      () => ({
         total_count: state.check ? 1 : 0,
         check_runs: state.check ? [structuredClone(state.check)] : []
-      }
-    throw new Error(`Unexpected GitHub read ${path}`)
+      })
+    ]
+  ]
+  const query = path => {
+    const route = queries.find(([prefix]) => path.startsWith(prefix))
+    if (!route) throw new Error(`Unexpected GitHub read ${path}`)
+    return route[1]()
   }
   const api = async (path, options = {}) => {
     state.calls.push({ path, ...options })

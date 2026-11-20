@@ -24,12 +24,16 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      # workflow_run uses protected default-branch code, never the queue checkout.
+      # The default workflow_run checkout is the protected default-branch SHA.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.workflow_sha }}
+          repository: bsv-blockchain/ts-stack
           persist-credentials: false
           sparse-checkout: scripts
+      - name: Verify the protected controller checkout
+        env:
+          EXPECTED_CONTROLLER_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROLLER_SHA"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.22.1
