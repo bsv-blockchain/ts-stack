@@ -73,6 +73,14 @@ test('missing, hidden, nested, duplicate, incomplete and malformed blocks fail',
   assert.deepEqual(parseReleaseNote(`<!-- ${body(note())} -->\n${body(note())}`), note())
 })
 
+test('fence scanning handles delimiter boundaries and long input without backtracking', () => {
+  assert.deepEqual(parseReleaseNote(body(note()).replaceAll('```', '~~~~')), note())
+  assert.throws(() => parseReleaseNote(body(note()).replaceAll('```', '``')))
+  assert.throws(() => parseReleaseNote(body(note()).replace(/```\n$/, '~~~\n')))
+  assert.throws(() => parseReleaseNote('`'.repeat(60000) + '\r\n' + body(note())))
+  assert.throws(() => parseReleaseNote('~'.repeat(60000) + '\r\n' + body(note())))
+})
+
 test('wrong schemas, shapes, fields and placeholder prose fail', () => {
   for (const value of [
     null,

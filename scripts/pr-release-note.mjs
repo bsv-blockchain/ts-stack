@@ -5,12 +5,23 @@ import { pathToFileURL } from 'node:url'
 
 const IMPACTS = new Set(['patch', 'minor', 'major', 'initial'])
 const FIELDS = ['schemaVersion', 'packages', 'summary', 'migration']
-const FENCE = /^(`{3,}|~{3,})(.*)$/
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+function readFence(line) {
+  const delimiter = line[0]
+  if (delimiter !== '`' && delimiter !== '~') return undefined
+  let end = 1
+  while (line[end] === delimiter) end++
+  if (end < 3) return undefined
+  return { marker: line.slice(0, end), info: line.slice(end) }
+}
 
 function closesFence(match, fence) {
   return (
-    match && match[1][0] === fence[0] && match[1].length >= fence.length && match[2].trim() === ''
+    match &&
+    match.marker[0] === fence[0] &&
+    match.marker.length >= fence.length &&
+    match.info.trim() === ''
   )
 }
 
@@ -20,7 +31,7 @@ function openingFence(line, comments) {
     if (token[0] === '<!--') hidden = true
     comments.active = token[0] === '<!--'
   }
-  return hidden ? null : FENCE.exec(line)
+  return hidden ? undefined : readFence(line)
 }
 
 function releaseNoteBlocks(body) {
@@ -31,11 +42,11 @@ function releaseNoteBlocks(body) {
   for (const line of body.replaceAll('\r\n', '\n').split('\n')) {
     if (fence === undefined) {
       const match = openingFence(line, comments)
-      fence = match?.[1]
-      note = match?.[2].trim() === 'release-note' ? [] : undefined
+      fence = match?.marker
+      note = match?.info.trim() === 'release-note' ? [] : undefined
       continue
     }
-    const match = FENCE.exec(line)
+    const match = readFence(line)
     if (closesFence(match, fence)) {
       if (note !== undefined) blocks.push(note.join('\n'))
       fence = undefined
