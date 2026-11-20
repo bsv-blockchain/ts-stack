@@ -26,7 +26,18 @@ export interface SigmaAuthorizationRequest {
   operation: SigmaOperation
   /** Lowercase hex SHA-256 of the context; present for schnorr, dleq and or. */
   contextSha256?: string
+  /** True when the application chose the base point: `key` with a base, and every `dleq`. */
+  applicationBase: boolean
+  /** Lowercase hex SHA-256 of the whole operation input (the request's plaintext). */
+  inputSha256: string
 }
+
+/**
+ * How requests at security levels 1 and 2, and privileged requests, are authorized.
+ * `'each'` asks for every proof and remembers only a plain public-key request;
+ * `'grant'` remembers one approval as a grant covering every operation.
+ */
+export type SigmaProofAuthorization = 'each' | 'grant'
 
 export type SigmaAuthorizationHandler = (
   request: SigmaAuthorizationRequest
@@ -41,4 +52,6 @@ export interface SigmaPermissionModuleOptions {
   authorize?: SigmaAuthorizationHandler
   /** Duration of a successful protocol grant. Defaults to five minutes. */
   authorizationTTL?: number
+  /** How requests are authorized. Defaults to 'each'. */
+  proofAuthorization?: SigmaProofAuthorization
 }

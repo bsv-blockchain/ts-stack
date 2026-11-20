@@ -10,7 +10,8 @@ export type {
   SigmaKeyDeriver,
   SigmaOperation,
   SigmaPermissionModuleOptions,
-  SigmaPrivilegedKeyDeriver
+  SigmaPrivilegedKeyDeriver,
+  SigmaProofAuthorization
 } from './types.js'
 
 export const createSigmaModule = (options: SigmaPermissionModuleOptions): SigmaPermissionModule =>

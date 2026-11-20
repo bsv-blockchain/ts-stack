@@ -311,7 +311,7 @@ describe('SigmaPermissionModule authorisation', () => {
     )
   })
 
-  it('authorizes level 1 once per application and protocol, including concurrent calls', async () => {
+  it("under 'grant' authorizes level 1 once per application and protocol, including concurrent calls", async () => {
     let resolveAuthorization!: (approved: boolean) => void
     const authorization = new Promise<boolean>(resolve => {
       resolveAuthorization = resolve
@@ -319,7 +319,8 @@ describe('SigmaPermissionModule authorisation', () => {
     const authorize = jest.fn(async () => await authorization)
     const m = new SigmaPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(43)),
-      authorize
+      authorize,
+      proofAuthorization: 'grant'
     })
     const first = observe(call(m, 'schnorr', ctx, levelOne('schnorr')))
     const second = observe(call(m, 'schnorr', ctx, levelOne('schnorr')))
@@ -353,7 +354,7 @@ describe('SigmaPermissionModule authorisation', () => {
     }
   })
 
-  it('scopes level 2 grants by counterparty and clears them on dispose', async () => {
+  it('scopes level 2 grants by counterparty and refuses every request after dispose', async () => {
     const authorize = jest.fn(async () => true)
     const m = new SigmaPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(47)),
@@ -368,9 +369,10 @@ describe('SigmaPermissionModule authorisation', () => {
     await call(m, 'key', [], levelTwo(first))
     await call(m, 'key', [], levelTwo(first))
     await call(m, 'key', [], levelTwo(second))
+    expect(authorize).toHaveBeenCalledTimes(2)
     m.dispose()
-    await call(m, 'key', [], levelTwo(first))
-    expect(authorize).toHaveBeenCalledTimes(3)
+    await expect(call(m, 'key', [], levelTwo(first))).rejects.toThrow(/disposed/)
+    expect(authorize).toHaveBeenCalledTimes(2)
   })
 
   it('does not scope level 1 grants by counterparty', async () => {
@@ -664,5 +666,226 @@ describe('SigmaPermissionModule boundaries', () => {
     const ring = [P, ...Array.from({ length: 7 }, (_, i) => parsePoint33(point33(10 + i), 'o'))]
     expect(verifyOr(ring, bigCtx, ciphertext)).toBe(true)
     await expect(call(m, 'or', [...plaintext, 0])).rejects.toThrow()
+  })
+})
+
+describe('proof authorization', () => {
+  const keyDeriver = new CachedKeyDeriver(new PrivateKey(111))
+  const H = H33
+  const point33 = (k: number): number[] => curve.g.mul(new BigNumber(k)).encode(true) as number[]
+  const ring = (k = 13, index = 1): number[] => [2, index, ...point33(k)]
+  const ctxOf = (n: number): number[] => [n, n, n]
+  const sha256Hex = (bytes: number[]): string => Utils.toHex(Hash.sha256(bytes))
+  type Overrides = Record<string, unknown>
+  const callKey = async (m: SigmaPermissionModule, base: number[] = []): Promise<unknown> =>
+    await call(m, 'key', base, levelOne('key'))
+  const callSchnorr = async (m: SigmaPermissionModule, context: number[]): Promise<unknown> =>
+    await call(m, 'schnorr', context, levelOne('schnorr'))
+  const callDleq = async (
+    m: SigmaPermissionModule,
+    base: number[],
+    context: number[]
+  ): Promise<unknown> => await call(m, 'dleq', [...base, ...context], levelOne('dleq'))
+  const callOr = async (
+    m: SigmaPermissionModule,
+    context: number[],
+    overrides: Overrides = {},
+    members: number[] = ring()
+  ): Promise<unknown> =>
+    await call(m, 'or', [...members, ...context], { ...levelOne('or'), ...overrides })
+  const deferred = (): { promise: Promise<boolean>; resolve: (approved: boolean) => void } => {
+    let resolve!: (approved: boolean) => void
+    const promise = new Promise<boolean>(r => {
+      resolve = r
+    })
+    return { promise, resolve }
+  }
+
+  it('asks for every proof by default and remembers only the plain public key', async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    await callKey(m)
+    await callOr(m, ctxOf(1))
+    await callOr(m, ctxOf(1))
+    await callSchnorr(m, ctxOf(2))
+    await callKey(m)
+    expect(authorize.mock.calls.map(c => c[0].operation)).toEqual(['key', 'or', 'or', 'schnorr'])
+  })
+
+  it('remembers the plain public key across key IDs, as a grant does', async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    await callKey(m)
+    await call(m, 'key', [], { ...levelOne('key'), keyID: 'member 2' })
+    expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks every time for key with a base', async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    await callKey(m, H)
+    await callKey(m, H)
+    await callKey(m)
+    expect(authorize.mock.calls.map(c => [c[0].operation, c[0].applicationBase])).toEqual([
+      ['key', true],
+      ['key', true],
+      ['key', false]
+    ])
+  })
+
+  it('does not let a remembered public key cover a proof, or a pending one answer it', async () => {
+    const decision = deferred()
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => await decision.promise)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    const key = observe(callKey(m))
+    const proof = observe(callOr(m, ctxOf(1)))
+    decision.resolve(true)
+    expect((await Promise.all([key, proof])).every(o => o.ok)).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(2)
+    await callOr(m, ctxOf(1))
+    expect(authorize).toHaveBeenCalledTimes(3)
+  })
+
+  it('shares one decision between identical concurrent proofs only', async () => {
+    const decision = deferred()
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => await decision.promise)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    const results = [
+      observe(callOr(m, ctxOf(1), { keyID: 'member 1' })),
+      observe(callOr(m, ctxOf(1), { keyID: 'member 1' })),
+      observe(callOr(m, ctxOf(1), { keyID: 'member 2' })),
+      observe(callOr(m, ctxOf(1), { keyID: 'member 1' }, ring(17)))
+    ]
+    decision.resolve(true)
+    expect((await Promise.all(results)).every(o => o.ok)).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not share a decision between proofs for different counterparties', async () => {
+    const decision = deferred()
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => await decision.promise)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    const counterparty = new PrivateKey(41).toPublicKey().toString()
+    const results = [
+      observe(callOr(m, ctxOf(1), { counterparty: 'self' })),
+      observe(callOr(m, ctxOf(1), { counterparty }))
+    ]
+    decision.resolve(true)
+    expect((await Promise.all(results)).every(o => o.ok)).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
+  it('a denied proof is not remembered as a denial', async () => {
+    const authorize = jest
+      .fn<SigmaAuthorizationHandler>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    await expect(callSchnorr(m, ctxOf(2))).rejects.toThrow(/denied/)
+    await expect(callSchnorr(m, ctxOf(2))).resolves.toBeDefined()
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
+  it("under 'grant' one approval covers every operation", async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize, proofAuthorization: 'grant' })
+    await callKey(m)
+    await callOr(m, ctxOf(1))
+    await callSchnorr(m, ctxOf(2))
+    await callDleq(m, H, ctxOf(3))
+    expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
+  it("under 'grant' concurrent requests in one scope share one decision", async () => {
+    const decision = deferred()
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => await decision.promise)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize, proofAuthorization: 'grant' })
+    const results = [observe(callKey(m)), observe(callOr(m, ctxOf(1))), observe(callKey(m, H))]
+    decision.resolve(true)
+    expect((await Promise.all(results)).every(o => o.ok)).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
+  it("tells the host whether the base is the application's, and hashes the whole input", async () => {
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+    const m = new SigmaPermissionModule({ keyDeriver, authorize })
+    const plaintexts: Array<[string, number[]]> = [
+      ['key', []],
+      ['key', H],
+      ['schnorr', ctxOf(2)],
+      ['dleq', [...H, ...ctxOf(3)]],
+      ['or', [...ring(), ...ctxOf(4)]]
+    ]
+    for (const [operation, plaintext] of plaintexts) {
+      await call(m, operation as 'key', plaintext, levelOne(operation))
+    }
+    const requests = authorize.mock.calls.map(c => c[0])
+    expect(requests.map(r => r.applicationBase)).toEqual([false, true, false, true, false])
+    requests.forEach((r, i) => {
+      expect(r.inputSha256).toBe(sha256Hex(plaintexts[i]![1]))
+    })
+    expect(requests[0]!.inputSha256).toBe(sha256Hex([]))
+    expect(requests[0]!.inputSha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('fails a decision that was pending when the module was disposed, without deriving a key', async () => {
+    const decision = deferred()
+    const authorize = jest.fn<SigmaAuthorizationHandler>(async () => await decision.promise)
+    const derivePrivateKey = jest.fn<SigmaKeyDeriver['derivePrivateKey']>()
+    const m = new SigmaPermissionModule({ keyDeriver: { derivePrivateKey }, authorize })
+    const pending = observe(callOr(m, ctxOf(1)))
+    m.dispose()
+    decision.resolve(true)
+    const result = await pending
+    expect(result).toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: expect.stringMatching(/disposed/) })
+    })
+    expect(derivePrivateKey).not.toHaveBeenCalled()
+    await expect(callKey(m)).rejects.toThrow(/disposed/)
+    await expect(call(m, 'key', [])).rejects.toThrow(/disposed/)
+    expect(authorize).toHaveBeenCalledTimes(1)
+    expect(() => m.dispose()).not.toThrow()
+  })
+
+  it('fails a privileged request disposed while its deriver was being fetched', async () => {
+    const derivePrivateKey = jest.fn<SigmaKeyDeriver['derivePrivateKey']>()
+    let provide!: (deriver: SigmaKeyDeriver) => void
+    const privilegedKeyDeriver = jest.fn(
+      async () =>
+        await new Promise<SigmaKeyDeriver>(resolve => {
+          provide = resolve
+        })
+    )
+    const m = new SigmaPermissionModule({
+      keyDeriver,
+      authorize: async () => true,
+      privilegedKeyDeriver
+    })
+    const pending = observe(
+      call(m, 'key', [], { privileged: true, privilegedReason: 'Protect the private key' })
+    )
+    while (privilegedKeyDeriver.mock.calls.length === 0) {
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    m.dispose()
+    provide({ derivePrivateKey })
+    expect(await pending).toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: expect.stringMatching(/disposed/) })
+    })
+    expect(derivePrivateKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown proofAuthorization value', () => {
+    expect(
+      () => new SigmaPermissionModule({ keyDeriver, proofAuthorization: 'always' as never })
+    ).toThrow(TypeError)
+    expect(
+      () => new SigmaPermissionModule({ keyDeriver, proofAuthorization: null as never })
+    ).toThrow(TypeError)
+    expect(
+      () => new SigmaPermissionModule({ keyDeriver, proofAuthorization: 'each' })
+    ).not.toThrow()
   })
 })

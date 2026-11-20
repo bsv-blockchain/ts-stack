@@ -1,4 +1,5 @@
 import fc from 'fast-check'
+import { jest } from '@jest/globals'
 import { BigNumber, CachedKeyDeriver, Curve, PrivateKey } from '@bsv/sdk'
 import {
   parsePoint33,
@@ -7,6 +8,7 @@ import {
   verifyOr,
   verifySchnorr
 } from '../index.js'
+import type { SigmaAuthorizationHandler } from '../index.js'
 import { call } from './helpers.js'
 
 const curve = new Curve()
@@ -106,6 +108,36 @@ describe('SigmaPermissionModule properties', () => {
           expect(verifyOr(ring, altered(ctx), first)).toBe(false)
         }
       )
+    )
+  })
+
+  it('by default asks once for every proof request made one after another', async () => {
+    const ring = [2, 1, ...point33(13)]
+    const inputFor: Record<'schnorr' | 'dleq' | 'or', (ctx: number[]) => number[]> = {
+      schnorr: ctx => ctx,
+      dleq: ctx => [...point33(7), ...ctx],
+      or: ctx => [...ring, ...ctx]
+    }
+    const proofRequest = fc.record({
+      operation: fc.constantFrom('schnorr' as const, 'dleq' as const, 'or' as const),
+      keyID,
+      context
+    })
+    await fc.assert(
+      fc.asyncProperty(fc.array(proofRequest, { minLength: 1, maxLength: 6 }), async requests => {
+        const authorize = jest.fn<SigmaAuthorizationHandler>(async () => true)
+        const m = new SigmaPermissionModule({
+          keyDeriver: new CachedKeyDeriver(new PrivateKey(29)),
+          authorize
+        })
+        for (const { operation, keyID: id, context: ctx } of requests) {
+          await call(m, operation, inputFor[operation](ctx), {
+            protocolID: [1, `p sigma ${operation} property test`],
+            keyID: id
+          })
+        }
+        expect(authorize).toHaveBeenCalledTimes(requests.length)
+      })
     )
   })
 })

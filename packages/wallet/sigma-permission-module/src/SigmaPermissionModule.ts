@@ -16,7 +16,8 @@ import type {
   SigmaAuthorizationRequest,
   SigmaKeyDeriver,
   SigmaOperation,
-  SigmaPermissionModuleOptions
+  SigmaPermissionModuleOptions,
+  SigmaProofAuthorization
 } from './types.js'
 
 const SIGMA_PATTERN = /^p sigma (key|schnorr|dleq|or) ([a-z0-9]+(?: [a-z0-9]+)*)$/
@@ -33,6 +34,7 @@ const ASCII_CONTROL = /[\0-\x1f\x7f]/
 const COMPRESSED_KEY_HEX = /^0[23][0-9a-f]{64}$/
 const UTF8 = new TextEncoder()
 const G = new Curve().g
+const DISPOSED_ERROR = 'Sigma: the module has been disposed'
 const PROTOCOL_ERROR = 'Sigma: protocol must be p sigma <key|schnorr|dleq|or> <logicalProtocolID>'
 
 type Counterparty = PubKeyHex | 'self' | 'anyone'
@@ -52,6 +54,8 @@ interface ParsedSigmaRequest extends ParsedProtocol, ParsedPrivilege {
   keyID: string
   counterparty: Counterparty
   seekPermission: boolean
+  /** The operation input as received, before parsing. */
+  input: number[]
   plaintext: ParsedPlaintext
 }
 
@@ -114,6 +118,12 @@ function lifetimeOption(lifetime: unknown): number {
     lifetime <= MAX_AUTHORIZATION_TTL
   if (!valid) throw new RangeError('Sigma: authorizationTTL must be between 1 ms and 24 hours')
   return lifetime
+}
+
+function proofAuthorizationOption(mode: unknown): SigmaProofAuthorization {
+  if (mode === undefined) return 'each'
+  if (mode === 'each' || mode === 'grant') return mode
+  throw new TypeError("Sigma: proofAuthorization must be 'each' or 'grant'")
 }
 
 function functionOption<T>(value: unknown, name: string): T | undefined {
@@ -194,13 +204,15 @@ function parseRequest(rawArgs: unknown): ParsedSigmaRequest {
   const keyID = parseKeyID(args.keyID)
   const counterparty = parseCounterparty(args.counterparty ?? 'self')
   const privilege = parsePrivilege(args.privileged, args.privilegedReason)
-  const plaintext = parsePlaintext(protocol.operation, copyBytes(args.plaintext))
+  const input = copyBytes(args.plaintext)
+  const plaintext = parsePlaintext(protocol.operation, input)
   return {
     ...protocol,
     keyID,
     counterparty,
     ...privilege,
     seekPermission: args.seekPermission !== false,
+    input,
     plaintext
   }
 }
@@ -234,7 +246,9 @@ function authorizationRequest(
     privileged: parsed.privileged,
     privilegedReason: parsed.privilegedReason,
     operation: parsed.operation,
-    ...context
+    ...context,
+    applicationBase: 'H' in parsed.plaintext,
+    inputSha256: Utils.toHex(Hash.sha256(parsed.input))
   }
 }
 
@@ -244,6 +258,8 @@ export class SigmaPermissionModule implements PermissionsModule {
   readonly #privilegedKeyDeriver: SigmaPermissionModuleOptions['privilegedKeyDeriver']
   readonly #authorize: SigmaPermissionModuleOptions['authorize']
   readonly #grants: GrantStore
+  readonly #proofAuthorization: SigmaProofAuthorization
+  #disposed = false
 
   constructor(options: SigmaPermissionModuleOptions) {
     const owned = ownData(options, 'Sigma options')
@@ -253,12 +269,17 @@ export class SigmaPermissionModule implements PermissionsModule {
     const lifetime = lifetimeOption(owned.authorizationTTL ?? DEFAULT_AUTHORIZATION_TTL)
     this.#privilegedKeyDeriver = functionOption(owned.privilegedKeyDeriver, 'privilegedKeyDeriver')
     this.#authorize = functionOption(owned.authorize, 'authorize')
+    this.#proofAuthorization = proofAuthorizationOption(owned.proofAuthorization)
     this.#keyDeriver = owned.keyDeriver
     this.#grants = new GrantStore(lifetime)
   }
 
-  /** Clears cached and pending authorization state. */
+  /**
+   * Clears cached and pending authorization state and refuses every later
+   * request, including one whose decision is still pending. Safe to call twice.
+   */
   dispose(): void {
+    this.#disposed = true
     this.#grants.clear()
   }
 
@@ -267,11 +288,13 @@ export class SigmaPermissionModule implements PermissionsModule {
     request: PermissionsModuleRequest,
     _next: PermissionsModuleNext
   ): Promise<{ ciphertext: number[] }> {
+    this.#assertLive()
     const owned = ownData(request, 'Sigma request')
     const originator = encryptOriginator(owned)
     const parsed = parseRequest(owned.args)
     await this.#ensureAuthorized(parsed, originator)
     const keyDeriver = await this.#selectKeyDeriver(parsed)
+    this.#assertLive()
     const derivedKey = keyDeriver.derivePrivateKey(
       [parsed.securityLevel, `p sigma ${parsed.logicalProtocolID}`],
       parsed.keyID,
@@ -317,20 +340,46 @@ export class SigmaPermissionModule implements PermissionsModule {
     }
   }
 
+  #assertLive(): void {
+    if (this.#disposed) throw new Error(DISPOSED_ERROR)
+  }
+
+  /**
+   * Under 'grant' every approval is remembered; under 'each' only a plain
+   * public-key request (`key` with no base) is.
+   */
+  #isRemembered(request: SigmaAuthorizationRequest): boolean {
+    if (this.#proofAuthorization === 'grant') return true
+    return request.operation === 'key' && !request.applicationBase
+  }
+
+  /**
+   * The key under which concurrent requests share one pending decision: the
+   * grant scope under 'grant'; under 'each', the whole authorization request, so
+   * only identical requests (grant scope, operation, key ID, counterparty and
+   * input included) share an answer.
+   */
+  #decisionKey(scope: string, request: SigmaAuthorizationRequest): string {
+    return this.#proofAuthorization === 'grant' ? scope : JSON.stringify(request)
+  }
+
   async #ensureAuthorized(parsed: ParsedSigmaRequest, originator: string): Promise<void> {
     if (parsed.securityLevel === 0 && !parsed.privileged) return
     const scope = grantScope(parsed, originator)
-    if (this.#grants.covers(scope)) return
+    const request = authorizationRequest(parsed, originator)
+    const remembered = this.#isRemembered(request)
+    if (remembered && this.#grants.covers(scope)) return
     if (!parsed.seekPermission) {
       throw new Error('Sigma: permission is required and seekPermission is false')
     }
     const authorize = this.#authorize
     if (authorize == null) throw new Error('Sigma: no authorization handler is configured')
-    const approved = await this.#grants.decide(scope, () =>
-      authorize(authorizationRequest(parsed, originator))
+    const approved = await this.#grants.decide(this.#decisionKey(scope, request), () =>
+      authorize(request)
     )
+    this.#assertLive()
     if (approved !== true) throw new Error('Sigma: user denied permission')
-    this.#grants.remember(scope)
+    if (remembered) this.#grants.remember(scope)
   }
 
   async #selectKeyDeriver(parsed: ParsedSigmaRequest): Promise<SigmaKeyDeriver> {
