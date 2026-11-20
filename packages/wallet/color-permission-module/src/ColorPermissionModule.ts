@@ -2017,7 +2017,8 @@ export class ColorPermissionModule implements PermissionsModule {
         tags: [COLOR_BASKET_NAMESPACE],
         include: 'locking scripts',
         includeCustomInstructions: true,
-        includeTags: true
+        includeTags: true,
+        limit: LIST_PAGE_LIMIT
       },
       originator
     )
@@ -3432,7 +3433,8 @@ export class ColorPermissionModule implements PermissionsModule {
         include: entireTransactions ? 'entire transactions' : 'locking scripts',
         includeCustomInstructions: args.includeCustomInstructions,
         includeTags: true,
-        includeLabels: args.includeLabels
+        includeLabels: args.includeLabels,
+        limit: LIST_PAGE_LIMIT
       },
       originator
     )

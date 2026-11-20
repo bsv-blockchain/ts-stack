@@ -25,8 +25,8 @@ No wire, BEEF or BRC-100 change. 2.18.0 was not published; this candidate includ
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
-app's patch of 2.15.3. Every change is opt-in; with none of it set, behaviour is
-unchanged. No wire or schema change, and no consumer migration.
+app's patch of 2.15.3. These host hooks are opt-in. The Monitor changes below
+apply to supported stores by default.
 
 - `Wallet.setAdminOriginator(originator)` names the host's own originator (the
   domain its `WalletPermissionsManager` uses as `adminOriginator`) once; it
@@ -60,6 +60,12 @@ can be reconstructed from the original signed Toolbox action after restart.
 Recovering an interrupted phone change lets WAB finalize the original rotation. Snapshot,
 BRC-100 and UMP wire formats are unchanged. See Optional durable profile state
 in the README for adoption and recovery guidance.
+
+- Bound the Wallet Storage Monitor’s status, proof, and reorg review work so
+  other tasks can continue. Resume ARC events from the last durably handled
+  event and reconcile exact outpoints when a confirmed spender has a verified
+  Merkle proof and the local primary epoch. Normal Knex migrations install
+  bounded checkpoint and receipt storage and retain eligible legacy evidence.
 
 # 2.17.0 — published
 
