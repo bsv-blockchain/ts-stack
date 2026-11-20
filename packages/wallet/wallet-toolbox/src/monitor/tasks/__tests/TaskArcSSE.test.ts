@@ -193,7 +193,7 @@ describe('TaskBsvBroadcasterSSE', () => {
       const monitor = makeMonitor()
       const sp = monitor.storage.sp
       sp.loadMonitorCheckpoint.mockResolvedValue(['"41"'])
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       const key: string = sp.loadMonitorCheckpoint.mock.calls[0][0]
       expect(key).toMatch(/^ArcadeSSECursor\.[a-f0-9]{40}$/)
@@ -209,7 +209,7 @@ describe('TaskBsvBroadcasterSSE', () => {
       await task.runTask()
       expect(sp.saveMonitorCheckpoint).toHaveBeenLastCalledWith(key, '"42"')
       sp.loadMonitorCheckpoint.mockResolvedValue(['"42"'])
-      const restarted = new TaskArcadeSSE(monitor)
+      const restarted = new TaskBsvBroadcasterSSE(monitor)
       await restarted.asyncSetup()
       expect(restarted.sseClient?.lastEventId).toBe('42')
       task.close()
@@ -218,7 +218,7 @@ describe('TaskBsvBroadcasterSSE', () => {
 
     test('retries reconnect after the accepted prefix drains and backs off repeated errors', async () => {
       const clock = jest.spyOn(Date, 'now').mockReturnValue(10000)
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       const drain = jest.spyOn(task.sseClient!, 'isDraining', 'get').mockReturnValue(true)
       FakeEventSource.instances[0].emit('error', {})
