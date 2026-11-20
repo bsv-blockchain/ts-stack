@@ -1,3 +1,5 @@
+import { registerUMPActionReceiptReader, umpUpdateActionLabel } from './utility/umpActionReceipt'
+import { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
 import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
 import { promiseFromSync } from './utility/promiseFromSync'
 export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
@@ -449,6 +451,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.services != null) {
       this.storage.setServices(this.services)
     }
+    registerUMPActionReceiptReader(this, (operationId, originator) =>
+      this.readStoredUMPActionReceipt(operationId, originator)
+    )
   }
 
   async destroy(): Promise<void> {
@@ -655,6 +660,33 @@ export class Wallet implements WalletInterface, ProtoWallet {
   /// ///////////////
   // List Methods
   /// ///////////////
+
+  /** Read the signed request only after binding its transaction ID to the authorized account and operation label. */
+  private async readStoredUMPActionReceipt(operationId: string, originator: string): Promise<number[] | undefined> {
+    if (!this.storage.isActiveStorageProvider()) return undefined
+    const label = umpUpdateActionLabel(operationId)
+    const { totalActions, actions } = await this.listActions(
+      { labels: [label], includeLabels: true, limit: 2 },
+      originator
+    )
+    if (totalActions === 0 && actions.length === 0) return undefined
+    const [action] = actions
+    if (totalActions !== 1 || actions.length !== 1 || !action.isOutgoing || action.labels?.includes(label) !== true)
+      throw new Error('Could not bind the retained wallet action to its UMP update.')
+    if (action.status === 'unsigned') return undefined
+
+    return await this.storage.runAsStorageProvider(async storage => {
+      const requests = await storage.findProvenTxReqs({ partial: { txid: action.txid }, paged: { limit: 2 } })
+      if (requests.length !== 1) return undefined
+      const [request] = requests
+      if (request.inputBEEF == null || request.status === 'invalid' || request.status === 'doubleSpend')
+        return undefined
+      const beef = new Beef()
+      await storage.mergeReqToBeefToShareExternally(request, beef, [])
+      await verifyUnlockScripts(action.txid, beef, this.scriptVerifier)
+      return beef.toBinaryAtomic(action.txid)
+    })
+  }
 
   async listActions(
     args: ListActionsArgs,

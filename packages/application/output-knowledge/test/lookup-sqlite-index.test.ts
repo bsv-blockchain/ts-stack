@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { SQLiteTransactionDomain } from '../src/storage/SQLiteTransactionDomain.js'
 import {
   lookupIndexDefinition,
@@ -581,54 +582,62 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('matches a row-map model across generated updates, deletions and exact lost-ack retries', async () => {
-  const { store } = await fixture()
-  const expected = new Map<string, { revision: string; label: string }>()
-  let sequence = 0n
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 0, max: 7 }),
-      fc.boolean(),
-      fc.string({ maxLength: 40 }),
-      async (number, remove, label) => {
-        const key = number.toString(16).padStart(2, '0'),
-          before = expected.get(key)
-        const change: LookupIndexMutation = {
-          base: sequence.toString(),
-          evaluatedAt: '100',
-          event: { reason: 'model' },
-          edits: [
-            {
-              key,
-              previous: before?.revision ?? null,
-              next: remove ? null : { data: { label }, expiresAt: null }
-            }
-          ]
+it.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
+  'matches a row-map model across generated updates, deletions and exact lost-ack retries (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const { store } = await fixture()
+    const expected = new Map<string, { revision: string; label: string }>()
+    let sequence = 0n
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 7 }),
+        fc.boolean(),
+        fc.string({ maxLength: 40 }),
+        async (number, remove, label) => {
+          const key = number.toString(16).padStart(2, '0'),
+            before = expected.get(key)
+          const change: LookupIndexMutation = {
+            base: sequence.toString(),
+            evaluatedAt: '100',
+            event: { reason: 'model' },
+            edits: [
+              {
+                key,
+                previous: before?.revision ?? null,
+                next: remove ? null : { data: { label }, expiresAt: null }
+              }
+            ]
+          }
+          const committed = await store.commit(change)
+          sequence++
+          expect(committed.sequence).toBe(sequence.toString())
+          expect(await store.commit(change)).toEqual(committed)
+          if (remove) expected.delete(key)
+          else expected.set(key, { revision: sequence.toString(), label })
+          const page = await store.snapshot(sequence.toString(), null, {
+            records: 128,
+            bytes: 65536
+          })
+          expect(page.complete).toBe(true)
+          expect(
+            page.rows.map(row => ({
+              key: row.key,
+              revision: row.revision,
+              label: row.value.data.label
+            }))
+          ).toEqual(
+            [...expected]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => ({ key, ...value }))
+          )
+          expect((await store.head()).sequence).toBe(sequence.toString())
         }
-        const committed = await store.commit(change)
-        sequence++
-        expect(committed.sequence).toBe(sequence.toString())
-        expect(await store.commit(change)).toEqual(committed)
-        if (remove) expected.delete(key)
-        else expected.set(key, { revision: sequence.toString(), label })
-        const page = await store.snapshot(sequence.toString(), null, { records: 128, bytes: 65536 })
-        expect(page.complete).toBe(true)
-        expect(
-          page.rows.map(row => ({
-            key: row.key,
-            revision: row.revision,
-            label: row.value.data.label
-          }))
-        ).toEqual(
-          [...expected]
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => ({ key, ...value }))
-        )
-        expect((await store.head()).sequence).toBe(sequence.toString())
-      }
+      ),
+      propertyBatch
     )
-  )
-}, 120000)
+  },
+  120000
+)
 
 it('validates every capacity and binding before opening a durable file', async () => {
   const { path, store } = await fixture()
