@@ -1,3 +1,4 @@
+import { readUMPActionReceipt, registerUMPActionReceiptReader } from './utility/umpActionReceipt'
 import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import { validateCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import {
@@ -962,6 +963,11 @@ export class WalletPermissionsManager implements WalletInterface {
     this.underlying = underlyingWallet
     this.adminOriginator = this.normalizeOriginator(adminOriginator) || adminOriginator
     this.telemetry = new Telemetry(config.telemetry)
+    registerUMPActionReceiptReader(this, async (operationId, originator) => {
+      if (this.normalizeOriginator(originator) !== this.adminOriginator)
+        throw new Error('Only the wallet administrator can recover a UMP action.')
+      return await readUMPActionReceipt(this.underlying, operationId, this.adminOriginator)
+    })
 
     // Default all config options to true unless specified
     this.config = {

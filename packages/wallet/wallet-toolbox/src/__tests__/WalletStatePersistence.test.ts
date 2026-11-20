@@ -232,6 +232,37 @@ describe('awaited wallet state continuity', () => {
     expect(f.publish).toHaveBeenCalledTimes(1)
     expect(f.republish).not.toHaveBeenCalled()
   })
+  test('recovers the original signed action after restart with only a submitting checkpoint', async () => {
+    const f = await fixture()
+    f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
+      await checkpoint!.onStarting?.()
+      throw new Error('original signing response lost')
+    })
+    await expect(f.manager.addProfile('Work')).rejects.toMatchObject({ stage: 'submitting' })
+    const pending = f.pending!
+    expect(pending.transaction).toBeUndefined()
+
+    const resumed = await fixture()
+    await resumed.manager.loadSnapshot(pending.previousSnapshot)
+    resumed.manager.loadPendingUMPUpdate(pending)
+    const receipt = { transaction: [1], outpoint: nextOutpoint }
+    resumed.interactor.recoverCheckpoint = jest.fn(async () => receipt)
+    ;(resumed.persistence.savePendingUpdate as jest.Mock).mockRejectedValueOnce(new Error('receipt write unavailable'))
+    await expect(resumed.manager.recoverPendingUMPUpdate()).rejects.toMatchObject({ stage: 'submitting' })
+    expect(resumed.republish).not.toHaveBeenCalled()
+
+    resumed.republish.mockImplementationOnce(async (_wallet, _admin, _token, _previous, signed) => {
+      expect(signed).toMatchObject({ ...receipt, stage: 'signed', operationId: pending.operationId })
+      expect(resumed.pending).toEqual(signed)
+      return nextOutpoint
+    })
+    await resumed.manager.recoverPendingUMPUpdate()
+    expect(resumed.interactor.recoverCheckpoint).toHaveBeenCalledTimes(2)
+    expect(resumed.publish).not.toHaveBeenCalled()
+    expect(resumed.republish).toHaveBeenCalledTimes(1)
+    expect(resumed.pending).toBeNull()
+    expect(resumed.manager.listProfiles().map(profile => profile.name)).toEqual(['default', 'Work'])
+  })
   test('failure to save the initial intent cannot start a financial update', async () => {
     const f = await fixture()
     ;(f.persistence.savePendingUpdate as jest.Mock).mockRejectedValueOnce(new Error('disk full'))

@@ -31,8 +31,9 @@ unchanged. No wire or schema change, and no consumer migration.
 
 Add optional awaited host persistence, serialized profile activation and snapshot
 restore, and signed checkpoints for UMP updates. The built-in interactor holds
-wallet and overlay submission until the signed receipt is durable. Recovering an
-interrupted phone change lets WAB finalize the original rotation. Snapshot,
+wallet and overlay submission until the signed receipt is durable. A lost receipt
+can be reconstructed from the original signed Toolbox action after restart.
+Recovering an interrupted phone change lets WAB finalize the original rotation. Snapshot,
 BRC-100 and UMP wire formats are unchanged. See Optional durable profile state
 in the README for adoption and recovery guidance.
 

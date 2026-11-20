@@ -1,3 +1,4 @@
+import { readStoredUMPActionReceipt, registerUMPActionReceiptReader } from './utility/umpActionReceipt'
 import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
 import { promiseFromSync } from './utility/promiseFromSync'
 export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
@@ -448,6 +449,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.services != null) {
       this.storage.setServices(this.services)
     }
+    registerUMPActionReceiptReader(this, (operationId, originator) =>
+      readStoredUMPActionReceipt(this, operationId, originator)
+    )
   }
 
   async destroy(): Promise<void> {

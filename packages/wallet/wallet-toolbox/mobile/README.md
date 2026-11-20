@@ -41,9 +41,13 @@ After an interrupted update, authenticate or restore the original account, then
 load its retained checkpoint with `loadPendingUMPUpdate` before serving wallet
 requests. Call `recoverPendingUMPUpdate` to verify the exact successor or
 re-publish the original transaction after checking its owner, fields, unique
-token output and predecessor input. A submitting checkpoint without a receipt
-requires reconciliation of the original wallet action. Resume an interrupted
-phone-number change after recovery to finalize its existing staged rotation.
+token output and predecessor input. With Toolbox `Wallet` or
+`WalletPermissionsManager` and locally readable Toolbox storage, a submitting
+checkpoint can recover the original signed transaction using the operation ID. Recovery saves
+that receipt before sending it. Custom interactors can implement
+`recoverCheckpoint` to recover the same authenticated receipt from their own
+durable action store. An unknown signing outcome remains pending. Resume an
+interrupted phone-number change after recovery to finalize its existing rotation.
 
 `syncUMPToken()` retains its boolean return. `getUMPTokenSyncStatus()` additionally
 distinguishes unchanged, updated, authoritative not-found and unknown results.

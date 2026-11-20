@@ -17,6 +17,12 @@ export interface WalletStatePersistence {
   savePendingUpdate(checkpoint: PendingUMPUpdate | null): Promise<void>
 }
 
+/** Complete Atomic BEEF for a previously signed UMP update and its exact token outpoint. */
+export interface SignedUMPActionReceipt {
+  transaction: number[]
+  outpoint: string
+}
+
 export interface UMPActionCheckpoint {
   operationId: string
   onStarting?(): Promise<void>
