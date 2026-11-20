@@ -106,8 +106,7 @@ function copyBytes(value: unknown): number[] {
   return bytes
 }
 
-function lifetimeOption(value: unknown): number {
-  const lifetime = value ?? DEFAULT_AUTHORIZATION_TTL
+function lifetimeOption(lifetime: unknown): number {
   const valid =
     typeof lifetime === 'number' &&
     Number.isSafeInteger(lifetime) &&
@@ -162,8 +161,7 @@ function parseKeyID(keyID: unknown): string {
   return keyID
 }
 
-function parseCounterparty(value: unknown): Counterparty {
-  const counterparty = value ?? 'self'
+function parseCounterparty(counterparty: unknown): Counterparty {
   if (counterparty === 'self' || counterparty === 'anyone') return counterparty
   if (typeof counterparty !== 'string') {
     throw new TypeError('Sigma: counterparty must be self, anyone, or a compressed public key')
@@ -194,7 +192,7 @@ function parseRequest(rawArgs: unknown): ParsedSigmaRequest {
   const args = ownData(rawArgs, 'Sigma: encrypt arguments')
   const protocol = parseProtocol(args.protocolID)
   const keyID = parseKeyID(args.keyID)
-  const counterparty = parseCounterparty(args.counterparty)
+  const counterparty = parseCounterparty(args.counterparty ?? 'self')
   const privilege = parsePrivilege(args.privileged, args.privilegedReason)
   const plaintext = parsePlaintext(protocol.operation, copyBytes(args.plaintext))
   return {
@@ -252,7 +250,7 @@ export class SigmaPermissionModule implements PermissionsModule {
     if (!isKeyDeriver(owned.keyDeriver)) {
       throw new TypeError('Sigma: keyDeriver with derivePrivateKey is required')
     }
-    const lifetime = lifetimeOption(owned.authorizationTTL)
+    const lifetime = lifetimeOption(owned.authorizationTTL ?? DEFAULT_AUTHORIZATION_TTL)
     this.#privilegedKeyDeriver = functionOption(owned.privilegedKeyDeriver, 'privilegedKeyDeriver')
     this.#authorize = functionOption(owned.authorize, 'authorize')
     this.#keyDeriver = owned.keyDeriver
@@ -286,18 +284,14 @@ export class SigmaPermissionModule implements PermissionsModule {
 
   /** This scheme defines no baskets or labels; refuse rather than skip ordinary checks. */
   onRequest(request: PermissionsModuleRequest): Promise<{ args: object }> {
-    return new Promise((_resolve, reject) => {
-      reject(refusal(request.method))
-    })
+    return Promise.reject(refusal(request.method))
   }
 
   onResponse(
     _result: unknown,
     context?: { method?: string; originator?: string }
   ): Promise<unknown> {
-    return new Promise((_resolve, reject) => {
-      reject(refusal(context?.method))
-    })
+    return Promise.reject(refusal(context?.method))
   }
 
   #run(plaintext: ParsedPlaintext, x: ReturnType<typeof deriveScalar>): number[] {
