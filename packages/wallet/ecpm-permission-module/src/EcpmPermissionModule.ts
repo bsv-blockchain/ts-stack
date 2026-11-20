@@ -308,6 +308,12 @@ export class EcpmPermissionModule implements PermissionsModule {
         throw new Error('ECPM: authorization queue is full')
       }
       pending = Promise.resolve(this.#authorize(authorization))
+      // The host may synchronously tear down the wallet in its callback.
+      // Never restore a pending entry after dispose has cleared the maps.
+      if (authorizationEpoch !== this.#authorizationEpoch) {
+        void pending.catch(() => {})
+        throw new Error('ECPM: request invalidated by dispose')
+      }
       this.#pendingGrants.set(scope, pending)
     }
     let approved: boolean

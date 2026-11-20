@@ -501,6 +501,35 @@ describe('EcpmPermissionModule', () => {
     expect(derivePrivateKey).toHaveBeenCalledTimes(1)
   })
 
+  it('does not restore a pending entry when authorization disposes the wallet', async () => {
+    let module!: EcpmPermissionModule
+    let shouldDispose = true
+    const authorize = jest.fn(async () => {
+      if (shouldDispose) {
+        shouldDispose = false
+        module.dispose()
+      }
+      return true
+    })
+    module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(63)),
+      authorize
+    })
+    const args = requestArgs(point(7), 'apply', {
+      protocolID: [1, `p ecpm apply ${point(7)} mental poker deal`]
+    })
+
+    const tornDown = observe(execute(module, args))
+    const fresh = observe(execute(module, args))
+    const [firstResult, secondResult] = await Promise.all([tornDown, fresh])
+    expect(firstResult.ok).toBe(false)
+    if (!firstResult.ok) {
+      expect(firstResult.error).toEqual(new Error('ECPM: request invalidated by dispose'))
+    }
+    expect(secondResult.ok).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
   it('does not use a privileged deriver returned after disposal', async () => {
     let enteredProvider!: () => void
     let releaseProvider!: () => void
