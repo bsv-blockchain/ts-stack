@@ -391,10 +391,39 @@ test('specialized workflows are bounded and required conformance checks always r
   const runtime = readFileSync(RUNTIME_PATH, 'utf8')
 
   assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 1)
-  assert.match(conformance, /^  pull_request:\n    branches: \[main\]\n\nconcurrency:/m)
+  assert.match(
+    conformance,
+    /^  pull_request:\n    branches: \[main\]\n  merge_group:\n    types: \[checks_requested\]\n\nconcurrency:/m
+  )
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)
+})
+
+test('merge queue workflows select the combined diff and preserve security admission', () => {
+  for (const file of ['ci.yml', 'codeql.yml', 'conformance.yml']) {
+    const source = readFileSync(join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    assert.match(source, /^  merge_group:\n    types: \[checks_requested\]$/m)
+    assert.match(source, /group: .+github\.ref/)
+  }
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
+  assert.match(
+    jobs.scope,
+    /PR_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}/
+  )
+  assert.match(
+    jobs.scope,
+    /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.event\.merge_group\.head_sha \|\| github\.sha \}\}/
+  )
+  assert.match(
+    jobs['dependency-review'],
+    /if: github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group'/
+  )
+  assert.match(jobs['dependency-review'], /fail-on-severity: high/)
+  // Until genuine queue analysis is qualified, never scan a queue as main.
+  assert.match(jobs['coverage-upload'], /github\.event_name != 'merge_group'/)
+  assert.match(jobs['merge-gate'], /CI_EVENT: \$\{\{ github\.event_name \}\}/)
 })
 
 test('all selected execution jobs survive skipped ancestors and expose a strict final gate', () => {

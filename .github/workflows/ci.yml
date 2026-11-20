@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
   # Release acceptance must be able to exercise the complete current tree.
   workflow_dispatch:
     inputs:
@@ -154,9 +156,9 @@ jobs:
       - name: Resolve package, documentation, conformance, and image scope
         id: scope
         env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           PUSH_BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
         run: |
           BASE_SHA="$PR_BASE_SHA"
           if [ -z "$BASE_SHA" ]; then BASE_SHA="$PUSH_BASE_SHA"; fi
@@ -1710,7 +1712,10 @@ jobs:
         # disables Automatic Analysis; the two methods cannot run together.
         # Dependabot changes are covered by audit + dependency review and do
         # not receive Actions secrets.
-        if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        # Queue analysis needs its own explicit Sonar branch/revision contract;
+        # never let an unrecognized event overwrite the main analysis.
+        # The result gate rejects the missing queue analysis until it is qualified.
+        if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -1761,7 +1766,7 @@ jobs:
           # CI checks out GitHub's synthetic PR merge commit but Codecov
           # reports against the branch head.  Give Codecov the actual base
           # parent so it does not fall back to its last covered main commit.
-          commit_parent: ${{ github.event.pull_request.base.sha || github.event.before }}
+          commit_parent: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
           fail_ci_if_error: false
 
@@ -2066,7 +2071,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
