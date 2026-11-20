@@ -294,7 +294,7 @@ const setManifestVersion = (text, version) => {
   const line = lines[index] ?? ''
   const valueStart = line.indexOf('"', line.indexOf(':') + 1)
   const valueEnd = line.indexOf('"', valueStart + 1)
-  if (index === -1 || line.indexOf(':') === -1 || valueStart === -1 || valueEnd === -1) {
+  if (index === -1 || !line.includes(':') || valueStart === -1 || valueEnd === -1) {
     throw new Error('package.json has no "version" field to update')
   }
   lines[index] = `${line.slice(0, valueStart + 1)}${version}${line.slice(valueEnd)}`
@@ -326,7 +326,7 @@ export function insertChangelogSection(text, { version, date, changes }) {
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.startsWith('## '))
   const bullets = changelogBullets(changes)
-  const escapedVersion = version.replaceAll('.', '\\.')
+  const escapedVersion = version.replaceAll('.', String.raw`\.`)
   const versionPattern = new RegExp(String.raw`(^|[^\d.])` + escapedVersion + String.raw`(?![\d.])`)
   const existing = headings.find(({ line }) => versionPattern.test(line))
   if (existing !== undefined) {
@@ -382,7 +382,7 @@ export function setPageVersion(text, version) {
   const index = lines.findIndex(line => line.startsWith('version:'))
   if (index === -1) return text
   const value = lines[index].slice('version:'.length).trim()
-  const quote = value[0] === '"' || value[0] === "'" ? value[0] : ''
+  const quote = ['"', "'"].find(mark => value.startsWith(mark)) ?? ''
   lines[index] = `version: ${quote}${version}${quote}`
   const updated = lines.join('\n')
   return updated === frontmatter ? text : text.replace(frontmatter, updated)
