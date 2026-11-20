@@ -14,7 +14,7 @@ export interface ArcadeRejectionClassification {
 }
 
 /**
- * Canonical classification shared by Arcade polling and SSE. Keeping this in
+ * Canonical classification shared by BSV Broadcaster polling and SSE. Keeping this in
  * one place prevents a provider from calling a rejection "unknown" while the
  * monitor's event path calls the same status terminal.
  */

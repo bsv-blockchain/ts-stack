@@ -110,16 +110,16 @@ export function createDefaultWalletServicesOptions(
     deploymentId?: string,
     chaintracks?: ChaintracksClientApi,
     /**
-     * Optional Arcade endpoint. TTN uses its public Arcade endpoint by default and regtest
-     * uses REGTEST_ARCADE_URL; other chains remain opt-in. Arcade is registered as the
+     * Optional BSV Broadcaster endpoint. TTN uses its public BSV Broadcaster endpoint by default and regtest
+     * uses REGTEST_ARCADE_URL; other chains remain opt-in. BSV Broadcaster is registered as the
      * primary broadcaster ahead of ARC. Pass an empty string to explicitly disable the
      * TTN or regtest default.
      */
     arcadeUrl?: string,
-    /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
+    /** Server-level API key (Bearer) for the BSV Broadcaster endpoint, if it requires auth. */
     arcadeApiKey?: string,
     /**
-     * Stable SSE callback token. Must match the Monitor's `callbackToken` so Arcade routes
+     * Stable SSE callback token. Must match the Monitor's `callbackToken` so BSV Broadcaster routes
      * each broadcast transaction's status events to this wallet's `/events` subscription.
      */
     arcadeCallbackToken?: string
@@ -165,7 +165,7 @@ export function createDefaultWalletServicesOptions(
     exchangeratesapiKey: undefined,
     chaintracksFiatExchangeRatesUrl,
     chaintracks,
-    // Arcade uses EF at /tx. Legacy ARC uses BEEF at /v1/tx and has no
+    // BSV Broadcaster uses EF at /tx. Legacy ARC uses BEEF at /v1/tx and has no
     // compatible TTN or regtest endpoint, so do not install it as their fallback.
     arcUrl: arcDefaultUrl(chain),
     arcConfig: {
@@ -184,8 +184,8 @@ export function createDefaultWalletServicesOptions(
     bitailsApiKey
   }
 
-  // Arcade (bsv-blockchain/arcade) primary broadcaster. TTN and regtest have no
-  // compatible ARC fallback, so they default to their Arcade endpoint (TTN's public
+  // BSV Broadcaster (bsv-blockchain/broadcaster) primary broadcaster. TTN and regtest have no
+  // compatible ARC fallback, so they default to their BSV Broadcaster endpoint (TTN's public
   // one, regtest's from REGTEST_ARCADE_URL). Existing mainnet/testnet provider sets
   // remain opt-in and therefore unchanged.
   const resolvedArcadeUrl =
@@ -196,7 +196,7 @@ export function createDefaultWalletServicesOptions(
       apiKey: arcadeApiKey ?? undefined,
       deploymentId,
       // SSE (pull) flow: token scopes the /events subscription; no webhook callbackUrl
-      // (Arcade rejects private/loopback URLs). Must match Monitor.options.callbackToken.
+      // (BSV Broadcaster rejects private/loopback URLs). Must match Monitor.options.callbackToken.
       callbackToken: arcadeCallbackToken ?? arcCallbackToken ?? undefined
     }
   }
@@ -205,7 +205,7 @@ export function createDefaultWalletServicesOptions(
 }
 
 /**
- * Default Arcade (bsv-blockchain/arcade) endpoint per chain.
+ * Default BSV Broadcaster (bsv-blockchain/broadcaster) endpoint per chain.
  * Returns undefined when no public default is known for the chain.
  */
 export function arcadeDefaultUrl(chain: Chain): string | undefined {
@@ -241,7 +241,7 @@ export function arcDefaultUrl(chain: Chain): string {
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL ('' when unset).
       return tstnArcadeUrl() ?? ''
     case 'regtest':
-      // Regtest deployments run Arcade (EF at /tx), not legacy ARC (BEEF at /v1/tx).
+      // Regtest deployments run BSV Broadcaster (EF at /tx), not legacy ARC (BEEF at /v1/tx).
       return ''
     case 'mock':
       return ''

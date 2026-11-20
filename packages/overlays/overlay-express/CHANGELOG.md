@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Rename `ArcadeProvider` to `BsvBroadcasterProvider`, `ArcadeProviderConfig` to
+  `BsvBroadcasterProviderConfig`, `ArcadeMerkleProof` to `BsvBroadcasterMerkleProof`
+  and `configureArcade` to `configureBsvBroadcaster`, because Arcade was renamed to
+  BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster). The old names and the
+  `ArcadeProvider.ts` import path remain as deprecated aliases. The `Arcade` provider name
+  in broadcast results, the `arcade*` instance fields, hostnames, HTTP paths and headers
+  are unchanged. No consumer migration is required.
+
 - Prepare `2.9.0`: Adds optional script verifier configuration and accepts Arcade SEEN_MULTIPLE_NODES and STUMP_PROCESSING as successful rebroadcast states. Existing deployments retain JavaScript verification. Operators may configure a preloaded verifier; no wire or data migration is required.
 
 

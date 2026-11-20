@@ -13,7 +13,7 @@ import { TaskClock } from './tasks/TaskClock'
 import { TaskNewHeader } from './tasks/TaskNewHeader'
 import { TaskMonitorCallHistory } from './tasks/TaskMonitorCallHistory'
 import { TaskReorg } from './tasks/TaskReorg'
-import { TaskArcadeSSE } from './tasks/TaskArcSSE'
+import { TaskBsvBroadcasterSSE } from './tasks/TaskArcSSE'
 import { TaskMineBlock } from './tasks/TaskMineBlock'
 
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
@@ -88,7 +88,7 @@ export interface MonitorOptions {
 
   /**
    * Stable callback token for ARC SSE event streaming.
-   * When set, TaskArcadeSSE will open an SSE connection to Arcade's
+   * When set, TaskBsvBroadcasterSSE will open an SSE connection to BSV Broadcaster's
    * /events endpoint and receive real-time transaction status updates.
    * Must match the X-CallbackToken header sent during broadcast.
    */
@@ -265,7 +265,7 @@ export class Monitor {
 
   async destroy(): Promise<void> {
     for (const task of new Set([...this._tasks, ...this._otherTasks])) {
-      if (task instanceof TaskArcadeSSE) task.close()
+      if (task instanceof TaskBsvBroadcasterSSE) task.close()
     }
     if (this.chaintracksWithEvents != null) {
       const c = this.chaintracksWithEvents
@@ -353,7 +353,7 @@ export class Monitor {
       new TaskReconcilePendingTransactions(this),
       new TaskReviewProvenTxs(this),
       new TaskCleanupActionBatches(this),
-      new TaskArcadeSSE(this)
+      new TaskBsvBroadcasterSSE(this)
     )
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour), new TaskReviewUtxos(this))
     if (this.chain === 'mock') {
@@ -382,7 +382,7 @@ export class Monitor {
       new TaskReconcilePendingTransactions(this),
       new TaskReviewProvenTxs(this),
       new TaskCleanupActionBatches(this),
-      new TaskArcadeSSE(this)
+      new TaskBsvBroadcasterSSE(this)
     )
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams), new TaskReviewUtxos(this))
     if (this.chain === 'mock') {
@@ -403,7 +403,7 @@ export class Monitor {
 
   removeTask(name: string): void {
     for (const task of this._tasks) {
-      if (task.name === name && task instanceof TaskArcadeSSE) task.close()
+      if (task.name === name && task instanceof TaskBsvBroadcasterSSE) task.close()
     }
     this._tasks = this._tasks.filter(t => t.name !== name)
   }
@@ -649,7 +649,7 @@ export class Monitor {
   }
 
   /**
-   * Called by TaskArcadeSSE when an SSE status event is received from Arcade.
+   * Called by TaskBsvBroadcasterSSE when an SSE status event is received from BSV Broadcaster.
    */
   callOnTransactionStatusChanged(txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged != null) {
@@ -670,11 +670,12 @@ export class Monitor {
   }
 
   /**
-   * Fetch pending transaction status events from Arcade on demand.
+   * Fetch pending transaction status events from BSV Broadcaster on demand.
    * Call this on app open, balance refresh, transaction list view, etc.
    */
   async fetchSSEEvents(): Promise<number> {
-    const sseTask = this._tasks.find(t => t.name === TaskArcadeSSE.taskName) as TaskArcadeSSE | undefined
+    const sseTask = this._tasks.find(t => t.name === TaskBsvBroadcasterSSE.taskName) as
+      TaskBsvBroadcasterSSE | undefined
     return (await sseTask?.fetchNow()) ?? 0
   }
 

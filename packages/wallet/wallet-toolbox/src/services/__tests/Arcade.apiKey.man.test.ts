@@ -1,6 +1,6 @@
 import { HttpClient, HttpClientRequestOptions, HttpClientResponse, Random } from '@bsv/sdk'
 import { toHex } from '@bsv/sdk/primitives/utils'
-import { Arcade } from '../providers/Arcade'
+import { BsvBroadcaster } from '../providers/BsvBroadcaster'
 
 /**
  * Live tests of Arcade API-key authorization (bsv-blockchain/arcade auth middleware) against a
@@ -61,7 +61,7 @@ describeLive('Arcade API key (live)', () => {
 
   test('the key is accepted and the request is charged to its tier, not anonymous', async () => {
     const policies: Array<string | null> = []
-    const arcade = new Arcade(ARCADE_LIVE_URL, {
+    const arcade = new BsvBroadcaster(ARCADE_LIVE_URL, {
       apiKey: ARCADE_LIVE_API_KEY,
       httpClient: policyRecordingHttpClient(policies)
     })
@@ -77,12 +77,12 @@ describeLive('Arcade API key (live)', () => {
   })
 
   test('with the default transport, a lookup of an unknown txid is authorized (404, not 401)', async () => {
-    const arcade = new Arcade(ARCADE_LIVE_URL, { apiKey: ARCADE_LIVE_API_KEY })
+    const arcade = new BsvBroadcaster(ARCADE_LIVE_URL, { apiKey: ARCADE_LIVE_API_KEY })
     await expect(arcade.getTxData(randomTxid())).rejects.toThrow('Arcade transaction data response 404')
   })
 
-  test('a broadcast is authorized: Arcade judges the transaction (invalidTx), it does not refuse the key', async () => {
-    const arcade = new Arcade(ARCADE_LIVE_URL, { apiKey: ARCADE_LIVE_API_KEY })
+  test('a broadcast is authorized: BsvBroadcaster judges the transaction (invalidTx), it does not refuse the key', async () => {
+    const arcade = new BsvBroadcaster(ARCADE_LIVE_URL, { apiKey: ARCADE_LIVE_API_KEY })
 
     const r = await arcade.postRawTx(UNACCEPTABLE_TX_HEX)
 
@@ -93,7 +93,9 @@ describeLive('Arcade API key (live)', () => {
 
   test('a refused key is a service error, never an invalid-transaction verdict', async () => {
     // right shape, wrong checksum: refused by Arcade before the transaction is read
-    const arcade = new Arcade(ARCADE_LIVE_URL, { apiKey: 'bsvb_0000000000000000000000000000000000000000000_000000' })
+    const arcade = new BsvBroadcaster(ARCADE_LIVE_URL, {
+      apiKey: 'bsvb_0000000000000000000000000000000000000000000_000000'
+    })
 
     const r = await arcade.postRawTx(UNACCEPTABLE_TX_HEX)
 

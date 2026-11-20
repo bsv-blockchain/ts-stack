@@ -163,9 +163,9 @@ Wallet-manager snapshots can carry root and privileged key material; they do
 not include the Wallet Toolbox storage database. Possession of such a snapshot
 is possession of the wallet's key material. Store each
 complete snapshot only in an OS Keychain, hardware-backed keystore, or
-comparably trusted secret store. Remote storage and credential-bearing Arcade
+comparably trusted secret store. Remote storage and credential-bearing BSV Broadcaster
 SSE require HTTPS except for explicit loopback development, and transport
-debugging cannot log callback tokens or API credentials. Arcade status events
+debugging cannot log callback tokens or API credentials. BSV Broadcaster status events
 are validated, copied, and committed one at a time under per-event and aggregate
 queue budgets; no later cursor can advance past a malformed or failed event.
 The stream is silent by default and reports credential-bearing transport errors
@@ -200,11 +200,11 @@ work or unusually large transactions. Time budgets limit when a page starts
 another operation. The Monitor still waits for an operation already in progress
 and resumes from the durable cursor on the next tick.
 
-The default Arcade cursor is scoped to its endpoint and callback feed. A token
+The default BSV Broadcaster cursor is scoped to its endpoint and callback feed. A token
 change selects a fresh feed and starts from its beginning. Hosts that can prove
 feed continuity across a rotation can supply both cursor persistence hooks.
 
-An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
+A BSV Broadcaster endpoint that requires an API key takes it as the `arcadeApiKey`
 argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it
 is sent as `Authorization: Bearer <key>` on broadcast, lookup and SSE requests.
 A refused key (HTTP 401 or 403) is a service error, like a 429 or 5xx: the
@@ -269,7 +269,7 @@ an optional WAB pin names one of the verified candidates. Lookups with no usable
 response remain errors; WAB existing-account continuity still prevents
 replacement-wallet onboarding.
 
-ChainTracks defaults to credential-free Arcade/go-chaintracks v2 HTTP and SSE
+ChainTracks defaults to credential-free BSV Broadcaster/go-chaintracks v2 HTTP and SSE
 on mainnet, testnet, and TerraTestNet. STN and Terra Scaling TestNet require an
 explicit operator endpoint. Remote header batches pass local serialization,
 hash, continuity, and genesis checks; source failures fall through in priority

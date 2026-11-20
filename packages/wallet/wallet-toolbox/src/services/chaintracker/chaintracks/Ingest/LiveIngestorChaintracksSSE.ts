@@ -12,7 +12,7 @@ export interface LiveIngestorChaintracksSSEOptions extends LiveIngestorBaseOptio
 }
 
 /**
- * Adapts a remote Chaintracks event stream, such as Arcade/go-chaintracks
+ * Adapts a remote Chaintracks event stream, such as BSV Broadcaster/go-chaintracks
  * `/chaintracks/v2/tip/stream`, into the local Chaintracks live-ingestor API.
  */
 export class LiveIngestorChaintracksSSE extends LiveIngestorBase {

@@ -1,4 +1,4 @@
-import { TaskArcadeSSE } from '../TaskArcSSE'
+import { TaskBsvBroadcasterSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 import { EntityProvenTx } from '../../../storage/schema/entities'
 import { MerklePath, Utils } from '@bsv/sdk'
@@ -139,7 +139,7 @@ function makeMonitor(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('TaskArcadeSSE', () => {
+describe('TaskBsvBroadcasterSSE', () => {
   beforeEach(() => {
     FakeEventSource.instances = []
     jest.spyOn(console, 'log').mockImplementation(() => {})
@@ -152,7 +152,7 @@ describe('TaskArcadeSSE', () => {
 
   describe('asyncSetup()', () => {
     test('creates and connects SSE client when fully configured', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       expect(task.sseClient).not.toBeNull()
       expect(FakeEventSource.instances).toHaveLength(1)
@@ -161,7 +161,7 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('skips setup when callbackToken is absent', async () => {
-      const task = new TaskArcadeSSE(makeMonitor({ callbackToken: null }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ callbackToken: null }))
       await task.asyncSetup()
       expect(task.sseClient).toBeNull()
       expect(FakeEventSource.instances).toHaveLength(0)
@@ -170,7 +170,7 @@ describe('TaskArcadeSSE', () => {
     test('skips setup when arcadeUrl is absent', async () => {
       const monitor = makeMonitor({ arcadeUrl: '' })
       monitor.services.options.arcadeUrl = ''
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       expect(task.sseClient).toBeNull()
     })
@@ -178,13 +178,13 @@ describe('TaskArcadeSSE', () => {
     test('skips setup when EventSourceClass is absent', async () => {
       const monitor = makeMonitor()
       monitor.options.EventSourceClass = undefined
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       expect(task.sseClient).toBeNull()
     })
 
     test('passes loadLastSSEEventId result as lastEventId to client', async () => {
-      const task = new TaskArcadeSSE(makeMonitor({ loadLastSSEEventId: async () => '77' }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ loadLastSSEEventId: async () => '77' }))
       await task.asyncSetup()
       expect(task.sseClient?.lastEventId).toBe('77')
     })
@@ -193,7 +193,7 @@ describe('TaskArcadeSSE', () => {
       const monitor = makeMonitor()
       const sp = monitor.storage.sp
       sp.loadMonitorCheckpoint.mockResolvedValue(['"41"'])
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       const key: string = sp.loadMonitorCheckpoint.mock.calls[0][0]
       expect(key).toMatch(/^ArcadeSSECursor\.[a-f0-9]{40}$/)
@@ -209,7 +209,7 @@ describe('TaskArcadeSSE', () => {
       await task.runTask()
       expect(sp.saveMonitorCheckpoint).toHaveBeenLastCalledWith(key, '"42"')
       sp.loadMonitorCheckpoint.mockResolvedValue(['"42"'])
-      const restarted = new TaskArcadeSSE(monitor)
+      const restarted = new TaskBsvBroadcasterSSE(monitor)
       await restarted.asyncSetup()
       expect(restarted.sseClient?.lastEventId).toBe('42')
       task.close()
@@ -218,7 +218,7 @@ describe('TaskArcadeSSE', () => {
 
     test('retries reconnect after the accepted prefix drains and backs off repeated errors', async () => {
       const clock = jest.spyOn(Date, 'now').mockReturnValue(10000)
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       const drain = jest.spyOn(task.sseClient!, 'isDraining', 'get').mockReturnValue(true)
       FakeEventSource.instances[0].emit('error', {})
@@ -237,7 +237,7 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('continues setup when loadLastSSEEventId throws', async () => {
-      const task = new TaskArcadeSSE(
+      const task = new TaskBsvBroadcasterSSE(
         makeMonitor({
           loadLastSSEEventId: async () => {
             throw new Error('db error')
@@ -254,7 +254,7 @@ describe('TaskArcadeSSE', () => {
         loadLastSSEEventId: async () => 'private-cursor'
       })
       monitor.options.callbackToken = 'private-token'
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       const diagnostics = monitor.logEvent.mock.calls.flat().join(' ')
       expect(diagnostics).not.toContain('private-arcade')
@@ -267,12 +267,12 @@ describe('TaskArcadeSSE', () => {
 
   describe('trigger()', () => {
     test('returns run=false when no pending events', () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       expect(task.trigger(Date.now()).run).toBe(false)
     })
 
     test('returns run=true after an SSE event is received', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       const payload: ArcSSEEvent = { txid: TXID_A, txStatus: 'MINED', timestamp: '' }
       FakeEventSource.instances[0].emit('status', { data: JSON.stringify(payload) })
@@ -284,12 +284,12 @@ describe('TaskArcadeSSE', () => {
 
   describe('runTask()', () => {
     test('returns empty string when there are no pending events', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       expect(await task.runTask()).toBe('')
     })
 
     test('drains serially delivered events without accumulating task promises', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       const payload: ArcSSEEvent = { txid: TXID_B, txStatus: 'SEEN_ON_NETWORK', timestamp: '' }
       FakeEventSource.instances[0].emit('status', { data: JSON.stringify(payload) })
@@ -305,7 +305,7 @@ describe('TaskArcadeSSE', () => {
     test('calls callOnTransactionStatusChanged for each processed event', async () => {
       const reqApi = makeReqApi('unsent', TXID_C)
       const monitor = makeMonitor({ storageOverride: makeStorageWithReqs([reqApi]) })
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: TXID_C, txStatus: 'SEEN_ON_NETWORK', timestamp: '' })
@@ -315,7 +315,7 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('logs "No matching ProvenTxReq" when storage returns empty', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: TXID_D, txStatus: 'MINED', timestamp: '' })
@@ -337,7 +337,7 @@ describe('TaskArcadeSSE', () => {
       const reqApi = makeReqApi(reqStatus)
       const storage = makeStorageWithReqs([reqApi])
       const monitor = makeMonitor({ storageOverride: storage })
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: reqApi.txid, txStatus, timestamp: '', ...extra })
@@ -507,7 +507,7 @@ describe('TaskArcadeSSE', () => {
           getMerklePath
         }
       })
-      const task = new TaskArcadeSSE(monitor)
+      const task = new TaskBsvBroadcasterSSE(monitor)
       await task.asyncSetup()
 
       FakeEventSource.instances[0].emit('status', {
@@ -551,19 +551,19 @@ describe('TaskArcadeSSE', () => {
 
   describe('fetchNow()', () => {
     test('returns 0 when sseClient is null', async () => {
-      const task = new TaskArcadeSSE(makeMonitor({ callbackToken: null }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ callbackToken: null }))
       await task.asyncSetup()
       expect(await task.fetchNow()).toBe(0)
     })
 
     test('returns 0 when sseClient is present', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       expect(await task.fetchNow()).toBe(0)
     })
 
     test('close releases the EventSource and rejects unacknowledged task work', async () => {
-      const task = new TaskArcadeSSE(makeMonitor())
+      const task = new TaskBsvBroadcasterSSE(makeMonitor())
       await task.asyncSetup()
       const source = FakeEventSource.instances[0]
       source.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }) })
@@ -582,7 +582,7 @@ describe('TaskArcadeSSE', () => {
   describe('saveLastSSEEventId', () => {
     test('is called when lastEventId changes on an incoming event', async () => {
       const saveLastSSEEventId = jest.fn().mockResolvedValue(undefined)
-      const task = new TaskArcadeSSE(makeMonitor({ saveLastSSEEventId }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ saveLastSSEEventId }))
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: TXID_E, txStatus: 'MINED', timestamp: '' }),
@@ -598,7 +598,7 @@ describe('TaskArcadeSSE', () => {
       const saveLastSSEEventId = jest.fn().mockResolvedValue(undefined)
       const storage = makeEmptyStorage()
       storage.findProvenTxReqs.mockRejectedValueOnce(new Error('temporary database error')).mockResolvedValue([])
-      const task = new TaskArcadeSSE(makeMonitor({ storageOverride: storage, saveLastSSEEventId }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ storageOverride: storage, saveLastSSEEventId }))
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: TXID_F, txStatus: 'REJECTED', timestamp: '', status: 466 }),
@@ -620,7 +620,7 @@ describe('TaskArcadeSSE', () => {
         .fn()
         .mockRejectedValueOnce(new Error('cursor store unavailable'))
         .mockResolvedValue(undefined)
-      const task = new TaskArcadeSSE(makeMonitor({ saveLastSSEEventId }))
+      const task = new TaskBsvBroadcasterSSE(makeMonitor({ saveLastSSEEventId }))
       await task.asyncSetup()
       FakeEventSource.instances[0].emit('status', {
         data: JSON.stringify({ txid: TXID_F, txStatus: 'REJECTED', timestamp: '' }),

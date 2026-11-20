@@ -1,7 +1,7 @@
 import { LockingScript, Script, Transaction } from '@bsv/sdk'
 import { _tu, setLogging } from '../utils/TestUtilsWalletStorage'
 import { StorageProvider, WalletStorageManager } from '../../src/index.all'
-import { TaskArcadeSSE } from '../../src/monitor/tasks/TaskArcSSE'
+import { TaskBsvBroadcasterSSE } from '../../src/monitor/tasks/TaskArcSSE'
 import { TaskReconcilePendingTransactions } from '../../src/monitor/tasks/TaskReconcilePendingTransactions'
 import { failPendingDescendants } from '../../src/storage/methods/reconcileFailedTransactionInputs'
 import type { TableOutput, TableTransaction, TableUser } from '../../src/storage/schema/tables'
@@ -232,7 +232,7 @@ describe('a REJECTED answer after RECEIVED', () => {
       logEvent: jest.fn(async () => {}),
       callOnTransactionStatusChanged: jest.fn()
     }
-    const task = new TaskArcadeSSE(monitor)
+    const task = new TaskBsvBroadcasterSSE(monitor)
     await task.asyncSetup()
 
     FakeEventSource.instances[0].emit('status', {
@@ -294,7 +294,7 @@ describe('a REJECTED answer after RECEIVED', () => {
       logEvent: jest.fn(async () => {}),
       callOnTransactionStatusChanged: jest.fn()
     }
-    const task = new TaskArcadeSSE(monitor)
+    const task = new TaskBsvBroadcasterSSE(monitor)
     await task.asyncSetup()
 
     FakeEventSource.instances[0].emit('status', {

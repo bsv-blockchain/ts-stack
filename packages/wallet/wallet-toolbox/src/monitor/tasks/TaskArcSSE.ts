@@ -31,11 +31,12 @@ interface ArcadeStatusNote extends ReqHistoryNote {
 }
 
 /**
- * Monitor task that receives transaction status updates from Arcade via SSE
- * and processes them — including fetching merkle proofs directly from Arcade
+ * Monitor task that receives transaction status updates from BSV Broadcaster via SSE
+ * and processes them — including fetching merkle proofs directly from BSV Broadcaster
  * when transactions are MINED.
  */
-export class TaskArcadeSSE extends WalletMonitorTask {
+export class TaskBsvBroadcasterSSE extends WalletMonitorTask {
+  /** Kept as `ArcadeSSE`: task names are stored and used to address tasks, so they do not follow the rename. */
   static readonly taskName = 'ArcadeSSE'
 
   private cursorEvent: string | undefined
@@ -49,7 +50,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   }> = []
 
   constructor(monitor: Monitor) {
-    super(monitor, TaskArcadeSSE.taskName)
+    super(monitor, TaskBsvBroadcasterSSE.taskName)
   }
 
   override async asyncSetup(): Promise<void> {
@@ -451,7 +452,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
   /**
    * Complete a MINED/IMMUTABLE status by using the configured proof providers.
-   * Arcade is first when configured, but the shared provider path validates the
+   * BSV Broadcaster is first when configured, but the shared provider path validates the
    * proof against the wallet chaintracker before a ProvenTx is persisted.
    */
   private async fetchProofFromServices(req: EntityProvenTxReq, writes?: StorageReqWrite): Promise<string> {
@@ -535,3 +536,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return log
   }
 }
+
+/** @deprecated Use TaskBsvBroadcasterSSE. Arcade was renamed to BSV Broadcaster. */
+export const TaskArcadeSSE = TaskBsvBroadcasterSSE
+/** @deprecated Use TaskBsvBroadcasterSSE. Arcade was renamed to BSV Broadcaster. */
+export type TaskArcadeSSE = TaskBsvBroadcasterSSE

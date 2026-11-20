@@ -1,3 +1,5 @@
+// BsvBroadcaster is implemented in this file, which keeps its former Arcade name so the code
+// keeps its history here. Import it from './BsvBroadcaster'.
 import { Beef, HexString, HttpClient, HttpClientResponse, HttpClientRequestOptions, MerklePath, Random } from '@bsv/sdk'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import {
@@ -22,7 +24,7 @@ import {
 } from '../validatePostBeefResult'
 import { validateStatusForTxidsResult } from '../validateStatusForTxidsResult'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
-// Shared wire-contract types only (no behavior coupling): Arcade is ARC-compatible on the
+// Shared wire-contract types only (no behavior coupling): BSV Broadcaster is ARC-compatible on the
 // configuration and `getTxData` response shape, so it reuses those interfaces.
 import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
 import { classifyArcadeRejection } from './arcadeStatus'
@@ -30,34 +32,40 @@ import { normalizeArcProviderConfig } from './arcProviderConfig'
 import { validateArcTxData } from './arcTxDataValidation'
 
 /**
- * Arcade's API-key middleware answers 401 for a missing-but-required, malformed, unknown,
+ * BSV Broadcaster's API-key middleware answers 401 for a missing-but-required, malformed, unknown,
  * revoked or expired key, and 403 for a key not allowed to make the call. Both are decided
  * before the transaction is parsed, so they say nothing about the transaction.
  */
-function isArcadeAuthStatus(status: number | undefined): boolean {
+function isBsvBroadcasterAuthStatus(status: number | undefined): boolean {
   return status === 401 || status === 403
 }
 
 /**
- * Arcade-specific service-error classification: ARC's transient statuses (408, 429, 476, 5xx,
- * rate-limit/backpressure details) plus Arcade's credential refusals. A refused API key must be
+ * BSV Broadcaster-specific service-error classification: ARC's transient statuses (408, 429, 476, 5xx,
+ * rate-limit/backpressure details) plus BSV Broadcaster's credential refusals. A refused API key must be
  * a service error so the wallet fails over or retries instead of marking the transaction invalid.
  */
-function isArcadeServiceErrorStatus(status: number | undefined, detail?: string): boolean {
-  return isArcadeAuthStatus(status) || isArcServiceErrorStatus(status, detail)
+function isBsvBroadcasterServiceErrorStatus(status: number | undefined, detail?: string): boolean {
+  return isBsvBroadcasterAuthStatus(status) || isArcServiceErrorStatus(status, detail)
 }
 
 function defaultDeploymentId(): string {
   return `ts-sdk-${toHex(Random(16))}`
 }
 
-// Storage sendWith can aggregate many transactions into one BEEF. Arcade accepts
+// Storage sendWith can aggregate many transactions into one BEEF. BSV Broadcaster accepts
 // one EF transaction per request, so submit independent transactions concurrently
 // while preserving dependency order and avoiding an unbounded burst.
-export const ARCADE_POST_BEEF_CONCURRENCY = 4
-export { validateArcTxData as validateArcadeTxData } from './arcTxDataValidation'
+export const BSV_BROADCASTER_POST_BEEF_CONCURRENCY = 4
+/** @deprecated Use BSV_BROADCASTER_POST_BEEF_CONCURRENCY. Arcade was renamed to BSV Broadcaster. */
+export const ARCADE_POST_BEEF_CONCURRENCY = BSV_BROADCASTER_POST_BEEF_CONCURRENCY
+export {
+  validateArcTxData as validateBsvBroadcasterTxData,
+  /** @deprecated Use validateBsvBroadcasterTxData. Arcade was renamed to BSV Broadcaster. */
+  validateArcTxData as validateArcadeTxData
+} from './arcTxDataValidation'
 
-interface ArcadePostNoteContext {
+interface BsvBroadcasterPostNoteContext {
   nn: () => { name: string; when: string }
   nne: () => {
     rawTx: HexString
@@ -68,21 +76,51 @@ interface ArcadePostNoteContext {
   }
 }
 
+/** One batch transaction: its EF hex, or the error recorded when EF could not be built. */
+type PreparedEf = { txid: string; dependencies: string[] } & (
+  { efHex: string; error?: undefined } | { efHex?: undefined; error: PostTxResultForTxid }
+)
+
 /**
- * Broadcaster for bsv-blockchain/arcade — the Teranode-native, ARC-compatible broadcaster.
+ * Group batch indices into waves that can be posted together: a transaction joins a wave once
+ * every parent in the same batch is in an earlier wave.
+ */
+function dependencyWaves(prepared: PreparedEf[]): number[][] {
+  const indexByTxid = new Map(prepared.map(({ txid }, index) => [txid, index]))
+  const pending = new Set(prepared.map((_, index) => index))
+  const waves: number[][] = []
+  while (pending.size > 0) {
+    let ready = [...pending].filter(index =>
+      prepared[index].dependencies.every(dependency => {
+        const dependencyIndex = indexByTxid.get(dependency)
+        return dependencyIndex == null || !pending.has(dependencyIndex)
+      })
+    )
+    // A valid transaction graph is acyclic. Preserve forward progress for a
+    // malformed/cyclic graph and let BSV Broadcaster return the authoritative error.
+    if (ready.length === 0) ready = [[...pending][0]]
+    for (const index of ready) pending.delete(index)
+    waves.push(ready)
+  }
+  return waves
+}
+
+/**
+ * Client for BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster, formerly Arcade) —
+ * the Teranode-native, ARC-compatible broadcaster.
  *
- * Arcade is intentionally a separate, self-contained class (not a subclass of {@link ARC}) so
+ * `BsvBroadcaster` is intentionally a separate, self-contained class (not a subclass of {@link ARC}) so
  * the audited ARC transport is never altered. It is ARC-compatible on headers, configuration and
  * the `getTxData` response shape — but differs where it must:
  *
  *  - Endpoints are served at the root: `/tx` and `/tx/{txid}` (no `/v1` prefix).
  *  - A submit returns HTTP 202; HTTP 400 is a terminal validation failure (REJECTED) and is
  *    surfaced as an invalid-transaction status error rather than a transient service error.
- *  - Submission encoding is Extended Format (EF), not BEEF: Arcade's `/tx` parser rejects BEEF
+ *  - Submission encoding is Extended Format (EF), not BEEF: BSV Broadcaster's `/tx` parser rejects BEEF
  *    ("failed to parse transaction") and runs fee/script validation that needs per-input source
  *    data, which EF carries inline.
  */
-export class Arcade {
+export class BsvBroadcaster {
   readonly name: string
   readonly URL: string
   readonly apiKey: string | undefined
@@ -93,8 +131,8 @@ export class Arcade {
   private readonly httpClient: HttpClient
 
   /**
-   * @param URL - The Arcade endpoint base URL.
-   * @param config - Arcade configuration (shares ARC's {@link ArcConfig} shape).
+   * @param URL - The BSV Broadcaster endpoint base URL.
+   * @param config - BSV Broadcaster configuration (shares ARC's {@link ArcConfig} shape).
    */
   constructor(URL: string, config?: ArcConfig, name?: string)
   constructor(URL: string, apiKey?: string, name?: string)
@@ -140,8 +178,8 @@ export class Arcade {
 
   private applySuccessfulPostRawTx(
     result: PostTxResultForTxid,
-    data: ArcadeResponse,
-    notes: ArcadePostNoteContext
+    data: BsvBroadcasterResponse,
+    notes: BsvBroadcasterPostNoteContext
   ): void {
     const { txid, extraInfo, txStatus, competingTxs } = data
     result.data = extraInfo != null && extraInfo !== '' ? `${txStatus} ${extraInfo}` : `${txStatus}`
@@ -165,9 +203,9 @@ export class Arcade {
 
   private applyFailedPostRawTx(
     result: PostTxResultForTxid,
-    response: Exclude<HttpClientResponse<ArcadeResponse>, { ok: true }>,
-    data: ArcadeResponse,
-    notes: ArcadePostNoteContext
+    response: Exclude<HttpClientResponse<BsvBroadcasterResponse>, { ok: true }>,
+    data: BsvBroadcasterResponse,
+    notes: BsvBroadcasterPostNoteContext
   ): void {
     result.status = 'error'
     const responseNote = {
@@ -206,7 +244,7 @@ export class Arcade {
         note.detail = responseData.detail
       }
     }
-    if (isArcadeAuthStatus(numericStatus)) {
+    if (isBsvBroadcasterAuthStatus(numericStatus)) {
       const reason =
         this.apiKey != null && this.apiKey !== ''
           ? 'Arcade refused the configured API key'
@@ -214,23 +252,27 @@ export class Arcade {
       errorData.detail ??= reason
       note.detail ??= reason
     }
-    result.serviceError = isArcadeServiceErrorStatus(numericStatus, errorData.detail)
+    result.serviceError = isBsvBroadcasterServiceErrorStatus(numericStatus, errorData.detail)
     result.notes!.push(note)
   }
 
   private applyPostRawTxResponse(
     result: PostTxResultForTxid,
-    response: HttpClientResponse<ArcadeResponse>,
-    notes: ArcadePostNoteContext
+    response: HttpClientResponse<BsvBroadcasterResponse>,
+    notes: BsvBroadcasterPostNoteContext
   ): void {
     if (response.ok) {
       this.applySuccessfulPostRawTx(result, response.data, notes)
     } else {
-      this.applyFailedPostRawTx(result, response, response.data as ArcadeResponse, notes)
+      this.applyFailedPostRawTx(result, response, response.data as BsvBroadcasterResponse, notes)
     }
   }
 
-  private applyPostRawTxCatch(result: PostTxResultForTxid, error_: unknown, notes: ArcadePostNoteContext): void {
+  private applyPostRawTxCatch(
+    result: PostTxResultForTxid,
+    error_: unknown,
+    notes: BsvBroadcasterPostNoteContext
+  ): void {
     const error = WalletError.fromUnknown(error_)
     result.status = 'error'
     result.serviceError = true
@@ -244,10 +286,10 @@ export class Arcade {
   }
 
   /**
-   * Submit a single transaction to Arcade's `POST /tx` endpoint.
+   * Submit a single transaction to BSV Broadcaster's `POST /tx` endpoint.
    *
    * `rawTx` must be a single (raw or Extended Format) transaction hex — NOT BEEF. The canonical
-   * txid is taken from `txids` when supplied (Arcade derives the same txid from the parsed tx).
+   * txid is taken from `txids` when supplied (BSV Broadcaster derives the same txid from the parsed tx).
    */
   async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
     rawTx = normalizePostRawHex(rawTx, MAX_POST_BEEF_BYTES)
@@ -273,7 +315,7 @@ export class Arcade {
     }
 
     const url = `${this.URL}/tx`
-    const notes: ArcadePostNoteContext = {
+    const notes: BsvBroadcasterPostNoteContext = {
       nn: () => ({ name: this.name, when: new Date().toISOString() }),
       nne: () => ({
         name: this.name,
@@ -285,7 +327,7 @@ export class Arcade {
     }
 
     try {
-      const response = await this.httpClient.request<ArcadeResponse>(url, requestOptions)
+      const response = await this.httpClient.request<BsvBroadcasterResponse>(url, requestOptions)
       this.applyPostRawTxResponse(r, response, notes)
     } catch (error_: unknown) {
       this.applyPostRawTxCatch(r, error_, notes)
@@ -319,7 +361,7 @@ export class Arcade {
     const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
 
     const txidSet = new Set(txids)
-    const prepared = txids.map(txid => {
+    const prepared = txids.map((txid): PreparedEf => {
       try {
         // Extract each transaction from the shared parsed bundle.
         // findAtomicTransaction attaches the source-transaction ancestry
@@ -340,38 +382,38 @@ export class Arcade {
           serviceError: true,
           notes: [{ ...nn(), what: 'arcadeEfBuildFailed', txid, code: e.code, description: e.description }]
         }
-        return { txid, dependencies: [] as string[], error }
+        return { txid, dependencies: [], error }
       }
     })
-    const indexByTxid = new Map(txids.map((txid, index) => [txid, index]))
-    const pending = new Set(txids.map((_, index) => index))
-
-    while (pending.size > 0) {
-      let ready = [...pending].filter(index =>
-        prepared[index].dependencies.every(dependency => {
-          const dependencyIndex = indexByTxid.get(dependency)
-          return dependencyIndex == null || !pending.has(dependencyIndex)
-        })
-      )
-      // A valid transaction graph is acyclic. Preserve forward progress for a
-      // malformed/cyclic graph and let Arcade return the authoritative error.
-      if (ready.length === 0) ready = [[...pending][0]]
-
-      let nextReady = 0
-      const worker = async (): Promise<void> => {
-        while (nextReady < ready.length) {
-          const index = ready[nextReady++]
-          const item = prepared[index]
-          r.txidResults[index] = item.error ?? (await this.postRawTx(item.efHex, [item.txid]))
-        }
-      }
-
-      await Promise.all(Array.from({ length: Math.min(ARCADE_POST_BEEF_CONCURRENCY, ready.length) }, worker))
-      for (const index of ready) pending.delete(index)
-    }
+    // Dependency waves are posted in order; each wave has no unposted parent in the batch.
+    await dependencyWaves(prepared).reduce<Promise<void>>(
+      async (previous, wave) => await previous.then(async () => await this.postEfWave(prepared, wave, r.txidResults)),
+      Promise.resolve()
+    )
     if (r.txidResults.some(result => result.status === 'error')) r.status = 'error'
 
     return validatePostBeefResultOrServiceError(r, txids, this.name)
+  }
+
+  /**
+   * Post one dependency wave, keeping at most {@link BSV_BROADCASTER_POST_BEEF_CONCURRENCY}
+   * requests in flight. Entries whose EF could not be built keep their prepared error.
+   */
+  private async postEfWave(prepared: PreparedEf[], wave: number[], results: PostTxResultForTxid[]): Promise<void> {
+    const toPost: Array<{ index: number; txid: string; efHex: string }> = []
+    for (const index of wave) {
+      const item = prepared[index]
+      if (item.error == null) toPost.push({ index, txid: item.txid, efHex: item.efHex })
+      else results[index] = item.error
+    }
+    let next = 0
+    const worker = async (): Promise<void> => {
+      if (next >= toPost.length) return
+      const { index, txid, efHex } = toPost[next++]
+      results[index] = await this.postRawTx(efHex, [txid])
+      await worker()
+    }
+    await Promise.all(Array.from({ length: Math.min(BSV_BROADCASTER_POST_BEEF_CONCURRENCY, toPost.length) }, worker))
   }
 
   /** Look up a transaction's current status (and merkle path once mined) via `GET /tx/{txid}`. */
@@ -395,7 +437,7 @@ export class Arcade {
   }
 
   /**
-   * Adapt Arcade's lifecycle endpoint to the shared transaction-status
+   * Adapt BSV Broadcaster's lifecycle endpoint to the shared transaction-status
    * provider contract. This lets monitor reconciliation remain operational
    * when an explorer such as WhatsOnChain is absent. Only network-observed
    * states count as known; RECEIVED/PENDING_RETRY and terminal rejection
@@ -460,9 +502,9 @@ export class Arcade {
   }
 
   /**
-   * `getMerklePath` provider: obtain a BUMP merkle proof for a mined transaction from Arcade.
+   * `getMerklePath` provider: obtain a BUMP merkle proof for a mined transaction from BSV Broadcaster.
    *
-   * Arcade only has a proof for transactions it tracked (i.e. broadcast through it) that have
+   * BSV Broadcaster only has a proof for transactions it tracked (i.e. broadcast through it) that have
    * been mined while tracked; for anything else `GET /tx/{txid}` reports a non-mined status (or
    * 404) and this returns no `merklePath`, so {@link Services.getMerklePath} falls through to the
    * other providers (WhatsOnChain/Bitails).
@@ -486,7 +528,7 @@ export class Arcade {
         data.blockHash == null ||
         data.blockHash === ''
       ) {
-        // No proof from Arcade yet (not mined / untracked / 404) — fall through to other providers.
+        // No proof from BSV Broadcaster yet (not mined / untracked / 404) — fall through to other providers.
         r.notes!.push({ ...nn(), what: 'getMerklePathArcadeNoProof', txid, txStatus: data.txStatus })
         return r
       }
@@ -501,7 +543,7 @@ export class Arcade {
       try {
         validated = validateMerklePathResult(txid, { merklePath, header })
       } catch {
-        // Arcade's BUMP does not reconcile with the canonical block — reject and fall through.
+        // BSV Broadcaster's BUMP does not reconcile with the canonical block — reject and fall through.
         r.notes!.push({
           ...nn(),
           what: 'getMerklePathArcadeRootMismatch',
@@ -530,8 +572,13 @@ export class Arcade {
   }
 }
 
-/** Arcade's `POST /tx` response body. `extraInfo`/`competingTxs` are absent on the 202. */
-interface ArcadeResponse {
+/** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */
+export const Arcade = BsvBroadcaster
+/** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */
+export type Arcade = BsvBroadcaster
+
+/** BSV Broadcaster's `POST /tx` response body. `extraInfo`/`competingTxs` are absent on the 202. */
+interface BsvBroadcasterResponse {
   txid: string
   extraInfo?: string
   txStatus: string
