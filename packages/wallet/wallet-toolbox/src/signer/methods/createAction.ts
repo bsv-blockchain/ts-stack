@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import {
   type ValidCreateActionArgs,
   type ValidCreateActionInput,
@@ -55,17 +56,20 @@ export async function createAction(
         'action.is_sign_action': vargs.isSignAction
       }
     },
-    async span => {
-      const result = await createActionCore(wallet, auth, vargs, span)
-      span.end({
-        attributes: {
-          'action.has_transaction': result.tx != null,
-          'action.has_signable_transaction': result.signableTransaction != null,
-          'action.send_result_count': result.sendWithResults?.length ?? 0
+    span =>
+      mapAwaitFromSync(
+        () => createActionCore(wallet, auth, vargs, span),
+        result => {
+          span.end({
+            attributes: {
+              'action.has_transaction': result.tx != null,
+              'action.has_signable_transaction': result.signableTransaction != null,
+              'action.send_result_count': result.sendWithResults?.length ?? 0
+            }
+          })
+          return result
         }
-      })
-      return result
-    }
+      )
   )
 }
 
@@ -90,11 +94,8 @@ async function createActionCore(
       return r
     }
 
-    prior.tx = await traceActionStep(
-      wallet,
-      'wallet.create_action.complete_signing',
-      parent,
-      async () => await completeSignedTransaction(prior!, {}, wallet)
+    prior.tx = await traceActionStep(wallet, 'wallet.create_action.complete_signing', parent, () =>
+      awaitFromSync(() => completeSignedTransaction(prior!, {}, wallet))
     )
     logger?.log('completed signed transaction')
 
@@ -113,11 +114,8 @@ async function createActionCore(
     })
     logger?.log('merged beef')
 
-    await traceActionStep(
-      wallet,
-      'wallet.create_action.verify_unlock_scripts',
-      parent,
-      async () => await verifyUnlockScripts(r.txid!, beef, wallet.scriptVerifier)
+    await traceActionStep(wallet, 'wallet.create_action.verify_unlock_scripts', parent, () =>
+      awaitFromSync(() => verifyUnlockScripts(r.txid!, beef, wallet.scriptVerifier))
     )
     logger?.log('verified unlock scripts')
 
@@ -135,7 +133,7 @@ async function createActionCore(
     wallet,
     'wallet.create_action.process',
     parent,
-    async () => await processAction(prior, wallet, auth, vargs)
+    () => awaitFromSync(() => processAction(prior, wallet, auth, vargs))
   )
   logger?.log('processed transaction')
 

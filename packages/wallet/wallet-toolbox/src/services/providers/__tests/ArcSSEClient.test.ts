@@ -51,9 +51,9 @@ function makeClient(overrides: Partial<ArcSSEClientOptions> = {}): {
   const client = new ArcSSEClient({
     baseUrl: 'https://arcade.example.com',
     callbackToken: 'tok-abc123',
-    onEvent: e => events.push(e),
-    onError: e => errors.push(e),
-    onLastEventIdChanged: id => lastEventIds.push(id),
+    onEvent: e => void events.push(e),
+    onError: e => void errors.push(e),
+    onLastEventIdChanged: id => void lastEventIds.push(id),
     EventSourceClass: FakeEventSource,
     ...overrides
   })
@@ -158,11 +158,12 @@ describe('ArcSSEClient', () => {
       expect(FakeEventSource.instances[0].opts.headers.Authorization).toBe('Bearer original-key')
       expect(FakeEventSource.instances[0].opts.headers['Last-Event-ID']).toBe('original-cursor')
 
-      const accessorOptions = {
+      const accessorOptions: ArcSSEClientOptions = {
         baseUrl: 'https://arcade.example.com',
         onEvent: () => {},
-        EventSourceClass: FakeEventSource
-      } as ArcSSEClientOptions
+        EventSourceClass: FakeEventSource,
+        callbackToken: ''
+      }
       Object.defineProperty(accessorOptions, 'callbackToken', { get: () => 'hidden-token', enumerable: true })
       expect(() => new ArcSSEClient(accessorOptions)).toThrow('data property')
     })

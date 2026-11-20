@@ -37,3 +37,11 @@ export type { PostReqsToNetworkResult } from './storage/methods/attemptToPostReq
 export { parseJsonRpc, stringifyJsonRpc } from './storage/remoting/BinaryJson'
 export { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
 export type { UnlockScriptVerificationResult } from './signer/methods/verifyUnlockScripts'
+
+export type {
+  PrimaryHandoffControl,
+  PrimaryHandoffControlOptions,
+  PrimaryHandoffPlan,
+  PrimaryHandoffSource,
+  PrimaryHandoffStatus
+} from './storage/PrimaryHandoffControl'

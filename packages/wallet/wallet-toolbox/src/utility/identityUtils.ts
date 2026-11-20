@@ -1,3 +1,4 @@
+import { awaitVoidFromSync } from './promiseFromSync'
 import {
   LookupAnswer,
   PushDrop,
@@ -486,9 +487,7 @@ const isUiRuntime = (): boolean => {
   return false
 }
 
-const yieldToUi = async (): Promise<void> => {
-  await new Promise<void>(resolve => setTimeout(resolve, 0))
-}
+const yieldToUi = (): Promise<void> => awaitVoidFromSync(() => new Promise<void>(resolve => setTimeout(resolve, 0)))
 
 /**
  * Parse a single overlay output into a verified, decrypted certificate. Returns `null` on any

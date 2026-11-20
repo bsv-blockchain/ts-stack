@@ -53,9 +53,9 @@ describe('StorageProvider authorization boundaries', () => {
   })
 
   test('bounds the compatibility ownership scan for custom providers without exact txids', async () => {
-    const getProvenTxReqsForUser = jest.fn().mockResolvedValue(
-      Array.from({ length: 10_001 }, (_, index) => ({ txid: index.toString(16).padStart(64, '0') }))
-    )
+    const getProvenTxReqsForUser = jest
+      .fn()
+      .mockResolvedValue(Array.from({ length: 10_001 }, (_, index) => ({ txid: index.toString(16).padStart(64, '0') })))
     const findProvenTxReqs = jest.fn()
 
     await expect(
@@ -85,11 +85,13 @@ describe('StorageProvider authorization boundaries', () => {
       validateEntity: jest.fn(value => value)
     }
 
-    await expect(StorageIdb.prototype.findProvenTxReqsAuth.call(
-      storage,
-      { userId: 7, identityKey: `02${'1'.repeat(64)}` },
-      { partial: {}, paged: { limit: 1, offset: 5 } }
-    )).resolves.toEqual([row])
+    await expect(
+      StorageIdb.prototype.findProvenTxReqsAuth.call(
+        storage,
+        { userId: 7, identityKey: `02${'1'.repeat(64)}` },
+        { partial: {}, paged: { limit: 1, offset: 5 } }
+      )
+    ).resolves.toEqual([row])
     expect(filterProvenTxReqs).toHaveBeenCalledWith(
       { partial: {}, paged: { limit: 1, offset: 5 } },
       expect.any(Function),
@@ -106,17 +108,35 @@ describe('StorageProvider authorization boundaries', () => {
     }
     const knex = { select: jest.fn(() => subquery) }
     const whereExists = jest.fn().mockResolvedValue([row])
+    const readPackedWalletRows = jest.fn(async (table, trx, read) => {
+      expect(table).toBe('proven_tx_reqs')
+      expect(trx).toBeUndefined()
+      return await read(knex)
+    })
+    const packedTextQuery = jest.fn(async (db, table, args, query) => {
+      expect(db).toBe(knex)
+      expect(table).toBe('proven_tx_reqs')
+      expect(args).toEqual({ partial: {}, paged: { limit: 1, offset: 5 } })
+      return { query: query({}) }
+    })
     const storage = {
-      toDb: jest.fn(() => knex),
+      readPackedWalletRows,
+      packedTextQuery,
       findProvenTxReqsQuery: jest.fn(() => ({ whereExists })),
       validateEntities: jest.fn(value => value)
     }
 
-    await expect(StorageKnex.prototype.findProvenTxReqsAuth.call(
-      storage,
-      { userId: 7, identityKey: `02${'1'.repeat(64)}` },
-      { partial: {}, paged: { limit: 1, offset: 5 } }
-    )).resolves.toEqual([row])
+    await expect(
+      StorageKnex.prototype.findProvenTxReqsAuth.call(
+        storage,
+        { userId: 7, identityKey: `02${'1'.repeat(64)}` },
+        { partial: {}, paged: { limit: 1, offset: 5 } }
+      )
+    ).resolves.toEqual([row])
+    expect(readPackedWalletRows).toHaveBeenCalledTimes(1)
+    expect(packedTextQuery).toHaveBeenCalledTimes(1)
+    expect(storage.findProvenTxReqsQuery).toHaveBeenCalledWith({ partial: {}, paged: { limit: 1, offset: 5 } })
+    expect(subquery.whereRaw).toHaveBeenCalledWith('proven_tx_reqs.txid = transactions.txid')
     expect(subquery.where).toHaveBeenCalledWith('transactions.userId', 7)
     expect(whereExists).toHaveBeenCalledWith(subquery)
   })

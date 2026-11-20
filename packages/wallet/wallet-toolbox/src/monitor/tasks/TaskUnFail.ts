@@ -1,5 +1,9 @@
+import { promiseFromSync, awaitFromSync } from '../../utility/promiseFromSync'
+import { WalletError } from '../../sdk/WalletError'
+import { StorageReqWrite } from '../../storage/StorageReqWrite'
+import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
 import { Monitor } from '../Monitor'
-import { WalletMonitorTask } from './WalletMonitorTask'
+import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import { EntityProvenTxReq } from '../../storage/schema/entities'
 import { authenticateMerklePathResult } from '../../services/validateMerklePathResult'
@@ -24,17 +28,22 @@ export class TaskUnFail extends WalletMonitorTask {
    */
   private static checkNowRequested = false
   private readonly authenticatedRequests = new WeakSet<EntityProvenTxReq>()
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  private readonly writeCaptures = new WeakMap<EntityProvenTxReq, StorageReqWrite>()
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 10
   ) {
     super(monitor, TaskUnFail.taskName)
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskUnFail.checkNow ||
@@ -42,54 +51,82 @@ export class TaskUnFail extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     TaskUnFail.checkNow = false
 
     const limit = 100
+    let offset = 0
     for (;;) {
       const reqs = await this.storage.findProvenTxReqs({
         partial: {},
         status: ['unfail'],
         // Every successfully processed row leaves the 'unfail' set, so keep
-        // reading its first page. Advancing an offset here skips rows after
-        // the preceding page is updated.
-        paged: { limit, offset: 0 }
+        // retaining only inactive-profile rows in the offset. Successful rows
+        // leave the set; they must not advance the remaining-row cursor.
+        paged: { limit, offset }
       })
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'unfail'\n`
       const r = await this.unfail(reqs, 2)
       log += `${r.log}\n`
+      offset += r.deferred ?? 0
       if (reqs.length < limit) break
     }
 
     return log
   }
 
-  async unfail (reqs: TableProvenTxReq[], indent = 0): Promise<{ log: string }> {
+  async unfail(reqs: TableProvenTxReq[], indent = 0): Promise<{ log: string; deferred?: number }> {
     let log = ''
+    let deferred = 0
     for (const reqApi of reqs) {
-      const req = new EntityProvenTxReq(reqApi)
-      log += ' '.repeat(indent)
-      log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
-      const r = await this.monitor.services.getMerklePath(req.txid)
       try {
-        if (r.merklePath == null || r.header == null) throw new Error('No proof was returned.')
-        if (req.rawTx == null || asString(doubleSha256BE(req.rawTx)) !== req.txid.toLowerCase()) {
-          throw new Error('The request transaction bytes do not match its txid.')
-        }
-        await authenticateMerklePathResult(req.txid, r, this.monitor.chaintracks, false, false)
-      } catch {
-        req.status = 'invalid'
-        req.addHistoryNote({ what: 'unfailProofRejected' }, true)
-        log += 'proof unavailable or rejected; returned to status \'invalid\'\n'
-        await req.updateStorageDynamicProperties(this.storage)
-        continue
+        log += (await this.unfailOne(reqApi, indent)).log
+      } catch (error) {
+        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+        deferred++
+        log += `reqId ${reqApi.provenTxReqId} deferred to its current primary\n`
       }
-      this.authenticatedRequests.add(req)
-      log += 'authenticated and unfailed. status is now \'unmined\'\n'
-      log += await this.unfailReq(req, indent + 2)
     }
+    return { log, ...(deferred ? { deferred } : {}) }
+  }
+
+  private async unfailOne(reqApi: TableProvenTxReq, indent: number): Promise<{ log: string }> {
+    let log = ''
+    const req = new EntityProvenTxReq(reqApi)
+    log += ' '.repeat(indent)
+    log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
+    const writes = await captureMonitorReqWrite(this, [req.txid])
+    await writes?.assertCurrent()
+    const r = await this.monitor.services.getMerklePath(req.txid)
+    try {
+      if (r.merklePath == null || r.header == null) throw new Error('No proof was returned.')
+      if (req.rawTx == null || asString(doubleSha256BE(req.rawTx)) !== req.txid.toLowerCase()) {
+        throw new Error('The request transaction bytes do not match its txid.')
+      }
+      await authenticateMerklePathResult(req.txid, r, this.monitor.chaintracks, false, false)
+    } catch {
+      req.status = 'invalid'
+      req.addHistoryNote({ what: 'unfailProofRejected' }, true)
+      log += "proof unavailable or rejected; returned to status 'invalid'\n"
+      if (writes == null) await req.updateStorageDynamicProperties(this.storage)
+      else if (
+        !(await writes.request(req, current => {
+          return promiseFromSync(() => {
+            if (current.status !== 'unfail') return
+            current.status = 'invalid'
+            current.addHistoryNote({ what: 'unfailProofRejected' }, true)
+          })
+        }))
+      )
+        throw new WERR_NOT_ACTIVE('Unfail observation lost its captured primary profiles')
+      return { log }
+    }
+    this.authenticatedRequests.add(req)
+    if (writes != null) this.writeCaptures.set(req, writes)
+    log += "authenticated and unfailed. status is now 'unmined'\n"
+    log += await this.unfailReq(req, indent + 2)
     return { log }
   }
 
@@ -102,12 +139,20 @@ export class TaskUnFail extends WalletMonitorTask {
    * @param indent
    * @returns
    */
-  async unfailReq (req: EntityProvenTxReq, indent: number): Promise<string> {
+  async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string> {
     if (!this.authenticatedRequests.delete(req)) {
       throw new WERR_INVALID_OPERATION('Unfail requires a proof authenticated for this exact request.')
     }
+    const writes = this.writeCaptures.get(req)
+    this.writeCaptures.delete(req)
+    if (writes?.preparesOutsideManager === true)
+      return await writes.prepare(sp =>
+        awaitFromSync(() => sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 }, writes))
+      )
     return await this.storage.runAsStorageProvider(async sp =>
-      await sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 })
+      writes == null
+        ? await sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 })
+        : await sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 }, writes)
     )
   }
 }

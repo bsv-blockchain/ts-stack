@@ -1,4 +1,6 @@
 import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
+import { promiseFromSync } from './utility/promiseFromSync'
+export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
 import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
 import {
   BRC197_INTERNALIZATION_PROFILE,
@@ -53,7 +55,6 @@ import {
   GetPublicKeyResult,
   GetVersionResult,
   InternalizeActionArgs,
-  InternalizeActionResult,
   ListActionsArgs,
   ListActionsResult,
   ListCertificatesArgs,
@@ -103,7 +104,7 @@ import {
   TelemetryConfig,
   createPublicHTTPSFetch
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { fromBase58, toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
 import { proveCertificate } from './signer/methods/proveCertificate'
@@ -142,7 +143,14 @@ import {
 } from './sdk/types'
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_REVIEW_ACTIONS
+} from './sdk/WERR_errors'
+import type { AdminValidCreateActionArgs } from './utility/adminOriginator'
 import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
@@ -316,7 +324,7 @@ export interface WalletArgs {
    * internal transaction checks. This is an implementation extension and does
    * not change the BRC-100 wallet interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /**
    * Optional provider-neutral tracing shared by wallet, lookup, storage, and
    * permission layers. Disabled unless an enabled sink is supplied.
@@ -374,8 +382,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
-  readonly scriptVerifier?: SpendVerifierInterface
+  readonly scriptVerifier?: WalletScriptVerifier
   readonly telemetry: Telemetry
+  private adminOriginatorValue?: string
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -655,14 +664,53 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const storageArgs = this.actionBatch.hasWorkspace ? { ...vargs, limit: 10000, offset: 0 } : vargs
     const r = this.actionBatch.overlayListActions(await this.storage.listActions(storageArgs), vargs)
     // Implement security policy to block customInstructions from output results.
-    for (const action of r.actions) {
-      if (action.outputs != null) {
-        for (const output of action.outputs) {
-          output.customInstructions = undefined
+    // The host's own admin originator keeps them: its customInstructions are its
+    // own wallet-private metadata.
+    if (!this.isAdminOriginator(originator)) {
+      for (const action of r.actions) {
+        if (action.outputs != null) {
+          for (const output of action.outputs) {
+            output.customInstructions = undefined
+          }
         }
       }
     }
     return r
+  }
+
+  /**
+   * The host's own originator (the domain its WalletPermissionsManager uses as
+   * adminOriginator), if the host set one. Undefined by default.
+   */
+  get adminOriginator(): string | undefined {
+    return this.adminOriginatorValue
+  }
+
+  /**
+   * Names the host's own originator. Trusted host code calls this once, where
+   * it builds the wallet; it cannot be changed afterwards. For calls from this
+   * originator only:
+   * - listActions returns output customInstructions (redacted for every other
+   *   originator, as before);
+   * - createAction tells storage the action is the admin's
+   *   (AdminValidCreateActionArgs.isAdminOriginator), which keeps its funding
+   *   plan minimal and lets a storage validateResolvedActionInput hook allow
+   *   inputs that other originators may not spend.
+   * The flag is derived from the originator argument, never from action fields.
+   */
+  setAdminOriginator(originator: OriginatorDomainNameStringUnder250Bytes): void {
+    validateOriginator(originator)
+    if (typeof originator !== 'string' || originator === '') {
+      throw new WERR_INVALID_PARAMETER('originator', 'a non-empty originator domain')
+    }
+    if (this.adminOriginatorValue !== undefined) {
+      throw new WERR_INVALID_OPERATION('The admin originator is already set')
+    }
+    this.adminOriginatorValue = originator
+  }
+
+  private isAdminOriginator(originator?: OriginatorDomainNameStringUnder250Bytes): boolean {
+    return this.adminOriginatorValue !== undefined && originator === this.adminOriginatorValue
   }
 
   get storageParty(): string {
@@ -1165,6 +1213,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
       const { auth, vargs } = this.validateAuthAndArgs(args, validateCreateActionArgs, logger)
       logger?.log('validated args')
 
+      // Decided from the originator argument only, never from action fields.
+      ;(vargs as AdminValidCreateActionArgs).isAdminOriginator = this.isAdminOriginator(originator)
       vargs.includeAllSourceTransactions = this.includeAllSourceTransactions
       if (this.randomVals != null && this.randomVals.length > 1) {
         vargs.randomVals = [...this.randomVals]
@@ -1251,7 +1301,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<InternalizeActionResult> {
+  ): Promise<StorageInternalizeActionResult> {
     validateOriginator(originator)
     const { auth, vargs } = this.validateAuthAndArgs(args, validateInternalizeActionArgs)
 
@@ -1338,20 +1388,21 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { relinquished: true }
   }
 
-  async isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    const r: { authenticated: true } = {
-      authenticated: true
-    }
-    return r
+  isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      const r: { authenticated: true } = {
+        authenticated: true
+      }
+      return r
+    })
   }
 
-  async waitForAuthentication(
-    args: {},
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    return { authenticated: true }
+  waitForAuthentication(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { authenticated: true }
+    })
   }
 
   async getHeight(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
@@ -1369,14 +1420,18 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { header: toHex(serializedHeader) }
   }
 
-  async getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    validateOriginator(originator)
-    return { network: toWalletNetwork(this.chain) }
+  getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { network: toWalletNetwork(this.chain) }
+    })
   }
 
-  async getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    validateOriginator(originator)
-    return { version: 'wallet-brc100-1.0.0' }
+  getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { version: 'wallet-brc100-1.0.0' }
+    })
   }
 
   /**

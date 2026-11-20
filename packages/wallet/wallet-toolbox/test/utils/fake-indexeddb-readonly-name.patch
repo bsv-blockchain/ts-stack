@@ -1,0 +1,44 @@
+--- a/build/cjs/FDBDatabase.js
++++ b/build/cjs/FDBDatabase.js
+@@ -35,6 +35,10 @@
+ 
+ // http://www.w3.org/TR/2015/REC-IndexedDB-20150108/#database-interface
+ class FDBDatabase extends _FakeEventTarget.default {
++  #name;
++  get name() {
++    return this.#name;
++  }
+   _closePending = false;
+   _closed = false;
+   _runningVersionchangeTransaction = false;
+@@ -42,7 +46,7 @@
+     super();
+     this._rawDatabase = rawDatabase;
+     this._rawDatabase.connections.push(this);
+-    this.name = rawDatabase.name;
++    this.#name = rawDatabase.name;
+     this.version = rawDatabase.version;
+     this.objectStoreNames = new _FakeDOMStringList.default(...Array.from(rawDatabase.rawObjectStores.keys()).sort());
+   }
+--- a/build/esm/FDBDatabase.js
++++ b/build/esm/FDBDatabase.js
+@@ -28,6 +28,10 @@
+ 
+ // http://www.w3.org/TR/2015/REC-IndexedDB-20150108/#database-interface
+ class FDBDatabase extends FakeEventTarget {
++  #name;
++  get name() {
++    return this.#name;
++  }
+   _closePending = false;
+   _closed = false;
+   _runningVersionchangeTransaction = false;
+@@ -35,7 +39,7 @@
+     super();
+     this._rawDatabase = rawDatabase;
+     this._rawDatabase.connections.push(this);
+-    this.name = rawDatabase.name;
++    this.#name = rawDatabase.name;
+     this.version = rawDatabase.version;
+     this.objectStoreNames = new FakeDOMStringList(...Array.from(rawDatabase.rawObjectStores.keys()).sort());
+   }
