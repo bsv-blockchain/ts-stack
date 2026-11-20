@@ -98,7 +98,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read
     outputs:
+      local-ci-certified: ${{ steps.certificate.outputs.local-ci-certified }}
       direct-projects: ${{ steps.scope.outputs.direct-projects }}
       affected-projects: ${{ steps.scope.outputs.affected-projects }}
       build-projects: ${{ steps.scope.outputs.build-projects }}
@@ -131,6 +133,21 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.22.1
+
+      - name: Verify a maintainer CI certificate with the base branch verifier
+        id: certificate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]] &&
+             /usr/bin/git show "$PR_BASE_SHA:scripts/ci-certificate.mjs" > "$RUNNER_TEMP/ci-certificate.mjs" 2>/dev/null; then
+            node "$RUNNER_TEMP/ci-certificate.mjs"
+          else
+            echo "local-ci-certified=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resolve package, documentation, conformance, and image scope
         id: scope
@@ -277,6 +294,25 @@ jobs:
               echo "$key=false" >> "$GITHUB_OUTPUT"
             fi
           done
+
+  sonar-certified:
+    name: Sonar scan for a certified test run
+    needs: scope
+    if: >-
+      needs.scope.outputs.local-ci-certified == 'true' && vars.SONAR_CI_ENABLED == 'true' &&
+      github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   sonar-zero-findings:
     name: Quality gate — zero new Sonar findings
@@ -529,6 +565,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      local-ci-certified: ${{ needs.scope.outputs.local-ci-certified }}
       direct-projects: ${{ needs.scope.outputs.direct-projects }}
       affected-projects: ${{ needs.scope.outputs.affected-projects }}
       build-projects: ${{ needs.scope.outputs.build-projects }}
@@ -685,7 +722,7 @@ jobs:
 
   standard-tests:
     name: Tests / non-coverage packages
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -729,7 +766,7 @@ jobs:
 
   dependent-tests:
     name: Tests / affected ${{ matrix.application && 'application' || 'dependents' }} (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -805,7 +842,7 @@ jobs:
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -870,7 +907,7 @@ jobs:
 
   wallet-browser-platform:
     name: Platform / wallet browser
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_client == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet_client == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -904,7 +941,7 @@ jobs:
 
   wallet-mobile-platform:
     name: Platform / wallet mobile
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_mobile == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet_mobile == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -943,7 +980,7 @@ jobs:
 
   coverage-sdk:
     name: Coverage / SDK (${{ matrix.shard }}/2)
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1001,7 +1038,7 @@ jobs:
   coverage-sdk-thresholds:
     name: Coverage / SDK thresholds
     if: >-
-      always() && !cancelled() && needs.prepare.result == 'success' &&
+      always() && !cancelled() && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.result == 'success' &&
       needs.prepare.outputs.sdk == 'true' && needs.coverage-sdk.result == 'success'
     needs:
       - prepare
@@ -1031,7 +1068,7 @@ jobs:
 
   sdk-browser-contract:
     name: Platform / SDK browser contract
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1069,7 +1106,7 @@ jobs:
 
   coverage-did:
     name: Coverage / DID
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.did == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.did == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1104,7 +1141,7 @@ jobs:
 
   coverage-wallet:
     name: Coverage / wallet-toolbox (${{ matrix.id }})
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-24.04-arm
     # Keep both original COMPLETED cases together, each with its finite bound.
@@ -1367,7 +1404,7 @@ jobs:
 
   coverage-wallet-monitor:
     name: Coverage / wallet-toolbox monitor
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -1412,7 +1449,7 @@ jobs:
 
   coverage-verifast:
     name: Coverage / VeriFast
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.verifast == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.verifast == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1464,7 +1501,7 @@ jobs:
 
   coverage-other:
     name: Coverage / ${{ matrix.application && 'application state' || 'other affected packages' }} (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -1560,6 +1597,7 @@ jobs:
   coverage-upload:
     name: Coverage / aggregate upload
     if: >-
+      needs.prepare.outputs.local-ci-certified != 'true' &&
       always() && !cancelled() &&
       needs.prepare.result == 'success' &&
       needs.prepare.outputs.coverage-required == 'true' &&
