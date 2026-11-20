@@ -92,9 +92,52 @@ or rebase their branches merely because an earlier independent PR merged.
 
 ## Qualification evidence and current rollout status
 
-**Implementation and full rollout qualification remain pending. Do not enable
-main solely from these vendor probes.** The baseline main ruleset is 19713320,
-with strict freshness and no merge-queue rule as of this record.
+[PR1642](https://github.com/bsv-blockchain/ts-stack/pull/1642) merged at
+`4be3cebcf512ff3508044e4a9e2bb6b30cef9ab1` after all seven required checks,
+strict zero-new-findings Sonar and exact-PR CodeQL analysis passed. The main
+CI, CodeQL and conformance workflows then passed. Historical main findings
+remain visible; this is not a claim that the entire main baseline has no findings.
+
+Main ruleset **19713320** now requires the merge queue with `ALLGREEN`, two
+concurrent builds, `MERGE`, minimum group size one, maximum two, a one-minute
+minimum wait and a 60-minute check timeout. Strict contributor-branch freshness
+is off. All seven app-bound required contexts and thread resolution are unchanged.
+
+The final isolated pair [1661](https://github.com/bsv-blockchain/ts-stack/pull/1661)
+and [1662](https://github.com/bsv-blockchain/ts-stack/pull/1662) queue-merged at
+22:34:50 UTC on November 20, 2026, without updating either source head. Their
+combined commits were `7e37e006c4df3f715ff59ffa91a76212eca58a53` and
+`67e4725d4bdec8b320ca6d69123707a0a36eadd8`. Each passed all seven required checks
+and the strict Sonar inventory. Auxiliary drafts 1665/1666 and their refs were
+cleaned automatically; the isolated base and ruleset were removed and verified.
+This trial exercised the helper exports. The production event adapter was
+then exercised on main by the independent documentation PRs below.
+
+| Main verification                                            | Unchanged contributor head                 | Combined queue commit                      |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
+| [1663](https://github.com/bsv-blockchain/ts-stack/pull/1663) | `e0592a80c598b8e7bc5fa6824dc46ad4b407a2d7` | `9a981e20b50fc22df9511900296dac3a33a609bb` |
+| [1664](https://github.com/bsv-blockchain/ts-stack/pull/1664) | `ed74922dea9f795e6583dfc64bd1054472033bfa` | `37b9379d161effde34b2a644ed6e797254c8c818` |
+
+The second combined commit has the first combined commit as its first parent;
+neither contributor head was rebased. Production controller runs
+[44834874722](https://github.com/bsv-blockchain/ts-stack/actions/runs/44834874722)
+and [44834873230](https://github.com/bsv-blockchain/ts-stack/actions/runs/44834873230)
+created exact-SHA drafts 1669/1670. Sonar app checks 136629269922 and
+136629221005 passed; each strict inventory contained **zero issues and zero
+hotspots**. Queue CI runs
+[44834838762](https://github.com/bsv-blockchain/ts-stack/actions/runs/44834838762)
+and [44834841704](https://github.com/bsv-blockchain/ts-stack/actions/runs/44834841704)
+passed and retain the `sonar-policy-queue-<SHA>` artifacts. Both auxiliary drafts
+were closed and their unchanged refs deleted automatically, with 404 read-back.
+
+Consult the linked PRs and the [final coordination record](https://github.com/bsv-blockchain/ts-stack/discussions/1668)
+for terminal CodeQL, automatic merge and resulting-main evidence. A
+successful Sonar or CI run alone is not a claim that every required queue check
+has finished. The rollout used an explicitly authorized administrator review
+exception scoped to these verification PRs; the original organization review
+policy is restored after verification. The companion rule preserves deletion,
+force-push and repository-rename safeguards while that exception is active.
+No required check, app identity or finding policy is waived.
 
 The first isolated probes [1639](https://github.com/bsv-blockchain/ts-stack/pull/1639)
 and [1640](https://github.com/bsv-blockchain/ts-stack/pull/1640) produced both
@@ -139,7 +182,7 @@ and secure credential renewal. Never expose a credential in logs or discussions.
    including strict Sonar and CodeQL findings. Test the actual helper code on
    isolated queue commits with all seven required checks. Keep main unchanged.
 2. Obtain the existing qualified maintainer approval, resolve review threads,
-   and merge the workflow PR through normal protection. Verify main and the
+   and merge the workflow PR through the approved repository process. Verify main and the
    trusted default-branch controller before enabling queue admission.
 3. Save the complete live main ruleset and effective inherited rules. In one
    update, add `merge_queue` and remove strict freshness, preserving every
@@ -149,7 +192,9 @@ and secure credential renewal. Never expose a credential in logs or discussions.
 4. Enqueue two approved harmless independent PRs from the same base. Record
    their original head SHAs, both combined SHAs and all required results.
    Verify consecutive merges without source-branch updates, resulting main
-   checks and auxiliary cleanup. Never use a protection bypass.
+   checks and auxiliary cleanup. A direct administrator merge does not prove
+   queue behavior. Any explicitly authorized review exception must preserve
+   all security checks, be limited to the rollout and be restored afterward.
 5. If a required result is absent or the controller fails, dequeue pending
    rollout canaries and restore the saved strict ruleset. Automatic Analysis
    stays on and the existing PR merge path remains available. Close only owned
