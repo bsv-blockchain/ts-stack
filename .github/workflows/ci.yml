@@ -2178,7 +2178,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: c66a1356064f44ee61cfa4406babe73096497687
+          ref: e282aec5c2543e7fdeb9234445bff7144773ace5
           persist-credentials: false
           sparse-checkout: scripts
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -2208,7 +2208,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: c66a1356064f44ee61cfa4406babe73096497687
+          ref: e282aec5c2543e7fdeb9234445bff7144773ace5
           persist-credentials: false
           sparse-checkout: scripts
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
