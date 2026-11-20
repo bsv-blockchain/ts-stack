@@ -4,9 +4,9 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.7.0'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+version: '0.8.0'
+last_updated: '2026-11-16'
+last_verified: '2026-11-16'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'relay']
@@ -97,7 +97,7 @@ function WalletConnection() {
 
 ### Server-Side (Node.js)
 
-- **WalletRelayService** — All-in-one relay server; auto-registers REST routes (`GET /api/session`, `POST /api/request/:id`) and WebSocket endpoint
+- **WalletRelayService** — All-in-one relay server; auto-registers REST routes (`GET /api/session`, `GET /api/session/:id`, `POST /api/request/:id`) and WebSocket endpoint. `GET /api/session/:id` returns `topic`, `backendIdentityKey`, and `protocolID` equal to the pairing QR, plus the relay URL.
 - **QRSessionManager** — Session lifecycle management, status tracking, cleanup
 - **WebSocketRelay** — WebSocket server with message routing, topic validation, token auth
 - **WalletRequestHandler** — Converts JSON-RPC calls to wallet method invocations

@@ -299,10 +299,21 @@ function normalizeStatusEvent(value: unknown, eventId: string | undefined): ArcS
   }
 }
 
-function readEventData(event: unknown, key: string): unknown {
+const nativeMessageEvent = typeof MessageEvent === 'undefined' ? undefined : MessageEvent.prototype
+const nativeData =
+  nativeMessageEvent == null ? undefined : Object.getOwnPropertyDescriptor(nativeMessageEvent, 'data')?.get
+const nativeLastEventId =
+  nativeMessageEvent == null ? undefined : Object.getOwnPropertyDescriptor(nativeMessageEvent, 'lastEventId')?.get
+
+function readEventData(event: unknown, key: 'data' | 'lastEventId'): unknown {
   if (event == null || (typeof event !== 'object' && typeof event !== 'function')) return undefined
   try {
-    return ownDataValue(event as object, key)
+    const record = event as object
+    if (Object.hasOwn(record, key)) return ownDataValue(record, key)
+    // EventSource v4 uses native, brand-checked MessageEvents. Read only
+    // the platform's captured getter, never an arbitrary inherited accessor.
+    const getter = key === 'data' ? nativeData : nativeLastEventId
+    return getter == null ? undefined : Reflect.apply(getter, record, [])
   } catch {
     return undefined
   }
@@ -317,6 +328,7 @@ export class ArcSSEClient {
   private connecting = false
   private generation = 0
   private processingGeneration: number | undefined
+  private detachedGeneration: number | undefined
   private readonly pendingEvents: PendingEvent[] = []
   private pendingBytes = 0
 
@@ -329,6 +341,11 @@ export class ArcSSEClient {
 
   get lastEventId(): string | undefined {
     return this._lastEventId
+  }
+
+  /** A stopped connection may still be committing its accepted prefix. */
+  get isDraining(): boolean {
+    return this.es == null && this.processingGeneration != null
   }
 
   /** Open the SSE connection. Events are processed serially in exact arrival order. */
@@ -346,6 +363,16 @@ export class ArcSSEClient {
     try {
       source = new this.options.EventSourceClass(this.url, {
         headers,
+        // EventSource v4 delivers request options through its own fetch hook.
+        // Keep the legacy header option for React Native implementations.
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
+          if (url.origin !== new URL(this.url).origin) throw new Error('Arcade SSE changed request origin.')
+          const outbound = new Headers(init?.headers)
+          outbound.set('Last-Event-ID', this._lastEventId ?? '0')
+          if (this.options.arcApiKey != null) outbound.set('Authorization', `Bearer ${this.options.arcApiKey}`)
+          return await fetch(input, { ...init, headers: outbound, redirect: 'error' })
+        },
         // Third-party debug output can include the URL token and Authorization header.
         debug: false,
         pollingInterval: 0
@@ -369,7 +396,7 @@ export class ArcSSEClient {
         // Error objects can contain the credential-bearing request URL and
         // headers. Do not inspect or forward remote diagnostic fields.
         void event
-        this.terminateSource(source, new Error('Arcade SSE connection error.'), true)
+        this.terminateSource(source, new Error('Arcade SSE connection error.'), true, true)
       })
       this.emitLog('Arcade SSE connecting.')
     } catch {
@@ -406,7 +433,15 @@ export class ArcSSEClient {
         this.pendingEvents.length >= this.options.maxPendingEvents ||
         this.pendingBytes + bytes > this.options.maxPendingBytes
       ) {
-        throw new Error('Arcade SSE pending-event capacity was exceeded.')
+        if (this.es != null) {
+          this.terminateSource(
+            this.es,
+            new Error('Arcade SSE queue capacity reached; replay will resume after the acknowledged prefix.'),
+            true,
+            true
+          )
+        }
+        return
       }
       this.pendingEvents.push({ event: normalized, bytes })
       this.pendingBytes += bytes
@@ -423,46 +458,56 @@ export class ArcSSEClient {
     this.processingGeneration = generation
     void this.drainEvents(generation).finally(() => {
       if (this.processingGeneration === generation) this.processingGeneration = undefined
+      if (this.detachedGeneration === generation) this.detachedGeneration = undefined
       if (this.es != null && this.pendingEvents.length > 0) this.startDrain(this.generation)
     })
   }
 
   private async drainEvents(generation: number): Promise<void> {
-    while (this.generation === generation && this.es != null && this.pendingEvents.length > 0) {
+    const canCommit = (): boolean =>
+      this.generation === generation && (this.es != null || this.detachedGeneration === generation)
+    while (canCommit() && this.pendingEvents.length > 0) {
       const pending = this.pendingEvents[0]
       try {
         await this.options.onEvent({ ...pending.event })
-        if (this.generation !== generation || this.es == null) return
+        if (!canCommit()) return
         const eventId = pending.event.eventId
         if (eventId != null) {
           await this.options.onLastEventIdChanged?.(eventId)
-          if (this.generation !== generation || this.es == null) return
+          if (!canCommit()) return
           this._lastEventId = eventId
         }
         if (this.pendingEvents[0] !== pending) return
         this.pendingEvents.shift()
         this.pendingBytes -= pending.bytes
       } catch (error) {
-        if (this.es != null) {
-          this.terminateSource(
-            this.es,
-            error instanceof Error ? error : new Error('Arcade SSE event processing failed.'),
-            true
-          )
+        const failure = error instanceof Error ? error : new Error('Arcade SSE event processing failed.')
+        if (this.es != null) this.terminateSource(this.es, failure, true)
+        else if (this.detachedGeneration === generation) {
+          this.invalidatePending()
+          this.reportError(failure)
         }
         return
       }
     }
   }
 
-  private terminateSource(source: any, error: Error, notify: boolean): void {
+  private invalidatePending(): void {
+    this.generation += 1
+    this.detachedGeneration = undefined
+    this.pendingEvents.length = 0
+    this.pendingBytes = 0
+  }
+
+  private terminateSource(source: any, error: Error, notify: boolean, drainPrefix = false): void {
     if (this.es !== source) return
     this.es = null
     this.connected = false
     this.connecting = false
-    this.generation += 1
-    this.pendingEvents.length = 0
-    this.pendingBytes = 0
+    // Backpressure and transport loss stop further input, but keep the
+    // validated prefix until its durable acknowledgements complete.
+    if (drainPrefix && this.processingGeneration === this.generation) this.detachedGeneration = this.generation
+    else this.invalidatePending()
     try {
       source.close()
     } catch {
@@ -497,9 +542,7 @@ export class ArcSSEClient {
     } else {
       this.connected = false
       this.connecting = false
-      this.generation += 1
-      this.pendingEvents.length = 0
-      this.pendingBytes = 0
+      this.invalidatePending()
     }
   }
 

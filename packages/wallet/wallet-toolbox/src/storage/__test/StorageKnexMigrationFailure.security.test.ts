@@ -131,6 +131,7 @@ test('MySQL full deletion does not issue SQLite generation operations', async ()
     },
     {
       client: { config: { client: 'mysql2' } },
+      schema: { dropTableIfExists: jest.fn().mockResolvedValue(undefined) },
       transaction: jest.fn(),
       raw: jest.fn(async (sql: string) => {
         expect(sql).not.toMatch(/sqlite|PRAGMA/i)
@@ -155,6 +156,7 @@ test('MySQL full deletion does not issue SQLite generation operations', async ()
     }
   )
   await StorageKnex.prototype.dropAllData.call(storageWithKnex(database))
+  expect(database.schema.dropTableIfExists.mock.calls).toEqual([['monitor_checkpoints'], ['monitor_confirmed_spends']])
   expect(database.transaction).not.toHaveBeenCalled()
   expect(database.raw.mock.calls.some(([sql]) => sql.includes('information_schema.TABLES'))).toBe(true)
   expect(database.raw.mock.calls.some(([sql]) => sql.includes('information_schema.TRIGGERS'))).toBe(true)

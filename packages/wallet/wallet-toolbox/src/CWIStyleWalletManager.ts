@@ -1,3 +1,14 @@
+import {
+  PendingUMPUpdate,
+  SignedUMPActionReceipt,
+  WalletStatePersistence,
+  WalletStateTransitionError,
+  WalletProfileUnavailableError,
+  UMPActionCheckpoint,
+  validatePendingUMPUpdate
+} from './WalletStatePersistence'
+import { readUMPActionReceipt, umpUpdateActionLabel } from './utility/umpActionReceipt'
+export * from './WalletStatePersistence'
 import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import {
   Random,
@@ -55,6 +66,7 @@ import {
   WalletInterface,
   OutpointString,
   PrivateKey,
+  ProtoWallet,
   Signature,
   LookupResolver,
   LookupAnswer,
@@ -547,6 +559,30 @@ export interface KdfConfig {
  * Describes a system capable of finding and updating UMP tokens on the blockchain.
  */
 export interface UMPTokenInteractor {
+  /** Opt-in checkpoint/republication contract; custom interactors must explicitly implement it. */
+  readonly checkpointVersion?: 1
+  /** Verify that a discovered token is controlled by the authenticated root wallet. */
+  verifyToken?: (
+    wallet: Pick<WalletInterface, 'getPublicKey'>,
+    adminOriginator: string,
+    token: UMPToken
+  ) => Promise<void>
+  /** Return the original signed action from durable wallet storage, when available. */
+  recoverCheckpoint?: (
+    wallet: WalletInterface,
+    adminOriginator: string,
+    token: UMPToken,
+    previousToken: UMPToken,
+    checkpoint: PendingUMPUpdate
+  ) => Promise<SignedUMPActionReceipt | undefined>
+  publishCheckpoint?: (
+    wallet: WalletInterface,
+    adminOriginator: string,
+    token: UMPToken,
+    previousToken: UMPToken,
+    checkpoint: PendingUMPUpdate
+  ) => Promise<string>
+
   /**
    * Locates the latest valid copy of a UMP token (including its outpoint)
    * based on the presentation key hash.
@@ -580,7 +616,8 @@ export interface UMPTokenInteractor {
     wallet: WalletInterface, // This wallet MUST be the one built for the default profile
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     token: UMPToken,
-    oldTokenToConsume?: UMPToken
+    oldTokenToConsume?: UMPToken,
+    checkpoint?: UMPActionCheckpoint
   ) => Promise<OutpointString>
 }
 
@@ -640,6 +677,8 @@ export class UMPTokenLookupError extends Error {
  * 3) Consuming (spending) an old token if provided.
  */
 export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
+  readonly checkpointVersion = 1 as const
+
   /**
    * A `LookupResolver` instance used to query overlay networks.
    */
@@ -1176,7 +1215,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     wallet: WalletInterface, // This wallet MUST be the one built for the default profile
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     token: UMPToken,
-    oldTokenToConsume?: UMPToken
+    oldTokenToConsume?: UMPToken,
+    checkpoint?: UMPActionCheckpoint
   ): Promise<OutpointString> {
     // 1) Construct the data fields and PushDrop locking script for the new UMP token.
     const fields = this.tokenFields(token)
@@ -1208,6 +1248,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
     const createArgs: CreateActionArgs = {
       description: resolvedOldToken == null ? 'Create new UMP token' : 'Renew UMP token (consume old, create new)',
+      ...(checkpoint == null ? {} : { labels: [umpUpdateActionLabel(checkpoint.operationId)] }),
       inputs,
       outputs: tokenOutput,
       inputBEEF: inputToken?.beef,
@@ -1225,7 +1266,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const operation = resolvedOldToken == null ? 'create' : 'renew'
     let transaction: Transaction
     try {
-      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator)
+      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator, checkpoint)
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.ump.action.failed',
@@ -1238,6 +1279,11 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         error
       })
       throw error
+    }
+    if (checkpoint != null) {
+      const outpoint = this.umpTransactionOutpoint(transaction, tokenScript)
+      await checkpoint.onCompleted(transaction.toAtomicBEEF(), outpoint)
+      await this.sendSignedUMPAction(wallet, adminOriginator, transaction)
     }
     return await this.broadcastUMPTransaction(transaction, tokenScript, operation)
   }
@@ -1284,7 +1330,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
   /** Proves the exact predecessor is an authenticated token controlled by this wallet. */
   private async assertOwnedUMPInput(
-    wallet: WalletInterface,
+    wallet: Pick<WalletInterface, 'getPublicKey'>,
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     oldToken: UMPToken,
     inputToken: { beef: number[]; outputIndex: number }
@@ -1320,12 +1366,154 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     wallet: WalletInterface,
     createArgs: CreateActionArgs,
     inputSigners: NonNullable<Parameters<typeof completeBoundAction>[2]>['inputSigners'],
-    adminOriginator: OriginatorDomainNameStringUnder250Bytes
+    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+    checkpoint?: UMPActionCheckpoint
   ): Promise<Transaction> {
-    return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
+    if (checkpoint == null)
+      return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
+
+    // Set noSend at signing so Toolbox plans and persists the action through its ordinary storage path.
+    // noSend at creation can instead open an in-memory batch that would be lost on restart.
+    const signAction: WalletInterface['signAction'] = async (args, originator) => {
+      // Planning and input binding can fail before the wallet is asked to sign.
+      await checkpoint.onStarting?.()
+      return await wallet.signAction({ ...args, options: { ...args.options, noSend: true } }, originator)
+    }
+    const stagingWallet = new Proxy(wallet, {
+      get(target, property) {
+        if (property === 'signAction') return signAction
+        const value: unknown = Reflect.get(target, property)
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+    return awaitFromSync(() => completeBoundAction(stagingWallet, createArgs, { inputSigners }, adminOriginator))
   }
 
-  /** Broadcasts a bound UMP transaction and returns the exact, uniquely matching token output. */
+  private async sendSignedUMPAction(
+    wallet: WalletInterface,
+    adminOriginator: string,
+    transaction: Transaction
+  ): Promise<void> {
+    const txid = transaction.id('hex')
+    const result = await wallet.createAction(
+      { description: 'Broadcast signed UMP token', options: { sendWith: [txid], acceptDelayedBroadcast: false } },
+      adminOriginator
+    )
+    if (result.sendWithResults?.find(item => item.txid === txid)?.status !== 'unproven') {
+      throw new Error('Wallet did not confirm submission of the signed UMP update.')
+    }
+  }
+
+  /** Verifies authenticated token fields and root ownership without constructing a wallet. */
+  async verifyToken(
+    wallet: Pick<WalletInterface, 'getPublicKey'>,
+    adminOriginator: string,
+    token: UMPToken
+  ): Promise<void> {
+    if (token.currentOutpoint == null) throw new Error('Discovered UMP token has no outpoint.')
+    const input = await this.findByOutpoint(token.currentOutpoint)
+    if (input == null) throw new Error('Discovered UMP token proof is unavailable.')
+    await this.assertOwnedUMPInput(wallet, adminOriginator, token, input)
+  }
+
+  /** Read and authenticate the original receipt from locally readable Toolbox wallet storage. */
+  async recoverCheckpoint(
+    wallet: WalletInterface,
+    adminOriginator: string,
+    token: UMPToken,
+    previousToken: UMPToken,
+    checkpoint: PendingUMPUpdate
+  ): Promise<SignedUMPActionReceipt | undefined> {
+    validatePendingUMPUpdate(checkpoint)
+    const bytes = await readUMPActionReceipt(wallet, checkpoint.operationId, adminOriginator)
+    if (bytes == null) return undefined
+    if (bytes.length > MAX_STATE_SNAPSHOT_BYTES) throw new Error('Retained UMP receipt is too large.')
+    const transaction = Transaction.fromAtomicBEEF(bytes)
+    const expected = JSON.stringify(this.tokenFields(token))
+    const outputs = transaction.outputs.flatMap((output, index) => {
+      if (output.satoshis !== 1) return []
+      try {
+        return JSON.stringify(decodeAuthenticatedUMPFields(output.lockingScript).fields) === expected ? [index] : []
+      } catch {
+        return []
+      }
+    })
+    if (outputs.length !== 1) throw new Error('Retained wallet action has no unique intended UMP output.')
+    const outpoint = `${transaction.id('hex')}.${outputs[0]}`
+    await this.verifyCheckpoint(wallet, adminOriginator, token, previousToken, {
+      ...checkpoint,
+      stage: 'signed',
+      transaction: bytes,
+      outpoint
+    })
+    return { transaction: bytes, outpoint }
+  }
+
+  /** Re-publishes the exact signed update. */
+  async publishCheckpoint(
+    wallet: WalletInterface,
+    adminOriginator: string,
+    token: UMPToken,
+    previousToken: UMPToken,
+    checkpoint: PendingUMPUpdate
+  ): Promise<string> {
+    const transaction = await this.verifyCheckpoint(wallet, adminOriginator, token, previousToken, checkpoint)
+    const outputIndex = Number(checkpoint.outpoint!.split('.')[1])
+    await this.sendSignedUMPAction(wallet, adminOriginator, transaction)
+    return await this.broadcastUMPTransaction(
+      transaction,
+      transaction.outputs[outputIndex].lockingScript.toHex(),
+      'renew'
+    )
+  }
+
+  private async verifyCheckpoint(
+    wallet: WalletInterface,
+    adminOriginator: string,
+    token: UMPToken,
+    previousToken: UMPToken,
+    checkpoint: PendingUMPUpdate
+  ): Promise<Transaction> {
+    validatePendingUMPUpdate(checkpoint)
+    if (checkpoint.transaction == null || previousToken.currentOutpoint == null)
+      throw new Error('The original wallet action needs reconciliation before publication.')
+    const transaction = Transaction.fromAtomicBEEF(checkpoint.transaction)
+    const outputIndex = Number(checkpoint.outpoint?.split('.')[1])
+    const output = transaction.outputs[outputIndex]
+    if (output == null || `${transaction.id('hex')}.${outputIndex}` !== checkpoint.outpoint)
+      throw new Error('Pending UMP transaction identity mismatch.')
+    const decoded = decodeAuthenticatedUMPFields(output.lockingScript)
+    const expectedFields = this.tokenFields(token)
+    if (JSON.stringify(decoded.fields) !== JSON.stringify(expectedFields))
+      throw new Error('Pending UMP transaction does not contain the intended update.')
+    const publicKey = (
+      await wallet.getPublicKey(
+        { protocolID: [2, 'admin user management token'], keyID: '1', counterparty: 'self', forSelf: true },
+        adminOriginator
+      )
+    ).publicKey
+    if (decoded.lockingPublicKey.toString().toLowerCase() !== publicKey.toLowerCase())
+      throw new Error('Pending UMP transaction is not owned by this wallet.')
+    const inputs = transaction.inputs.filter(
+      input =>
+        `${input.sourceTXID ?? input.sourceTransaction?.id('hex')}.${input.sourceOutputIndex}` ===
+        previousToken.currentOutpoint
+    )
+    if (inputs.length !== 1) throw new Error('Pending UMP transaction must consume its exact predecessor.')
+    const tokenScript = output.lockingScript.toHex()
+    if (this.umpTransactionOutpoint(transaction, tokenScript) !== checkpoint.outpoint)
+      throw new Error('Pending UMP transaction output mismatch.')
+    return transaction
+  }
+
+  private umpTransactionOutpoint(transaction: Transaction, tokenScript: string): string {
+    const matches = transaction.outputs.flatMap((output, index) =>
+      output.satoshis === 1 && output.lockingScript.toHex().toLowerCase() === tokenScript.toLowerCase() ? [index] : []
+    )
+    if (matches.length !== 1) throw new Error('Final UMP transaction must contain exactly one requested token output.')
+    return `${transaction.id('hex')}.${matches[0]}`
+  }
+
   private async broadcastUMPTransaction(
     transaction: Transaction,
     tokenScript: string,
@@ -1597,6 +1785,223 @@ export class CWIStyleWalletManager implements WalletInterface {
    * The current UMP token in use.
    */
   private currentUMPToken?: UMPToken
+
+  private statePersistence?: WalletStatePersistence
+  private pendingUMPUpdate?: PendingUMPUpdate
+  private transitionTail: Promise<unknown> = Promise.resolve()
+  private stateGeneration = 0
+  private stateTransitionActive = false
+  private stateTransitionGeneration = 0
+  private statePersistencePending = false
+  private umpSyncStatus: 'unknown' | 'unchanged' | 'updated' | 'not-found' = 'unknown'
+
+  /** Distinguishes authoritative absence from an unchanged verified lookup. */
+  getUMPTokenSyncStatus(): 'unknown' | 'unchanged' | 'updated' | 'not-found' {
+    return this.umpSyncStatus
+  }
+
+  /** Attach an awaited device store before authentication. Never log its checkpoint payloads. */
+  setStatePersistence(persistence: WalletStatePersistence): void {
+    if (this.statePersistence != null && this.statePersistence !== persistence)
+      throw new Error('Wallet state persistence is already attached to this manager.')
+    this.statePersistence = persistence
+  }
+
+  /** Restore a retained checkpoint only after restoring/authenticating its original account. */
+  loadPendingUMPUpdate(checkpoint: PendingUMPUpdate): void {
+    if (this.statePersistence == null) throw new Error('Attach durable wallet state before loading a pending update.')
+    validatePendingUMPUpdate(checkpoint)
+    if (
+      this.rootPrimaryKey == null ||
+      new PrivateKey(this.rootPrimaryKey).toPublicKey().toString() !== checkpoint.rootIdentityKey
+    )
+      throw new Error('Pending wallet update belongs to another account.')
+    this.pendingUMPUpdate = {
+      ...checkpoint,
+      previousSnapshot: [...checkpoint.previousSnapshot],
+      proposedToken: [...checkpoint.proposedToken],
+      activeProfileId: [...checkpoint.activeProfileId],
+      ...(checkpoint.transaction == null ? {} : { transaction: [...checkpoint.transaction] })
+    }
+  }
+
+  private runStateTransition<T>(operation: () => Promise<T>, recovery = false): Promise<T> {
+    if (this.statePersistence == null) return operation()
+    const generation = this.stateGeneration
+    const pending = this.transitionTail
+      .catch(() => {})
+      .then(async () => {
+        if (generation !== this.stateGeneration) throw new Error('Wallet session changed before the operation started.')
+        if (!recovery && this.pendingUMPUpdate != null)
+          throw new WalletStateTransitionError(this.pendingUMPUpdate.stage, undefined)
+        this.stateTransitionActive = true
+        this.stateTransitionGeneration = generation
+        try {
+          const result = await operation()
+          this.assertTransitionCurrent()
+          return result
+        } catch (error) {
+          if (this.pendingUMPUpdate != null && !(error instanceof WalletStateTransitionError))
+            throw new WalletStateTransitionError(this.pendingUMPUpdate.stage, error)
+          throw error
+        } finally {
+          this.stateTransitionActive = false
+        }
+      })
+    this.transitionTail = pending
+    return pending
+  }
+
+  private assertTransitionCurrent(): void {
+    if (
+      this.statePersistence != null &&
+      this.stateTransitionActive &&
+      this.stateTransitionGeneration !== this.stateGeneration
+    )
+      throw new Error('Wallet session changed during the state transition.')
+  }
+
+  private async persistState(profileId = this.activeProfileId): Promise<void> {
+    if (this.statePersistence == null) return
+    this.assertTransitionCurrent()
+    const snapshot = this.saveSnapshot()
+    // Snapshot v2 deliberately keeps the device selection outside its payload.
+    snapshot.splice(33, 16, ...profileId)
+    try {
+      await this.statePersistence.saveSnapshot(snapshot)
+      this.assertTransitionCurrent()
+      this.statePersistencePending = false
+    } catch (error) {
+      this.statePersistencePending = true
+      throw new WalletStateTransitionError('persistence', error)
+    }
+  }
+
+  private pendingUpdateRoot(pending: PendingUMPUpdate): number[] {
+    if (
+      this.rootPrimaryKey == null ||
+      !this.authenticated ||
+      new PrivateKey(this.rootPrimaryKey).toPublicKey().toString() !== pending.rootIdentityKey
+    )
+      throw new Error('Pending wallet update belongs to another account.')
+    return this.rootPrimaryKey
+  }
+
+  /** Reconcile or re-publish the original update. Never constructs a replacement action. */
+  recoverPendingUMPUpdate(): Promise<void> {
+    return this.runStateTransition(async () => {
+      const pending = this.pendingUMPUpdate
+      if (pending == null) return
+      validatePendingUMPUpdate(pending)
+      const authenticatedRoot = this.pendingUpdateRoot(pending)
+      if (pending.stage === 'prepared') {
+        await this.statePersistence?.savePendingUpdate(null)
+        this.pendingUMPUpdate = undefined
+        return
+      }
+      const token = this.deserializeUMPToken(pending.proposedToken, true)
+      const savedReader = new Reader(pending.previousSnapshot)
+      const version = savedReader.readUInt8()
+      if (version !== 2) throw new Error('Pending wallet update requires its original snapshot format.')
+      const key = savedReader.read(32)
+      savedReader.read(16)
+      const payload = new Reader(new SymmetricKey(key).decrypt(savedReader.read()) as number[])
+      const root = payload.read(32)
+      if (toHex(root) !== toHex(authenticatedRoot)) throw new Error('Pending wallet update root mismatch.')
+      const previousToken = this.deserializeUMPToken(payload.read(payload.readVarIntNumStrict(false)))
+      if (pending.transaction != null) {
+        // A failed receipt write leaves the signed transaction in memory. Repair its durable copy before sending it.
+        await this.statePersistence?.savePendingUpdate(pending)
+        this.assertTransitionCurrent()
+      }
+      const outpoint = await this.resolvePendingUpdateOutpoint(root, pending, token, previousToken)
+      this.assertTransitionCurrent()
+      token.currentOutpoint = outpoint
+      this.currentUMPToken = token
+      await this.setupRoot(root)
+      await this.activateProfile(pending.activeProfileId)
+      await this.persistState()
+      await this.statePersistence?.savePendingUpdate(null)
+      this.pendingUMPUpdate = undefined
+    }, true)
+  }
+
+  private async resolvePendingUpdateOutpoint(
+    root: number[],
+    pending: PendingUMPUpdate,
+    token: UMPToken,
+    previousToken: UMPToken
+  ): Promise<string> {
+    const options = { pinnedOutpoint: previousToken.currentOutpoint }
+    const refreshed =
+      (await this.UMPTokenInteractor.findByPresentationKeyHash(token.presentationHash, options)) ??
+      (await this.UMPTokenInteractor.findByRecoveryKeyHash(token.recoveryHash, options))
+    const sameFields = (candidate: UMPToken) =>
+      toHex(this.serializeUMPToken({ ...candidate, currentOutpoint: '' }, true)) === toHex(pending.proposedToken)
+    if (refreshed != null && sameFields(refreshed) && refreshed.currentOutpoint != null) {
+      if (pending.outpoint != null && pending.outpoint !== refreshed.currentOutpoint)
+        throw new Error('Discovered update does not match the original signed transaction.')
+      await this.UMPTokenInteractor.verifyToken?.(
+        new ProtoWallet(new PrivateKey(root)),
+        this.adminOriginator,
+        refreshed
+      )
+      return refreshed.currentOutpoint
+    } else {
+      if (refreshed != null && refreshed.currentOutpoint !== previousToken.currentOutpoint)
+        throw new Error('A different account update must be reconciled before continuing.')
+      const publish = this.UMPTokenInteractor.publishCheckpoint
+      if (publish == null) throw new WalletStateTransitionError(pending.stage, undefined)
+      const selected = [...this.activeProfileId]
+      await this.activateProfile(DEFAULT_PROFILE_ID)
+      try {
+        const wallet = this.underlying!
+        const signed =
+          pending.transaction == null
+            ? await this.recoverOriginalUMPReceipt(wallet, token, previousToken, pending)
+            : pending
+        return await publish.call(this.UMPTokenInteractor, wallet, this.adminOriginator, token, previousToken, signed)
+      } catch (error) {
+        await this.activateProfile(selected).catch(() => {})
+        throw error
+      }
+    }
+  }
+
+  private async recoverOriginalUMPReceipt(
+    wallet: WalletInterface,
+    token: UMPToken,
+    previousToken: UMPToken,
+    pending: PendingUMPUpdate
+  ): Promise<PendingUMPUpdate> {
+    const receipt = await this.UMPTokenInteractor.recoverCheckpoint?.(
+      wallet,
+      this.adminOriginator,
+      token,
+      previousToken,
+      pending
+    )
+    this.assertTransitionCurrent()
+    if (receipt == null) throw new WalletStateTransitionError(pending.stage, undefined)
+    const signed = {
+      ...pending,
+      stage: 'signed' as const,
+      transaction: receipt.transaction,
+      outpoint: receipt.outpoint
+    }
+    validatePendingUMPUpdate(signed)
+    await this.statePersistence?.savePendingUpdate(signed)
+    this.assertTransitionCurrent()
+    this.pendingUMPUpdate = signed
+    return signed
+  }
+
+  /** Retry only local persistence. This never creates or publishes a transaction. */
+  retryStatePersistence(): Promise<void> {
+    return this.runStateTransition(async () => {
+      await this.persistState()
+    }, true)
+  }
 
   /** Unpublished token retained through an interrupted new-user registration. */
   private pendingRegistrationToken?: UMPToken
@@ -2130,6 +2535,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param snapshot Encrypted snapshot bytes.
    */
   async loadSnapshot(snapshot: number[]): Promise<void> {
+    return this.runStateTransition(() => this.restoreSnapshot(snapshot))
+  }
+
+  private async restoreSnapshot(snapshot: number[]): Promise<void> {
+    const generation = this.stateGeneration
     try {
       if (
         snapshot.length === 0 ||
@@ -2172,8 +2582,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.currentUMPToken = token
 
       // Setup root infrastructure, load profiles, and switch to the loaded active profile
-      await this.setupRoot(rootPrimaryKey) // Will automatically load profiles
-      await this.switchProfile(activeProfileId) // Switch to the profile saved in the snapshot
+      await this.setupRoot(rootPrimaryKey)
+      if (this.statePersistence == null) {
+        await this.switchProfile(activeProfileId)
+      } else {
+        await this.activateProfile(activeProfileId)
+        await this.persistState()
+      }
 
       this.clearPublishedPendingRegistration(token)
 
@@ -2188,7 +2603,7 @@ export class CWIStyleWalletManager implements WalletInterface {
         }
       })
     } catch (error) {
-      this.destroy() // Clear state on error
+      if (this.stateGeneration === generation) this.destroy()
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.load-failed',
         component: CWI_COMPONENT,
@@ -2201,37 +2616,84 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   async syncUMPToken(): Promise<boolean> {
-    if (!this.authenticated || this.currentUMPToken == null || this.rootPrimaryKey == null) {
-      throw new Error('Wallet not authenticated or missing UMP token.')
-    }
+    return this.runStateTransition(async () => {
+      if (!this.authenticated || this.currentUMPToken == null || this.rootPrimaryKey == null) {
+        throw new Error('Wallet not authenticated or missing UMP token.')
+      }
 
-    const currentToken = this.currentUMPToken
-    let refreshed: UMPToken | undefined
+      this.umpSyncStatus = 'unknown'
+      const generation = this.stateGeneration
+      const currentToken = this.currentUMPToken
+      const lookupOptions: [UMPTokenLookupOptions?] =
+        this.statePersistence == null ? [] : [{ pinnedOutpoint: currentToken.currentOutpoint }]
+      let refreshed: UMPToken | undefined
 
-    if (currentToken.presentationHash && currentToken.presentationHash.length > 0) {
-      refreshed = await this.UMPTokenInteractor.findByPresentationKeyHash(currentToken.presentationHash)
-    }
+      if (currentToken.presentationHash && currentToken.presentationHash.length > 0) {
+        refreshed = await this.UMPTokenInteractor.findByPresentationKeyHash(
+          currentToken.presentationHash,
+          ...lookupOptions
+        )
+      }
 
-    if (refreshed == null && currentToken.recoveryHash && currentToken.recoveryHash.length > 0) {
-      refreshed = await this.UMPTokenInteractor.findByRecoveryKeyHash(currentToken.recoveryHash)
-    }
+      if (refreshed == null && currentToken.recoveryHash && currentToken.recoveryHash.length > 0) {
+        refreshed = await this.UMPTokenInteractor.findByRecoveryKeyHash(currentToken.recoveryHash, ...lookupOptions)
+      }
 
-    if (refreshed == null) {
-      return false
-    }
+      this.assertTransitionCurrent()
+      if (refreshed == null) {
+        this.umpSyncStatus = 'not-found'
+        return false
+      }
 
-    if (
-      refreshed.currentOutpoint &&
-      currentToken.currentOutpoint &&
-      refreshed.currentOutpoint === currentToken.currentOutpoint
-    ) {
-      return false
-    }
+      if (
+        refreshed.currentOutpoint &&
+        currentToken.currentOutpoint &&
+        refreshed.currentOutpoint === currentToken.currentOutpoint
+      ) {
+        this.umpSyncStatus = 'unchanged'
+        return false
+      }
 
+      const root = this.rootPrimaryKey
+      if (this.statePersistence == null) {
+        this.currentUMPToken = refreshed
+        await this.setupRoot(root)
+        this.saveSnapshot()
+        this.umpSyncStatus = 'updated'
+        return true
+      }
+      await this.applyVerifiedUMPRefresh(root, currentToken, refreshed, generation)
+      this.umpSyncStatus = 'updated'
+      return true
+    })
+  }
+
+  private async applyVerifiedUMPRefresh(
+    root: number[],
+    currentToken: UMPToken,
+    refreshed: UMPToken,
+    generation: number
+  ): Promise<void> {
+    await this.UMPTokenInteractor.verifyToken?.(new ProtoWallet(new PrivateKey(root)), this.adminOriginator, refreshed)
+    if (generation !== this.stateGeneration) throw new Error('Wallet session changed during account verification.')
+    const previousProfiles = this.profiles
+    const previousRootManager = this.rootPrivilegedKeyManager
+    const activeId = [...this.activeProfileId]
     this.currentUMPToken = refreshed
-    await this.setupRoot(this.rootPrimaryKey)
-    this.saveSnapshot()
-    return true
+    try {
+      await this.setupRoot(root)
+      if (!activeId.every(byte => byte === 0) && !this.profiles.some(profile => toHex(profile.id) === toHex(activeId)))
+        throw new WalletProfileUnavailableError()
+      await this.activateProfile(activeId)
+    } catch (error) {
+      if (generation === this.stateGeneration) {
+        this.currentUMPToken = currentToken
+        this.profiles = previousProfiles
+        this.rootPrivilegedKeyManager = previousRootManager
+      }
+      throw error
+    }
+    await this.persistState()
   }
 
   private clearPublishedPendingRegistration(token: UMPToken): void {
@@ -2250,6 +2712,10 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Destroys the wallet state, clearing keys, tokens, and profiles.
    */
   destroy(): void {
+    this.stateGeneration++
+    this.pendingUMPUpdate = undefined
+    this.statePersistencePending = false
+    this.umpSyncStatus = 'unknown'
     this.underlying = undefined
     this.rootPrivilegedKeyManager = undefined
     this.authenticated = false
@@ -2310,59 +2776,61 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @returns The ID of the newly created profile.
    */
   async addProfile(name: string): Promise<number[]> {
-    if (
-      !this.authenticated ||
-      this.rootPrimaryKey == null ||
-      this.currentUMPToken == null ||
-      this.rootPrivilegedKeyManager == null
-    ) {
-      throw new Error('Wallet not fully initialized or authenticated.')
-    }
+    return this.runStateTransition(async () => {
+      if (
+        !this.authenticated ||
+        this.rootPrimaryKey == null ||
+        this.currentUMPToken == null ||
+        this.rootPrivilegedKeyManager == null
+      ) {
+        throw new Error('Wallet not fully initialized or authenticated.')
+      }
 
-    // Ensure name is unique (including 'default')
-    const normalizedName = name.toLowerCase()
-    if (
-      name === 'default' ||
-      this.pendingProfileNames.has(normalizedName) ||
-      this.profiles.some(p => p.name.toLowerCase() === normalizedName)
-    ) {
-      throw new Error(`Profile name "${name}" is already in use.`)
-    }
+      // Ensure name is unique (including 'default')
+      const normalizedName = name.toLowerCase()
+      if (
+        name === 'default' ||
+        this.pendingProfileNames.has(normalizedName) ||
+        this.profiles.some(p => p.name.toLowerCase() === normalizedName)
+      ) {
+        throw new Error(`Profile name "${name}" is already in use.`)
+      }
 
-    const newProfile: Profile = {
-      name,
-      id: Random(16),
-      primaryPad: Random(32),
-      privilegedPad: Random(32),
-      createdAt: Math.floor(Date.now() / 1000)
-    }
+      const newProfile: Profile = {
+        name,
+        id: Random(16),
+        primaryPad: Random(32),
+        privilegedPad: Random(32),
+        createdAt: Math.floor(Date.now() / 1000)
+      }
 
-    // Reserve the case-insensitive name before the first await. The profile
-    // itself remains unpublished until updateFactors accepts the new token.
-    this.pendingProfileNames.add(normalizedName)
-    try {
-      // Only keep the new profile once the UMP token holds it, so a failed update
-      // leaves the list as it was and a retry is not rejected as a duplicate.
-      // Update the UMP token with the new profile list
-      await this.updateFactors(
-        this.currentUMPToken.passwordSalt,
-        // Need to re-derive/decrypt factors needed for re-encryption
-        await this.getFactor('passwordKey'),
-        await this.getFactor('presentationKey'),
-        await this.getFactor('recoveryKey'),
-        this.rootPrimaryKey,
-        await this.getFactor('privilegedKey'), // Get ROOT privileged key
-        // Built last, after the awaits above: arguments are evaluated left to
-        // right, and updateFactors captures the token it consumes before its first
-        // await, so this list and that token are one consistent snapshot. Built
-        // earlier, a profile added by an overlapping call would be dropped.
-        [...this.profiles, newProfile]
-      )
+      // Reserve the case-insensitive name before the first await. The profile
+      // itself remains unpublished until updateFactors accepts the new token.
+      this.pendingProfileNames.add(normalizedName)
+      try {
+        // Only keep the new profile once the UMP token holds it, so a failed update
+        // leaves the list as it was and a retry is not rejected as a duplicate.
+        // Update the UMP token with the new profile list
+        await this.updateFactors(
+          this.currentUMPToken.passwordSalt,
+          // Need to re-derive/decrypt factors needed for re-encryption
+          await this.getFactor('passwordKey'),
+          await this.getFactor('presentationKey'),
+          await this.getFactor('recoveryKey'),
+          this.rootPrimaryKey,
+          await this.getFactor('privilegedKey'), // Get ROOT privileged key
+          // Built last, after the awaits above: arguments are evaluated left to
+          // right, and updateFactors captures the token it consumes before its first
+          // await, so this list and that token are one consistent snapshot. Built
+          // earlier, a profile added by an overlapping call would be dropped.
+          [...this.profiles, newProfile]
+        )
 
-      return newProfile.id
-    } finally {
-      this.pendingProfileNames.delete(normalizedName)
-    }
+        return newProfile.id
+      } finally {
+        this.pendingProfileNames.delete(normalizedName)
+      }
+    })
   }
 
   /**
@@ -2373,52 +2841,54 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param profileId The 16-byte ID of the profile to delete.
    */
   async deleteProfile(profileId: number[]): Promise<void> {
-    if (
-      !this.authenticated ||
-      this.rootPrimaryKey == null ||
-      this.currentUMPToken == null ||
-      this.rootPrivilegedKeyManager == null
-    ) {
-      throw new Error('Wallet not fully initialized or authenticated.')
-    }
-    if (profileId.every(x => x === 0)) {
-      throw new Error('Cannot delete the default profile.')
-    }
-
-    const profileIndex = this.profiles.findIndex(p => p.id.every((x, i) => x === profileId[i]))
-    if (profileIndex === -1) {
-      throw new Error('Profile not found.')
-    }
-
-    // Remove the profile only once the UMP token no longer holds it, so a
-    // failed update leaves the profile (and the active wallet) in place.
-    const wasActive = this.activeProfileId.every((x, i) => x === profileId[i])
-
-    // If the deleted profile was active, switch to default
-    if (wasActive) {
-      await this.switchProfile(DEFAULT_PROFILE_ID) // This rebuilds the wallet
-    }
-
-    // Update the UMP token
-    try {
-      await this.updateFactors(
-        this.currentUMPToken.passwordSalt,
-        await this.getFactor('passwordKey'),
-        await this.getFactor('presentationKey'),
-        await this.getFactor('recoveryKey'),
-        this.rootPrimaryKey,
-        await this.getFactor('privilegedKey'), // Get ROOT privileged key
-        // Built last, after the awaits, for the same reason as in addProfile.
-        this.profiles.filter(p => !p.id.every((x, i) => x === profileId[i]))
-      )
-    } catch (error) {
-      // Back to the profile we left, unless the token was published before the
-      // failure. A failed switch back must not hide the original error.
-      if (wasActive && this.profiles.some(p => p.id.every((x, i) => x === profileId[i]))) {
-        await this.switchProfile(profileId).catch(() => {})
+    return this.runStateTransition(async () => {
+      if (
+        !this.authenticated ||
+        this.rootPrimaryKey == null ||
+        this.currentUMPToken == null ||
+        this.rootPrivilegedKeyManager == null
+      ) {
+        throw new Error('Wallet not fully initialized or authenticated.')
       }
-      throw error
-    }
+      if (profileId.every(x => x === 0)) {
+        throw new Error('Cannot delete the default profile.')
+      }
+
+      const profileIndex = this.profiles.findIndex(p => p.id.every((x, i) => x === profileId[i]))
+      if (profileIndex === -1) {
+        throw new Error('Profile not found.')
+      }
+
+      // Remove the profile only once the UMP token no longer holds it, so a
+      // failed update leaves the profile (and the active wallet) in place.
+      const wasActive = this.activeProfileId.every((x, i) => x === profileId[i])
+
+      // If the deleted profile was active, switch to default
+      if (wasActive) {
+        await this.switchProfileForUpdate(DEFAULT_PROFILE_ID) // This rebuilds the wallet
+      }
+
+      // Update the UMP token
+      try {
+        await this.updateFactors(
+          this.currentUMPToken.passwordSalt,
+          await this.getFactor('passwordKey'),
+          await this.getFactor('presentationKey'),
+          await this.getFactor('recoveryKey'),
+          this.rootPrimaryKey,
+          await this.getFactor('privilegedKey'), // Get ROOT privileged key
+          // Built last, after the awaits, for the same reason as in addProfile.
+          this.profiles.filter(p => !p.id.every((x, i) => x === profileId[i]))
+        )
+      } catch (error) {
+        // Back to the profile we left, unless the token was published before the
+        // failure. A failed switch back must not hide the original error.
+        if (wasActive && this.profiles.some(p => p.id.every((x, i) => x === profileId[i]))) {
+          await this.switchProfileForUpdate(profileId).catch(() => {})
+        }
+        throw error
+      }
+    })
   }
 
   /**
@@ -2427,15 +2897,26 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param profileId The 16-byte ID of the profile to switch to (use DEFAULT_PROFILE_ID for default).
    */
   async switchProfile(profileId: number[]): Promise<void> {
-    if (!this.authenticated || this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null) {
-      throw new Error('Cannot switch profile: Wallet not authenticated or root keys missing.')
-    }
+    return this.runStateTransition(async () => {
+      if (!this.authenticated || this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null)
+        throw new Error('Cannot switch profile: Wallet not authenticated or root keys missing.')
+      if (
+        this.statePersistence != null &&
+        (profileId.length !== 16 || profileId.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255))
+      )
+        throw new Error('Invalid wallet profile ID.')
+      await this.activateProfile(profileId)
+      await this.persistState()
+    })
+  }
 
-    await this.activateProfile(profileId)
+  private switchProfileForUpdate(profileId: number[]): Promise<void> {
+    return this.statePersistence == null ? this.switchProfile(profileId) : this.activateProfile(profileId)
   }
 
   /** Build an internal profile wallet while an unpublished registration is not yet authenticated. */
   private async activateProfile(profileId: number[]): Promise<void> {
+    this.assertTransitionCurrent()
     if (this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null) {
       throw new Error('Cannot activate profile: root keys are missing.')
     }
@@ -2447,7 +2928,6 @@ export class CWIStyleWalletManager implements WalletInterface {
       // Switching to default profile
       profilePrimaryKey = this.rootPrimaryKey
       profilePrivilegedPad = undefined // No pad for default
-      this.activeProfileId = DEFAULT_PROFILE_ID
     } else {
       // Switching to a non-default profile
       const profile = this.profiles.find(p => p.id.every((x, i) => x === profileId[i]))
@@ -2456,7 +2936,6 @@ export class CWIStyleWalletManager implements WalletInterface {
       }
       profilePrimaryKey = this.XOR(this.rootPrimaryKey, profile.primaryPad)
       profilePrivilegedPad = profile.privilegedPad
-      this.activeProfileId = profileId
     }
 
     // Create a *profile-specific* PrivilegedKeyManager.
@@ -2477,11 +2956,15 @@ export class CWIStyleWalletManager implements WalletInterface {
     )
 
     // Build the underlying wallet for the specific profile
-    this.underlying = await this.walletBuilder(
+    const generation = this.stateGeneration
+    const candidate = await this.walletBuilder(
       profilePrimaryKey,
       profilePrivilegedKeyManager, // Pass the profile-specific manager
-      this.activeProfileId // Pass the ID of the profile being activated
+      profileId // Pass the ID of the profile being activated
     )
+    if (generation !== this.stateGeneration) throw new Error('Wallet session changed while activating the profile.')
+    this.underlying = candidate
+    this.activeProfileId = [...profileId]
   }
 
   // --- Key Management Methods ---
@@ -2490,38 +2973,40 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Changes the user's password. Re-wraps keys and updates the UMP token.
    */
   async changePassword(newPassword: string): Promise<void> {
-    if (
-      !this.authenticated ||
-      this.currentUMPToken == null ||
-      this.rootPrimaryKey == null ||
-      this.rootPrivilegedKeyManager == null
-    ) {
-      throw new Error('Not authenticated or missing required data.')
-    }
+    return this.runStateTransition(async () => {
+      if (
+        !this.authenticated ||
+        this.currentUMPToken == null ||
+        this.rootPrimaryKey == null ||
+        this.rootPrivilegedKeyManager == null
+      ) {
+        throw new Error('Not authenticated or missing required data.')
+      }
 
-    const passwordSalt = Random(32)
-    // Preserve current token's KDF metadata (or use manager's kdfConfig for legacy tokens)
-    const kdfToUse = this.currentUMPToken.passwordKdf ?? this.kdfConfig
-    const tempTokenForKdf = {
-      passwordSalt,
-      passwordKdf: kdfToUse
-    }
-    const newPasswordKey = await derivePasswordKey(tempTokenForKdf, toArray(newPassword, 'utf8'))
+      const passwordSalt = Random(32)
+      // Preserve current token's KDF metadata (or use manager's kdfConfig for legacy tokens)
+      const kdfToUse = this.currentUMPToken.passwordKdf ?? this.kdfConfig
+      const tempTokenForKdf = {
+        passwordSalt,
+        passwordKdf: kdfToUse
+      }
+      const newPasswordKey = await derivePasswordKey(tempTokenForKdf, toArray(newPassword, 'utf8'))
 
-    // Decrypt existing factors needed for re-encryption, using the *root* privileged key manager
-    const recoveryKey = await this.getFactor('recoveryKey')
-    const presentationKey = await this.getFactor('presentationKey')
-    const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
+      // Decrypt existing factors needed for re-encryption, using the *root* privileged key manager
+      const recoveryKey = await this.getFactor('recoveryKey')
+      const presentationKey = await this.getFactor('presentationKey')
+      const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
 
-    await this.updateFactors(
-      passwordSalt,
-      newPasswordKey,
-      presentationKey,
-      recoveryKey,
-      this.rootPrimaryKey,
-      rootPrivilegedKey, // Pass the explicitly fetched root key
-      this.profiles // Preserve existing profiles
-    )
+      await this.updateFactors(
+        passwordSalt,
+        newPasswordKey,
+        presentationKey,
+        recoveryKey,
+        this.rootPrimaryKey,
+        rootPrivilegedKey, // Pass the explicitly fetched root key
+        this.profiles // Preserve existing profiles
+      )
+    })
   }
 
   /**
@@ -2540,69 +3025,80 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Changes the user's recovery key. Prompts user to save the new key.
    */
   async changeRecoveryKey(): Promise<void> {
-    if (
-      !this.authenticated ||
-      this.currentUMPToken == null ||
-      this.rootPrimaryKey == null ||
-      this.rootPrivilegedKeyManager == null
-    ) {
-      throw new Error('Not authenticated or missing required data.')
-    }
+    return this.runStateTransition(async () => {
+      if (
+        !this.authenticated ||
+        this.currentUMPToken == null ||
+        this.rootPrimaryKey == null ||
+        this.rootPrivilegedKeyManager == null
+      ) {
+        throw new Error('Not authenticated or missing required data.')
+      }
 
-    // Decrypt existing factors needed
-    const passwordKey = await this.getFactor('passwordKey')
-    const presentationKey = await this.getFactor('presentationKey')
-    const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
+      // Decrypt existing factors needed
+      const passwordKey = await this.getFactor('passwordKey')
+      const presentationKey = await this.getFactor('presentationKey')
+      const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
 
-    // Generate and save new recovery key
-    const newRecoveryKey = Random(32)
-    await this.recoveryKeySaver(newRecoveryKey)
+      // Generate and save new recovery key
+      const newRecoveryKey = Random(32)
+      await this.recoveryKeySaver(newRecoveryKey)
 
-    await this.updateFactors(
-      this.currentUMPToken.passwordSalt,
-      passwordKey,
-      presentationKey,
-      newRecoveryKey, // Use the new key
-      this.rootPrimaryKey,
-      rootPrivilegedKey,
-      this.profiles // Preserve profiles
-    )
+      await this.updateFactors(
+        this.currentUMPToken.passwordSalt,
+        passwordKey,
+        presentationKey,
+        newRecoveryKey, // Use the new key
+        this.rootPrimaryKey,
+        rootPrivilegedKey,
+        this.profiles // Preserve profiles
+      )
+    })
   }
 
   /**
    * Changes the user's presentation key.
    */
   async changePresentationKey(newPresentationKey: number[]): Promise<void> {
-    if (
-      !this.authenticated ||
-      this.currentUMPToken == null ||
-      this.rootPrimaryKey == null ||
-      this.rootPrivilegedKeyManager == null
-    ) {
-      throw new Error('Not authenticated or missing required data.')
-    }
-    if (newPresentationKey.length !== 32) {
-      throw new Error('Presentation key must be 32 bytes.')
-    }
+    return this.runStateTransition(async () => {
+      if (
+        !this.authenticated ||
+        this.currentUMPToken == null ||
+        this.rootPrimaryKey == null ||
+        this.rootPrivilegedKeyManager == null
+      ) {
+        throw new Error('Not authenticated or missing required data.')
+      }
+      if (newPresentationKey.length !== 32) {
+        throw new Error('Presentation key must be 32 bytes.')
+      }
 
-    // Decrypt existing factors
-    const recoveryKey = await this.getFactor('recoveryKey')
-    const passwordKey = await this.getFactor('passwordKey')
-    const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
+      // A recovered WAB rotation may already have installed this presentation key.
+      if (
+        this.statePersistence != null &&
+        toHex(sha256(newPresentationKey)) === toHex(this.currentUMPToken.presentationHash)
+      )
+        return
 
-    await this.updateFactors(
-      this.currentUMPToken.passwordSalt,
-      passwordKey,
-      newPresentationKey, // Use the new key
-      recoveryKey,
-      this.rootPrimaryKey,
-      rootPrivilegedKey,
-      this.profiles // Preserve profiles
-    )
-    // Update the temporarily stored key if it was set
-    if (this.presentationKey != null) {
-      this.presentationKey = newPresentationKey
-    }
+      // Decrypt existing factors
+      const recoveryKey = await this.getFactor('recoveryKey')
+      const passwordKey = await this.getFactor('passwordKey')
+      const rootPrivilegedKey = await this.getFactor('privilegedKey') // Get ROOT privileged key
+
+      await this.updateFactors(
+        this.currentUMPToken.passwordSalt,
+        passwordKey,
+        newPresentationKey, // Use the new key
+        recoveryKey,
+        this.rootPrimaryKey,
+        rootPrivilegedKey,
+        this.profiles // Preserve profiles
+      )
+      // Update the temporarily stored key if it was set
+      if (this.presentationKey != null) {
+        this.presentationKey = newPresentationKey
+      }
+    })
   }
 
   // --- Internal Helper Methods ---
@@ -2692,6 +3188,12 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Recomputes UMP token fields with updated factors and profiles, then publishes the update.
    * This operation requires the *root* privileged key and the *default* profile wallet.
    */
+  private async clearUnsubmittedUMPUpdate(): Promise<void> {
+    if (this.pendingUMPUpdate?.stage !== 'prepared') return
+    await this.statePersistence?.savePendingUpdate(null)
+    this.pendingUMPUpdate = undefined
+  }
+
   private async updateFactors(
     passwordSalt: number[],
     passwordKey: number[],
@@ -2774,34 +3276,42 @@ export class CWIStyleWalletManager implements WalletInterface {
       // currentOutpoint will be set after publishing
     }
 
+    await this.prepareUMPUpdate(newTokenData, rootPrimaryKey)
+
     // We need the wallet built for the DEFAULT profile to publish the UMP token.
     // If the current active profile is not default, temporarily switch, publish, then switch back.
     const currentActiveId = this.activeProfileId
     let walletToUse: WalletInterface | undefined = this.underlying
 
-    if (!currentActiveId.every(x => x === 0)) {
-      this.telemetry.capture({
-        name: 'wallet-toolbox.ump.profile-switch.started',
-        component: CWI_COMPONENT,
-        severity: 'debug',
-        attributes: { reason: 'token-update' }
-      })
-      await this.switchProfile(DEFAULT_PROFILE_ID) // This rebuilds this.underlying
-      walletToUse = this.underlying
-    }
-
-    if (walletToUse == null) {
-      throw new Error('Default profile wallet could not be activated for UMP token update.')
-    }
-
-    // Publish the new token on-chain, consuming the old one
+    // Retain the original selection even if preparing the root wallet fails.
     try {
+      if (!currentActiveId.every(x => x === 0)) {
+        this.telemetry.capture({
+          name: 'wallet-toolbox.ump.profile-switch.started',
+          component: CWI_COMPONENT,
+          severity: 'debug',
+          attributes: { reason: 'token-update' }
+        })
+        await this.switchProfileForUpdate(DEFAULT_PROFILE_ID) // This rebuilds this.underlying
+        walletToUse = this.underlying
+      }
+
+      if (walletToUse == null) {
+        throw new Error('Default profile wallet could not be activated for UMP token update.')
+      }
+      // Publish the new token on-chain, consuming the old one
       newTokenData.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
         walletToUse,
         this.adminOriginator,
         newTokenData,
-        oldTokenToConsume // Consume the previous token
+        oldTokenToConsume, // Consume the previous token
+        this.umpActionCheckpoint()
       )
+      if (this.pendingUMPUpdate != null && this.pendingUMPUpdate.transaction == null)
+        throw new Error('UMP interactor omitted the completed transaction checkpoint.')
+      // A completed original transaction remains recoverable after teardown,
+      // but it cannot restore the old account or replace a newer session.
+      this.assertTransitionCurrent()
       // Update the manager's state
       this.currentUMPToken = newTokenData
       // Keep the profiles in step with the token that now holds them. Callers
@@ -2810,16 +3320,77 @@ export class CWIStyleWalletManager implements WalletInterface {
       if (profiles != null) {
         this.profiles = profiles
       }
+      if (this.pendingUMPUpdate != null) {
+        this.pendingUMPUpdate = { ...this.pendingUMPUpdate, stage: 'published', outpoint: newTokenData.currentOutpoint }
+        await this.statePersistence?.savePendingUpdate(this.pendingUMPUpdate)
+      }
+      await this.persistState(currentActiveId)
+    } catch (error) {
+      await this.clearUnsubmittedUMPUpdate()
+      throw error
     } finally {
       // Switch back if we temporarily switched
       if (!currentActiveId.every(x => x === 0)) {
-        await this.switchProfile(currentActiveId)
+        await this.switchProfileForUpdate(currentActiveId)
         this.telemetry.capture({
           name: 'wallet-toolbox.ump.profile-switch.completed',
           component: CWI_COMPONENT,
           severity: 'debug',
           attributes: { reason: 'token-update' }
         })
+      }
+    }
+    if (this.pendingUMPUpdate != null) {
+      await this.statePersistence?.savePendingUpdate(null)
+      this.pendingUMPUpdate = undefined
+    }
+  }
+
+  private async prepareUMPUpdate(token: UMPToken, rootPrimaryKey: number[]): Promise<void> {
+    this.assertTransitionCurrent()
+    if (this.statePersistence != null) {
+      if (this.UMPTokenInteractor.checkpointVersion !== 1)
+        throw new Error('This UMP interactor cannot retain recoverable updates.')
+      this.pendingUMPUpdate = {
+        version: 1,
+        operationId: toHex(Random(16)),
+        rootIdentityKey: new PrivateKey(rootPrimaryKey).toPublicKey().toString(),
+        previousSnapshot: this.saveSnapshot(),
+        proposedToken: this.serializeUMPToken(token, true),
+        activeProfileId: [...this.activeProfileId],
+        stage: 'prepared'
+      }
+      try {
+        await this.statePersistence.savePendingUpdate(this.pendingUMPUpdate)
+      } catch (error) {
+        this.pendingUMPUpdate = undefined
+        throw error // No financial action has started.
+      }
+    }
+  }
+
+  private umpActionCheckpoint(): UMPActionCheckpoint | undefined {
+    const pending = this.pendingUMPUpdate
+    if (pending == null) return undefined
+    const generation = this.stateGeneration
+    return {
+      operationId: pending.operationId,
+      onStarting: async () => {
+        this.assertTransitionCurrent()
+        const submitting = { ...pending, stage: 'submitting' } as const
+        await this.statePersistence?.savePendingUpdate(submitting)
+        if (generation !== this.stateGeneration) {
+          // The signing call has not run, so teardown can retire this admission.
+          await this.statePersistence?.savePendingUpdate(null)
+          this.assertTransitionCurrent()
+        }
+        this.pendingUMPUpdate = submitting
+      },
+      onCompleted: async (transaction, outpoint) => {
+        const signed = { ...pending, stage: 'signed', transaction, outpoint } as const
+        if (generation === this.stateGeneration) this.pendingUMPUpdate = signed
+        await this.statePersistence?.savePendingUpdate(signed)
+        this.assertTransitionCurrent()
       }
     }
   }
@@ -3084,6 +3655,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    */
 
   private assertReady(originator?: string): void {
+    if (
+      this.statePersistence != null &&
+      (this.stateTransitionActive || this.statePersistencePending || this.pendingUMPUpdate != null)
+    )
+      throw new Error('Wallet state is changing or needs recovery. Retry after its state is saved.')
     if (!this.authenticated) {
       throw new Error('User is not authenticated.')
     }

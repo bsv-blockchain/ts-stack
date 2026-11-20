@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { knex, type Knex } from 'knex'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -20,8 +21,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 
@@ -99,78 +98,81 @@ async function live(
     })
 }
 
-test('generated source membership and identity independently predict bounded live resolution and rollback', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.array(
-        fc.record({
-          tableId: fc.constantFrom(
-            0 as const,
-            1 as const,
-            2 as const,
-            3 as const,
-            4 as const,
-            5 as const,
-            6 as const,
-            8 as const,
-            9 as const
-          ),
-          generation: fc.integer({ min: 1, max: 20 }),
-          later: fc.integer({ min: 0, max: 5 }),
-          member: fc.boolean(),
-          physicallyPresent: fc.boolean()
-        }),
-        { minLength: 1, maxLength: 6 }
-      ),
-      async examples => {
-        const model = examples.map((event, index) => ({
-          ...event,
-          incomingId: index + 1,
-          revision: event.generation + event.later,
-          visible: event.member && event.physicallyPresent
-        }))
-        await expect(
-          db.transaction(async trx => {
-            for (const entry of model) {
-              await live(
-                trx,
-                entry.tableId,
-                entry.incomingId,
-                String(entry.generation),
-                String(entry.revision),
-                entry.member ? 1 : 2
-              )
-              if (!entry.physicallyPresent)
-                await trx('snapshot_journal_physical')
-                  .where({ tableId: entry.tableId, id1: entry.incomingId })
-                  .update({ present: 0 })
-              const readOne = readSnapshotJournalSourceGenerations(trx, 1, high, [
-                { tableId: entry.tableId, incomingId: entry.incomingId }
-              ])
-              if (entry.visible)
-                expect([...(await readOne)]).toEqual([
-                  [
-                    entry.tableId + ':' + entry.incomingId,
-                    { generation: String(entry.generation), revision: String(entry.revision) }
-                  ]
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated source membership and identity independently predict bounded live resolution and rollback (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            tableId: fc.constantFrom(
+              0 as const,
+              1 as const,
+              2 as const,
+              3 as const,
+              4 as const,
+              5 as const,
+              6 as const,
+              8 as const,
+              9 as const
+            ),
+            generation: fc.integer({ min: 1, max: 20 }),
+            later: fc.integer({ min: 0, max: 5 }),
+            member: fc.boolean(),
+            physicallyPresent: fc.boolean()
+          }),
+          { minLength: 1, maxLength: 6 }
+        ),
+        async examples => {
+          const model = examples.map((event, index) => ({
+            ...event,
+            incomingId: index + 1,
+            revision: event.generation + event.later,
+            visible: event.member && event.physicallyPresent
+          }))
+          await expect(
+            db.transaction(async trx => {
+              for (const entry of model) {
+                await live(
+                  trx,
+                  entry.tableId,
+                  entry.incomingId,
+                  String(entry.generation),
+                  String(entry.revision),
+                  entry.member ? 1 : 2
+                )
+                if (!entry.physicallyPresent)
+                  await trx('snapshot_journal_physical')
+                    .where({ tableId: entry.tableId, id1: entry.incomingId })
+                    .update({ present: 0 })
+                const readOne = readSnapshotJournalSourceGenerations(trx, 1, high, [
+                  { tableId: entry.tableId, incomingId: entry.incomingId }
                 ])
-              else await expect(readOne).rejects.toThrow('Missing or inconsistent')
-            }
-            const visible = model.filter(entry => entry.visible)
-            expect([...(await readSnapshotJournalSourceGenerations(trx, 1, high, visible))]).toEqual(
-              visible.map(entry => [
-                entry.tableId + ':' + entry.incomingId,
-                { generation: String(entry.generation), revision: String(entry.revision) }
-              ])
-            )
-            throw new Error('generated source rollback')
-          })
-        ).rejects.toThrow('generated source rollback')
-        expect(await db('snapshot_journal_physical').select('id1')).toEqual([])
-        expect(await db('snapshot_profile_keys_v2').select('snapshotRowId')).toEqual([])
-        expect(await db('snapshot_global_keys_v2').select('rowId')).toEqual([])
-      }
-    ),
-    controls
-  )
-})
+                if (entry.visible)
+                  expect([...(await readOne)]).toEqual([
+                    [
+                      entry.tableId + ':' + entry.incomingId,
+                      { generation: String(entry.generation), revision: String(entry.revision) }
+                    ]
+                  ])
+                else await expect(readOne).rejects.toThrow('Missing or inconsistent')
+              }
+              const visible = model.filter(entry => entry.visible)
+              expect([...(await readSnapshotJournalSourceGenerations(trx, 1, high, visible))]).toEqual(
+                visible.map(entry => [
+                  entry.tableId + ':' + entry.incomingId,
+                  { generation: String(entry.generation), revision: String(entry.revision) }
+                ])
+              )
+              throw new Error('generated source rollback')
+            })
+          ).rejects.toThrow('generated source rollback')
+          expect(await db('snapshot_journal_physical').select('id1')).toEqual([])
+          expect(await db('snapshot_profile_keys_v2').select('snapshotRowId')).toEqual([])
+          expect(await db('snapshot_global_keys_v2').select('rowId')).toEqual([])
+        }
+      ),
+      propertyBatch
+    )
+  }
+)

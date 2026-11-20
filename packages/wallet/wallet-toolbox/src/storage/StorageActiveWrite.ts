@@ -21,8 +21,30 @@ export type StorageWriterAdmission = <T>(operation: () => Promise<T>) => Promise
 /** @internal Optional manager scheduling for bounded monitor SQL scopes. */
 export interface StorageStatusReviewArgs {
   agedLimit: Date
+  pageSize?: number
   trx?: TrxToken
   admission?: StorageWriterAdmission
+}
+
+export interface ConfirmedSpendCursor {
+  proofId: number
+  inputOffset: number
+  outputId: number
+}
+
+export interface ConfirmedSpendPage {
+  after: number
+  partial?: ConfirmedSpendCursor
+  examined: number
+  repaired: number
+  unavailable: number
+}
+
+export interface ConfirmedSpendRecoveryPage {
+  after: number
+  legacyAfter: number | null
+  restored: number
+  unavailable: number
 }
 
 /** Internal provider CODE only. Choosing scheduling never supplies SQL,

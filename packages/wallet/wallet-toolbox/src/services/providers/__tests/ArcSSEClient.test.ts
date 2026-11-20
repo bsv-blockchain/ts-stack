@@ -309,6 +309,52 @@ describe('ArcSSEClient', () => {
       expect(client.lastEventId).toBe('initial')
     })
 
+    test('accepts a native EventSource MessageEvent and advances its cursor after processing', async () => {
+      const { client, events, errors, lastEventIds } = makeClient()
+      client.connect()
+      FakeEventSource.instances[0].emit(
+        'status',
+        new MessageEvent('status', {
+          data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }),
+          lastEventId: 'native-1'
+        })
+      )
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(events.map(event => event.txid)).toEqual([TXID_A])
+      expect(lastEventIds).toEqual(['native-1'])
+      expect(errors).toEqual([])
+    })
+
+    test('does not invoke a supplied accessor in place of the platform getter', () => {
+      const { client, errors } = makeClient()
+      const getter = jest.fn()
+      client.connect()
+      FakeEventSource.instances[0].emit(
+        'status',
+        Object.create({
+          get data() {
+            return getter()
+          }
+        })
+      )
+      expect(getter).not.toHaveBeenCalled()
+      expect(errors).toHaveLength(1)
+    })
+
+    test('uses the acknowledged resume cursor and bearer authorization through the native fetch hook', async () => {
+      const { client } = makeClient({ lastEventId: 'saved-1', arcApiKey: 'test-key' })
+      client.connect()
+      const source = FakeEventSource.instances[0]
+      const request = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response())
+      await source.opts.fetch(source.url, { headers: { 'Last-Event-ID': 'unacknowledged' } })
+      const init = request.mock.calls[0][1]
+      expect(new Headers(init?.headers).get('Last-Event-ID')).toBe('saved-1')
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-key')
+      expect(init?.redirect).toBe('error')
+      await expect(source.opts.fetch('https://invalid.example/events')).rejects.toThrow('changed request origin')
+      expect(request).toHaveBeenCalledTimes(1)
+    })
+
     test('fails the stream closed on malformed event JSON', () => {
       const { client, events, errors } = makeClient()
       client.connect()
@@ -396,13 +442,16 @@ describe('ArcSSEClient', () => {
       })
       client.connect()
       const es = FakeEventSource.instances[0]
-      es.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }) })
+      es.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }), lastEventId: '1' })
       es.emit('status', { data: JSON.stringify({ txid: TXID_B, txStatus: 'MINED', timestamp: '' }) })
 
       expect(es.closed).toBe(true)
-      expect(errors[0].message).toBe('Arcade SSE supplied an invalid or excessive status event.')
+      expect(errors[0].message).toContain('queue capacity reached')
       release()
       await new Promise(resolve => setTimeout(resolve, 0))
+      expect(client.lastEventId).toBe('1')
+      await client.fetchEvents()
+      expect(FakeEventSource.instances[1].opts.headers['Last-Event-ID']).toBe('1')
     })
 
     test('rejects oversized and noncanonical event fields without retaining their content', () => {

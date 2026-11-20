@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import {
   canonicalTestReference,
   collectExpectedCanonicalChunks
@@ -30,9 +31,7 @@ const MIN_PROPERTY_RUNS = 300
 fc.configureGlobal({
   numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
   seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
 
 const policy = { maximumAllocationBytes: 1048576 }
@@ -242,31 +241,36 @@ test('real IndexedDB source projection matches the original coherent legacy expo
   }
 })
 
-test('generated binary and structured histories retain exact bytes, falsy values and bounded canonical output', () => {
-  fc.assert(
-    fc.property(fc.uint8Array({ maxLength: 8192 }), fc.integer(), fc.boolean(), (rawTx, code, accepted) => {
-      const row = project({
-        rawTx,
-        history: JSON.stringify({ notes: [{ what: 'original', detail: null, code, accepted }] })
-      })
-      expect(row.rawTx).toBe(Buffer.from(rawTx).toString('base64'))
-      expect(row.history).toEqual({ notes: [{ what: 'original', code, accepted }] })
-      const chunks = collectExpectedCanonicalChunks(
-        canonicalPortableChunks(row, { maximumValueBytes: 1048576, maximumChunkBytes: 64 }),
-        canonicalTestReference(row)
-      )
-      expect(chunks.every(chunk => chunk.length <= 64)).toBe(true)
-      expect(JSON.parse(Buffer.concat(chunks).toString())).toEqual(row)
-    }),
-    {
-      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
-      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-      ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true
-    }
-  )
-}, 180000)
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
+    seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+    ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
+  })
+)(
+  'generated binary and structured histories retain exact bytes, falsy values and bounded canonical output (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(fc.uint8Array({ maxLength: 8192 }), fc.integer(), fc.boolean(), (rawTx, code, accepted) => {
+        const row = project({
+          rawTx,
+          history: JSON.stringify({ notes: [{ what: 'original', detail: null, code, accepted }] })
+        })
+        expect(row.rawTx).toBe(Buffer.from(rawTx).toString('base64'))
+        expect(row.history).toEqual({ notes: [{ what: 'original', code, accepted }] })
+        const chunks = collectExpectedCanonicalChunks(
+          canonicalPortableChunks(row, { maximumValueBytes: 1048576, maximumChunkBytes: 64 }),
+          canonicalTestReference(row)
+        )
+        expect(chunks.every(chunk => chunk.length <= 64)).toBe(true)
+        expect(JSON.parse(Buffer.concat(chunks).toString())).toEqual(row)
+      }),
+      propertyBatch
+    )
+  },
+  180000
+)
 
 test('plain data rows from another realm normalize while class and accessor values refuse', () => {
   const row: unknown = runInNewContext('({history:{notes:[{what:"original",when:null}]}})')

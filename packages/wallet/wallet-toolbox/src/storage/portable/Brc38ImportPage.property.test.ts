@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { prepareBrc38ImportPage, type Brc38PreparedImportData } from './Brc38ImportPage'
 import { importPageFixture } from './Brc38ImportPageFixture'
@@ -63,64 +64,69 @@ function assertData(
   return value.rows.length
 }
 describe('independent bounded import page/legacy-field properties', () => {
-  test('exact thirteen-table sequence and semantic values survive every row-page boundary including the original incoming Number domain', async () => {
-    const incoming = fc.oneof(
-        fc.integer({ min: -20, max: 20 }),
-        fc.constantFrom(0, -1, Number.MAX_SAFE_INTEGER + 1, 1e21, -1e21, Number.MAX_VALUE)
-      ),
-      active = new Set<Promise<void>>()
-    try {
-      await fc.assert(
-        fc.asyncProperty(
-          incoming,
-          fc.integer({ min: 1, max: 12 }),
-          fc.integer({ min: 1, max: 4 }),
-          async (id, count, pageRows) => {
-            const work = (async () => {
-              const data = semanticStageFixture(),
-                original = data.tables.outputBaskets[0]
-              data.tables.outputBaskets = Array.from({ length: count }, (_value, index) => ({
-                ...original,
-                basketId: index === 0 ? id : -1000 - index,
-                name: 'original ' + index
-              }))
-              data.tables.outputs[0].basketId = id
-              const fixture = importPageFixture(data),
-                admission = { ...fixture.admission, maximumStepRows: pageRows },
-                expected = legacyOrder.flatMap(table => data.tables[table].map((_row, index) => ({ table, index })))
-              let cursor = 0,
-                observed = 0
-              while (cursor < admission.totalRows) {
-                const page = await prepareBrc38ImportPage(fixture.reader, fixture.metadata, admission, cursor)
-                expect(page.step.fromRow).toBe(cursor)
-                expect(page.step.rows).toBeLessThanOrEqual(pageRows)
-                expect(page.step.bytes).toBeLessThanOrEqual(admission.maximumStepBytes)
-                observed += await page.consume(async value => assertData(value, fixture, expected, observed))
-                cursor += page.step.rows
-              }
-              expect(observed).toBe(expected.length)
-              expect(cursor).toBe(admission.totalRows)
-              expect(fixture.maximumPending).toBe(1)
-              expect(fixture.calls).toEqual(expected)
-            })()
-            active.add(work)
-            try {
-              await work
-            } finally {
-              active.delete(work)
-            }
-          }
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+    })
+  )(
+    'exact thirteen-table sequence and semantic values survive every row-page boundary including the original incoming Number domain (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const incoming = fc.oneof(
+          fc.integer({ min: -20, max: 20 }),
+          fc.constantFrom(0, -1, Number.MAX_SAFE_INTEGER + 1, 1e21, -1e21, Number.MAX_VALUE)
         ),
-        {
-          numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
-          seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
-          path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-          interruptAfterTimeLimit: 150000,
-          markInterruptAsFailure: true
-        }
-      )
-    } finally {
-      await Promise.allSettled(active)
-    }
-  }, 180000)
+        active = new Set<Promise<void>>()
+      try {
+        await fc.assert(
+          fc.asyncProperty(
+            incoming,
+            fc.integer({ min: 1, max: 12 }),
+            fc.integer({ min: 1, max: 4 }),
+            async (id, count, pageRows) => {
+              const work = (async () => {
+                const data = semanticStageFixture(),
+                  original = data.tables.outputBaskets[0]
+                data.tables.outputBaskets = Array.from({ length: count }, (_value, index) => ({
+                  ...original,
+                  basketId: index === 0 ? id : -1000 - index,
+                  name: 'original ' + index
+                }))
+                data.tables.outputs[0].basketId = id
+                const fixture = importPageFixture(data),
+                  admission = { ...fixture.admission, maximumStepRows: pageRows },
+                  expected = legacyOrder.flatMap(table => data.tables[table].map((_row, index) => ({ table, index })))
+                let cursor = 0,
+                  observed = 0
+                while (cursor < admission.totalRows) {
+                  const page = await prepareBrc38ImportPage(fixture.reader, fixture.metadata, admission, cursor)
+                  expect(page.step.fromRow).toBe(cursor)
+                  expect(page.step.rows).toBeLessThanOrEqual(pageRows)
+                  expect(page.step.bytes).toBeLessThanOrEqual(admission.maximumStepBytes)
+                  observed += await page.consume(async value => assertData(value, fixture, expected, observed))
+                  cursor += page.step.rows
+                }
+                expect(observed).toBe(expected.length)
+                expect(cursor).toBe(admission.totalRows)
+                expect(fixture.maximumPending).toBe(1)
+                expect(fixture.calls).toEqual(expected)
+              })()
+              active.add(work)
+              try {
+                await work
+              } finally {
+                active.delete(work)
+              }
+            }
+          ),
+          propertyBatch
+        )
+      } finally {
+        await Promise.allSettled(active)
+      }
+    },
+    180000
+  )
 })
