@@ -472,6 +472,99 @@ describe('EcpmPermissionModule', () => {
     expect(authorize).toHaveBeenCalledTimes(3)
   })
 
+  it('does not revive a pending grant after disposal', async () => {
+    const decisions: Array<(approved: boolean) => void> = []
+    const authorize = jest.fn(
+      async () =>
+        await new Promise<boolean>(resolve => {
+          decisions.push(resolve)
+        })
+    )
+    const keyDeriver = new CachedKeyDeriver(new PrivateKey(60))
+    const derivePrivateKey = jest.spyOn(keyDeriver, 'derivePrivateKey')
+    const module = new EcpmPermissionModule({ keyDeriver, authorize })
+    const args = requestArgs(point(7), 'apply', {
+      protocolID: [1, `p ecpm apply ${point(7)} mental poker deal`]
+    })
+
+    const pending = execute(module, args)
+    expect(authorize).toHaveBeenCalledTimes(1)
+    module.dispose()
+    decisions[0]!(true)
+    await expect(pending).rejects.toThrow('request invalidated by dispose')
+    expect(derivePrivateKey).not.toHaveBeenCalled()
+
+    const fresh = execute(module, args)
+    expect(authorize).toHaveBeenCalledTimes(2)
+    decisions[1]!(true)
+    await expect(fresh).resolves.toHaveProperty('publicKey')
+    expect(derivePrivateKey).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not restore a pending entry when authorization disposes the wallet', async () => {
+    let module!: EcpmPermissionModule
+    let shouldDispose = true
+    const authorize = jest.fn(async () => {
+      if (shouldDispose) {
+        shouldDispose = false
+        module.dispose()
+      }
+      return true
+    })
+    module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(63)),
+      authorize
+    })
+    const args = requestArgs(point(7), 'apply', {
+      protocolID: [1, `p ecpm apply ${point(7)} mental poker deal`]
+    })
+
+    const tornDown = observe(execute(module, args))
+    const fresh = observe(execute(module, args))
+    const [firstResult, secondResult] = await Promise.all([tornDown, fresh])
+    expect(firstResult.ok).toBe(false)
+    if (!firstResult.ok) {
+      expect(firstResult.error).toEqual(new Error('ECPM: request invalidated by dispose'))
+    }
+    expect(secondResult.ok).toBe(true)
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not use a privileged deriver returned after disposal', async () => {
+    let enteredProvider!: () => void
+    let releaseProvider!: () => void
+    const providerEntered = new Promise<void>(resolve => {
+      enteredProvider = resolve
+    })
+    const providerRelease = new Promise<void>(resolve => {
+      releaseProvider = resolve
+    })
+    const privilegedDeriver = new CachedKeyDeriver(new PrivateKey(61))
+    const derivePrivateKey = jest.spyOn(privilegedDeriver, 'derivePrivateKey')
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(62)),
+      authorize: async () => true,
+      privilegedKeyDeriver: async () => {
+        enteredProvider()
+        await providerRelease
+        return privilegedDeriver
+      }
+    })
+    const pending = execute(
+      module,
+      requestArgs(point(8), 'apply', {
+        privileged: true,
+        privilegedReason: 'Protect the private card mask'
+      })
+    )
+
+    await providerEntered
+    module.dispose()
+    releaseProvider()
+    await expect(pending).rejects.toThrow('request invalidated by dispose')
+    expect(derivePrivateKey).not.toHaveBeenCalled()
+  })
+
   it('honors seekPermission false and denial without calling the key deriver', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(61))
     const derivePrivateKey = jest.spyOn(keyDeriver, 'derivePrivateKey')

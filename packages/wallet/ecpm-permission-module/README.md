@@ -1,6 +1,6 @@
 # ECPM Permission Module
 
-Security release candidate `0.2.0` changes ECPM scalar derivation to address GHSA-m3c6-3mv8-j86f. A point masked with 0.1.x cannot be unmasked with 0.2.0; finish or restart an in-progress protocol on one version.
+Security release `0.2.0` changes ECPM scalar derivation to address GHSA-m3c6-3mv8-j86f. A point masked with 0.1.x cannot be unmasked with 0.2.0; finish or restart an in-progress protocol on one version.
 
 `@bsv/ecpm-permission-module` implements the BRC-229 `p ecpm` semantic module
 for BRC-100 wallets. It applies or removes a BRC-42/43-derived scalar to an
@@ -76,8 +76,8 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 })
 ```
 
-Call `ecpm.dispose()` when the host tears down the wallet. The method clears
-cached and pending authorization state.
+Call `ecpm.dispose()` when the host tears down the wallet. The method clears cached and pending authorization state. In-flight requests
+are invalidated, including a late authorization or privileged key-provider result.
 
 Successful grants are capped at 1,024 entries with oldest-grant eviction, and
 at most 64 distinct authorization prompts may remain in flight. Requests that
