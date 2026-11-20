@@ -55,9 +55,7 @@ test('the shared build archive carries application browser and server bundles', 
       mkdirSync(dirname(join(directory, path)), { recursive: true })
       writeFileSync(join(directory, path), path)
     }
-    execFileSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', archiveStep], {
-      cwd: directory
-    })
+    execFileSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', archiveStep], { cwd: directory })
     const entries = execFileSync('/usr/bin/tar', ['-tzf', 'build-outputs.tar.gz'], {
       cwd: directory,
       encoding: 'utf8'
@@ -574,11 +572,7 @@ test('infra image builds back off longer only for registry rate limits', () => {
         return []
       }
     }
-    return {
-      status: run.status,
-      calls: lines('calls').length,
-      sleeps: lines('sleeps').map(Number)
-    }
+    return { status: run.status, calls: lines('calls').length, sleeps: lines('sleeps').map(Number) }
   }
   assert.deepEqual(scenario(['ok']), { status: 0, calls: 1, sleeps: [] })
   assert.deepEqual(scenario(['429', '429', '429', 'ok']), {
@@ -799,7 +793,10 @@ test('queue Sonar writes use protected workflow code while admission stays read-
     controller,
     /workflow_run:\n    workflows: \[CI\]\n    types: \[in_progress, completed\]/
   )
-  assert.match(controller, /ref: \$\{\{ github\.workflow_sha \}\}/)
+  assert.match(controller, /repository: bsv-blockchain\/ts-stack/)
+  assert.doesNotMatch(controller, /^\s+ref:/m)
+  assert.match(controller, /EXPECTED_CONTROLLER_SHA: \$\{\{ github\.sha \}\}/)
+  assert.ok(controller.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROLLER_SHA"'))
   assert.match(controller, /persist-credentials: false/)
   assert.match(controller, /contents: write\n      pull-requests: write/)
   assert.match(controller, /run: node scripts\/sonar-queue-analysis\.mjs/)

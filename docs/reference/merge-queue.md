@@ -42,8 +42,9 @@ trusted `workflow_run` controller therefore creates a temporary draft PR with
 its head pointing to the exact combined queue SHA. This invokes the existing
 Sonar integration without modifying source or manufacturing a check result.
 
-The controller runs protected default-branch code, checked out by
-`github.workflow_sha`. Its job has Actions read, contents write and PR write
+The controller explicitly checks out this repository using the default
+`workflow_run` checkout, then verifies HEAD equals `github.sha`, the protected
+default-branch commit for that event. Its job has Actions read, contents write and PR write
 permissions. It never executes queue code, downloads queue artifacts, merges a
 PR, writes a check result or uses `SONAR_TOKEN`. This additional branch/PR write
 access and the temporary-PR operational behavior were explicitly approved by
