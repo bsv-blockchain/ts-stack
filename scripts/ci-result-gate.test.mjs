@@ -61,7 +61,11 @@ function evidence(selected = true) {
       ].map(key => [key, String(selected)])
     )
   )
-  needs.scope.outputs = { docs: String(selected), conformance: String(selected) }
+  needs.scope.outputs = {
+    docs: String(selected),
+    conformance: String(selected),
+    'local-ci-certified': 'false'
+  }
   needs['infra-scope'].outputs = { 'has-infra': String(selected) }
   needs['sonar-zero-findings'] = { result: 'skipped' }
   needs['dependency-review'] = { result: 'skipped' }
@@ -110,6 +114,55 @@ test('PRs require real analysis and dependency review; out-of-scope failures sti
   assert.deepEqual(validateCiResults(needs, 'pull_request'), [])
   needs['coverage-sdk'].result = 'failure'
   assert.match(validateCiResults(needs, 'pull_request').join('\n'), /coverage-sdk/)
+})
+
+test('a verified PR certificate admits only selected test and coverage skips', () => {
+  const needs = evidence()
+  needs.scope.outputs['local-ci-certified'] = 'true'
+  needs['sonar-zero-findings'].result = 'success'
+  needs['dependency-review'].result = 'success'
+  const testLanes = [
+    'standard-tests',
+    'dependent-tests',
+    'browser-packages',
+    'wallet-browser-platform',
+    'wallet-mobile-platform',
+    'coverage-sdk',
+    'coverage-sdk-thresholds',
+    'sdk-browser-contract',
+    'coverage-did',
+    'coverage-wallet',
+    'coverage-wallet-monitor',
+    'coverage-verifast',
+    'coverage-other',
+    'coverage-upload'
+  ]
+  for (const lane of testLanes) needs[lane].result = 'skipped'
+  assert.deepEqual(validateCiResults(needs, 'pull_request'), [])
+  assert.ok(
+    validateCiResults(needs, 'push').includes('Local CI certificates apply only to pull requests')
+  )
+  for (const lane of [
+    'sonar-zero-findings',
+    'dependency-review',
+    'package-artifacts',
+    'infra',
+    'docs-validate',
+    'conformance'
+  ]) {
+    const failed = structuredClone(needs)
+    failed[lane].result = 'skipped'
+    assert.ok(validateCiResults(failed, 'pull_request').some(error => error.startsWith(`${lane}:`)))
+  }
+  needs.scope.outputs['local-ci-certified'] = undefined
+  assert.ok(
+    validateCiResults(needs, 'pull_request').some(error =>
+      error.startsWith('scope.local-ci-certified:')
+    )
+  )
+  assert.ok(
+    validateCiResults(needs, 'pull_request').some(error => error.startsWith('coverage-wallet:'))
+  )
 })
 
 test('background mutation failures, cancellations and missing results never enter admission', () => {

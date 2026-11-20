@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { createHash } from 'node:crypto'
 import { sqliteLookupBridge } from '../src/lookup/SQLiteLookupBridge.js'
@@ -277,33 +278,44 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('retains the exact pinned baseline and later groups over generated compaction boundaries', async () => {
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 1, max: 8 }), fc.nat({ max: 8 }), async (count, choice) => {
-      const { store } = await fixture()
-      try {
-        for (let base = 0; base < count; base++) await store.commit(update(base))
-        const watermark = choice % (count + 1)
-        await store.retainSnapshot(firstPin, String(watermark), '1000')
-        const compacted = await store.compact('500', limits)
-        expect(compacted.head.retention.floor).toBe(String(watermark))
-        const row = await store.row('01', String(watermark))
-        if (watermark === 0) expect(row).toBeNull()
-        else expect(row?.value.data.value).toBe(watermark - 1)
-        expect((await store.changes(String(watermark), pages)).groups.map(x => x.sequence)).toEqual(
-          Array.from({ length: count - watermark }, (_, i) => String(watermark + i + 1))
-        )
-        expect((await store.compact('1000', limits)).head.retention.floor).toBe(String(count))
-        if (watermark < count)
-          await expect(store.row('01', String(watermark))).rejects.toMatchObject({
-            code: 'reset-required'
-          })
-      } finally {
-        await store.close()
-      }
-    })
-  )
-}, 120000)
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'retains the exact pinned baseline and later groups over generated compaction boundaries (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 8 }),
+        fc.nat({ max: 8 }),
+        async (count, choice) => {
+          const { store } = await fixture()
+          try {
+            for (let base = 0; base < count; base++) await store.commit(update(base))
+            const watermark = choice % (count + 1)
+            await store.retainSnapshot(firstPin, String(watermark), '1000')
+            const compacted = await store.compact('500', limits)
+            expect(compacted.head.retention.floor).toBe(String(watermark))
+            const row = await store.row('01', String(watermark))
+            if (watermark === 0) expect(row).toBeNull()
+            else expect(row?.value.data.value).toBe(watermark - 1)
+            expect(
+              (await store.changes(String(watermark), pages)).groups.map(x => x.sequence)
+            ).toEqual(
+              Array.from({ length: count - watermark }, (_, i) => String(watermark + i + 1))
+            )
+            expect((await store.compact('1000', limits)).head.retention.floor).toBe(String(count))
+            if (watermark < count)
+              await expect(store.row('01', String(watermark))).rejects.toMatchObject({
+                code: 'reset-required'
+              })
+          } finally {
+            await store.close()
+          }
+        }
+      ),
+      propertyBatch
+    )
+  },
+  120000
+)
 
 // An independent digest oracle protects the persisted record-format contract.
 function retainedDigest(kind: string, identity: string, payload: string): string {

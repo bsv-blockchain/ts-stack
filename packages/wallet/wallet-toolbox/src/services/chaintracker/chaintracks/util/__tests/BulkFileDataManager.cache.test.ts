@@ -24,7 +24,7 @@ function fixtureFile(data: Uint8Array): BulkHeaderFileInfo {
   }
 }
 
-function fixtureFetch(download: jest.Mock<Promise<Uint8Array>, [string]>): ChaintracksFetchApi {
+function fixtureFetch(download: ChaintracksFetchApi['download']): ChaintracksFetchApi {
   return {
     download,
     fetchJson: jest.fn(),

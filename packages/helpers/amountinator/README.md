@@ -80,7 +80,7 @@ Supported currencies: `BSV`, `SATS`, `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `INR`, `
 
 ## License
 
-This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+This package is released under the [Apache License 2.0](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

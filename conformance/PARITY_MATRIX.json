@@ -1,21 +1,21 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-10-27",
+  "generated_at": "2026-10-28",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
-    "total_files": 78,
-    "total_vectors": 6718,
-    "fully_required_files": 58,
+    "total_files": 79,
+    "total_vectors": 6724,
+    "fully_required_files": 59,
     "files_with_intended": 18,
     "files_with_mixed_status": 16,
     "vectors_by_status": {
-      "required": 6512,
+      "required": 6518,
       "intended": 206,
       "skipped": 7
     },
     "by_reason_category": {
-      "fully_supported": 1287,
+      "fully_supported": 1293,
       "governed_vector_skip": 50,
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5122,
@@ -140,6 +140,18 @@
       "file_level_parity": "required",
       "effective_status": "required",
       "required_count": 18,
+      "intended_count": 0,
+      "skipped_count": 0,
+      "reason_category": "fully_supported",
+      "categories": []
+    },
+    {
+      "path": "payments/brc118.json",
+      "id": "payments.brc118",
+      "total_vectors": 6,
+      "file_level_parity": "required",
+      "effective_status": "required",
+      "required_count": 6,
       "intended_count": 0,
       "skipped_count": 0,
       "reason_category": "fully_supported",

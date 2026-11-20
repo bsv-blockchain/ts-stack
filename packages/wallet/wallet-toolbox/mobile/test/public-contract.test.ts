@@ -12,7 +12,11 @@ const requiredExports = [
   'WalletStorageManager',
   'registerArgon2idBackend',
   'unregisterArgon2idBackend',
-  'sdk'
+  'sdk',
+  'DeviceBackupController',
+  'migrateDeviceBackupPreferences',
+  'BrowserArgon2idWorkerBackend',
+  'installBrowserArgon2idWorker'
 ] as const
 
 const unavailableExports = ['Setup', 'SetupClient', 'StorageIdb', 'StorageKnex', 'ShamirWalletManager'] as const

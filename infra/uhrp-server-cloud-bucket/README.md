@@ -51,6 +51,10 @@ retain their existing behavior. Use SDK 2.8.9 or later for full-size authenticat
 CHIRP chunks; its HTTP transport keeps its existing framing and response limits.
 No object, session, advertisement or persistence migration is required.
 
+CHIRP hashing passes bounded 64 KiB typed byte views directly to the SDK, avoiding
+redundant array conversion. Content identifiers, signed bytes, upload limits and
+existing stored objects are unchanged; no migration is required.
+
 ## Advertisement, ownership, and upload trust
 
 The public UHRP token authenticates the host identity, content hash, HTTPS
@@ -421,3 +425,18 @@ and keeps any existing inspector configuration. Production startup, database
 migrations, public routes and data formats are unchanged. Install the committed
 lock with `npm ci` before using the updated development command. This removes
 the unpatched `braces` path without an advisory exclusion or dependency override.
+
+## Test runner
+
+Run `npm test` for the complete service suite. Jest binds the standard `Math`
+object directly inside its test sandbox to avoid VM global-lookup overhead
+when authenticating full-size chunks. The suite retains its original test
+selection, assertions, request bytes and case deadlines, including the 30-second
+authenticated 4 MiB upload case. Service runtime behavior and production limits
+are unchanged.
+
+The development lock resolves Handlebars 4.7.10 for `ts-jest`, within its existing
+compatible version range, to include the upstream security patches. The update
+changes only that development dependency; first-party versions, service runtime
+dependencies and the production image dependency graph are unchanged. Reinstall
+with `npm ci --ignore-scripts` after updating the branch.

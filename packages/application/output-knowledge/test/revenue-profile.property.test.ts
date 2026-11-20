@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { canonicalOutputJSON, outputPacketDigest } from '@bsv/sdk'
@@ -25,63 +26,73 @@ fc.configureGlobal({
     ? Math.max(MIN_PROPERTY_RUNS, requestedRuns)
     : MIN_PROPERTY_RUNS,
   seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
-  ...(replayPath ? { path: replayPath } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(replayPath ? { path: replayPath } : {})
 })
 
-it('preserves owned immutable ancestry and exact signed purchase commitments under bounded envelope checks', () => {
-  fc.assert(
-    fc.property(
-      fc.integer({ min: 0, max: 1 }),
-      fc.integer({ min: 1, max: 10000 }),
-      (buyer, weight) => {
-        const input = purchased(buyer),
-          canonical = canonicalOutputJSON(input)
-        const packet = parseRevenueListingProfileLineagePackage(new TextEncoder().encode(canonical))
-        expect(canonicalOutputJSON(packet)).toBe(canonical)
-        expect(packet.genesis.body.listingId).toBe(
-          outputPacketDigest('sale-listing', fixture.descriptor)
-        )
-        packet.descriptor.initialRevenue.recipients[0].weight = weight
-        expect(canonicalOutputJSON(input)).toBe(canonical)
-        expect(() =>
-          parseRevenueListingProfileLineagePackage({
-            ...input,
-            transactions: [...input.transactions, input.transactions[0]]
-          })
-        ).toThrow('sorted and unique')
-      }
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'preserves owned immutable ancestry and exact signed purchase commitments under bounded envelope checks (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1 }),
+        fc.integer({ min: 1, max: 10000 }),
+        (buyer, weight) => {
+          const input = purchased(buyer),
+            canonical = canonicalOutputJSON(input)
+          const packet = parseRevenueListingProfileLineagePackage(
+            new TextEncoder().encode(canonical)
+          )
+          expect(canonicalOutputJSON(packet)).toBe(canonical)
+          expect(packet.genesis.body.listingId).toBe(
+            outputPacketDigest('sale-listing', fixture.descriptor)
+          )
+          packet.descriptor.initialRevenue.recipients[0].weight = weight
+          expect(canonicalOutputJSON(input)).toBe(canonical)
+          expect(() =>
+            parseRevenueListingProfileLineagePackage({
+              ...input,
+              transactions: [...input.transactions, input.transactions[0]]
+            })
+          ).toThrow('sorted and unique')
+        }
+      ),
+      propertyBatch
     )
-  )
-}, 180000)
+  },
+  180000
+)
 
-it('executes complete normal permissionless payouts while retaining reserve, remainder and immutable ancestry', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 1, max: 100 }),
-      fc.integer({ min: 1, max: 100 }),
-      async (units, fee) => {
-        const payout = await construct(
-          purchaseTransaction(),
-          0,
-          { operation: 'payout', units: String(units) },
-          fee
-        )
-        const packet = parseRevenueListingProfileLineagePackage(extend(purchased(), payout))
-        const assembly = assembleLineage(packet, lineageLimits({})),
-          graph = inspectProfileLineage(assembly, profile)
-        expect(graph.complete).toBe(true)
-        if (!graph.complete) throw new Error('Incomplete normal history')
-        expect(graph.satoshis).toBe(String(1002 - units * 10))
-        expect(graph.transitions[0].plan?.payout).toBe(String(units * 10))
-        expect(graph.transitions[0].plan?.schedule).toEqual(fixture.descriptor.initialRevenue)
-        expect(() =>
-          executeProfileInputs(assembly, graph.transitions[0].transaction, 134217728)
-        ).not.toThrow()
-        expect(payout.outputs[2].satoshis).toBe(units * 7)
-        expect(payout.outputs[3].satoshis).toBe(units * 3)
-      }
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'executes complete normal permissionless payouts while retaining reserve, remainder and immutable ancestry (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 100 }),
+        fc.integer({ min: 1, max: 100 }),
+        async (units, fee) => {
+          const payout = await construct(
+            purchaseTransaction(),
+            0,
+            { operation: 'payout', units: String(units) },
+            fee
+          )
+          const packet = parseRevenueListingProfileLineagePackage(extend(purchased(), payout))
+          const assembly = assembleLineage(packet, lineageLimits({})),
+            graph = inspectProfileLineage(assembly, profile)
+          expect(graph.complete).toBe(true)
+          if (!graph.complete) throw new Error('Incomplete normal history')
+          expect(graph.satoshis).toBe(String(1002 - units * 10))
+          expect(graph.transitions[0].plan?.payout).toBe(String(units * 10))
+          expect(graph.transitions[0].plan?.schedule).toEqual(fixture.descriptor.initialRevenue)
+          expect(() =>
+            executeProfileInputs(assembly, graph.transitions[0].transaction, 134217728)
+          ).not.toThrow()
+          expect(payout.outputs[2].satoshis).toBe(units * 7)
+          expect(payout.outputs[3].satoshis).toBe(units * 3)
+        }
+      ),
+      propertyBatch
     )
-  )
-}, 180000)
+  },
+  180000
+)

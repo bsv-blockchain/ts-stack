@@ -31,6 +31,8 @@ jobs:
           cache: pnpm
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify independent BRC-118 wire and signature vectors
+        run: python3 conformance/runner/scripts/brc118-vectors.py
       - name: Build TS runner dependencies
         run: >-
           pnpm -r
