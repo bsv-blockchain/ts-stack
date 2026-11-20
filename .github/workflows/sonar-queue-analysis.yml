@@ -40,4 +40,9 @@ jobs:
       - name: Manage the exact queue analysis draft
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          QUEUE_ACTION: ${{ github.event.action }}
+          QUEUE_RUN_ID: ${{ github.event.workflow_run.id }}
+          QUEUE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          QUEUE_REVISION: ${{ github.event.workflow_run.head_sha }}
+          QUEUE_REF: ${{ github.event.workflow_run.head_branch }}
         run: node scripts/sonar-queue-analysis.mjs

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import {
   REPOSITORY,
@@ -81,12 +80,35 @@ export async function handleWorkflowRun(event, api, baseBranch = 'main') {
   return { pullRequest: pr.number, revision: current.sha }
 }
 
+export function eventFromEnvironment(env) {
+  if (env.GITHUB_EVENT_NAME !== 'workflow_run' || env.GITHUB_REPOSITORY !== REPOSITORY)
+    throw new Error('Expected this repository workflow_run event')
+  const repository = { full_name: REPOSITORY }
+  return {
+    repository,
+    action: env.QUEUE_ACTION,
+    workflow_run: {
+      id: Number(env.QUEUE_RUN_ID),
+      run_attempt: Number(env.QUEUE_RUN_ATTEMPT),
+      head_sha: env.QUEUE_REVISION,
+      head_branch: env.QUEUE_REF,
+      event: 'merge_group',
+      path: '.github/workflows/ci.yml',
+      repository,
+      head_repository: repository
+    }
+  }
+}
+
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (process.env.GITHUB_EVENT_NAME !== 'workflow_run') throw new Error('Expected workflow_run')
-    const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
     console.log(
-      JSON.stringify(await handleWorkflowRun(event, githubClient(process.env.GITHUB_TOKEN)))
+      JSON.stringify(
+        await handleWorkflowRun(
+          eventFromEnvironment(process.env),
+          githubClient(process.env.GITHUB_TOKEN)
+        )
+      )
     )
   } catch (error) {
     console.error(error instanceof Error ? error.message : error)

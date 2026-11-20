@@ -7,7 +7,12 @@ import {
   queueContext,
   revision
 } from './sonar-queue-context.mjs'
-import { cleanupAnalysisPr, createAnalysisPr, handleWorkflowRun } from './sonar-queue-analysis.mjs'
+import {
+  cleanupAnalysisPr,
+  createAnalysisPr,
+  eventFromEnvironment,
+  handleWorkflowRun
+} from './sonar-queue-analysis.mjs'
 import { CONTEXT, PR, RUN, SHA, queueFixture } from './sonar-queue-test-fixture.mjs'
 
 test('controller accepts only canonical same-repository main queue CI identities', () => {
@@ -177,4 +182,27 @@ test('cleanup cannot remove a branch reused by an unowned open PR', async () => 
   })
   await assert.rejects(cleanupAnalysisPr(fixture.api, CONTEXT), /unowned PR/)
   assert.equal(fixture.state.calls.filter(call => call.method).length, 0)
+})
+
+test('the controller accepts only explicit event fields and revalidates them against GitHub', async () => {
+  const env = {
+    GITHUB_EVENT_NAME: 'workflow_run',
+    GITHUB_REPOSITORY: RUN.repository.full_name,
+    QUEUE_ACTION: 'in_progress',
+    QUEUE_RUN_ID: String(RUN.id),
+    QUEUE_RUN_ATTEMPT: String(RUN.run_attempt),
+    QUEUE_REVISION: SHA,
+    QUEUE_REF: RUN.head_branch,
+    GITHUB_EVENT_PATH: '/must/not/be/read'
+  }
+  const fixture = queueFixture({ prs: [] })
+  assert.equal((await handleWorkflowRun(eventFromEnvironment(env), fixture.api)).pullRequest, 71)
+  for (const change of [{ GITHUB_EVENT_NAME: 'pull_request' }, { GITHUB_REPOSITORY: 'other/repo' }])
+    assert.throws(() => eventFromEnvironment({ ...env, ...change }))
+  for (const change of [{ QUEUE_RUN_ID: '' }, { QUEUE_REF: 'main' }, { QUEUE_REVISION: 'invalid' }])
+    await assert.rejects(
+      handleWorkflowRun(eventFromEnvironment({ ...env, ...change }), fixture.api)
+    )
+  fixture.state.run.head_repository.full_name = 'other/repo'
+  await assert.rejects(handleWorkflowRun(eventFromEnvironment(env), fixture.api), /canonical/)
 })

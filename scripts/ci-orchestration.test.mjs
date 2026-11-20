@@ -800,7 +800,13 @@ test('queue Sonar writes use protected workflow code while admission stays read-
   assert.match(controller, /persist-credentials: false/)
   assert.match(controller, /contents: write\n      pull-requests: write/)
   assert.match(controller, /run: node scripts\/sonar-queue-analysis\.mjs/)
-  assert.doesNotMatch(controller, /head_sha|SONAR_TOKEN|npm |pnpm |download-artifact/)
+  assert.match(controller, /QUEUE_RUN_ID: \$\{\{ github\.event\.workflow_run\.id \}\}/)
+  assert.doesNotMatch(controller, /SONAR_TOKEN|npm |pnpm |download-artifact/)
+  const controllerScript = readFileSync(
+    join(REPOSITORY_ROOT, 'scripts/sonar-queue-analysis.mjs'),
+    'utf8'
+  )
+  assert.doesNotMatch(controllerScript, /node:fs|GITHUB_EVENT_PATH/)
   const jobs = Object.fromEntries(
     workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
   )

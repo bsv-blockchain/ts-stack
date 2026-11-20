@@ -52,6 +52,9 @@ the operator on November 20, 2026.
 
 Before creating a draft, the controller validates the canonical CI run, event,
 repository, attempt, queue ref, exact revision and current base ancestry. Each
+event supplies only its action, run ID, attempt, revision and ref through explicit
+environment fields; the controller does not read or forward event-file contents.
+The canonical GitHub run must independently match these advertised fields. Each
 run attempt owns a distinct `codex/merge-queue-analysis/` branch. A bot ID, head,
 base and body marker identify its PR. Existing changed or unowned objects cause
 failure rather than being overwritten. The production command only accepts
