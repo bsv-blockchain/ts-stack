@@ -9,6 +9,7 @@ import {
   Validation
 } from '@bsv/sdk'
 import { Wallet } from '../../../src/Wallet'
+import { OverlayUMPTokenInteractor, UMPToken } from '../../../src/CWIStyleWalletManager'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../src/utility/actionBatchDigest'
 import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
@@ -140,6 +141,63 @@ describe('in-memory action batch workspace', () => {
     expect(storedAfterCommit).toHaveLength(1)
     const begun = await begin.mock.results[0].value
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
+  })
+
+  test('a checkpointed UMP signature survives rebuilding an auto-batching wallet before release', async () => {
+    const interactor = new OverlayUMPTokenInteractor({} as never, {} as never)
+    const field = Array<number>(32).fill(1)
+    const token: UMPToken = {
+      passwordSalt: field,
+      passwordPresentationPrimary: field,
+      passwordRecoveryPrimary: field,
+      presentationRecoveryPrimary: field,
+      passwordPrimaryPrivileged: field,
+      presentationRecoveryPrivileged: field,
+      presentationHash: field,
+      recoveryHash: field,
+      presentationKeyEncrypted: field,
+      passwordKeyEncrypted: field,
+      recoveryKeyEncrypted: field
+    }
+    const overlayBroadcast = jest.fn()
+    Object.assign(interactor, { broadcaster: { broadcast: overlayBroadcast } })
+    const walletBroadcast = jest.mocked(ctx.services.postBeef)
+    let receipt: number[] | undefined
+    let txid: string | undefined
+    await expect(
+      interactor.buildAndSend(ctx.wallet, 'admin.invalid', token, undefined, {
+        operationId: 'ab'.repeat(16),
+        onCompleted: async (transaction, outpoint) => {
+          receipt = transaction
+          txid = outpoint.split('.')[0]
+          throw new Error('receipt write interrupted')
+        }
+      })
+    ).rejects.toThrow('receipt write interrupted')
+    expect(walletBroadcast).not.toHaveBeenCalled()
+    expect(overlayBroadcast).not.toHaveBeenCalled()
+    expect(Transaction.fromAtomicBEEF(receipt!).id('hex')).toBe(txid)
+    expect(ctx.wallet.actionBatch.hasWorkspace).toBe(false)
+
+    ctx.wallet = new Wallet({
+      chain: ctx.chain,
+      keyDeriver: ctx.keyDeriver,
+      storage: ctx.storage,
+      services: ctx.services,
+      monitor: ctx.monitor
+    })
+    await expect(ctx.wallet.listNoSendActions({ labels: ['ump-update:' + 'ab'.repeat(16)] })).resolves.toMatchObject({
+      actions: [{ txid, status: 'nosend' }]
+    })
+    const result = await ctx.wallet.createAction(
+      {
+        description: 'Release retained UMP action',
+        options: { sendWith: [txid!], acceptDelayedBroadcast: false }
+      },
+      'admin.invalid'
+    )
+    expect(result.sendWithResults).toEqual([{ txid, status: 'unproven' }])
+    expect(walletBroadcast).toHaveBeenCalledTimes(1)
   })
 
   test('staged noSend actions listed by txid can be aborted without exposing an internal reference', async () => {

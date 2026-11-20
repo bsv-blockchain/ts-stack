@@ -944,7 +944,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     const session = this.phoneChangeSession
     if (session == null) throw new Error('No phone change')
 
-    if (session.changeToken == null) {
+    if (session.changeToken == null && session.changeId == null) {
       const authorization = await this.phoneChange<WABPhoneChangeAuthorization>('complete', {
         presentationKey: session.presentationKey,
         phoneNumber: session.phoneNumber,

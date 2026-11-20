@@ -1257,7 +1257,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     let transaction: Transaction
     await checkpoint?.onStarting?.()
     try {
-      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator)
+      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator, checkpoint != null)
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.ump.action.failed',
@@ -1274,6 +1274,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (checkpoint != null) {
       const outpoint = this.umpTransactionOutpoint(transaction, tokenScript)
       await checkpoint.onCompleted(transaction.toAtomicBEEF(), outpoint)
+      await this.sendSignedUMPAction(wallet, adminOriginator, transaction)
     }
     return await this.broadcastUMPTransaction(transaction, tokenScript, operation)
   }
@@ -1356,9 +1357,39 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     wallet: WalletInterface,
     createArgs: CreateActionArgs,
     inputSigners: NonNullable<Parameters<typeof completeBoundAction>[2]>['inputSigners'],
-    adminOriginator: OriginatorDomainNameStringUnder250Bytes
+    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+    holdBroadcast: boolean
   ): Promise<Transaction> {
-    return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
+    if (!holdBroadcast)
+      return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
+
+    // Set noSend at signing so Toolbox plans and persists the action through its ordinary storage path.
+    // noSend at creation can instead open an in-memory batch that would be lost on restart.
+    const signAction: WalletInterface['signAction'] = (args, originator) =>
+      wallet.signAction({ ...args, options: { ...args.options, noSend: true } }, originator)
+    const stagingWallet = new Proxy(wallet, {
+      get(target, property) {
+        if (property === 'signAction') return signAction
+        const value: unknown = Reflect.get(target, property)
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+    return awaitFromSync(() => completeBoundAction(stagingWallet, createArgs, { inputSigners }, adminOriginator))
+  }
+
+  private async sendSignedUMPAction(
+    wallet: WalletInterface,
+    adminOriginator: string,
+    transaction: Transaction
+  ): Promise<void> {
+    const txid = transaction.id('hex')
+    const result = await wallet.createAction(
+      { description: 'Broadcast signed UMP token', options: { sendWith: [txid], acceptDelayedBroadcast: false } },
+      adminOriginator
+    )
+    if (result.sendWithResults?.find(item => item.txid === txid)?.status !== 'unproven') {
+      throw new Error('Wallet did not confirm submission of the signed UMP update.')
+    }
   }
 
   /** Verifies authenticated token fields and root ownership without constructing a wallet. */
@@ -1407,7 +1438,11 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         previousToken.currentOutpoint
     )
     if (inputs.length !== 1) throw new Error('Pending UMP transaction must consume its exact predecessor.')
-    return await this.broadcastUMPTransaction(transaction, output.lockingScript.toHex(), 'renew')
+    const tokenScript = output.lockingScript.toHex()
+    if (this.umpTransactionOutpoint(transaction, tokenScript) !== checkpoint.outpoint)
+      throw new Error('Pending UMP transaction output mismatch.')
+    await this.sendSignedUMPAction(wallet, adminOriginator, transaction)
+    return await this.broadcastUMPTransaction(transaction, tokenScript, 'renew')
   }
 
   private umpTransactionOutpoint(transaction: Transaction, tokenScript: string): string {
@@ -1813,6 +1848,11 @@ export class CWIStyleWalletManager implements WalletInterface {
       const root = payload.read(32)
       if (toHex(root) !== toHex(authenticatedRoot)) throw new Error('Pending wallet update root mismatch.')
       const previousToken = this.deserializeUMPToken(payload.read(payload.readVarIntNumStrict(false)))
+      if (pending.transaction != null) {
+        // A failed receipt write leaves the signed transaction in memory. Repair its durable copy before sending it.
+        await this.statePersistence?.savePendingUpdate(pending)
+        this.assertTransitionCurrent()
+      }
       const outpoint = await this.resolvePendingUpdateOutpoint(root, pending, token, previousToken)
       this.assertTransitionCurrent()
       token.currentOutpoint = outpoint
@@ -2407,6 +2447,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param snapshot Encrypted snapshot bytes.
    */
   async loadSnapshot(snapshot: number[]): Promise<void> {
+    return this.runStateTransition(() => this.restoreSnapshot(snapshot))
+  }
+
+  private async restoreSnapshot(snapshot: number[]): Promise<void> {
+    const generation = this.stateGeneration
     try {
       if (
         snapshot.length === 0 ||
@@ -2449,8 +2494,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.currentUMPToken = token
 
       // Setup root infrastructure, load profiles, and switch to the loaded active profile
-      await this.setupRoot(rootPrimaryKey) // Will automatically load profiles
-      await this.switchProfile(activeProfileId) // Switch to the profile saved in the snapshot
+      await this.setupRoot(rootPrimaryKey)
+      if (this.statePersistence == null) {
+        await this.switchProfile(activeProfileId)
+      } else {
+        await this.activateProfile(activeProfileId)
+        await this.persistState()
+      }
 
       this.clearPublishedPendingRegistration(token)
 
@@ -2465,7 +2515,7 @@ export class CWIStyleWalletManager implements WalletInterface {
         }
       })
     } catch (error) {
-      this.destroy() // Clear state on error
+      if (this.stateGeneration === generation) this.destroy()
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.load-failed',
         component: CWI_COMPONENT,
@@ -2918,6 +2968,13 @@ export class CWIStyleWalletManager implements WalletInterface {
         throw new Error('Presentation key must be 32 bytes.')
       }
 
+      // A recovered WAB rotation may already have installed this presentation key.
+      if (
+        this.statePersistence != null &&
+        toHex(sha256(newPresentationKey)) === toHex(this.currentUMPToken.presentationHash)
+      )
+        return
+
       // Decrypt existing factors
       const recoveryKey = await this.getFactor('recoveryKey')
       const passwordKey = await this.getFactor('passwordKey')
@@ -3230,6 +3287,7 @@ export class CWIStyleWalletManager implements WalletInterface {
             if (pending == null) throw new Error('Wallet update checkpoint is missing.')
             this.pendingUMPUpdate = { ...pending, stage: 'signed', transaction, outpoint }
             await this.statePersistence?.savePendingUpdate(this.pendingUMPUpdate)
+            this.assertTransitionCurrent()
           }
         }
   }

@@ -15,6 +15,7 @@ import {
   UMPToken,
   UMPTokenInteractor
 } from '../CWIStyleWalletManager'
+import { WalletAuthenticationManager } from '../WalletAuthenticationManager'
 import {
   PendingUMPUpdate,
   WalletStatePersistence,
@@ -50,7 +51,10 @@ const deferred = <T>() => {
   })
   return { promise, resolve }
 }
-async function fixture() {
+async function fixture(options?: {
+  rootValue?: number
+  wab?: ConstructorParameters<typeof WalletAuthenticationManager>[5]
+}) {
   let visible: UMPToken | undefined
   let rejectBuild = false
   let builderGate: Promise<void> | undefined
@@ -78,17 +82,13 @@ async function fixture() {
     findByRecoveryKeyHash: async () => visible,
     buildAndSend: publish
   }
-  const manager = new CWIStyleWalletManager(
-    'admin.invalid',
-    builder,
-    interactor,
-    async () => true,
-    async () => ''
-  )
+  const args = ['admin.invalid', builder, interactor, async () => true, async () => ''] as const
+  const manager =
+    options?.wab == null ? new CWIStyleWalletManager(...args) : new WalletAuthenticationManager(...args, options.wab)
   const state = manager as unknown as FixtureManager
   state.currentUMPToken = Object.fromEntries(fields.map(field => [field, Array(32).fill(1)])) as unknown as UMPToken
   state.currentUMPToken.currentOutpoint = firstOutpoint
-  await state.setupRoot(root)
+  await state.setupRoot(options?.rootValue == null ? root : Array(32).fill(options.rootValue))
   await manager.switchProfile(Array(16).fill(0))
   state.getFactor = async () => Array(32).fill(1)
   let saved: number[] | undefined
@@ -196,6 +196,29 @@ describe('awaited wallet state continuity', () => {
     expect(reopened.republish).toHaveBeenCalledTimes(1)
     expect(reopened.manager.listProfiles().map(profile => profile.name)).toEqual(['default', 'Work'])
   })
+  test('recovery repairs a refused receipt write before releasing the original transaction', async () => {
+    const f = await fixture()
+    const savePending = f.persistence.savePendingUpdate as jest.Mock
+    f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
+      await checkpoint!.onStarting?.()
+      savePending.mockRejectedValueOnce(new Error('receipt write refused'))
+      await checkpoint!.onCompleted([1], nextOutpoint)
+    })
+
+    await expect(f.manager.addProfile('Work')).rejects.toMatchObject({ stage: 'signed' })
+    expect(f.pending?.stage).toBe('submitting')
+    savePending.mockRejectedValueOnce(new Error('receipt still unwritable'))
+    await expect(f.manager.recoverPendingUMPUpdate()).rejects.toMatchObject({ stage: 'signed' })
+    expect(f.republish).not.toHaveBeenCalled()
+
+    f.republish.mockImplementationOnce(async () => {
+      expect(f.pending).toMatchObject({ stage: 'signed', transaction: [1], outpoint: nextOutpoint })
+      return nextOutpoint
+    })
+    await f.manager.recoverPendingUMPUpdate()
+    expect(f.republish).toHaveBeenCalledTimes(1)
+    expect(f.publish).toHaveBeenCalledTimes(1)
+  })
   test('an admitted operation without transaction evidence stays pending instead of being recreated', async () => {
     const f = await fixture()
     f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
@@ -234,6 +257,62 @@ describe('awaited wallet state continuity', () => {
     await Promise.all([first, second])
     expect(f.manager.listProfiles().find(profile => profile.active)?.id).toEqual(Array(16).fill(0))
   })
+  test('serializes account restore with a profile switch before replacing the root or token', async () => {
+    const f = await fixture()
+    const other = await fixture({ rootValue: 8 })
+    const id = await f.manager.addProfile('Work')
+    const expected = (await other.manager.getPublicKey({ identityKey: true }, 'app.invalid')).publicKey
+    const entered = deferred<void>()
+    const release = deferred<void>()
+    f.builder.mockImplementationOnce(async key => {
+      entered.resolve()
+      await release.promise
+      return {
+        getPublicKey: async () => ({ publicKey: new PrivateKey(key).toPublicKey().toString() })
+      } as WalletInterface
+    })
+
+    const switching = f.manager.switchProfile(id)
+    await entered.promise
+    const restoring = f.manager.loadSnapshot(other.manager.saveSnapshot())
+    release.resolve()
+    await Promise.all([switching, restoring])
+
+    const writes = (f.persistence.saveSnapshot as jest.Mock).mock.calls
+    const previous = await fixture()
+    await previous.manager.loadSnapshot(writes.at(-2)![0] as number[])
+    expect(previous.manager.listProfiles().find(profile => profile.active)?.id).toEqual(id)
+    expect((await f.manager.getPublicKey({ identityKey: true }, 'app.invalid')).publicKey).toBe(expected)
+    expect(f.manager.listProfiles().map(profile => profile.name)).toEqual(['default'])
+  })
+  test.each([false, true])(
+    'finalizes one phone change after local recovery (existing WAB stage: %s)',
+    async resumable => {
+      const request = jest.fn(async (path: string) => {
+        if (path.endsWith('/start')) return { success: true }
+        if (path.endsWith('/complete'))
+          return resumable
+            ? { success: true, pendingPresentationKey: 'ab'.repeat(32), pendingPhoneChangeId: 42 }
+            : { success: true, changeToken: 'a'.repeat(64) }
+        return { success: true, changeId: 42 }
+      })
+      const wab = { transport: { request } } as unknown as ConstructorParameters<typeof WalletAuthenticationManager>[5]
+      const f = await fixture({ wab })
+      const manager = f.manager as WalletAuthenticationManager
+      f.failSave(true)
+      await manager.startPhoneNumberChange('+12065550100')
+      await expect(manager.completePhoneNumberChange('123456')).rejects.toBeInstanceOf(WalletStateTransitionError)
+      expect(f.publish).toHaveBeenCalledTimes(1)
+      expect(request.mock.calls.some(([path]) => path.endsWith('/finalize'))).toBe(false)
+
+      f.failSave(false)
+      await manager.recoverPendingUMPUpdate()
+      await expect(manager.completePhoneNumberChange('123456')).resolves.toEqual({ changeId: 42 })
+      expect(f.publish).toHaveBeenCalledTimes(1)
+      expect(request.mock.calls.filter(([path]) => path.endsWith('/complete'))).toHaveLength(1)
+      expect(request.mock.calls.filter(([path]) => path.endsWith('/finalize'))).toHaveLength(1)
+    }
+  )
   test('late activation cannot republish identity after destroy', async () => {
     const f = await fixture()
     const id = await f.manager.addProfile('Work')
@@ -506,8 +585,12 @@ describe('original signed UMP checkpoint binding', () => {
       txid: transaction.id('hex'),
       message: 'published'
     }))
+    const createAction = jest.fn<WalletInterface['createAction']>(async () => ({
+      sendWithResults: [{ txid: transaction.id('hex'), status: 'unproven' }]
+    }))
+    Object.assign(wallet, { createAction })
     Object.assign(subject, { broadcaster: { broadcast } })
-    return { wallet, subject, sourceToken, nextToken, transaction, checkpoint, broadcast, outpoint }
+    return { wallet, subject, sourceToken, nextToken, transaction, checkpoint, broadcast, createAction, outpoint }
   }
   test('verifies discovered proof ownership and refuses absent proof before recovery', async () => {
     const f = await signedFixture()
@@ -555,6 +638,52 @@ describe('original signed UMP checkpoint binding', () => {
     expect(f.broadcast).toHaveBeenCalledTimes(1)
     expect(completed).toHaveBeenCalledTimes(1)
   })
+  test('holds both wallet and overlay publication until the signed receipt is durable', async () => {
+    const f = await signedFixture()
+    const events: string[] = []
+    const txid = f.transaction.id('hex')
+    const partial = Transaction.fromAtomicBEEF(f.transaction.toAtomicBEEF())
+    partial.inputs[0].unlockingScript = new UnlockingScript([])
+    const createAction = jest.fn<WalletInterface['createAction']>(async args => {
+      if (args.options?.sendWith?.length) {
+        events.push('wallet broadcast')
+        expect(args.options.sendWith).toEqual([txid])
+        return { sendWithResults: [{ txid, status: 'unproven' }] }
+      }
+      expect(args.options?.noSend).toBeUndefined()
+      return { signableTransaction: { reference: 'dGVzdA==', tx: partial.toAtomicBEEF() } }
+    })
+    const signAction = jest.fn<WalletInterface['signAction']>(async args => {
+      events.push(args.options?.noSend === true ? 'sign only' : 'sign and broadcast')
+      return { txid, tx: f.transaction.toAtomicBEEF() }
+    })
+    const wallet = Object.assign(f.wallet, { createAction, signAction, abortAction: jest.fn() }) as WalletInterface
+    Object.assign(f.subject, {
+      findByOutpoint: async () => ({ beef: partial.inputs[0].sourceTransaction!.toBEEF(), outputIndex: 0 })
+    })
+    const onCompleted = jest.fn(async () => {
+      throw new Error('disk full')
+    })
+    const checkpoint = { operationId: f.checkpoint.operationId, onCompleted }
+
+    await expect(
+      f.subject.buildAndSend(wallet, 'admin.invalid', f.nextToken, f.sourceToken, checkpoint)
+    ).rejects.toThrow('disk full')
+    expect(events).toEqual(['sign only'])
+    expect(f.broadcast).not.toHaveBeenCalled()
+
+    onCompleted.mockImplementationOnce(async () => {
+      events.push('durable receipt')
+    })
+    f.broadcast.mockImplementationOnce(async () => {
+      events.push('overlay broadcast')
+      return { status: 'success', txid, message: 'published' }
+    })
+    await expect(f.subject.buildAndSend(wallet, 'admin.invalid', f.nextToken, f.sourceToken, checkpoint)).resolves.toBe(
+      f.outpoint
+    )
+    expect(events).toEqual(['sign only', 'sign only', 'durable receipt', 'wallet broadcast', 'overlay broadcast'])
+  })
   test('re-publishes the identical authenticated transaction without creating another action', async () => {
     const f = await signedFixture()
     await expect(
@@ -566,8 +695,27 @@ describe('original signed UMP checkpoint binding', () => {
         f.checkpoint
       )
     ).resolves.toBe(f.outpoint)
+    expect(f.createAction).toHaveBeenCalledTimes(1)
+    expect(f.createAction).toHaveBeenCalledWith(
+      {
+        description: 'Broadcast signed UMP token',
+        options: { sendWith: [f.transaction.id('hex')], acceptDelayedBroadcast: false }
+      },
+      'admin.invalid'
+    )
     expect(f.broadcast).toHaveBeenCalledTimes(1)
     expect(f.broadcast.mock.calls[0][0].toAtomicBEEF()).toEqual(f.checkpoint.transaction)
+    f.createAction.mockResolvedValueOnce({ sendWithResults: [{ txid: f.transaction.id('hex'), status: 'failed' }] })
+    await expect(
+      f.subject.publishCheckpoint(
+        f.wallet as WalletInterface,
+        'admin.invalid',
+        f.nextToken,
+        f.sourceToken,
+        f.checkpoint
+      )
+    ).rejects.toThrow('did not confirm submission')
+    expect(f.broadcast).toHaveBeenCalledTimes(1)
   })
   test('rejects a receipt with another owner, intended token, predecessor, or outpoint before broadcast', async () => {
     const f = await signedFixture()
