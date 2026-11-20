@@ -30,7 +30,7 @@ export function queueContext(run, baseBranch = 'main') {
     typeof run.head_branch !== 'string' ||
     run.head_branch !== run.head_branch.trim() ||
     !run.head_branch.startsWith(`gh-readonly-queue/${baseBranch}/`) ||
-    !/^pr-[1-9][0-9]*-[a-f0-9]{40}$/.test(
+    !/^pr-[1-9]\d*-[a-f0-9]{40}$/.test(
       run.head_branch.slice(`gh-readonly-queue/${baseBranch}/`.length)
     )
   )

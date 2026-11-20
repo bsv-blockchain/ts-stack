@@ -1,0 +1,2 @@
+Independent disposable queue qualification marker A.
+Never targets main.

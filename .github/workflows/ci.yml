@@ -704,7 +704,7 @@ jobs:
       - name: Verify changed package artifacts
         env:
           SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           filters=()
           while IFS= read -r package; do filters+=(--filter "$package"); done < <(
@@ -812,7 +812,7 @@ jobs:
         env:
           SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
           while IFS= read -r package; do
@@ -843,7 +843,7 @@ jobs:
       - name: Run one affected application regression shard
         if: matrix.application != 0
         env:
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
           # Shards follow measured per-file durations, longest first.
           JEST_SHARD_DURATIONS: ${{ github.workspace }}/governance/ci-lane-durations.json
           JEST_SHARD_LANE: output-knowledge-tests
@@ -885,7 +885,7 @@ jobs:
         env:
           BROWSER_PACKAGES: ${{ needs.prepare.outputs.browser-packages }}
           BROWSER_COMPOSITION_DIRECTORY: ${{ github.workspace }}/.browser-composition
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
           index=0
@@ -1103,7 +1103,7 @@ jobs:
       - name: Verify the packed SDK browser consumer and UMD contract
         env:
           BROWSER_COMPOSITION_DIRECTORY: ${{ github.workspace }}/.browser-composition
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           pnpm --filter @bsv/sdk exec node \
             "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
@@ -1233,14 +1233,14 @@ jobs:
         working-directory: packages/wallet/wallet-toolbox
         timeout-minutes: 5
         env:
-          TS_STACK_SNAPSHOT_HOSTED_MYSQL: "1"
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
         run: node test/storage/snapshotArchiveDocker.cjs provision-hosted-image
       - name: Verify native snapshot MySQL recovery
         if: matrix.id == 'shard-1'
         working-directory: packages/wallet/wallet-toolbox
         timeout-minutes: 5
         env:
-          TS_STACK_SNAPSHOT_HOSTED_MYSQL: "1"
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
         run: node test/storage/runSnapshotArchiveMysql.cjs
       - name: Verify native journal SQLite recovery
         if: matrix.id == 'shard-1'
@@ -1252,7 +1252,7 @@ jobs:
         working-directory: packages/wallet/wallet-toolbox
         timeout-minutes: 10
         env:
-          TS_STACK_SNAPSHOT_HOSTED_MYSQL: "1"
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
         run: node test/storage/runSnapshotJournalMysql.cjs
       - name: Deliver the pinned native browser for the serial browser cases
         if: matrix.id == 'shard-4'
@@ -1270,7 +1270,7 @@ jobs:
       - name: Run every original browser case serially before ordinary shard-4
         if: matrix.id == 'shard-4'
         env:
-          RUNPOSTGRES: "1"
+          RUNPOSTGRES: '1'
           POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
@@ -1484,7 +1484,7 @@ jobs:
       - name: Generate VeriFast coverage and run packaged-consumer checks
         env:
           BROWSER_COMPOSITION_DIRECTORY: ${{ github.workspace }}/.browser-composition
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           pnpm --filter @bsv/verifast exec node \
             "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
@@ -1552,7 +1552,7 @@ jobs:
         env:
           SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
-          PREBUILT_PACKAGE_OUTPUTS: "1"
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
           while IFS= read -r package; do
@@ -1969,7 +1969,7 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
           ignore-unfixed: false
-          exit-code: "1"
+          exit-code: '1'
           format: table
           timeout: 15m
 
@@ -1999,7 +1999,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.22.1
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -2178,7 +2178,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: c66a1356064f44ee61cfa4406babe73096497687
+          ref: e282aec5c2543e7fdeb9234445bff7144773ace5
           persist-credentials: false
           sparse-checkout: scripts
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -2208,7 +2208,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: c66a1356064f44ee61cfa4406babe73096497687
+          ref: e282aec5c2543e7fdeb9234445bff7144773ace5
           persist-credentials: false
           sparse-checkout: scripts
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020

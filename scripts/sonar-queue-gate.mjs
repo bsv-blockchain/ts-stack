@@ -62,7 +62,7 @@ async function completedAnalysis(api, fetchImpl, context) {
   )
     throw new Error('Incomplete Sonar check inventory')
   const check = checks.check_runs.find(candidate => isAnalysisCheck(candidate, context, pr.number))
-  if (!check || check.status !== 'completed') return null
+  if (check?.status !== 'completed') return null
   if (check.conclusion !== 'success')
     throw new Error(`Sonar app check did not pass: ${check.conclusion}`)
   return { pr, analysis, check }
