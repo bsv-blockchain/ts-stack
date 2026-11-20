@@ -207,6 +207,8 @@ describe.each(['legacy', 'auto'] as const)('admin originator normalization (%s)'
   test('matches scheme, port and case, and fails closed for any other host', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy(`adminOriginatorNorm-${mode}`, mode)
     try {
+      expect(() => ctx.wallet.setAdminOriginator('')).toThrow('non-empty')
+      expect(() => ctx.wallet.setAdminOriginator('   ')).toThrow('non-empty')
       ctx.wallet.setAdminOriginator('https://Admin.Wallet.Example:8443')
       expect(ctx.wallet.adminOriginator).toBe(ADMIN)
 
@@ -235,6 +237,9 @@ describe.each(['legacy', 'auto'] as const)('admin originator normalization (%s)'
       expect(seen).toEqual([true, true, false, false, false, false])
       await expect(ctx.wallet.createAction(args(), 'not a host')).rejects.toThrow()
       expect(seen).toEqual([true, true, false, false, false, false])
+      ;(ctx.wallet as unknown as { adminOriginatorValue?: string }).adminOriginatorValue = ''
+      await ctx.wallet.listActions({ labels: [] }, ADMIN)
+      expect(ctx.wallet.adminOriginator).toBe('')
     } finally {
       await ctx.storage.destroy()
     }

@@ -168,6 +168,88 @@ describe('CachedKeyDeriver', () => {
       expect(cached[0].toHex()).toBe(firstKey.toHex())
       expect(derive).toHaveBeenCalledTimes(2)
     })
+
+    it('refuses a missing batch deriver and does not cache a bad result', async () => {
+      const protocolID: [1, string] = [1, 'testprotocol']
+      const first = { protocolID, keyID: 'missing', counterparty: 'anyone' as const }
+      const second = { protocolID, keyID: 'other', counterparty: 'anyone' as const }
+      mockKeyDeriver.derivePrivateKeys = undefined as unknown as KeyDeriver['derivePrivateKeys']
+      expect(() => cachedKeyDeriver.derivePrivateKeys([first])).toThrow(
+        'does not implement derivePrivateKeys'
+      )
+
+      const derive = jest
+        .fn()
+        .mockReturnValueOnce([new PrivateKey(1)])
+        .mockReturnValueOnce([new PrivateKey(2), 'not-a-key'])
+      mockKeyDeriver.derivePrivateKeys = derive as unknown as KeyDeriver['derivePrivateKeys']
+      expect(() => cachedKeyDeriver.derivePrivateKeys([first, second])).toThrow('unexpected result')
+      expect(() => cachedKeyDeriver.derivePrivateKeys([first, second])).toThrow('unexpected result')
+      expect(derive).toHaveBeenCalledTimes(2)
+      mockKeyDeriver.derivePrivateKeys = jest
+        .fn()
+        .mockReturnValueOnce(null)
+        .mockReturnValueOnce('not-keys')
+        .mockReturnValue([new PrivateKey(3)]) as unknown as KeyDeriver['derivePrivateKeys']
+      expect(() => cachedKeyDeriver.derivePrivateKeys([first])).toThrow()
+      expect(() => cachedKeyDeriver.derivePrivateKeys([first])).toThrow('unexpected result')
+      const recovered = syncKeys(cachedKeyDeriver.derivePrivateKeys([first]))
+      expect(recovered[0]).toBeInstanceOf(PrivateKey)
+    })
+  })
+
+  describe('optional async lanes', () => {
+    const protocolID: [1, string] = [1, 'testprotocol']
+
+    it('refuses an async public or symmetric lane the deriver does not implement', async () => {
+      mockKeyDeriver.derivePublicKeyAsync = undefined
+      mockKeyDeriver.deriveSymmetricKeyAsync = undefined
+      await expect(
+        cachedKeyDeriver.derivePublicKeyAsync(protocolID, 'pub', 'self')
+      ).rejects.toThrow('does not implement derivePublicKeyAsync')
+      await expect(
+        cachedKeyDeriver.deriveSymmetricKeyAsync(protocolID, 'sym', 'self')
+      ).rejects.toThrow('does not implement deriveSymmetricKeyAsync')
+    })
+
+    it('caches a fulfilled async public or symmetric key and does not cache a rejection', async () => {
+      const publicKey = new PublicKey(0)
+      const symmetricKey = new SymmetricKey(0)
+      const derivePublic = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('public failed'))
+        .mockResolvedValue(publicKey)
+      const deriveSymmetric = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('symmetric failed'))
+        .mockResolvedValue(symmetricKey)
+      mockKeyDeriver.derivePublicKeyAsync = derivePublic
+      mockKeyDeriver.deriveSymmetricKeyAsync = deriveSymmetric
+      await expect(
+        cachedKeyDeriver.derivePublicKeyAsync(protocolID, 'pub', 'self')
+      ).rejects.toThrow('public failed')
+      await expect(
+        cachedKeyDeriver.deriveSymmetricKeyAsync(protocolID, 'sym', 'self')
+      ).rejects.toThrow('symmetric failed')
+      await expect(cachedKeyDeriver.derivePublicKeyAsync(protocolID, 'pub', 'self')).resolves.toBe(
+        publicKey
+      )
+      const cachedPublic = await cachedKeyDeriver.derivePublicKeyAsync(protocolID, 'pub', 'self')
+      expect(cachedPublic.toString()).toBe(publicKey.toString())
+      expect(cachedPublic).not.toBe(publicKey)
+      await expect(
+        cachedKeyDeriver.deriveSymmetricKeyAsync(protocolID, 'sym', 'self')
+      ).resolves.toBe(symmetricKey)
+      const cachedSymmetric = await cachedKeyDeriver.deriveSymmetricKeyAsync(
+        protocolID,
+        'sym',
+        'self'
+      )
+      expect(cachedSymmetric.toString()).toBe(symmetricKey.toString())
+      expect(cachedSymmetric).not.toBe(symmetricKey)
+      expect(derivePublic).toHaveBeenCalledTimes(2)
+      expect(deriveSymmetric).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe('deriveSymmetricKey', () => {
