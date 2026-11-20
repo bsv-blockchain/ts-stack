@@ -250,7 +250,8 @@ export async function acquisitionNativeWalletFixture(
     cleanup.delete(close)
   }
   function close() {
-    return (closing ??= closeWallets())
+    closing ??= closeWallets()
+    return closing
   }
   cleanup.add(close)
   return { native: await open(true), open, close, broadcast }

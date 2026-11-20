@@ -10,7 +10,7 @@ const PROPERTY_TEST_BATCH_SIZE = 50
  */
 function propertyTestBatches(selection) {
   const numRuns = selection.numRuns ?? 100
-  const seed = selection.seed ?? Date.now() | 0
+  const seed = selection.seed ?? Date.now() % 0x80000000
   if (!Number.isSafeInteger(numRuns) || numRuns < 1)
     throw new RangeError('Property tests require a positive, safe case count.')
   // Shrink paths enumerate siblings of one generated counterexample. Keep
@@ -41,7 +41,7 @@ function measuredPropertyCampaign(selection, milliseconds) {
   return [
     {
       ...selection,
-      seed: selection.seed ?? Date.now() | 0,
+      seed: selection.seed ?? Date.now() % 0x80000000,
       numRuns: selection.numRuns ?? 100,
       path: selection.path ?? '',
       interruptAfterTimeLimit: milliseconds,
