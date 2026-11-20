@@ -398,7 +398,14 @@ export interface PermissionRequest {
   type: 'protocol' | 'basket' | 'certificate' | 'spending'
   originator: string // The domain or FQDN of the requesting application
   displayOriginator?: string // Optional raw/original originator string for UI purposes
-  usageType?: string // The usage context of the request (used for prompt coalescing)
+  /**
+   * Prompt-coalescing context shown to the wallet UI.
+   * Protocol checks use {@link ProtocolPermissionUsageType}.
+   * `revealCounterpartyKeyLinkage` sends `counterpartyLinkageRevelation` and
+   * `revealSpecificKeyLinkage` sends `specificLinkageRevelation`.
+   * `ensureProtocolPermission` still accepts the legacy `linkageRevelation` usage.
+   */
+  usageType?: string
   privileged?: boolean // For "protocol" or "certificate" usage, indicating privileged key usage
   protocolID?: WalletProtocol // For type='protocol': BRC-43 style (securityLevel, protocolName)
   counterparty?: string // For type='protocol': e.g. target public key or "self"/"anyone"
@@ -578,10 +585,31 @@ export interface WalletPermissionsManagerCallbacks {
 }
 
 /**
+ * Usage accepted by {@link WalletPermissionsManager.ensureProtocolPermission}.
+ *
+ * `linkageRevelation` is the legacy combined key-linkage usage and consults only
+ * `seekPermissionsForKeyLinkageRevelation`. The two reveal methods send
+ * `counterpartyLinkageRevelation` or `specificLinkageRevelation` so each can
+ * follow its own flag.
+ */
+export type ProtocolPermissionUsageType =
+  | 'signing'
+  | 'encrypting'
+  | 'hmac'
+  | 'publicKey'
+  | 'identityKey'
+  | 'linkageRevelation'
+  | 'counterpartyLinkageRevelation'
+  | 'specificLinkageRevelation'
+  | 'generic'
+
+/**
  * Configuration object for the WalletPermissionsManager. If a given option is `false`,
  * the manager will skip or alter certain permission checks or behaviors.
  *
  * By default, all of these are `true` unless specified otherwise. This is the most secure configuration.
+ * The two specific key-linkage flags are the exception: when they are omitted they
+ * follow `seekPermissionsForKeyLinkageRevelation` rather than forcing their own default.
  */
 export interface PermissionsManagerConfig {
   /**
@@ -624,10 +652,40 @@ export interface PermissionsManagerConfig {
   seekProtocolPermissionsForHMAC?: boolean
 
   /**
-   * For revealing counterparty-level or specific key linkage revelation information,
-   * should we require permission?
+   * Legacy combined default for key-linkage revelation permission.
+   *
+   * When `true` (the default), both `revealCounterpartyKeyLinkage` and
+   * `revealSpecificKeyLinkage` require permission unless the matching flag
+   * below is explicitly `false`. When `false`, both skip permission unless the
+   * matching flag below is explicitly `true`.
+   *
+   * Counterparty linkage reveals the root ECDH shared secret with a
+   * counterparty. Every BRC-2 symmetric encryption key and HMAC for that pair,
+   * for any protocol and any key ID, is computable from that secret. Specific
+   * linkage reveals only one per-invoice HMAC. Set the two flags below when
+   * those risks should be gated separately. Existing configs that set only
+   * this flag keep their current behavior.
    */
   seekPermissionsForKeyLinkageRevelation?: boolean
+
+  /**
+   * Whether `revealCounterpartyKeyLinkage` requires permission.
+   *
+   * When this is omitted, the call follows
+   * `seekPermissionsForKeyLinkageRevelation`. Counterparty linkage reveals the
+   * root ECDH shared secret for that counterparty.
+   */
+  seekPermissionsForCounterpartyKeyLinkageRevelation?: boolean
+
+  /**
+   * Whether `revealSpecificKeyLinkage` requires permission.
+   *
+   * When this is omitted, the call follows
+   * `seekPermissionsForKeyLinkageRevelation`. Specific linkage reveals one
+   * per-invoice HMAC, not the root shared secret. The reserved-protocol guard
+   * on that call is unchanged.
+   */
+  seekPermissionsForSpecificKeyLinkageRevelation?: boolean
 
   /**
    * For revealing any user public key (getPublicKey) **other** than the identity key,
@@ -969,7 +1027,9 @@ export class WalletPermissionsManager implements WalletInterface {
       return await readUMPActionReceipt(this.underlying, operationId, this.adminOriginator)
     })
 
-    // Default all config options to true unless specified
+    // Default all config options to true unless specified.
+    // The two key-linkage flags stay unset so each inherits
+    // seekPermissionsForKeyLinkageRevelation, which itself defaults to true.
     this.config = {
       seekProtocolPermissionsForSigning: true,
       seekProtocolPermissionsForEncrypting: true,
@@ -1725,7 +1785,7 @@ export class WalletPermissionsManager implements WalletInterface {
     counterparty: string
     reason?: string
     seekPermission?: boolean
-    usageType: 'signing' | 'encrypting' | 'hmac' | 'publicKey' | 'identityKey' | 'linkageRevelation' | 'generic'
+    usageType: ProtocolPermissionUsageType
   }): Promise<boolean> {
     const { normalized: normalizedOriginator, lookupValues } = this.prepareOriginator(originator)
     originator = normalizedOriginator
@@ -2072,16 +2132,39 @@ export class WalletPermissionsManager implements WalletInterface {
   /**
    * Returns true when the given usageType is configured to skip permission checks.
    */
-  private isProtocolUsageTypeExempted(
-    usageType: 'signing' | 'encrypting' | 'hmac' | 'publicKey' | 'identityKey' | 'linkageRevelation' | 'generic'
-  ): boolean {
+  private isProtocolUsageTypeExempted(usageType: ProtocolPermissionUsageType): boolean {
     if (usageType === 'signing' && !this.config.seekProtocolPermissionsForSigning) return true
     if (usageType === 'encrypting' && !this.config.seekProtocolPermissionsForEncrypting) return true
     if (usageType === 'hmac' && !this.config.seekProtocolPermissionsForHMAC) return true
     if (usageType === 'publicKey' && !this.config.seekPermissionsForPublicKeyRevelation) return true
     if (usageType === 'identityKey' && !this.config.seekPermissionsForIdentityKeyRevelation) return true
-    if (usageType === 'linkageRevelation' && !this.config.seekPermissionsForKeyLinkageRevelation) return true
+    if (
+      (usageType === 'linkageRevelation' ||
+        usageType === 'counterpartyLinkageRevelation' ||
+        usageType === 'specificLinkageRevelation') &&
+      !this.keyLinkageRevelationSought(usageType)
+    ) {
+      return true
+    }
     return false
+  }
+
+  /**
+   * Whether this key-linkage usage still requires a permission check.
+   * An omitted per-call flag inherits the legacy combined flag. The legacy
+   * usage itself consults only that combined flag.
+   */
+  private keyLinkageRevelationSought(
+    usageType: 'linkageRevelation' | 'counterpartyLinkageRevelation' | 'specificLinkageRevelation'
+  ): boolean | undefined {
+    const legacy = this.config.seekPermissionsForKeyLinkageRevelation
+    if (usageType === 'counterpartyLinkageRevelation') {
+      return this.config.seekPermissionsForCounterpartyKeyLinkageRevelation ?? legacy
+    }
+    if (usageType === 'specificLinkageRevelation') {
+      return this.config.seekPermissionsForSpecificKeyLinkageRevelation ?? legacy
+    }
+    return legacy
   }
 
   private isProtocolInCounterpartyPermissions(
@@ -5575,7 +5658,7 @@ export class WalletPermissionsManager implements WalletInterface {
       protocolID: [2, `counterparty key linkage revelation ${requestArgs.counterparty}`],
       counterparty: requestArgs.verifier,
       reason: requestArgs.privilegedReason,
-      usageType: 'linkageRevelation'
+      usageType: 'counterpartyLinkageRevelation'
     })
     return await this.underlying.revealCounterpartyKeyLinkage(...args)
   }
@@ -5603,7 +5686,7 @@ export class WalletPermissionsManager implements WalletInterface {
       ],
       counterparty: requestArgs.verifier,
       reason: requestArgs.privilegedReason,
-      usageType: 'linkageRevelation'
+      usageType: 'specificLinkageRevelation'
     })
     return await this.underlying.revealSpecificKeyLinkage(...args)
   }

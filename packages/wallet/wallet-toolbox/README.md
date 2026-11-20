@@ -626,6 +626,18 @@ binding.
 | **MockChain**      | In-memory blockchain for testing — mock mining, UTXO tracking, and merkle proof generation without a network                                     |
 | **Entropy**        | `EntropyCollector` gathers mouse/touch entropy for high-quality randomness in browser environments                                               |
 
+`revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage` both ask for
+permission by default. `seekPermissionsForKeyLinkageRevelation` remains the
+legacy combined switch. Leave
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` unset and that switch still
+gates both calls. Set either flag to override just that call. Counterparty
+linkage reveals the root ECDH shared secret for a counterparty, from which
+every BRC-2 symmetric key and HMAC for the pair can be derived. Specific
+linkage reveals one per-invoice HMAC. Protocol ID strings are unchanged, and
+`revealSpecificKeyLinkage` still refuses reserved protocol names for a
+non-admin originator.
+
 Durable permission grants queue their internal token transaction for delayed
 broadcast, so permission approval does not inherit network-broadcast latency.
 The funding planner prefers settled change and uses queued permission ancestry

@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.19.0'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -14,6 +14,34 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+## Key-linkage permission
+
+The 2.19.0 source candidate publishes the same `WalletPermissionsManager` as
+the core package, including independent gates for
+`revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage`.
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is
+omitted it follows `seekPermissionsForKeyLinkageRevelation`, still the legacy
+combined default (`true`).
+
+Counterparty linkage reveals the root ECDH shared secret with a counterparty.
+Specific linkage reveals one per-invoice HMAC. Protocol ID strings and the
+reserved-protocol guard are unchanged. Prompts use
+`counterpartyLinkageRevelation` and `specificLinkageRevelation`.
+`ensureProtocolPermission` still accepts the legacy `linkageRevelation` usage.
+
+```ts
+import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+
+declare const wallet: ConstructorParameters<typeof WalletPermissionsManager>[0]
+new WalletPermissionsManager(wallet, 'wallet.example', {
+  seekPermissionsForCounterpartyKeyLinkageRevelation: true,
+  seekPermissionsForSpecificKeyLinkageRevelation: false
+})
+```
+
+No BRC-100 wire or stored-permission migration is required.
 
 ## Certificate pagination
 
