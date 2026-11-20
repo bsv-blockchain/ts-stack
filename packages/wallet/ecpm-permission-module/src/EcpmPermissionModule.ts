@@ -328,7 +328,7 @@ export class EcpmPermissionModule implements PermissionsModule {
 
   /**
    * Maps the BRC-42/43 child private key to the ECPM multiplication scalar by
-   * HKDF-SHA256, reduced into [1, n). The child key is used only as input keying
+   * HKDF-SHA256, using 1 + (OKM mod (n - 1)). The child key is used only as input keying
    * material and is never exposed; the returned scalar is not linear in it, so a
    * counterparty who can compute the BRC-42 offset cannot strip it from `d·Q` to
    * recover the wallet's root ECDH secret. The mapping is deterministic in the
@@ -341,29 +341,18 @@ export class EcpmPermissionModule implements PermissionsModule {
     const ikm = derivedKey.toArray('be', 32) as number[]
     // HKDF-Extract then HKDF-Expand (RFC 5869) with SHA-256.
     const prk = sha256hmac(ECPM_SCALAR_SALT, ikm)
-    let info: number[] = [...ECPM_SCALAR_INFO]
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const okm: number[] = []
-      let block: number[] = []
-      let counter = 1
-      while (okm.length < ECPM_SCALAR_OKM_BYTES) {
-        block = sha256hmac(prk, [...block, ...info, counter & 0xff])
-        okm.push(...block)
-        counter++
-      }
-      const scalar = new BigNumber(okm.slice(0, ECPM_SCALAR_OKM_BYTES)).umod(CURVE.n)
-      if (!scalar.isZero()) return scalar
-      // Astronomically unlikely; re-expand under a distinct info on a zero result.
-      info = [...ECPM_SCALAR_INFO, attempt + 1]
+    const okm: number[] = []
+    let block: number[] = []
+    let counter = 1
+    while (okm.length < ECPM_SCALAR_OKM_BYTES) {
+      block = sha256hmac(prk, [...block, ...ECPM_SCALAR_INFO, counter & 0xff])
+      okm.push(...block)
+      counter++
     }
-    throw new Error('ECPM: failed to derive a nonzero scalar')
+    return new BigNumber(okm.slice(0, ECPM_SCALAR_OKM_BYTES)).umod(CURVE.n.subn(1)).addn(1)
   }
 
-  #multiply(
-    point: Point,
-    scalar: BigNumber,
-    operation: ParsedEcpmRequest['operation']
-  ): PubKeyHex {
+  #multiply(point: Point, scalar: BigNumber, operation: ParsedEcpmRequest['operation']): PubKeyHex {
     const effective = operation === 'remove' ? scalar.invm(CURVE.n) : scalar
     const result = point.mul(effective)
     if (result.isInfinity()) {
