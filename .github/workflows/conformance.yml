@@ -10,11 +10,11 @@ on:
       - 'scripts/generate-openapi-types.mjs'
   pull_request:
     branches: [main]
-  # Required checks must also report on merge-queue runs.
   merge_group:
+    types: [checks_requested]
 
 concurrency:
-  group: conformance-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  group: conformance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -22,6 +22,9 @@ permissions:
 
 jobs:
   ts-runner:
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary conformance' || 'ts-runner' }}
+    if: >-
+      !(github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

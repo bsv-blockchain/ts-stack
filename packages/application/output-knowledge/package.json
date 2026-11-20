@@ -1,6 +1,6 @@
 {
   "name": "@bsv/output-knowledge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Durable BRC-192 application output knowledge and interchangeable source adapters",
   "author": "BSV Association",
   "license": "Apache-2.0",

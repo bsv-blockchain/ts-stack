@@ -5,14 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Required checks must also report on merge-queue runs.
   merge_group:
+    types: [checks_requested]
   schedule:
     - cron: '17 8 * * 1'
   workflow_dispatch:
 
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -20,7 +20,10 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    # Even an accidentally approved auxiliary run must not publish a required queue context.
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && format('Auxiliary Analyze ({0})', matrix.language) || format('Analyze ({0})', matrix.language) }}
+    if: >-
+      !(github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

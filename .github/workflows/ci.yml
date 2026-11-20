@@ -5,9 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Merge queue: each queued pull request is tested on top of the ones ahead
-  # of it, so pull requests that each pass alone cannot break main together.
   merge_group:
+    types: [checks_requested]
   # Release acceptance must be able to exercise the complete current tree.
   workflow_dispatch:
     inputs:
@@ -25,7 +24,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -328,12 +327,14 @@ jobs:
 
   sonar-zero-findings:
     name: Quality gate — zero new Sonar findings
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
+      actions: read
       contents: read
       pull-requests: read
+      checks: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -343,6 +344,7 @@ jobs:
           node-version: 24.22.1
 
       - name: Enforce the exact-head repository Sonar policy
+        if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
@@ -351,11 +353,17 @@ jobs:
           --pull-request "${{ github.event.pull_request.number }}"
           --revision "${{ github.event.pull_request.head.sha }}"
 
-      - name: Retain complete PR569 Sonar inventories and both policy verdicts
+      - name: Enforce the exact combined queue analysis
+        if: github.event_name == 'merge_group'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/sonar-queue-gate.mjs
+
+      - name: Retain Sonar policy and exact queue analysis evidence
         if: always() && hashFiles('.sonar-policy/**/*.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: sonar-policy-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          name: sonar-policy-${{ github.event.pull_request.number || 'queue' }}-${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           path: .sonar-policy/
           include-hidden-files: true
           if-no-files-found: error
@@ -1720,6 +1728,9 @@ jobs:
         # disables Automatic Analysis; the two methods cannot run together.
         # Dependabot changes are covered by audit + dependency review and do
         # not receive Actions secrets.
+        # Queue analysis needs its own explicit Sonar branch/revision contract;
+        # never let an unrecognized event overwrite the main analysis.
+        # The result gate rejects the missing queue analysis until it is qualified.
         if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
@@ -1771,7 +1782,7 @@ jobs:
           # CI checks out GitHub's synthetic PR merge commit but Codecov
           # reports against the branch head.  Give Codecov the actual base
           # parent so it does not fall back to its last covered main commit.
-          commit_parent: ${{ github.event.pull_request.base.sha || github.event.before }}
+          commit_parent: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
           fail_ci_if_error: false
 
@@ -2076,7 +2087,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -2090,7 +2101,7 @@ jobs:
           comment-summary-in-pr: never
 
   merge-gate:
-    name: merge-gate
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary analysis PR gate' || 'merge-gate' }}
     if: always()
     needs:
       - scope

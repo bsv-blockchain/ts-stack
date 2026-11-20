@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
