@@ -133,7 +133,7 @@ describe('WAB-administered UMP pin fallback', () => {
       }),
       expect.anything(),
       'admin.example',
-      false
+      undefined
     )
     expect(broadcast).toHaveBeenCalledWith(completed)
   })

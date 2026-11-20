@@ -1255,9 +1255,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
     const operation = resolvedOldToken == null ? 'create' : 'renew'
     let transaction: Transaction
-    await checkpoint?.onStarting?.()
     try {
-      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator, checkpoint != null)
+      transaction = await this.completeUMPAction(wallet, createArgs, inputSigners, adminOriginator, checkpoint)
     } catch (error) {
       this.telemetry.capture({
         name: 'wallet-toolbox.ump.action.failed',
@@ -1358,15 +1357,18 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     createArgs: CreateActionArgs,
     inputSigners: NonNullable<Parameters<typeof completeBoundAction>[2]>['inputSigners'],
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
-    holdBroadcast: boolean
+    checkpoint?: UMPActionCheckpoint
   ): Promise<Transaction> {
-    if (!holdBroadcast)
+    if (checkpoint == null)
       return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
 
     // Set noSend at signing so Toolbox plans and persists the action through its ordinary storage path.
     // noSend at creation can instead open an in-memory batch that would be lost on restart.
-    const signAction: WalletInterface['signAction'] = (args, originator) =>
-      wallet.signAction({ ...args, options: { ...args.options, noSend: true } }, originator)
+    const signAction: WalletInterface['signAction'] = async (args, originator) => {
+      // Planning and input binding can fail before the wallet is asked to sign.
+      await checkpoint.onStarting?.()
+      return await wallet.signAction({ ...args, options: { ...args.options, noSend: true } }, originator)
+    }
     const stagingWallet = new Proxy(wallet, {
       get(target, property) {
         if (property === 'signAction') return signAction
@@ -1858,8 +1860,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       token.currentOutpoint = outpoint
       this.currentUMPToken = token
       await this.setupRoot(root)
-      await this.persistState(pending.activeProfileId)
       await this.activateProfile(pending.activeProfileId)
+      await this.persistState()
       await this.statePersistence?.savePendingUpdate(null)
       this.pendingUMPUpdate = undefined
     }, true)
@@ -2536,21 +2538,22 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.umpSyncStatus = 'unknown'
       const generation = this.stateGeneration
       const currentToken = this.currentUMPToken
+      const lookupOptions: [UMPTokenLookupOptions?] =
+        this.statePersistence == null ? [] : [{ pinnedOutpoint: currentToken.currentOutpoint }]
       let refreshed: UMPToken | undefined
 
       if (currentToken.presentationHash && currentToken.presentationHash.length > 0) {
-        refreshed = await this.UMPTokenInteractor.findByPresentationKeyHash(currentToken.presentationHash, {
-          pinnedOutpoint: currentToken.currentOutpoint
-        })
+        refreshed = await this.UMPTokenInteractor.findByPresentationKeyHash(
+          currentToken.presentationHash,
+          ...lookupOptions
+        )
       }
 
       if (refreshed == null && currentToken.recoveryHash && currentToken.recoveryHash.length > 0) {
-        refreshed = await this.UMPTokenInteractor.findByRecoveryKeyHash(currentToken.recoveryHash, {
-          pinnedOutpoint: currentToken.currentOutpoint
-        })
+        refreshed = await this.UMPTokenInteractor.findByRecoveryKeyHash(currentToken.recoveryHash, ...lookupOptions)
       }
 
-      if (generation !== this.stateGeneration) throw new Error('Wallet session changed during account refresh.')
+      this.assertTransitionCurrent()
       if (refreshed == null) {
         this.umpSyncStatus = 'not-found'
         return false
@@ -2566,6 +2569,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       }
 
       const root = this.rootPrimaryKey
+      if (this.statePersistence == null) {
+        this.currentUMPToken = refreshed
+        await this.setupRoot(root)
+        this.saveSnapshot()
+        this.umpSyncStatus = 'updated'
+        return true
+      }
       await this.UMPTokenInteractor.verifyToken?.(
         new ProtoWallet(new PrivateKey(root)),
         this.adminOriginator,
@@ -2585,13 +2595,14 @@ export class CWIStyleWalletManager implements WalletInterface {
           throw new WalletProfileUnavailableError()
         await this.activateProfile(activeId)
       } catch (error) {
-        this.currentUMPToken = currentToken
-        this.profiles = previousProfiles
-        this.rootPrivilegedKeyManager = previousRootManager
+        if (generation === this.stateGeneration) {
+          this.currentUMPToken = currentToken
+          this.profiles = previousProfiles
+          this.rootPrivilegedKeyManager = previousRootManager
+        }
         throw error
       }
-      if (this.statePersistence == null) this.saveSnapshot()
-      else await this.persistState()
+      await this.persistState()
       this.umpSyncStatus = 'updated'
       return true
     })
@@ -2614,6 +2625,9 @@ export class CWIStyleWalletManager implements WalletInterface {
    */
   destroy(): void {
     this.stateGeneration++
+    this.pendingUMPUpdate = undefined
+    this.statePersistencePending = false
+    this.umpSyncStatus = 'unknown'
     this.underlying = undefined
     this.rootPrivilegedKeyManager = undefined
     this.authenticated = false
@@ -2798,7 +2812,10 @@ export class CWIStyleWalletManager implements WalletInterface {
     return this.runStateTransition(async () => {
       if (!this.authenticated || this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null)
         throw new Error('Cannot switch profile: Wallet not authenticated or root keys missing.')
-      if (profileId.length !== 16 || profileId.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255))
+      if (
+        this.statePersistence != null &&
+        (profileId.length !== 16 || profileId.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255))
+      )
         throw new Error('Invalid wallet profile ID.')
       await this.activateProfile(profileId)
       await this.persistState()
@@ -3265,31 +3282,29 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   private umpActionCheckpoint(): UMPActionCheckpoint | undefined {
-    return this.pendingUMPUpdate == null
-      ? undefined
-      : {
-          operationId: this.pendingUMPUpdate.operationId,
-          onStarting: async () => {
-            this.assertTransitionCurrent()
-            const pending = this.pendingUMPUpdate
-            if (pending == null) throw new Error('Wallet update checkpoint is missing.')
-            this.pendingUMPUpdate = { ...pending, stage: 'submitting' }
-            try {
-              await this.statePersistence?.savePendingUpdate(this.pendingUMPUpdate)
-              this.assertTransitionCurrent()
-            } catch (error) {
-              this.pendingUMPUpdate = pending
-              throw error
-            }
-          },
-          onCompleted: async (transaction, outpoint) => {
-            const pending = this.pendingUMPUpdate
-            if (pending == null) throw new Error('Wallet update checkpoint is missing.')
-            this.pendingUMPUpdate = { ...pending, stage: 'signed', transaction, outpoint }
-            await this.statePersistence?.savePendingUpdate(this.pendingUMPUpdate)
-            this.assertTransitionCurrent()
-          }
+    const pending = this.pendingUMPUpdate
+    if (pending == null) return undefined
+    const generation = this.stateGeneration
+    return {
+      operationId: pending.operationId,
+      onStarting: async () => {
+        this.assertTransitionCurrent()
+        const submitting = { ...pending, stage: 'submitting' } as const
+        await this.statePersistence?.savePendingUpdate(submitting)
+        if (generation !== this.stateGeneration) {
+          // The signing call has not run, so teardown can retire this admission.
+          await this.statePersistence?.savePendingUpdate(null)
+          this.assertTransitionCurrent()
         }
+        this.pendingUMPUpdate = submitting
+      },
+      onCompleted: async (transaction, outpoint) => {
+        const signed = { ...pending, stage: 'signed', transaction, outpoint } as const
+        if (generation === this.stateGeneration) this.pendingUMPUpdate = signed
+        await this.statePersistence?.savePendingUpdate(signed)
+        this.assertTransitionCurrent()
+      }
+    }
   }
 
   /**

@@ -33,19 +33,22 @@ underlying wallet must retain its staged action so `sendWith` can release it
 after restart. Custom interactors opt in with `checkpointVersion: 1` and must
 await the signed checkpoint before any publication.
 
-After an interrupted update, authenticate or restore the original account,
-call `loadPendingUMPUpdate` with the retained checkpoint, then call
-`recoverPendingUMPUpdate`. Recovery verifies the exact successor or re-publishes
-the original transaction after checking its owner, fields, unique token output
-and predecessor input. A prepared checkpoint can be cleared before admission.
-A submitting checkpoint without a receipt requires reconciliation of the
-original wallet action. Resume an interrupted phone-number change after recovery
-to finalize its existing staged rotation.
+Funding and input checks run before the signing checkpoint. If planning fails,
+the manager can clear the prepared update. Destroying the manager clears its
+in-memory session. The host retains the durable checkpoint for that account.
+
+After an interrupted update, authenticate or restore the original account, then
+load its retained checkpoint with `loadPendingUMPUpdate` before serving wallet
+requests. Call `recoverPendingUMPUpdate` to verify the exact successor or
+re-publish the original transaction after checking its owner, fields, unique
+token output and predecessor input. A submitting checkpoint without a receipt
+requires reconciliation of the original wallet action. Resume an interrupted
+phone-number change after recovery to finalize its existing staged rotation.
 
 `syncUMPToken()` retains its boolean return. `getUMPTokenSyncStatus()` additionally
 distinguishes unchanged, updated, authoritative not-found and unknown results.
-Refresh verifies the discovered owner where the interactor supports it, rebuilds
-the selected runtime and persists through the attached store. An unavailable
+With an attached store, refresh verifies the discovered owner where the
+interactor supports it, rebuilds the selected runtime and persists the result. An unavailable
 selected profile requires an explicit choice; it does not silently activate the
 default. Lookup errors preserve prior state. Applications may retain offline reads
 from a committed cache, but should block new UMP mutations without a verified

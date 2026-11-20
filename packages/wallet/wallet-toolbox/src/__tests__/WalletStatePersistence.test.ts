@@ -53,6 +53,7 @@ const deferred = <T>() => {
 }
 async function fixture(options?: {
   rootValue?: number
+  attachPersistence?: boolean
   wab?: ConstructorParameters<typeof WalletAuthenticationManager>[5]
 }) {
   let visible: UMPToken | undefined
@@ -106,7 +107,7 @@ async function fixture(options?: {
       pending = value == null ? null : (JSON.parse(JSON.stringify(value)) as PendingUMPUpdate)
     })
   }
-  manager.setStatePersistence(persistence)
+  if (options?.attachPersistence !== false) manager.setStatePersistence(persistence)
   return {
     manager,
     state,
@@ -343,6 +344,20 @@ describe('awaited wallet state continuity', () => {
     await expect(f.manager.syncUMPToken()).rejects.toThrow('Choose a profile explicitly')
     expect(f.manager.listProfiles().find(profile => profile.active)?.id).toEqual(id)
   })
+  test('legacy refresh keeps its single lookup and the current wallet instance', async () => {
+    const f = await fixture({ attachPersistence: false })
+    const next = { ...f.state.currentUMPToken, currentOutpoint: nextOutpoint }
+    const lookup = jest.fn(async () => next)
+    f.interactor.findByPresentationKeyHash = lookup
+    f.interactor.verifyToken = jest.fn(async () => {
+      throw new Error('unexpected extra lookup')
+    })
+    await expect(f.manager.syncUMPToken()).resolves.toBe(true)
+    expect(lookup).toHaveBeenCalledWith(next.presentationHash)
+    expect(f.interactor.verifyToken).not.toHaveBeenCalled()
+    expect(f.builder).toHaveBeenCalledTimes(1)
+    expect(f.state.currentUMPToken.currentOutpoint).toBe(nextOutpoint)
+  })
   test('destroy during reconciliation cannot restore the old account after lookup returns', async () => {
     const f = await fixture()
     f.failSave(true)
@@ -412,6 +427,30 @@ describe('awaited wallet state continuity', () => {
     expect(f.saved).toBeUndefined()
     expect(f.manager.authenticated).toBe(false)
   })
+  test('a signature returned after destroy is retained without releasing the old session', async () => {
+    const f = await fixture()
+    const entered = deferred<void>()
+    const release = deferred<void>()
+    const broadcast = jest.fn()
+    f.publish.mockImplementationOnce(async (_wallet, _admin, _token, _old, checkpoint) => {
+      await checkpoint!.onStarting?.()
+      entered.resolve()
+      await release.promise
+      await checkpoint!.onCompleted([1], nextOutpoint)
+      broadcast()
+      return nextOutpoint
+    })
+    const update = f.manager.addProfile('Work')
+    await entered.promise
+    f.manager.destroy()
+    release.resolve()
+    await expect(update).rejects.toThrow('session changed')
+    expect(broadcast).not.toHaveBeenCalled()
+    expect(f.pending).toMatchObject({ stage: 'signed', outpoint: nextOutpoint })
+    const other = await fixture({ rootValue: 8 })
+    await expect(f.manager.loadSnapshot(other.manager.saveSnapshot())).resolves.toBeUndefined()
+    expect(() => f.manager.loadPendingUMPUpdate(f.pending!)).toThrow('another account')
+  })
   test('unchanged and absent verified lookups remain distinguishable and local save retry never publishes', async () => {
     const f = await fixture()
     expect(f.manager.getUMPTokenSyncStatus()).toBe('unknown')
@@ -436,11 +475,16 @@ describe('awaited wallet state continuity', () => {
     f.failSave(true)
     await expect(f.manager.addProfile('Work')).rejects.toThrow()
     const checkpoint = f.pending!
-    const other = await fixture()
-    other.manager.destroy()
+    const other = await fixture({ rootValue: 8 })
     expect(() => other.manager.loadPendingUMPUpdate(checkpoint)).toThrow('another account')
     f.manager.destroy()
-    await expect(f.manager.recoverPendingUMPUpdate()).rejects.toThrow()
+    await expect(f.manager.recoverPendingUMPUpdate()).resolves.toBeUndefined()
+    f.failSave(false)
+    await f.manager.loadSnapshot(checkpoint.previousSnapshot)
+    f.manager.loadPendingUMPUpdate(checkpoint)
+    await f.manager.recoverPendingUMPUpdate()
+    expect(f.pending).toBeNull()
+    expect(f.publish).toHaveBeenCalledTimes(1)
     expect(f.republish).not.toHaveBeenCalled()
   })
   test('prepared-only intent can be retired without publication, while an incomplete signed protocol remains pending', async () => {
@@ -622,12 +666,9 @@ describe('original signed UMP checkpoint binding', () => {
     })
     await f.subject.buildAndSend(f.wallet as WalletInterface, 'admin.invalid', f.nextToken, undefined, {
       operationId: f.checkpoint.operationId,
-      onStarting: async () => {
-        events.push('starting')
-      },
       onCompleted: completed
     })
-    expect(events).toEqual(['starting', 'completed', 'broadcast'])
+    expect(events).toEqual(['completed', 'broadcast'])
     f.transaction.outputs.push(f.transaction.outputs[0])
     await expect(
       f.subject.buildAndSend(f.wallet as WalletInterface, 'admin.invalid', f.nextToken, undefined, {
@@ -664,12 +705,21 @@ describe('original signed UMP checkpoint binding', () => {
     const onCompleted = jest.fn(async () => {
       throw new Error('disk full')
     })
-    const checkpoint = { operationId: f.checkpoint.operationId, onCompleted }
+    const onStarting = jest.fn(async () => {
+      events.push('admitted')
+    })
+    const checkpoint = { operationId: f.checkpoint.operationId, onStarting, onCompleted }
+    createAction.mockRejectedValueOnce(new Error('insufficient funds'))
+    await expect(
+      f.subject.buildAndSend(wallet, 'admin.invalid', f.nextToken, f.sourceToken, checkpoint)
+    ).rejects.toThrow('insufficient funds')
+    expect(onStarting).not.toHaveBeenCalled()
+    expect(signAction).not.toHaveBeenCalled()
 
     await expect(
       f.subject.buildAndSend(wallet, 'admin.invalid', f.nextToken, f.sourceToken, checkpoint)
     ).rejects.toThrow('disk full')
-    expect(events).toEqual(['sign only'])
+    expect(events).toEqual(['admitted', 'sign only'])
     expect(f.broadcast).not.toHaveBeenCalled()
 
     onCompleted.mockImplementationOnce(async () => {
@@ -682,7 +732,15 @@ describe('original signed UMP checkpoint binding', () => {
     await expect(f.subject.buildAndSend(wallet, 'admin.invalid', f.nextToken, f.sourceToken, checkpoint)).resolves.toBe(
       f.outpoint
     )
-    expect(events).toEqual(['sign only', 'sign only', 'durable receipt', 'wallet broadcast', 'overlay broadcast'])
+    expect(events).toEqual([
+      'admitted',
+      'sign only',
+      'admitted',
+      'sign only',
+      'durable receipt',
+      'wallet broadcast',
+      'overlay broadcast'
+    ])
   })
   test('re-publishes the identical authenticated transaction without creating another action', async () => {
     const f = await signedFixture()
