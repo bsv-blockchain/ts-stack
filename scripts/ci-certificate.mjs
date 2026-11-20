@@ -12,6 +12,7 @@ const query = `query($number: Int!, $endCursor: String) {
   repository(owner: "bsv-blockchain", name: "ts-stack") {
     pullRequest(number: $number) {
       state headRefOid baseRefOid
+      author { login ... on User { databaseId } }
       comments(first: 100, after: $endCursor) {
         nodes { body lastEditedAt isMinimized author { login ... on User { databaseId } } }
         pageInfo { hasNextPage endCursor }
@@ -24,24 +25,33 @@ export function certificateText(head) {
   return `CI Certificate: I ran the full comparable test suite locally for ${head} using its lockfile, and it passed.`
 }
 
+function isMaintainer(actor) {
+  const id = maintainers.get(actor?.login)
+  return id != null && id === actor.databaseId
+}
+
 export function findCertificate(pages, base, head) {
   if (!sha.test(base ?? '') || !sha.test(head ?? '') || !Array.isArray(pages) || !pages.length)
     return undefined
   const prs = pages.map(page => page?.data?.repository?.pullRequest)
-  if (prs.some(pr => pr?.state !== 'OPEN' || pr.baseRefOid !== base || pr.headRefOid !== head))
+  if (
+    prs.some(
+      pr =>
+        pr?.state !== 'OPEN' ||
+        pr.baseRefOid !== base ||
+        pr.headRefOid !== head ||
+        !isMaintainer(pr.author)
+    )
+  )
     return undefined
   const comments = prs.flatMap(pr => pr.comments?.nodes ?? [])
-  return comments.find(comment => {
-    const author = comment?.author
-    return (
-      author != null &&
-      maintainers.has(author.login) &&
-      maintainers.get(author.login) === author.databaseId &&
+  return comments.find(
+    comment =>
+      isMaintainer(comment?.author) &&
       comment.lastEditedAt === null &&
       comment.isMinimized === false &&
       comment.body?.trim() === certificateText(head)
-    )
-  })
+  )
 }
 
 function detectCertificate({

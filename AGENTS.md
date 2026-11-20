@@ -144,10 +144,11 @@ required.
 
 ### Maintainer CI certificate
 
-`sirdeggen`, `ty-everett`, and `BraydenLangley` may attest that the full
-comparable test suite passed on their own hardware. Run it with the locked
-dependencies for the exact commit. Use the hosted path if local coverage,
-platform tests, or other selected tests cannot be reproduced locally.
+For PRs opened by `sirdeggen`, `ty-everett`, or `BraydenLangley`, start with
+local qualification. One working Node version is sufficient for the full
+comparable test suite. Run it with the locked dependencies for the exact
+commit. Use the hosted path if local coverage, platform tests, or other
+selected tests cannot be completed locally.
 
 Post the following PR comment from the authenticated maintainer account.
 Replace `<commit>` with the full SHA of the tested checkout.
@@ -158,9 +159,10 @@ CI Certificate: I ran the full comparable test suite locally for <commit> using 
 
 CI reads the certificate when it selects the test matrix. Add it before that
 step or rerun CI after posting it. The verifier uses the trusted base branch,
-checks the maintainer identity against GitHub, and requires the hosted checkout
-to match the attested tree. Edit-free comments qualify. Post a fresh certificate
-after an update to the tested commit.
+checks that GitHub identifies both the PR author and the certificate issuer as
+named maintainers, and requires the hosted checkout to match the attested
+tree. Edit-free comments qualify. Post a fresh certificate after an update
+to the tested commit.
 
 With a valid certificate, CI skips the hosted PR test and coverage matrix.
 Hosted Sonar, CodeQL, dependency review, build and artifact checks, and

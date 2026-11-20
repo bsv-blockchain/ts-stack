@@ -11,6 +11,7 @@ const page = (nodes, pullRequest = {}) => ({
     repository: {
       pullRequest: {
         state: 'OPEN',
+        author,
         baseRefOid: base,
         headRefOid: head,
         comments: { nodes },
@@ -58,4 +59,13 @@ test('requires current branch and base, and falls back when comment evidence is 
     undefined
   )
   assert.equal(findCertificate([page([certificate]), {}], base, head), undefined)
+})
+
+test('a contributor PR uses hosted tests even with a maintainer comment', () => {
+  const contributor = { login: 'other-user', databaseId: 999 }
+  assert.equal(
+    findCertificate([page([certificate], { author: contributor })], base, head),
+    undefined
+  )
+  assert.equal(findCertificate([page([certificate], { author: null })], base, head), undefined)
 })

@@ -722,7 +722,7 @@ jobs:
 
   standard-tests:
     name: Tests / non-coverage packages
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -766,7 +766,7 @@ jobs:
 
   dependent-tests:
     name: Tests / affected ${{ matrix.application && 'application' || 'dependents' }} (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -842,7 +842,7 @@ jobs:
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
@@ -907,7 +907,7 @@ jobs:
 
   wallet-browser-platform:
     name: Platform / wallet browser
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_client == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet_client == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -941,7 +941,7 @@ jobs:
 
   wallet-mobile-platform:
     name: Platform / wallet mobile
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet_mobile == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet_mobile == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -980,7 +980,7 @@ jobs:
 
   coverage-sdk:
     name: Coverage / SDK (${{ matrix.shard }}/2)
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1038,8 +1038,7 @@ jobs:
   coverage-sdk-thresholds:
     name: Coverage / SDK thresholds
     if: >-
-      needs.prepare.outputs.local-ci-certified != 'true' &&
-      always() && !cancelled() && needs.prepare.result == 'success' &&
+      always() && !cancelled() && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.result == 'success' &&
       needs.prepare.outputs.sdk == 'true' && needs.coverage-sdk.result == 'success'
     needs:
       - prepare
@@ -1069,7 +1068,7 @@ jobs:
 
   sdk-browser-contract:
     name: Platform / SDK browser contract
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1107,7 +1106,7 @@ jobs:
 
   coverage-did:
     name: Coverage / DID
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.did == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.did == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1142,7 +1141,7 @@ jobs:
 
   coverage-wallet:
     name: Coverage / wallet-toolbox (${{ matrix.id }})
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-24.04-arm
     # Keep both original COMPLETED cases together, each with its finite bound.
@@ -1405,7 +1404,7 @@ jobs:
 
   coverage-wallet-monitor:
     name: Coverage / wallet-toolbox monitor
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -1450,7 +1449,7 @@ jobs:
 
   coverage-verifast:
     name: Coverage / VeriFast
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.verifast == 'true'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.verifast == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1502,7 +1501,7 @@ jobs:
 
   coverage-other:
     name: Coverage / ${{ matrix.application && 'application state' || 'other affected packages' }} (${{ matrix.shard }}/${{ matrix.total }})
-    if: always() && needs.prepare.outputs.local-ci-certified != 'true' && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.local-ci-certified != 'true' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
     runs-on: ubuntu-22.04
