@@ -2,12 +2,15 @@ import {
   BigNumber,
   CachedKeyDeriver,
   Curve,
+  Hash,
   Point,
   PrivateKey,
+  Utils,
   type GetPublicKeyArgs,
   type PubKeyHex
 } from '@bsv/sdk'
 import { jest } from '@jest/globals'
+import { hkdfSync } from 'node:crypto'
 import { createEcpmModule, EcpmPermissionModule } from '../index.js'
 
 const curve = new Curve()
@@ -73,7 +76,7 @@ describe('EcpmPermissionModule', () => {
     })
   })
 
-  it('agrees with direct multiplication by the canonical module-derived key', async () => {
+  it('multiplies by the HKDF hash of the canonical key, never the key itself', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(19))
     const module = new EcpmPermissionModule({ keyDeriver })
     const original = point(13)
@@ -82,14 +85,225 @@ describe('EcpmPermissionModule', () => {
       'deck mask',
       'self'
     )
-    const expected = curve.g
-      .mul(new BigNumber(13))
-      .mul(new BigNumber(derived.toHex(), 16))
-      .encode(true, 'hex')
+
+    // Node's independent RFC 5869 implementation avoids a shared HMAC error
+    // between the module and this assertion.
+    const okm = Buffer.from(
+      hkdfSync(
+        'sha256',
+        Buffer.from(derived.toArray('be', 32)),
+        Buffer.from('BRC-229 p ecpm scalar v1'),
+        Buffer.from('BRC-229 p ecpm scalar'),
+        48
+      )
+    )
+    const scalar = new BigNumber(Array.from(okm)).umod(curve.n.subn(1)).addn(1)
+    const basePoint = curve.g.mul(new BigNumber(13))
+    const expected = basePoint.mul(scalar).encode(true, 'hex')
 
     await expect(execute(module, requestArgs(original))).resolves.toEqual({
       publicKey: expected
     })
+
+    // Regression guard (BRC-229 root-secret disclosure): the result MUST NOT be
+    // the point multiplied by the raw BRC-42 child key. Returning a scalar
+    // linear in the child key is exactly what let a counterparty strip the
+    // offset and recover the wallet's root ECDH secret.
+    const rawKeyProduct = basePoint.mul(new BigNumber(derived.toHex(), 16)).encode(true, 'hex')
+    expect(expected).not.toBe(rawKeyProduct)
+  })
+
+  it('does not disclose the root ECDH secret through a counterparty-point apply', async () => {
+    // Regression test for the BRC-229 root-secret disclosure. A caller sets the
+    // ECPM point to a third party's identity key Q and tries to strip the
+    // caller-computable BRC-42 offset `o` from the returned d·Q to recover
+    // root·Q = ECDH(root, Q) — the secret revealCounterpartyKeyLinkage guards.
+    // With the hashed scalar, the strip MUST fail.
+    const curveLocal = new Curve()
+    const root = new PrivateKey(123456789)
+    const identityPub = root.toPublicKey()
+    const keyDeriver = new CachedKeyDeriver(root)
+    const module = new EcpmPermissionModule({ keyDeriver })
+
+    const victim = new PrivateKey(987654321)
+    const Q = victim.toPublicKey()
+    const Qhex = Q.encode(true, 'hex') as PubKeyHex
+    const logical = 'mental poker deal'
+    const keyID = 'deck mask'
+
+    // counterparty 'anyone': shared secret is the wallet's own identity key, so
+    // the attacker can compute the offset from fully public data.
+    const applied = await execute(
+      module,
+      requestArgs(Qhex, 'apply', {
+        protocolID: [0, `p ecpm apply ${Qhex} ${logical}`],
+        keyID,
+        counterparty: 'anyone'
+      })
+    )
+    const dQ = Point.fromString(applied.publicKey)
+    const invoice = `0-p ecpm ${logical}-${keyID}`
+    const offset = new BigNumber(
+      Hash.sha256hmac(identityPub.encode(true), Utils.toArray(invoice, 'utf8'))
+    ).umod(curveLocal.n)
+    const stripped = dQ.add(Q.mul(offset).neg()).encode(true, 'hex')
+    const rootSecret = root.deriveSharedSecret(Q).encode(true, 'hex')
+
+    expect(stripped).not.toBe(rootSecret)
+  })
+
+  it('does not disclose the self ECDH secret through an identity-point apply', async () => {
+    const root = new PrivateKey(123456789)
+    const identityPub = root.toPublicKey()
+    const module = new EcpmPermissionModule({ keyDeriver: new CachedKeyDeriver(root) })
+    const invoice = '0-p ecpm mental poker deal-deck mask'
+    const offset = new BigNumber(
+      Hash.sha256hmac(identityPub.encode(true), Utils.toArray(invoice, 'utf8'))
+    ).umod(curve.n)
+    // The old linear scalar leaked root·identityPub, unlocking self-derived keys.
+    const selfApplied = await execute(
+      module,
+      requestArgs(identityPub.encode(true, 'hex') as PubKeyHex, 'apply', {
+        counterparty: 'anyone'
+      })
+    )
+    const strippedSelf = Point.fromString(selfApplied.publicKey)
+      .add(identityPub.mul(offset).neg())
+      .encode(true, 'hex')
+    expect(strippedSelf).not.toBe(root.deriveSharedSecret(identityPub).encode(true, 'hex'))
+  })
+
+  it('does not disclose a third-party ECDH secret through a caller-held counterparty', async () => {
+    const root = new PrivateKey(123456789)
+    const identityPub = root.toPublicKey()
+    const module = new EcpmPermissionModule({ keyDeriver: new CachedKeyDeriver(root) })
+    const Q = new PrivateKey(987654321).toPublicKey()
+    const Qhex = Q.encode(true, 'hex') as PubKeyHex
+    const invoice = '0-p ecpm mental poker deal-deck mask'
+    const caller = new PrivateKey(55555555)
+    const callerPub = caller.toPublicKey().encode(true, 'hex') as PubKeyHex
+    const callerApplied = await execute(
+      module,
+      requestArgs(Qhex, 'apply', { counterparty: callerPub })
+    )
+    const callerOffset = new BigNumber(
+      Hash.sha256hmac(
+        caller.deriveSharedSecret(identityPub).encode(true),
+        Utils.toArray(invoice, 'utf8')
+      )
+    ).umod(curve.n)
+    const strippedCaller = Point.fromString(callerApplied.publicKey)
+      .add(Q.mul(callerOffset).neg())
+      .encode(true, 'hex')
+    expect(strippedCaller).not.toBe(root.deriveSharedSecret(Q).encode(true, 'hex'))
+  })
+
+  it('confirms the leaked self secret would reproduce a BRC-2 symmetric key', () => {
+    const root = new PrivateKey(123456789)
+    const identity = root.toPublicKey()
+    const rootSelfSecret = root.deriveSharedSecret(identity)
+    const invoice = '2-private notes-thread 7'
+    const offset = new BigNumber(
+      Hash.sha256hmac(rootSelfSecret.encode(true), Utils.toArray(invoice, 'utf8'))
+    ).umod(curve.n)
+    // (root + offset)^2 · G = root^2 · G + 2·offset·root·G + offset^2 · G.
+    // Every term on the right is known once root·identity leaks.
+    const attackerPoint = rootSelfSecret
+      .add(identity.mul(offset.muln(2).umod(curve.n)))
+      .add(curve.g.mul(offset.mul(offset).umod(curve.n)))
+    const actual = new CachedKeyDeriver(root).deriveSymmetricKey(
+      [2, 'private notes'],
+      'thread 7',
+      'self'
+    )
+    expect(attackerPoint.isInfinity()).toBe(false)
+    expect(attackerPoint.x?.toString(16)).toBe(actual.toString(16))
+  })
+
+  it('matches the fixed BRC-229 vectors for self and named counterparties', async () => {
+    const rootA = new PrivateKey(2)
+    const rootB = new PrivateKey(3)
+    const moduleA = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(rootA),
+      authorize: async () => true
+    })
+    const moduleB = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(rootB),
+      authorize: async () => true
+    })
+    const p = point(5)
+    const args = requestArgs(p, 'apply', {
+      protocolID: [2, `p ecpm apply ${p} mental poker deal`],
+      keyID: 'deck mask 1'
+    })
+    const a = await execute(moduleA, args)
+    const b = await execute(moduleB, args)
+    const named = await execute(moduleA, {
+      ...args,
+      counterparty: rootB.toPublicKey().encode(true, 'hex') as PubKeyHex
+    })
+
+    for (const [root, counterparty, childHex, scalarHex] of [
+      [
+        rootA,
+        'self',
+        '0d7da380de7459582c600748e94539c408742f9d4f21153473ba2c1cb812a984',
+        '4b666fc0dbfb9f8dfc04f0e996fa412a7d5ca159fef7ad70fe1a02a20bdf371c'
+      ],
+      [
+        rootB,
+        'self',
+        'd205df1fd5f36ed688c66dda212d1178b87e11cad37469a98c7b3edd690f2b3b',
+        'e0bcd184befaa45976ba562bec0f2b7f23652babd7e6df48d2a1bbb89512838d'
+      ],
+      [
+        rootA,
+        rootB.toPublicKey().encode(true, 'hex') as PubKeyHex,
+        'c3dd11d61386d969ff40e150e3039eeab9bda24ffa13936eac29d0347ec5104b',
+        '00a16e916d8154a31be41c6ed274523928c1017cd3220d6fc87e219093f93f5d'
+      ]
+    ] as const) {
+      const child = new CachedKeyDeriver(root).derivePrivateKey(
+        [2, 'p ecpm mental poker deal'],
+        'deck mask 1',
+        counterparty
+      )
+      expect(child.toHex().padStart(64, '0')).toBe(childHex)
+      const okm = Buffer.from(
+        hkdfSync(
+          'sha256',
+          Buffer.from(childHex, 'hex'),
+          Buffer.from('BRC-229 p ecpm scalar v1'),
+          Buffer.from('BRC-229 p ecpm scalar'),
+          48
+        )
+      )
+      expect(
+        new BigNumber(Array.from(okm)).umod(curve.n.subn(1)).addn(1).toString(16).padStart(64, '0')
+      ).toBe(scalarHex)
+    }
+
+    expect(a.publicKey).toBe('0278097c25918218a40191a6601fade23b1e1ff048c8bec5f1b6290b037035a38d')
+    expect(b.publicKey).toBe('0365203be12d49a64bfabc8ff5456149941e606c2ebb823e79b3778f177966bd7f')
+    expect(named.publicKey).toBe(
+      '030d76dcef1ef74ff55d4b90f7c1ddb86467731f62c8d82e9f3b4ad8753597beb7'
+    )
+    expect(
+      (
+        await execute(moduleB, {
+          ...args,
+          protocolID: [2, `p ecpm apply ${a.publicKey} mental poker deal`]
+        })
+      ).publicKey
+    ).toBe('020df70d013bf54db58a7e88b1750febde4f1285d53846876c7f3a6d482db7148d')
+    expect(
+      (
+        await execute(moduleA, {
+          ...args,
+          protocolID: [2, `p ecpm remove ${a.publicKey} mental poker deal`]
+        })
+      ).publicKey
+    ).toBe(p)
   })
 
   it('accepts the inclusive protocol, key, reason, TTL, and counterparty boundaries', async () => {
