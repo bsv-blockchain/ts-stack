@@ -44,7 +44,7 @@ export function validateCiResults(needs, event) {
       )
     }
   }
-  const output = (job, key, type) => {
+  const output = (job, key, type, fallback = true) => {
     const raw = needs[job]?.outputs?.[key]
     try {
       const value = JSON.parse(raw)
@@ -53,7 +53,7 @@ export function validateCiResults(needs, event) {
       return type === 'array' ? value.length > 0 : value
     } catch {
       errors.push(`${job}.${key}: missing or invalid ${type} scope`)
-      return true
+      return fallback
     }
   }
   for (const name of [
@@ -68,6 +68,9 @@ export function validateCiResults(needs, event) {
   ]) {
     expectResult(name, true)
   }
+  const localCertificate = output('scope', 'local-ci-certified', 'boolean', false)
+  if (localCertificate && event !== 'pull_request')
+    errors.push('Local CI certificates apply only to pull requests')
   for (const [name, key, type] of [
     ['standard-tests', 'standard-packages', 'array'],
     ['dependent-tests', 'dependent-test-packages', 'array'],
@@ -84,7 +87,8 @@ export function validateCiResults(needs, event) {
     ['coverage-other', 'coverage-other-packages', 'array'],
     ['coverage-upload', 'coverage-required', 'boolean']
   ]) {
-    expectResult(name, output('prepare', key, type))
+    const selected = output('prepare', key, type)
+    expectResult(name, selected && !(localCertificate && event === 'pull_request'))
   }
   expectResult('infra', output('infra-scope', 'has-infra', 'boolean'))
   expectResult('docs-validate', output('scope', 'docs', 'boolean'))
