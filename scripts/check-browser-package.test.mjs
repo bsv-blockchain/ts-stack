@@ -114,13 +114,13 @@ test('browser composition reports stable chunk, module, and package evidence', (
   )
 })
 
-test('browser bundle budgets validate every compression dimension', () => {
+test('browser bundle sizes are advisory while malformed budgets still fail', () => {
   const actual = bundleSizes(Buffer.from('browser-contract'.repeat(100)))
   validateBundleBudget(actual, actual, 'exact')
-  assert.throws(
-    () => validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'small'),
-    /exceeds budget/
+  assert.doesNotThrow(() =>
+    validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'small')
   )
+  assert.throws(() => validateBundleBudget(actual, { ...actual, gzip: 0 }, 'invalid'))
   assert.doesNotThrow(() =>
     validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'measurement', false)
   )

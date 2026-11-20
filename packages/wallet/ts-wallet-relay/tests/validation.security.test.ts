@@ -72,6 +72,26 @@ describe('wallet relay untrusted-data boundaries', () => {
     )
   })
 
+  it('keeps a valid QR pairing tuple from the session lookup and rejects a malformed one', () => {
+    const protocolID = JSON.stringify(PROTOCOL_ID)
+    expect(
+      validateSessionInfo({
+        sessionId: SESSION_ID,
+        status: 'pending',
+        topic: SESSION_ID,
+        protocolID
+      })
+    ).toEqual({ sessionId: SESSION_ID, status: 'pending', topic: SESSION_ID, protocolID })
+    expect(() =>
+      validateSessionInfo({ sessionId: SESSION_ID, status: 'pending', topic: 'not a topic' })
+    ).toThrow(/session response topic/)
+    for (const bad of [42, 'not json', '[0]', '[9,"mobile wallet session"]']) {
+      expect(() =>
+        validateSessionInfo({ sessionId: SESSION_ID, status: 'pending', protocolID: bad })
+      ).toThrow(/session response protocolID/)
+    }
+  })
+
   it('rejects executable pairing links and non-PNG session artwork', () => {
     for (const scheme of ['javascript', 'vbscript']) {
       expect(() =>

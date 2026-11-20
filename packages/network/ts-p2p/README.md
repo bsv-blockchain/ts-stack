@@ -529,7 +529,7 @@ For questions, bug reports, or feature requests:
 
 ## License
 
-TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party changes are under the [Apache License 2.0](./LICENSE).
 The recovered pre-monorepo MIT notice is retained in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 

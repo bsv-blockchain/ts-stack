@@ -71,11 +71,13 @@ export async function acquisitionNativeWalletFixture(
   actionBatchMode: 'auto' | 'legacy' = 'legacy'
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'acquisition-wallet-native-'))
+  const opening = new Set<Promise<unknown>>()
   const opened = new Set<() => Promise<void>>()
+  let closing: Promise<void> | undefined
   const broadcast: () => Promise<never> = jest.fn(() =>
     Promise.reject(new Error('Synthetic fixture cannot broadcast'))
   )
-  async function open(create = false) {
+  async function openWallet(create: boolean) {
     const knex = openKnex({
       client: 'better-sqlite3',
       connection: { filename: join(directory, 'wallet.db') },
@@ -225,7 +227,18 @@ export async function acquisitionNativeWalletFixture(
       withSyntheticPublication
     }
   }
-  const close = async () => {
+  async function open(create = false) {
+    if (closing) throw new Error('Native acquisition wallet fixture is closing or closed')
+    const pending = openWallet(create)
+    opening.add(pending)
+    try {
+      return await pending
+    } finally {
+      opening.delete(pending)
+    }
+  }
+  async function closeWallets() {
+    await Promise.allSettled(opening)
     await Array.from(opened).reduce(
       (sequence, closeWallet) =>
         sequence.then(async () => {
@@ -235,6 +248,10 @@ export async function acquisitionNativeWalletFixture(
     )
     rmSync(directory, { recursive: true, force: true })
     cleanup.delete(close)
+  }
+  function close() {
+    closing ??= closeWallets()
+    return closing
   }
   cleanup.add(close)
   return { native: await open(true), open, close, broadcast }

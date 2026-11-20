@@ -1,0 +1,41 @@
+{
+  "provenance": "Public test data: hash-wasm 4.12.0 Argon2id, Node.js AES-256-GCM; fixed salt/nonce; legacy KDF parameters 2 iterations, 1024 KiB, parallelism 1; not encryption defaults.",
+  "password": "packed public fixture é",
+  "keyHex": "4bffd5d69215b0a2c0356231b3372ee05cb781ac89748eb250528ea54afad67e",
+  "ciphertextBase64": "V0RBVAEBJgEAICAAAAACAAAEAAEgAAAAAAAAAAAAAAAAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QFok9XmDKlfiFxXC3jDUlH5pufxBT5mGEEv4zeq3529xNQCFEc7SzzQK5EYQm9R1sgRJ6bZznCzaMBrNA8y/hg0M2BxChiFGhr5n9EWXL1JZ8/hjIYkoQpqgK5TA/8q6g5+nJ3hdOjNrm8FUEV5TPQiRgnXJ8S0g8DZHUKC0g+nCBDzB+BaLEB8AAwcUnUGEmwKburx5X3UBDJmH71OWyYy7CF3CsnQl/z0jo14kCNxfQ4a+9Johp84czqYHTPH0n2Jdllk1CQ9/QFW1VntoU6mj8or6hKKIVDBZLGn+KA/3ejmLoN8mdD//TAljpQfbjcq5BfxErSNDeBajq/4/kvFXMt2AT+HOaGwpzDOEnOBkK2CGFqhN0VEIpNFjrZIgjyOzVryHANZ9kzFmeJ6DreeL+eUuZ4qzaaUb5dovYabXRVljRAYFNU5+mZyXhBQhjVlA7g0nXvRF3B2Z/lo0OTYMkG5pZ3BC+iZ5uzA/17j0/jY1PbR92ta/ZAmu+WqpFrBWRut3ebbZ+ApQYOWPf8ToFVhgJvK1SHq6lJvgvvZFK4H11QkWHVnb/fo1wT4L8+Nb35VORJcRYcAPfePigcbjheuqsB47G/TfXFYshe9L5dYf+p9kCrmVua4Xx9NESelx//ts7Vep4THRIrfyWXvoj0u/MLX9kkw0gesRDtSuyU7RSYS76nv2pNA0Gg1X4tuq9pakckG3nlgJ+dllDKXcuCWV38y0QpGgty97knEbO8/kxOdJgGKILH6LAUYiNNJa+fI2+sSpzUK9Q0vYlhxaYGmdPwW+7sSYnY8q2PC/fH1gsZFxIqHB1H7dGZGHMMoqKImoOvZEy/wXDDoMmxUkp4UtQrkTz6ba2fc+8A3EE1cj1XqYhQWjfbko",
+  "document": {
+    "brc": 38,
+    "title": "User Wallet Data Format",
+    "formatVersion": 1,
+    "exportedAt": "2026-10-03T00:00:00.000Z",
+    "sourceStorage": {
+      "created_at": "2026-10-03T00:00:00.000Z",
+      "updated_at": "2026-10-03T00:00:00.000Z",
+      "storageIdentityKey": "source",
+      "storageName": "source",
+      "chain": "test"
+    },
+    "user": {
+      "created_at": "2026-10-03T00:00:00.000Z",
+      "updated_at": "2026-10-03T00:00:00.000Z",
+      "userId": 1,
+      "identityKey": "identity",
+      "activeStorage": "source"
+    },
+    "tables": {
+      "provenTxs": [],
+      "provenTxReqs": [],
+      "outputBaskets": [],
+      "transactions": [],
+      "commissions": [],
+      "outputs": [],
+      "outputTags": [],
+      "outputTagMaps": [],
+      "txLabels": [],
+      "txLabelMaps": [],
+      "certificates": [],
+      "certificateFields": [],
+      "syncStates": []
+    }
+  }
+}

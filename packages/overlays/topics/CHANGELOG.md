@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.0.4`: remove the fixed KVStore tag-query count cap for `all` and `any`
+  filters. Paired with SDK4.1.1, admission and history accept larger tag sets.
+  Preserve every stored tag, all per-tag/cryptographic checks, and other topics'
+  query limits. No KVStore token or database migration is required.
+
 - Prepare `2.0.3` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 - Prepare `2.0.2` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
