@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { knex, type Knex } from 'knex'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -30,8 +31,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 let db: Knex
@@ -125,103 +124,106 @@ async function begin(): Promise<SnapshotJournalDestinationCheckpoint> {
   return await db.transaction(async trx => await beginSnapshotJournalDestinationWindow(trx, binding, sessionId))
 }
 
-test('generated source history independently predicts acknowledged identity, aliasing and rollback', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.array(
-        fc.record({
-          id: fc.integer({ min: 1, max: 3 }),
-          table: fc.constantFrom(4 as const, 5 as const),
-          replace: fc.boolean(),
-          rename: fc.boolean(),
-          proposedLocalId: fc.integer({ min: 100, max: 110 })
-        }),
-        { minLength: 1, maxLength: 6 }
-      ),
-      async history => {
-        const model = new Map<
-          string,
-          {
-            tableId: 4 | 5
-            incomingId: number
-            generation: number
-            identity: string
-            localId: number
-          }
-        >()
-        await expect(
-          db.transaction(async trx => {
-            for (const event of history) {
-              const modelKey = event.table + ':' + event.id
-              const old = model.get(modelKey)
-              const generation = old === undefined ? 1 : old.generation + (event.replace ? 1 : 0)
-              const identity = (event.rename ? 'b' : 'a').repeat(64)
-              const unchanged = old !== undefined && old.generation === generation && old.identity === identity
-              const desired = unchanged ? old.localId : event.proposedLocalId
-              const request: SnapshotJournalIdentityReference = {
-                tableId: event.table,
-                incomingId: event.id,
-                generation: snapshotJournalRevision(String(generation)),
-                naturalIdentity: identity,
-                required: unchanged
-              }
-              const actual = await prepareSnapshotJournalIdentityLedger(trx, binding, state, [request], {
-                maximumMappings: 8
-              })
-              expect(actual.associations.get(modelKey)).toEqual(
-                unchanged
-                  ? {
-                      generation: String(old.generation),
-                      naturalIdentity: old.identity,
-                      localId: old.localId
-                    }
-                  : undefined
-              )
-              expect(actual.previous.get(modelKey)).toEqual(
-                old !== undefined && !unchanged
-                  ? {
-                      generation: String(old.generation),
-                      naturalIdentity: old.identity,
-                      localId: old.localId
-                    }
-                  : undefined
-              )
-              await actual.persist(new Map([[modelKey, desired]]))
-              model.set(modelKey, {
-                tableId: event.table,
-                incomingId: event.id,
-                generation,
-                identity,
-                localId: desired
-              })
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated source history independently predicts acknowledged identity, aliasing and rollback (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            id: fc.integer({ min: 1, max: 3 }),
+            table: fc.constantFrom(4 as const, 5 as const),
+            replace: fc.boolean(),
+            rename: fc.boolean(),
+            proposedLocalId: fc.integer({ min: 100, max: 110 })
+          }),
+          { minLength: 1, maxLength: 6 }
+        ),
+        async history => {
+          const model = new Map<
+            string,
+            {
+              tableId: 4 | 5
+              incomingId: number
+              generation: number
+              identity: string
+              localId: number
             }
-            const expectedRows = [...model.values()]
-              .map(row => ({
-                tableId: row.tableId,
-                incomingId: row.incomingId,
-                generation: String(row.generation),
-                naturalIdentity: row.identity,
-                localId: row.localId
-              }))
-              .sort((a, b) => a.tableId - b.tableId || a.incomingId - b.incomingId)
-            expect(
-              await trx('snapshot_reconciliation_identity_maps')
-                .select('tableId', 'incomingId', 'generation', 'naturalIdentity', 'localId')
-                .orderBy(['tableId', 'incomingId'])
-            ).toEqual(expectedRows)
-            expect(await trx('snapshot_reconciliation_identity_budgets').select('mappings')).toEqual([
-              { mappings: model.size }
-            ])
-            throw new Error('generated identity rollback')
-          })
-        ).rejects.toThrow('generated identity rollback')
-        expect(await db('snapshot_reconciliation_identity_maps').select('incomingId')).toEqual([])
-        expect(await db('snapshot_reconciliation_identity_budgets').select('mappings')).toEqual([])
-        expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
-          state
-        )
-      }
-    ),
-    controls
-  )
-})
+          >()
+          await expect(
+            db.transaction(async trx => {
+              for (const event of history) {
+                const modelKey = event.table + ':' + event.id
+                const old = model.get(modelKey)
+                const generation = old === undefined ? 1 : old.generation + (event.replace ? 1 : 0)
+                const identity = (event.rename ? 'b' : 'a').repeat(64)
+                const unchanged = old !== undefined && old.generation === generation && old.identity === identity
+                const desired = unchanged ? old.localId : event.proposedLocalId
+                const request: SnapshotJournalIdentityReference = {
+                  tableId: event.table,
+                  incomingId: event.id,
+                  generation: snapshotJournalRevision(String(generation)),
+                  naturalIdentity: identity,
+                  required: unchanged
+                }
+                const actual = await prepareSnapshotJournalIdentityLedger(trx, binding, state, [request], {
+                  maximumMappings: 8
+                })
+                expect(actual.associations.get(modelKey)).toEqual(
+                  unchanged
+                    ? {
+                        generation: String(old.generation),
+                        naturalIdentity: old.identity,
+                        localId: old.localId
+                      }
+                    : undefined
+                )
+                expect(actual.previous.get(modelKey)).toEqual(
+                  old !== undefined && !unchanged
+                    ? {
+                        generation: String(old.generation),
+                        naturalIdentity: old.identity,
+                        localId: old.localId
+                      }
+                    : undefined
+                )
+                await actual.persist(new Map([[modelKey, desired]]))
+                model.set(modelKey, {
+                  tableId: event.table,
+                  incomingId: event.id,
+                  generation,
+                  identity,
+                  localId: desired
+                })
+              }
+              const expectedRows = [...model.values()]
+                .map(row => ({
+                  tableId: row.tableId,
+                  incomingId: row.incomingId,
+                  generation: String(row.generation),
+                  naturalIdentity: row.identity,
+                  localId: row.localId
+                }))
+                .sort((a, b) => a.tableId - b.tableId || a.incomingId - b.incomingId)
+              expect(
+                await trx('snapshot_reconciliation_identity_maps')
+                  .select('tableId', 'incomingId', 'generation', 'naturalIdentity', 'localId')
+                  .orderBy(['tableId', 'incomingId'])
+              ).toEqual(expectedRows)
+              expect(await trx('snapshot_reconciliation_identity_budgets').select('mappings')).toEqual([
+                { mappings: model.size }
+              ])
+              throw new Error('generated identity rollback')
+            })
+          ).rejects.toThrow('generated identity rollback')
+          expect(await db('snapshot_reconciliation_identity_maps').select('incomingId')).toEqual([])
+          expect(await db('snapshot_reconciliation_identity_budgets').select('mappings')).toEqual([])
+          expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
+            state
+          )
+        }
+      ),
+      propertyBatch
+    )
+  }
+)

@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { appendFile, stat } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -31,8 +32,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 const text = fc
@@ -178,267 +177,287 @@ afterEach(async () => {
   for (const directory of directories) await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
-test('generated bound admissions refuse before a real independent destination writer and preserve every durable charge', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom('binding', 'archive', 'preview', 'limits', 'expiry', 'count', 'destination'),
-      text,
-      fc.integer({ min: 1, max: 1000 }),
-      async (field, suffix, nonce) => {
-        const selected = { ...admission, scope: { ...admission.scope } }
-        if (field === 'binding') selected.scope.bindingSha256 = digest('binding' + suffix)
-        if (field === 'archive') selected.scope.archiveSha256 = digest('archive' + suffix)
-        if (field === 'preview') selected.previewId = randomUUID()
-        if (field === 'limits') selected.originalLimitsJson += ' '.repeat(nonce)
-        if (field === 'expiry') selected.expiresAt += nonce
-        if (field === 'count') selected.totalRows += nonce
-        if (field === 'destination') selected.initialDestinationSha256 = digest(suffix)
-        const writer = await target.writer.transaction()
-        try {
-          await writer('snapshot_journal_clock').update({ revision: writer.ref('revision') })
-          await expect(prepare(selected)).rejects.toThrow('differs')
-        } finally {
-          await writer.rollback()
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated bound admissions refuse before a real independent destination writer and preserve every durable charge (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('binding', 'archive', 'preview', 'limits', 'expiry', 'count', 'destination'),
+        text,
+        fc.integer({ min: 1, max: 1000 }),
+        async (field, suffix, nonce) => {
+          const selected = { ...admission, scope: { ...admission.scope } }
+          if (field === 'binding') selected.scope.bindingSha256 = digest('binding' + suffix)
+          if (field === 'archive') selected.scope.archiveSha256 = digest('archive' + suffix)
+          if (field === 'preview') selected.previewId = randomUUID()
+          if (field === 'limits') selected.originalLimitsJson += ' '.repeat(nonce)
+          if (field === 'expiry') selected.expiresAt += nonce
+          if (field === 'count') selected.totalRows += nonce
+          if (field === 'destination') selected.initialDestinationSha256 = digest(suffix)
+          const writer = await target.writer.transaction()
+          try {
+            await writer('snapshot_journal_clock').update({ revision: writer.ref('revision') })
+            await expect(prepare(selected)).rejects.toThrow('differs')
+          } finally {
+            await writer.rollback()
+          }
+          expect(await state()).toEqual(before)
         }
-        expect(await state()).toEqual(before)
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated lost acknowledgement replays the actual native header and original provenance checkpoint without repeated writes (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    expect((await prepare()).state).toBe('PREPARED')
+    const raw = canonical(rawHeader),
+      pageSha256 = createHash('sha256')
+        .update(
+          JSON.stringify([
+            'brc38-prepared-import-page/v1',
+            admission.scope.importId,
+            admission.scope.bindingSha256,
+            admission.scope.archiveSha256,
+            admission.scope.userId,
+            admission.previewId,
+            0
+          ])
+        )
+        .update(raw)
+        .digest('hex'),
+      acknowledged = await restoreHeader(),
+      before = await state()
+    expect(acknowledged).toMatchObject({
+      state: 'COMMITTED',
+      sequence: 1,
+      nextRow: 1,
+      mappedIds: 0,
+      logicalBytes: 4096,
+      lastStep: { fromRow: 0, rows: 1, bytes: Buffer.byteLength(raw), mappedIds: 0, pageSha256 }
+    })
+    expect(before.users).toHaveLength(1)
+    expect(before.users[0]).toMatchObject({
+      userId: admission.scope.userId,
+      identityKey: staged.selected.binding.identityKey,
+      activeStorage: ''
+    })
+    expect(before.originals).toEqual([
+      {
+        ...admission.scope,
+        sourceRow: 0,
+        tableName: 'header',
+        originalJson: raw,
+        sha256: digest(raw),
+        logicalBytes: 512 + Buffer.byteLength(raw)
       }
-    ),
-    controls
-  )
-}, 180000)
-
-test('generated lost acknowledgement replays the actual native header and original provenance checkpoint without repeated writes', async () => {
-  await open()
-  expect((await prepare()).state).toBe('PREPARED')
-  const raw = canonical(rawHeader),
-    pageSha256 = createHash('sha256')
-      .update(
-        JSON.stringify([
-          'brc38-prepared-import-page/v1',
-          admission.scope.importId,
-          admission.scope.bindingSha256,
-          admission.scope.archiveSha256,
-          admission.scope.userId,
-          admission.previewId,
-          0
-        ])
-      )
-      .update(raw)
-      .digest('hex'),
-    acknowledged = await restoreHeader(),
-    before = await state()
-  expect(acknowledged).toMatchObject({
-    state: 'COMMITTED',
-    sequence: 1,
-    nextRow: 1,
-    mappedIds: 0,
-    logicalBytes: 4096,
-    lastStep: { fromRow: 0, rows: 1, bytes: Buffer.byteLength(raw), mappedIds: 0, pageSha256 }
-  })
-  expect(before.users).toHaveLength(1)
-  expect(before.users[0]).toMatchObject({
-    userId: admission.scope.userId,
-    identityKey: staged.selected.binding.identityKey,
-    activeStorage: ''
-  })
-  expect(before.originals).toEqual([
-    {
-      ...admission.scope,
-      sourceRow: 0,
-      tableName: 'header',
-      originalJson: raw,
-      sha256: digest(raw),
-      logicalBytes: 512 + Buffer.byteLength(raw)
-    }
-  ])
-  expect(before.budgets[0]).toMatchObject({ rows: 1, logicalBytes: 512 + Buffer.byteLength(raw) })
-  expect(before.journal[0].receiptJson).toBe(JSON.stringify(acknowledged))
-  expect(before.journal[0].receiptSha256).toBe(digest(JSON.stringify(acknowledged)))
-  await fc.assert(
-    fc.asyncProperty(text, fc.boolean(), async (suffix, wrapper) => {
-      const lost = new Error('Generated acknowledgement loss ' + suffix)
-      let repeated = 0
-      await expect(
-        (async () => {
-          const replay = wrapper
-            ? await restoreHeader()
-            : await commitBrc38PrivateImportPage(store(), target.storage, {
-                admission,
-                receiptPolicy: policy,
-                fromRow: 0,
-                apply: async () => {
-                  repeated++
-                }
-              })
-          expect(replay).toEqual(acknowledged)
-          throw lost
-        })()
-      ).rejects.toBe(lost)
-      expect(repeated).toBe(0)
-      expect(await prepare()).toEqual(acknowledged)
-      expect(await receipt()).toEqual(acknowledged)
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 180000)
-
-test('generated callback cancellation and rejected post-write fences atomically roll back native rows mappings and cursor', async () => {
-  await open()
-  await prepare()
-  await restoreHeader()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom('throw', 'cancel', 'disabled', 'incomplete', 'primary'),
-      text,
-      fc.integer({ min: 1, max: 100000 }),
-      async (kind, suffix, nonce) => {
-        const controller = new AbortController(),
-          reason = new Error('Generated journal rollback ' + suffix),
-          incomingId = 1e21 + nonce * 1048576
-        let entered = 0
+    ])
+    expect(before.budgets[0]).toMatchObject({ rows: 1, logicalBytes: 512 + Buffer.byteLength(raw) })
+    expect(before.journal[0].receiptJson).toBe(JSON.stringify(acknowledged))
+    expect(before.journal[0].receiptSha256).toBe(digest(JSON.stringify(acknowledged)))
+    await fc.assert(
+      fc.asyncProperty(text, fc.boolean(), async (suffix, wrapper) => {
+        const lost = new Error('Generated acknowledgement loss ' + suffix)
+        let repeated = 0
         await expect(
-          commitBrc38PrivateImportJournalStep(store(), target.storage, {
-            admission,
-            receiptPolicy: policy,
-            step: {
-              fromRow: 1,
-              rows: 1,
-              bytes: 128 + Buffer.byteLength(suffix),
-              mappedIds: 1,
-              pageSha256: digest(JSON.stringify([kind, suffix, nonce]))
-            },
-            signal: controller.signal,
-            apply: async trx => {
-              entered++
-              const loaded = await loadBrc38ImportIdMap(trx, admission.scope, [
-                  { entity: 'outputBasket', incomingId, required: false }
-                ]),
-                localId = await target.storage.insertOutputBasket(
-                  {
-                    basketId: 0,
-                    userId: admission.scope.userId,
-                    name: suffix,
-                    numberOfDesiredUTXOs: 0,
-                    minimumDesiredUTXOValue: 0,
-                    isDeleted: false,
-                    created_at: new Date(1700000000000 + nonce),
-                    updated_at: new Date(1700000000000 + nonce)
-                  },
-                  trx
-                )
-              loaded.map.outputBasket.idMap[incomingId] = localId
-              await loaded.persist()
-              expect((await trx('brc38_import_journal').first()).mappedIds).toBe(1)
-              await expect(store().close()).rejects.toThrow('owned private')
-              await expect(store().readImportPreview()).rejects.toThrow('already owned')
-              await expect(target.writer('settings').update({ storageName: suffix })).rejects.toMatchObject({
-                code: 'SQLITE_BUSY'
-              })
-              if (kind === 'throw') throw reason
-              if (kind === 'cancel') controller.abort(reason)
-              if (kind === 'disabled')
-                await trx('snapshot_journal_clock').update({
-                  enabled: 0,
-                  reason: 'capacity-exhausted'
+          (async () => {
+            const replay = wrapper
+              ? await restoreHeader()
+              : await commitBrc38PrivateImportPage(store(), target.storage, {
+                  admission,
+                  receiptPolicy: policy,
+                  fromRow: 0,
+                  apply: async () => {
+                    repeated++
+                  }
                 })
-              if (kind === 'incomplete') await trx('snapshot_journal_generation').update({ complete: 0 })
-              if (kind === 'primary')
-                await trx('users').where({ userId: admission.scope.userId }).update({ activeStorage: suffix })
-            }
-          })
-        ).rejects.toThrow()
-        expect(entered).toBe(1)
+            expect(replay).toEqual(acknowledged)
+            throw lost
+          })()
+        ).rejects.toBe(lost)
+        expect(repeated).toBe(0)
+        expect(await prepare()).toEqual(acknowledged)
+        expect(await receipt()).toEqual(acknowledged)
         expect(await state()).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 180000)
+      }),
+      propertyBatch
+    )
+  },
+  180000
+)
 
-test('generated exact native restore replay preserves COMPLETE for an authenticated empty archive and superseded admission refuses', async () => {
-  await open(true)
-  expect(admission.totalRows).toBe(1)
-  expect((await prepare()).state).toBe('PREPARED')
-  const complete = await restoreHeader(),
-    before = await state()
-  expect(complete).toMatchObject({ state: 'COMPLETE', sequence: 1, nextRow: 1, mappedIds: 0 })
-  expect(before.users).toHaveLength(1)
-  expect(before.originals).toHaveLength(1)
-  expect(before.ids).toEqual([])
-  await fc.assert(
-    fc.asyncProperty(text, fc.boolean(), async (suffix, abort) => {
-      const controller = new AbortController(),
-        reason = new Error(suffix)
-      if (abort) controller.abort(reason)
-      const work = commitBrc38PrivateImportRestorePage(store(), target.storage, {
-        admission,
-        receiptPolicy: policy,
-        fromRow: 0,
-        signal: controller.signal
-      })
-      if (abort) await expect(work).rejects.toBe(reason)
-      else expect(await work).toEqual(complete)
-      expect(await prepare()).toEqual(complete)
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-  await previewBrc38PrivateImport(store(), target.storage, 'merge', policy)
-  await expect(prepare()).rejects.toThrow('differs')
-  await expect(restoreHeader()).rejects.toThrow('differs')
-  expect(await receipt()).toEqual(complete)
-  expect(await target.k('brc38_import_original')).toEqual(before.originals)
-}, 180000)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated callback cancellation and rejected post-write fences atomically roll back native rows mappings and cursor (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    await prepare()
+    await restoreHeader()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('throw', 'cancel', 'disabled', 'incomplete', 'primary'),
+        text,
+        fc.integer({ min: 1, max: 100000 }),
+        async (kind, suffix, nonce) => {
+          const controller = new AbortController(),
+            reason = new Error('Generated journal rollback ' + suffix),
+            incomingId = 1e21 + nonce * 1048576
+          let entered = 0
+          await expect(
+            commitBrc38PrivateImportJournalStep(store(), target.storage, {
+              admission,
+              receiptPolicy: policy,
+              step: {
+                fromRow: 1,
+                rows: 1,
+                bytes: 128 + Buffer.byteLength(suffix),
+                mappedIds: 1,
+                pageSha256: digest(JSON.stringify([kind, suffix, nonce]))
+              },
+              signal: controller.signal,
+              apply: async trx => {
+                entered++
+                const loaded = await loadBrc38ImportIdMap(trx, admission.scope, [
+                    { entity: 'outputBasket', incomingId, required: false }
+                  ]),
+                  localId = await target.storage.insertOutputBasket(
+                    {
+                      basketId: 0,
+                      userId: admission.scope.userId,
+                      name: suffix,
+                      numberOfDesiredUTXOs: 0,
+                      minimumDesiredUTXOValue: 0,
+                      isDeleted: false,
+                      created_at: new Date(1700000000000 + nonce),
+                      updated_at: new Date(1700000000000 + nonce)
+                    },
+                    trx
+                  )
+                loaded.map.outputBasket.idMap[incomingId] = localId
+                await loaded.persist()
+                expect((await trx('brc38_import_journal').first()).mappedIds).toBe(1)
+                await expect(store().close()).rejects.toThrow('owned private')
+                await expect(store().readImportPreview()).rejects.toThrow('already owned')
+                await expect(target.writer('settings').update({ storageName: suffix })).rejects.toMatchObject({
+                  code: 'SQLITE_BUSY'
+                })
+                if (kind === 'throw') throw reason
+                if (kind === 'cancel') controller.abort(reason)
+                if (kind === 'disabled')
+                  await trx('snapshot_journal_clock').update({
+                    enabled: 0,
+                    reason: 'capacity-exhausted'
+                  })
+                if (kind === 'incomplete') await trx('snapshot_journal_generation').update({ complete: 0 })
+                if (kind === 'primary')
+                  await trx('users').where({ userId: admission.scope.userId }).update({ activeStorage: suffix })
+              }
+            })
+          ).rejects.toThrow()
+          expect(entered).toBe(1)
+          expect(await state()).toEqual(before)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)
 
-test('generated page bounds mode guards and pre-aborted calls refuse without callback or destination effects', async () => {
-  await open()
-  await prepare()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom('merge', 'entity', 'originals', 'negative', 'past', 'zero', 'large', 'abort'),
-      text,
-      fc.integer({ min: 1, max: 1000 }),
-      async (kind, suffix, nonce) => {
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated exact native restore replay preserves COMPLETE for an authenticated empty archive and superseded admission refuses (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open(true)
+    expect(admission.totalRows).toBe(1)
+    expect((await prepare()).state).toBe('PREPARED')
+    const complete = await restoreHeader(),
+      before = await state()
+    expect(complete).toMatchObject({ state: 'COMPLETE', sequence: 1, nextRow: 1, mappedIds: 0 })
+    expect(before.users).toHaveLength(1)
+    expect(before.originals).toHaveLength(1)
+    expect(before.ids).toEqual([])
+    await fc.assert(
+      fc.asyncProperty(text, fc.boolean(), async (suffix, abort) => {
         const controller = new AbortController(),
           reason = new Error(suffix)
-        if (kind === 'abort') controller.abort(reason)
-        let applied = 0
-        const work =
-          kind === 'merge'
-            ? commitBrc38PrivateImportMergePage(store(), target.storage, {
-                admission,
-                receiptPolicy: policy,
-                fromRow: 0
-              })
-            : kind === 'entity'
-              ? commitBrc38PrivateImportEntityPage(store(), target.storage, {
+        if (abort) controller.abort(reason)
+        const work = commitBrc38PrivateImportRestorePage(store(), target.storage, {
+          admission,
+          receiptPolicy: policy,
+          fromRow: 0,
+          signal: controller.signal
+        })
+        if (abort) await expect(work).rejects.toBe(reason)
+        else expect(await work).toEqual(complete)
+        expect(await prepare()).toEqual(complete)
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+    await previewBrc38PrivateImport(store(), target.storage, 'merge', policy)
+    await expect(prepare()).rejects.toThrow('differs')
+    await expect(restoreHeader()).rejects.toThrow('differs')
+    expect(await receipt()).toEqual(complete)
+    expect(await target.k('brc38_import_original')).toEqual(before.originals)
+  },
+  180000
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated page bounds mode guards and pre-aborted calls refuse without callback or destination effects (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    await prepare()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('merge', 'entity', 'originals', 'negative', 'past', 'zero', 'large', 'abort'),
+        text,
+        fc.integer({ min: 1, max: 1000 }),
+        async (kind, suffix, nonce) => {
+          const controller = new AbortController(),
+            reason = new Error(suffix)
+          if (kind === 'abort') controller.abort(reason)
+          let applied = 0
+          const work =
+            kind === 'merge'
+              ? commitBrc38PrivateImportMergePage(store(), target.storage, {
                   admission,
                   receiptPolicy: policy,
                   fromRow: 0
                 })
-              : commitBrc38PrivateImportPage(store(), target.storage, {
-                  admission,
-                  receiptPolicy: policy,
-                  fromRow: kind === 'negative' ? -nonce : kind === 'past' ? admission.totalRows + nonce : 0,
-                  maximumPreparedRows:
-                    kind === 'zero' ? 0 : kind === 'large' ? admission.maximumStepRows + nonce : undefined,
-                  prepareOriginalProvenance: kind === 'originals',
-                  signal: controller.signal,
-                  apply: async () => {
-                    applied++
-                  }
-                })
-        if (kind === 'abort') await expect(work).rejects.toBe(reason)
-        else await expect(work).rejects.toThrow()
-        expect(applied).toBe(0)
-        expect(await state()).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 180000)
+              : kind === 'entity'
+                ? commitBrc38PrivateImportEntityPage(store(), target.storage, {
+                    admission,
+                    receiptPolicy: policy,
+                    fromRow: 0
+                  })
+                : commitBrc38PrivateImportPage(store(), target.storage, {
+                    admission,
+                    receiptPolicy: policy,
+                    fromRow: kind === 'negative' ? -nonce : kind === 'past' ? admission.totalRows + nonce : 0,
+                    maximumPreparedRows:
+                      kind === 'zero' ? 0 : kind === 'large' ? admission.maximumStepRows + nonce : undefined,
+                    prepareOriginalProvenance: kind === 'originals',
+                    signal: controller.signal,
+                    apply: async () => {
+                      applied++
+                    }
+                  })
+          if (kind === 'abort') await expect(work).rejects.toBe(reason)
+          else await expect(work).rejects.toThrow()
+          expect(applied).toBe(0)
+          expect(await state()).toEqual(before)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)

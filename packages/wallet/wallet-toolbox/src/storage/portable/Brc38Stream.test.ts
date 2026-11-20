@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { createDecipheriv } from 'node:crypto'
 import fc from 'fast-check'
 import type { Brc38StreamSource, Brc38StreamOptions } from './Brc38Stream'
@@ -31,9 +32,7 @@ const MIN_PROPERTY_RUNS = 300
 fc.configureGlobal({
   numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
   seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
 
 const iso = '2026-10-03T00:00:00.000Z'
@@ -306,42 +305,47 @@ test('cancellation releases the source and retains the exact reason', async () =
   expect(owner.released).toBe(1)
 })
 
-test('generated standard rows retain source IDs, tombstones, bytes and complete tables', async () => {
-  await fc.assert(
-    fc.asyncProperty(fc.array(fc.string({ maxLength: 40 }), { maxLength: 30 }), async names => {
-      const data = document()
-      data.tables.outputTags = names.map((tag, index) => ({
-        created_at: iso,
-        updated_at: iso,
-        userId: 7,
-        outputTagId: index + 1,
-        tag,
-        isDeleted: index % 2 === 0
-      }))
-      data.tables.outputTagMaps = []
-      const owner = source(data)
-      const stream = await createBrc38Stream(owner, options)
-      try {
-        const bytes = await collect(stream.chunks)
-        expect(parseBRC38Json(bytes.toString())).toEqual(data)
-        await stream.validateCompleted()
-      } finally {
-        await stream.close()
-      }
-      expect(owner.visits).toHaveLength(13)
-      expect(owner.validated).toBe(1)
-      expect(owner.released).toBe(1)
-    }),
-    {
-      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
-      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-      path: process.env.FAST_CHECK_PATH ?? '',
-      endOnFailure: true,
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true
-    }
-  )
-}, 180000)
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
+    seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+    path: process.env.FAST_CHECK_PATH ?? '',
+    endOnFailure: true
+  })
+)(
+  'generated standard rows retain source IDs, tombstones, bytes and complete tables (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(fc.array(fc.string({ maxLength: 40 }), { maxLength: 30 }), async names => {
+        const data = document()
+        data.tables.outputTags = names.map((tag, index) => ({
+          created_at: iso,
+          updated_at: iso,
+          userId: 7,
+          outputTagId: index + 1,
+          tag,
+          isDeleted: index % 2 === 0
+        }))
+        data.tables.outputTagMaps = []
+        const owner = source(data)
+        const stream = await createBrc38Stream(owner, options)
+        try {
+          const bytes = await collect(stream.chunks)
+          expect(parseBRC38Json(bytes.toString())).toEqual(data)
+          await stream.validateCompleted()
+        } finally {
+          await stream.close()
+        }
+        expect(owner.visits).toHaveLength(13)
+        expect(owner.validated).toBe(1)
+        expect(owner.released).toBe(1)
+      }),
+      propertyBatch
+    )
+  },
+  180000
+)
 
 test.each([
   ['maximumArchiveBytes', Number.MAX_SAFE_INTEGER],

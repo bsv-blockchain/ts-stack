@@ -1,3 +1,5 @@
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync } from '../../utility/promiseFromSync'
 import { WalletError } from '../../sdk/WalletError'
 import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
@@ -36,6 +38,9 @@ interface ArcadeStatusNote extends ReqHistoryNote {
 export class TaskArcadeSSE extends WalletMonitorTask {
   static readonly taskName = 'ArcadeSSE'
 
+  private cursorEvent: string | undefined
+  private reconnectAfter: number | undefined
+  private reconnectDelay = Monitor.oneSecond * 5
   sseClient: ArcSSEClient | null = null
   private readonly pendingEvents: Array<{
     event: ArcSSEEvent
@@ -67,9 +72,20 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
+    // A callback token selects a feed. Keep the original key for restart and
+    // migration, and never carry an opaque event ID onto a different feed.
+    const fingerprint = toHex(sha256(toArray(JSON.stringify([arcadeUrl, callbackToken]), 'utf8'))).slice(0, 40)
+    this.cursorEvent = `ArcadeSSECursor.${fingerprint}`
     let lastEventId: string | undefined
     try {
-      lastEventId = await this.monitor.options.loadLastSSEEventId?.()
+      if (this.monitor.options.loadLastSSEEventId != null) {
+        lastEventId = await this.monitor.options.loadLastSSEEventId()
+      } else if (this.monitor.options.saveLastSSEEventId == null) {
+        const key = this.cursorEvent
+        const [details] = await this.storage.runAsStorageProvider(sp => sp.loadMonitorCheckpoint(key))
+        const cursor: unknown = JSON.parse(details ?? 'null')
+        if (typeof cursor === 'string') lastEventId = cursor
+      }
     } catch (e) {
       await this.logSetupEvent(`failed to load lastEventId: ${safeDiagnostic(e)}`)
     }
@@ -99,11 +115,22 @@ export class TaskArcadeSSE extends WalletMonitorTask {
             })
         ),
       onError: err => {
+        this.scheduleReconnect()
         void this.logSetupEvent(`SSE error: ${safeDiagnostic(err)}`)
       }
     })
 
-    this.sseClient.connect()
+    try {
+      this.sseClient.connect()
+    } catch {
+      this.scheduleReconnect()
+      await this.logSetupEvent('SSE initialization failed; retry scheduled')
+    }
+  }
+
+  private scheduleReconnect(): void {
+    this.reconnectAfter = Date.now() + this.reconnectDelay
+    this.reconnectDelay = Math.min(Monitor.oneMinute, this.reconnectDelay * 2)
   }
 
   private async logSetupEvent(details: string): Promise<void> {
@@ -114,31 +141,49 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     }
   }
 
-  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
-    return { run: this.pendingEvents.length > 0 }
+  trigger(now: number): { run: boolean } {
+    return { run: this.pendingEvents.length > 0 || (this.reconnectAfter != null && now >= this.reconnectAfter) }
+  }
+
+  private async reconnectIfDue(): Promise<void> {
+    if (this.reconnectAfter == null || Date.now() < this.reconnectAfter) return
+    if (this.sseClient?.isDraining === true) return
+    this.reconnectAfter = undefined
+    try {
+      await this.fetchNow()
+    } catch {
+      this.scheduleReconnect()
+      await this.logSetupEvent('SSE reconnect failed; retry scheduled')
+    }
+  }
+
+  private async saveCursor(id: string): Promise<void> {
+    try {
+      if (this.monitor.options.saveLastSSEEventId != null) {
+        await this.monitor.options.saveLastSSEEventId(id)
+      } else if (this.cursorEvent != null && this.monitor.options.loadLastSSEEventId == null) {
+        const key = this.cursorEvent
+        await this.storage.runAsStorageProvider(sp => sp.saveMonitorCheckpoint(key, JSON.stringify(id)))
+      }
+    } catch (error) {
+      await this.logSetupEvent('Failed to persist acknowledged Arcade cursor')
+      throw error
+    }
   }
 
   async runTask(): Promise<string> {
-    const eventCount = this.pendingEvents.length
-    if (eventCount === 0) return ''
-
-    let log = ''
-    for (let i = 0; i < eventCount; i++) {
-      // Do not remove or acknowledge an event until its storage work succeeds.
-      // A thrown storage error leaves this event at the head for the next run.
-      const pending = this.pendingEvents[0]
-      log += await this.processStatusEvent(pending.event)
-      if (pending.event.eventId != null) {
-        try {
-          await this.monitor.options.saveLastSSEEventId?.(pending.event.eventId)
-        } catch (e) {
-          await this.logSetupEvent(`failed to persist lastEventId: ${safeDiagnostic(e)}`)
-          throw e
-        }
-      }
-      this.pendingEvents.shift()
-      pending.acknowledge()
+    // The admission callback holds at most one event in this task. Storage
+    // failure leaves it at the head and prevents the cursor from advancing.
+    const pending = this.pendingEvents[0]
+    if (pending == null) {
+      await this.reconnectIfDue()
+      return ''
     }
+    const log = await this.processStatusEvent(pending.event)
+    if (pending.event.eventId != null) await this.saveCursor(pending.event.eventId)
+    this.pendingEvents.shift()
+    pending.acknowledge()
+    this.reconnectDelay = Monitor.oneSecond * 5
     return log
   }
 
@@ -149,6 +194,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
   /** Close the live stream and reject any unacknowledged monitor event. */
   close(): void {
+    this.reconnectAfter = undefined
     this.sseClient?.close()
     this.sseClient = null
     const error = new Error('Arcade SSE monitor task closed.')

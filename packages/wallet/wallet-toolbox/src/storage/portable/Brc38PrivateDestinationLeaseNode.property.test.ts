@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { appendFile, chmod, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -24,8 +25,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 
@@ -86,131 +85,143 @@ async function fixture(lifetimeMs = 60000) {
 }
 
 describe('actual claimed and authenticated private destination lease lifecycle', () => {
-  test('generated wrapper identity never transfers a live lease between independently claimed stores', async () => {
-    const first = await fixture(),
-      second = await fixture()
-    try {
-      const action = fc.record({
-        index: fc.integer({ min: 0, max: 3 }),
-        operation: fc.constantFrom('register-own', 'register-other', 'lookup', 'assert')
-      })
-      await fc.assert(
-        fc.asyncProperty(fc.array(action, { minLength: 1, maxLength: 24 }), async actions => {
-          const entries = [first, second, first, second].map(owner => ({
-            owner,
-            wrapper: storage(owner.value)
-          }))
-          // Independent bounded model binds wrapper identity, never connection shape.
-          const model = new Set<number>()
-          const expectedPages = Math.floor((4194304 - 65536) / (3 * 4096))
-          for (const { index, operation } of actions) {
-            const { owner, wrapper } = entries[index],
-              other = owner === first ? second : first
-            if (operation === 'register-own') {
-              registerBrc38PrivateDestinationLease(wrapper, owner.value.store)
-              model.add(index)
-            } else if (operation === 'register-other') {
-              expect(() => registerBrc38PrivateDestinationLease(wrapper, other.value.store)).toThrow(
-                'actual claimed private stage'
-              )
-            }
-            const lease = brc38PrivateDestinationLease(wrapper)
-            expect(lease !== undefined).toBe(model.has(index))
-            if (lease !== undefined) {
-              expect(Object.isFrozen(lease)).toBe(true)
-              expect(lease.maximumPages).toBe(expectedPages)
-              if (operation === 'assert') lease.assertLive()
-            }
-            for (let i = 0; i < entries.length; i++)
-              expect(brc38PrivateDestinationLease(entries[i].wrapper) !== undefined).toBe(model.has(i))
-            expect(owner.value.store.limits.expiresAt).toBe(owner.expiry)
-          }
-          for (const owner of [first, second]) {
-            expect((await owner.value.store.knex.raw('PRAGMA max_page_count'))[0].max_page_count).toBe(expectedPages)
-            expect((await owner.value.store.knex.raw('PRAGMA journal_mode'))[0].journal_mode).toBe('delete')
-            await owner.value.store.withAuthenticatedPrivateDestination(async (header, metadata) => {
-              expect(header.user).toEqual(semanticStageFixture().user)
-              expect(metadata.rows).toBe(13)
-            })
-          }
-        }),
-        controls
-      )
-      expect((await first.root.usage()).imports).toBe(1)
-      expect((await second.root.usage()).imports).toBe(1)
-    } finally {
-      await first.close()
-      await second.close()
-    }
-  }, 30000)
-
-  test('generated retained handles and new registrations reject after actual physical store closure', async () => {
-    const target = await fixture()
-    try {
-      const wrapper = storage(target.value)
-      registerBrc38PrivateDestinationLease(wrapper, target.value.store)
-      const lease = brc38PrivateDestinationLease(wrapper)!
-      lease.assertLive()
-      await target.value.store.close()
-      await fc.assert(
-        fc.asyncProperty(fc.integer({ min: 0, max: 31 }), async reads => {
-          for (let i = 0; i <= reads; i++) expect(() => lease.assertLive()).toThrow('unavailable')
-          expect(() => registerBrc38PrivateDestinationLease(storage(target.value), target.value.store)).toThrow(
-            'unavailable'
-          )
-          await expect(target.value.store.withAuthenticatedPrivateDestination(async () => undefined)).rejects.toThrow(
-            'unavailable'
-          )
-          expect(target.value.store.limits.expiresAt).toBe(target.expiry)
-        }),
-        controls
-      )
-      const reopened = await target.root.resume(
-        target.value.id,
-        target.value.store.limits,
-        target.value.store.binding!.binding
-      )
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated wrapper identity never transfers a live lease between independently claimed stores (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const first = await fixture(),
+        second = await fixture()
       try {
-        const successor = storage(reopened)
-        expect(brc38PrivateDestinationLease(successor)).toBeUndefined()
-        registerBrc38PrivateDestinationLease(successor, reopened.store)
-        brc38PrivateDestinationLease(successor)!.assertLive()
-        expect(() => lease.assertLive()).toThrow('unavailable')
-        expect(reopened.store.limits.expiresAt).toBe(target.expiry)
+        const action = fc.record({
+          index: fc.integer({ min: 0, max: 3 }),
+          operation: fc.constantFrom('register-own', 'register-other', 'lookup', 'assert')
+        })
+        await fc.assert(
+          fc.asyncProperty(fc.array(action, { minLength: 1, maxLength: 24 }), async actions => {
+            const entries = [first, second, first, second].map(owner => ({
+              owner,
+              wrapper: storage(owner.value)
+            }))
+            // Independent bounded model binds wrapper identity, never connection shape.
+            const model = new Set<number>()
+            const expectedPages = Math.floor((4194304 - 65536) / (3 * 4096))
+            for (const { index, operation } of actions) {
+              const { owner, wrapper } = entries[index],
+                other = owner === first ? second : first
+              if (operation === 'register-own') {
+                registerBrc38PrivateDestinationLease(wrapper, owner.value.store)
+                model.add(index)
+              } else if (operation === 'register-other') {
+                expect(() => registerBrc38PrivateDestinationLease(wrapper, other.value.store)).toThrow(
+                  'actual claimed private stage'
+                )
+              }
+              const lease = brc38PrivateDestinationLease(wrapper)
+              expect(lease !== undefined).toBe(model.has(index))
+              if (lease !== undefined) {
+                expect(Object.isFrozen(lease)).toBe(true)
+                expect(lease.maximumPages).toBe(expectedPages)
+                if (operation === 'assert') lease.assertLive()
+              }
+              for (let i = 0; i < entries.length; i++)
+                expect(brc38PrivateDestinationLease(entries[i].wrapper) !== undefined).toBe(model.has(i))
+              expect(owner.value.store.limits.expiresAt).toBe(owner.expiry)
+            }
+            for (const owner of [first, second]) {
+              expect((await owner.value.store.knex.raw('PRAGMA max_page_count'))[0].max_page_count).toBe(expectedPages)
+              expect((await owner.value.store.knex.raw('PRAGMA journal_mode'))[0].journal_mode).toBe('delete')
+              await owner.value.store.withAuthenticatedPrivateDestination(async (header, metadata) => {
+                expect(header.user).toEqual(semanticStageFixture().user)
+                expect(metadata.rows).toBe(13)
+              })
+            }
+          }),
+          propertyBatch
+        )
+        expect((await first.root.usage()).imports).toBe(1)
+        expect((await second.root.usage()).imports).toBe(1)
       } finally {
-        await reopened.store.close()
+        await first.close()
+        await second.close()
       }
-    } finally {
-      await target.close()
-    }
-  }, 30000)
+    },
+    30000
+  )
 
-  test('generated access cannot renew the original real wall-clock expiry or enter destination work after it', async () => {
-    const target = await fixture(5000)
-    try {
-      const wrapper = storage(target.value)
-      registerBrc38PrivateDestinationLease(wrapper, target.value.store)
-      const lease = brc38PrivateDestinationLease(wrapper)!
-      const remaining = target.expiry - Date.now()
-      if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining + 1))
-      let entered = 0
-      await fc.assert(
-        fc.asyncProperty(fc.integer({ min: 0, max: 31 }), async reads => {
-          for (let i = 0; i <= reads; i++) expect(() => lease.assertLive()).toThrow('expired')
-          await expect(
-            target.value.store.withAuthenticatedPrivateDestination(async () => {
-              entered++
-            })
-          ).rejects.toThrow('expired')
-          expect(target.value.store.limits.expiresAt).toBe(target.expiry)
-          expect(entered).toBe(0)
-        }),
-        controls
-      )
-      expect((await stat(join(target.value.store.directory, 'stage.sqlite'))).mode & 0o777).toBe(0o600)
-      expect(await readdir(target.directory)).toContain('brc38-admission.sqlite')
-    } finally {
-      await target.close()
-    }
-  }, 30000)
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated retained handles and new registrations reject after actual physical store closure (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const target = await fixture()
+      try {
+        const wrapper = storage(target.value)
+        registerBrc38PrivateDestinationLease(wrapper, target.value.store)
+        const lease = brc38PrivateDestinationLease(wrapper)!
+        lease.assertLive()
+        await target.value.store.close()
+        await fc.assert(
+          fc.asyncProperty(fc.integer({ min: 0, max: 31 }), async reads => {
+            for (let i = 0; i <= reads; i++) expect(() => lease.assertLive()).toThrow('unavailable')
+            expect(() => registerBrc38PrivateDestinationLease(storage(target.value), target.value.store)).toThrow(
+              'unavailable'
+            )
+            await expect(target.value.store.withAuthenticatedPrivateDestination(async () => undefined)).rejects.toThrow(
+              'unavailable'
+            )
+            expect(target.value.store.limits.expiresAt).toBe(target.expiry)
+          }),
+          propertyBatch
+        )
+        const reopened = await target.root.resume(
+          target.value.id,
+          target.value.store.limits,
+          target.value.store.binding!.binding
+        )
+        try {
+          const successor = storage(reopened)
+          expect(brc38PrivateDestinationLease(successor)).toBeUndefined()
+          registerBrc38PrivateDestinationLease(successor, reopened.store)
+          brc38PrivateDestinationLease(successor)!.assertLive()
+          expect(() => lease.assertLive()).toThrow('unavailable')
+          expect(reopened.store.limits.expiresAt).toBe(target.expiry)
+        } finally {
+          await reopened.store.close()
+        }
+      } finally {
+        await target.close()
+      }
+    },
+    30000
+  )
+
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated access cannot renew the original real wall-clock expiry or enter destination work after it (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const target = await fixture(5000)
+      try {
+        const wrapper = storage(target.value)
+        registerBrc38PrivateDestinationLease(wrapper, target.value.store)
+        const lease = brc38PrivateDestinationLease(wrapper)!
+        const remaining = target.expiry - Date.now()
+        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining + 1))
+        let entered = 0
+        await fc.assert(
+          fc.asyncProperty(fc.integer({ min: 0, max: 31 }), async reads => {
+            for (let i = 0; i <= reads; i++) expect(() => lease.assertLive()).toThrow('expired')
+            await expect(
+              target.value.store.withAuthenticatedPrivateDestination(async () => {
+                entered++
+              })
+            ).rejects.toThrow('expired')
+            expect(target.value.store.limits.expiresAt).toBe(target.expiry)
+            expect(entered).toBe(0)
+          }),
+          propertyBatch
+        )
+        expect((await stat(join(target.value.store.directory, 'stage.sqlite'))).mode & 0o777).toBe(0o600)
+        expect(await readdir(target.directory)).toContain('brc38-admission.sqlite')
+      } finally {
+        await target.close()
+      }
+    },
+    30000
+  )
 })
