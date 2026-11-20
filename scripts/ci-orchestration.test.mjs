@@ -85,15 +85,14 @@ test('property campaigns cover each heavy suite shard and continue collecting ev
   const matrix = viewPropertyMatrix(workflow)
   assert.deepEqual(matrix, [
     'other-packages/all',
-    ...['output-knowledge', 'wallet-toolbox'].flatMap(suite =>
-      ['1', '2', '3', '4'].map(shard => suite + '/' + shard)
-    ),
+    ...Array.from({ length: 8 }, (_, index) => 'output-knowledge/' + (index + 1)),
+    ...Array.from({ length: 4 }, (_, index) => 'wallet-toolbox/' + (index + 1)),
     'lch/1',
     'lch/2'
   ])
   assert.match(workflow, /fail-fast: false/)
   assert.match(workflow, /run: pnpm test:governance/)
-  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/4"/)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/\$shard_count"/)
   assert.match(workflow, /--shard="\$PROPERTY_SHARD\/2"/)
   assert.match(
     workflow,

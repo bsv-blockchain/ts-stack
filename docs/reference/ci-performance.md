@@ -283,9 +283,10 @@ campaign. The opt-in coordinator and disclosure diagnostics retain their
 whole-campaign time limit for comparable performance measurements.
 
 The scheduled campaign runs Output Knowledge, Wallet Toolbox, LCH and the
-remaining governed packages in separate jobs. The two largest suites use the
-existing measured Jest file placement. Each job records the same seed and
-case count, plus its own shard and failure log.
+remaining governed packages in separate jobs. Output Knowledge uses eight
+shards and Wallet Toolbox uses four with measured Jest file placement. LCH
+uses two shards. Each job records the same seed and case count, plus its own
+shard and failure log.
 
 Edit the shared helper in `config/testing`, then run
 `node scripts/sync-property-test-batches.mjs` to update the copies used by

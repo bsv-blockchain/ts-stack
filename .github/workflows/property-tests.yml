@@ -44,6 +44,14 @@ jobs:
             shard: '3'
           - suite: output-knowledge
             shard: '4'
+          - suite: output-knowledge
+            shard: '5'
+          - suite: output-knowledge
+            shard: '6'
+          - suite: output-knowledge
+            shard: '7'
+          - suite: output-knowledge
+            shard: '8'
           - suite: wallet-toolbox
             shard: '1'
           - suite: wallet-toolbox
@@ -122,11 +130,13 @@ jobs:
               output-knowledge|wallet-toolbox)
                 package="@bsv/$PROPERTY_SUITE"
                 export JEST_SHARD_LANE=output-knowledge-tests
+                shard_count=8
                 if [[ "$PROPERTY_SUITE" == wallet-toolbox ]]; then
                   export JEST_SHARD_LANE=wallet-toolbox-coverage
+                  shard_count=4
                 fi
                 pnpm -r --filter "$package..." run build
-                pnpm --filter "$package" run test:property --shard="$PROPERTY_SHARD/4" \
+                pnpm --filter "$package" run test:property --shard="$PROPERTY_SHARD/$shard_count" \
                   --testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs"
                 ;;
               lch)
