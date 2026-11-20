@@ -320,12 +320,14 @@ jobs:
 
   sonar-zero-findings:
     name: Quality gate — zero new Sonar findings
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
+      actions: read
       contents: read
       pull-requests: read
+      checks: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -335,6 +337,7 @@ jobs:
           node-version: 24.22.1
 
       - name: Enforce the exact-head repository Sonar policy
+        if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
@@ -343,11 +346,17 @@ jobs:
           --pull-request "${{ github.event.pull_request.number }}"
           --revision "${{ github.event.pull_request.head.sha }}"
 
-      - name: Retain complete PR569 Sonar inventories and both policy verdicts
+      - name: Enforce the exact combined queue analysis
+        if: github.event_name == 'merge_group'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/sonar-queue-gate.mjs
+
+      - name: Retain Sonar policy and exact queue analysis evidence
         if: always() && hashFiles('.sonar-policy/**/*.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: sonar-policy-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          name: sonar-policy-${{ github.event.pull_request.number || 'queue' }}-${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           path: .sonar-policy/
           include-hidden-files: true
           if-no-files-found: error
@@ -2085,7 +2094,7 @@ jobs:
           comment-summary-in-pr: never
 
   merge-gate:
-    name: merge-gate
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary analysis PR gate' || 'merge-gate' }}
     if: always()
     needs:
       - scope

@@ -783,3 +783,45 @@ test('native browser jobs always release only their delivered exact-path sandbox
     )
   }
 })
+
+test('queue Sonar writes use protected workflow code while admission stays read-only', () => {
+  const controller = readFileSync(
+    join(REPOSITORY_ROOT, '.github/workflows/sonar-queue-analysis.yml'),
+    'utf8'
+  )
+  assert.match(
+    controller,
+    /workflow_run:\n    workflows: \[CI\]\n    types: \[in_progress, completed\]/
+  )
+  assert.match(controller, /ref: \$\{\{ github\.workflow_sha \}\}/)
+  assert.match(controller, /persist-credentials: false/)
+  assert.match(controller, /contents: write\n      pull-requests: write/)
+  assert.match(controller, /run: node scripts\/sonar-queue-analysis\.mjs/)
+  assert.doesNotMatch(controller, /head_sha|SONAR_TOKEN|npm |pnpm |download-artifact/)
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  assert.match(jobs['sonar-zero-findings'], /github\.event_name == 'merge_group'/)
+  assert.match(jobs['sonar-zero-findings'], /node scripts\/sonar-queue-gate\.mjs/)
+  assert.doesNotMatch(jobs['sonar-zero-findings'], /: write/)
+})
+
+test('auxiliary PR workflows cannot replace required combined-result contexts', () => {
+  for (const [file, name] of [
+    ['ci.yml', "'Auxiliary analysis PR gate' || 'merge-gate'"],
+    [
+      'codeql.yml',
+      "format('Auxiliary Analyze ({0})', matrix.language) || format('Analyze ({0})', matrix.language)"
+    ],
+    ['conformance.yml', "'Auxiliary conformance' || 'ts-runner'"]
+  ]) {
+    const source = readFileSync(join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    const job = workflowJobBlocks(source).find(candidate => candidate.source.includes(name))
+    assert.ok(job, `${file} must distinguish required context names`)
+    const names = job.source.match(/^    name: .*$/gm)
+    assert.equal(names.length, 1, 'duplicate YAML keys must not undo the identity guard')
+    assert.ok(names[0].includes("github.event_name == 'pull_request'"))
+    assert.ok(names[0].includes('github.event.pull_request.user.id == 41898282'))
+    assert.ok(names[0].includes("startsWith(github.head_ref, 'codex/merge-queue-analysis/')"))
+  }
+})

@@ -1,153 +1,104 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { enforceSonarQueueGate, queueBranch } from './sonar-queue-gate.mjs'
+import { enforceSonarQueueGate } from './sonar-queue-gate.mjs'
+import { SHA, queueFixture } from './sonar-queue-test-fixture.mjs'
 
-const SHA = '1234567890abcdef1234567890abcdef12345678'
-const BRANCH = queueBranch(SHA)
-
-function fixture(overrides = {}) {
-  const calls = []
-  let branchReads = 0
-  const analysis = {
-    name: BRANCH,
-    isMain: false,
-    type: 'SHORT',
-    commit: { sha: SHA },
-    analysisDate: '2026-11-20T20:00:00+0000'
-  }
-  const dependencies = {
-    log() {},
-    sleep: async () => {},
-    now: () => 0,
-    fetchImpl: async url => {
-      calls.push(url)
-      assert.equal(url.origin, 'https://sonarcloud.io')
-      let payload
-      if (url.pathname === '/api/project_branches/list') {
-        payload = { branches: [overrides.analysis?.(++branchReads, analysis) ?? analysis] }
-      } else {
-        assert.equal(url.searchParams.get('branch'), BRANCH)
-        assert.equal(url.searchParams.has('pullRequest'), false)
-        if (url.pathname === '/api/qualitygates/project_status')
-          payload = { projectStatus: { status: overrides.quality ?? 'OK' } }
-        else if (url.pathname === '/api/issues/search') {
-          assert.equal(
-            url.searchParams.get('issueStatuses'),
-            'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
-          )
-          payload = overrides.issues?.(Number(url.searchParams.get('p'))) ?? {
-            paging: { total: 0 },
-            issues: []
-          }
-        } else if (url.pathname === '/api/hotspots/search') {
-          assert.equal(url.searchParams.get('status'), 'TO_REVIEW')
-          payload = overrides.hotspots ?? { paging: { total: 0 }, hotspots: [] }
-        } else throw new Error('Unexpected endpoint')
-      }
-      return new Response(JSON.stringify(payload), { status: 200 })
-    }
-  }
-  return { calls, dependencies }
-}
-
-test('queue gate accepts only a stable exact queue analysis with complete zero findings', async () => {
-  const { calls, dependencies } = fixture()
-  const result = await enforceSonarQueueGate(SHA, dependencies)
+test('queue gate requires exact combined revision, genuine Sonar app and strict zero inventories', async () => {
+  const { dependencies } = queueFixture()
+  const result = await enforceSonarQueueGate(42, dependencies)
   assert.equal(result.revision, SHA)
+  assert.equal(result.pullRequest, 71)
   assert.equal(result.issueCount, 0)
   assert.equal(result.hotspotCount, 0)
-  assert.equal(calls.filter(url => url.pathname === '/api/project_branches/list').length, 2)
+  assert.equal(result.checkRunId, 91)
 })
 
-test('queue identity rejects malformed revisions', () => {
-  for (const value of ['', 'main', SHA.toUpperCase(), SHA + 'x', SHA + '\n', undefined]) {
-    assert.throws(() => queueBranch(value), /full lowercase commit SHA/)
-  }
-})
-
-test('queue gate waits for its exact revision and never accepts a PR result', async () => {
-  const { dependencies } = fixture({
-    analysis: (read, analysis) =>
-      read === 1 ? { ...analysis, commit: { sha: '0'.repeat(40) } } : analysis
-  })
-  let waits = 0
-  dependencies.sleep = async () => {
-    waits++
-  }
-  await enforceSonarQueueGate(SHA, dependencies)
-  assert.equal(waits, 1)
-})
-
-test('queue gate fails when the exact analysis never appears', async () => {
-  const { dependencies } = fixture({
-    analysis: (_, analysis) => ({ ...analysis, commit: { sha: '0'.repeat(40) } })
-  })
-  let time = 0
-  dependencies.now = () => time
-  dependencies.sleep = async () => {
-    time += 600000
-  }
-  await assert.rejects(enforceSonarQueueGate(SHA, dependencies), /Timed out/)
-})
-
-test('queue gate rejects main, long-lived, incomplete and changing analysis identities', async () => {
-  for (const change of [{ isMain: true }, { type: 'LONG' }, { analysisDate: undefined }]) {
-    const { dependencies } = fixture({ analysis: (_, analysis) => ({ ...analysis, ...change }) })
-    await assert.rejects(enforceSonarQueueGate(SHA, dependencies), /completed short-lived/)
-  }
-  const { dependencies } = fixture({
-    analysis: (read, analysis) =>
-      read > 1 ? { ...analysis, analysisDate: '2026-11-20T20:01:00+0000' } : analysis
-  })
-  await assert.rejects(enforceSonarQueueGate(SHA, dependencies), /changed while collecting/)
-})
-
-test('quality failure, accepted findings, false positives and unreviewed hotspots all block', async () => {
-  const cases = [
-    { quality: 'ERROR' },
-    ...['OPEN', 'CONFIRMED', 'ACCEPTED', 'FALSE_POSITIVE', 'UNKNOWN'].map(issueStatus => ({
-      issues: () => ({ total: 1, issues: [{ key: 'finding', issueStatus }] })
-    })),
-    { hotspots: { total: 1, hotspots: [{ key: 'hotspot' }] } }
-  ]
-  for (const options of cases)
-    await assert.rejects(enforceSonarQueueGate(SHA, fixture(options).dependencies), /gate failed/)
-})
-
-test('complete pagination detects findings beyond the first page', async () => {
-  let pages = 0
-  const issues = page => {
-    pages++
-    return {
-      total: 501,
-      issues: Array.from({ length: page === 1 ? 500 : 1 }, (_, index) => ({
-        key: `${page}-${index}`
-      }))
+test('missing analysis, original PR revision, wrong app or another PR cannot qualify the queue', async () => {
+  for (const mutation of [
+    state => {
+      state.prs = []
+    },
+    state => {
+      state.analysis.commit.sha = 'a'.repeat(40)
+    },
+    state => {
+      state.check = null
+    },
+    state => {
+      state.check.app.id = 15368
+    },
+    state => {
+      state.check.head_sha = 'a'.repeat(40)
+    },
+    state => {
+      state.check.details_url = 'https://sonarcloud.io/dashboard?id=other&pullRequest=71'
+    },
+    state => {
+      state.check.details_url =
+        'https://sonarcloud.io/dashboard?id=bsv-blockchain_ts-stack&pullRequest=72'
+    },
+    state => {
+      state.check.status = 'in_progress'
     }
+  ]) {
+    const { state, dependencies } = queueFixture()
+    mutation(state)
+    await assert.rejects(enforceSonarQueueGate(42, dependencies), /Timed out/)
   }
-  await assert.rejects(
-    enforceSonarQueueGate(SHA, fixture({ issues }).dependencies),
-    /newFindings=501/
-  )
-  assert.equal(pages, 2)
 })
 
-test('truncated, duplicate, malformed and changing inventories fail closed', async () => {
-  const cases = [
-    () => ({ issues: [] }),
-    () => ({ total: 1, issues: [] }),
-    () => ({ total: 1, issues: [{ key: 'a' }, { key: 'b' }] }),
-    () => ({ total: 2, issues: [{ key: 'a' }, { key: 'a' }] }),
-    () => ({ total: 1, issues: [{}] }),
-    page => ({ total: page === 1 ? 2 : 1, issues: [{ key: String(page) }] }),
-    () => ({ paging: { total: 0, pageIndex: 2 }, issues: [] })
+test('failed, neutral, skipped or cancelled Sonar checks are not passes', async () => {
+  for (const conclusion of ['failure', 'neutral', 'skipped', 'cancelled']) {
+    const { state, dependencies } = queueFixture()
+    state.check.conclusion = conclusion
+    await assert.rejects(enforceSonarQueueGate(42, dependencies), /did not pass/)
+  }
+})
+
+test('quality failure, every blocking issue state and unreviewed hotspots remain blocking', async () => {
+  const mutations = [
+    state => {
+      state.quality = 'ERROR'
+    },
+    state => {
+      state.hotspots = 1
+    },
+    ...['OPEN', 'CONFIRMED', 'ACCEPTED', 'FALSE_POSITIVE'].map(issueStatus => state => {
+      state.issues = [{ key: 'finding', issueStatus }]
+    })
   ]
-  for (const issues of cases)
-    await assert.rejects(enforceSonarQueueGate(SHA, fixture({ issues }).dependencies), /inventory/)
+  for (const mutation of mutations) {
+    const { state, dependencies } = queueFixture()
+    mutation(state)
+    await assert.rejects(enforceSonarQueueGate(42, dependencies), /zero-findings gate failed/)
+  }
 })
 
-test('API failure cannot produce a passing result', async () => {
-  const { dependencies } = fixture()
-  dependencies.fetchImpl = async () => new Response('', { status: 503 })
-  await assert.rejects(enforceSonarQueueGate(SHA, dependencies), /HTTP 503/)
+test('changed analysis or queue identity during collection fails closed', async () => {
+  const fixture = queueFixture()
+  let reads = 0
+  const original = fixture.dependencies.fetchImpl
+  fixture.dependencies.fetchImpl = async input => {
+    if (new URL(input).pathname === '/api/project_pull_requests/list' && ++reads === 3)
+      fixture.state.analysis.analysisDate = '2026-11-20T20:01:00+0000'
+    return await original(input)
+  }
+  await assert.rejects(enforceSonarQueueGate(42, fixture.dependencies), /changed during/)
+  const stale = queueFixture()
+  stale.state.ancestor = false
+  await assert.rejects(enforceSonarQueueGate(42, stale.dependencies), /not an ancestor/)
+})
+
+test('missing analysis date, malformed inventories and API errors are not passes', async () => {
+  const missing = queueFixture()
+  delete missing.state.analysis.analysisDate
+  await assert.rejects(enforceSonarQueueGate(42, missing.dependencies), /analysis date/)
+  const failed = queueFixture()
+  failed.dependencies.fetchImpl = async () => new Response('', { status: 503 })
+  await assert.rejects(enforceSonarQueueGate(42, failed.dependencies), /HTTP 503/)
+  const truncated = queueFixture()
+  const original = truncated.dependencies.api
+  truncated.dependencies.api = async path =>
+    path.includes('/check-runs') ? { total_count: 101, check_runs: [] } : await original(path)
+  await assert.rejects(enforceSonarQueueGate(42, truncated.dependencies), /Incomplete/)
 })

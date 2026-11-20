@@ -1,0 +1,39 @@
+name: Sonar queue analysis controller
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [in_progress, completed]
+
+permissions: {}
+
+concurrency:
+  group: sonar-queue-controller-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  manage-analysis:
+    if: >-
+      github.event.workflow_run.event == 'merge_group' &&
+      github.event.workflow_run.repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'gh-readonly-queue/main/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      # workflow_run uses protected default-branch code, never the queue checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: scripts
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+      - name: Manage the exact queue analysis draft
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/sonar-queue-analysis.mjs

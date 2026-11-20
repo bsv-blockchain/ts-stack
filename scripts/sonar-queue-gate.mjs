@@ -1,147 +1,135 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { enforceSonarPullRequestGate, parseArguments } from './sonar-pr-gate.mjs'
+import {
+  assertActiveQueue,
+  assertAnalysisPr,
+  findAnalysisPr,
+  githubClient,
+  positiveId,
+  queueContext
+} from './sonar-queue-context.mjs'
 
 const PROJECT = 'bsv-blockchain_ts-stack'
-const BASE_URL = 'https://sonarcloud.io'
-const PAGE_SIZE = 500
 
-export function queueBranch(revision) {
-  if (typeof revision !== 'string' || revision.length !== 40 || !/^[a-f0-9]{40}$/.test(revision)) {
-    throw new Error('Queue revision must be a full lowercase commit SHA')
-  }
-  return `merge-queue-${revision}`
-}
-
-function inventoryTotal(payload) {
-  const total = payload?.paging?.total ?? payload?.total
-  if (!Number.isSafeInteger(total) || total < 0) throw new Error('Invalid Sonar inventory total')
-  return total
-}
-
-function appendInventoryPage(payload, page, field, keys) {
-  const records = payload?.[field]
-  if (
-    !Array.isArray(records) ||
-    records.length > PAGE_SIZE ||
-    (payload.paging?.pageIndex !== undefined && payload.paging.pageIndex !== page)
-  ) {
-    throw new Error('Malformed Sonar inventory page')
-  }
-  for (const record of records) {
-    if (typeof record?.key !== 'string' || !record.key || keys.has(record.key)) {
-      throw new Error('Missing or duplicate Sonar inventory key')
+async function readAnalysis(fetchImpl, number) {
+  const response = await fetchImpl(
+    `https://sonarcloud.io/api/project_pull_requests/list?project=${PROJECT}`,
+    {
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000)
     }
-    keys.add(record.key)
-  }
-  return records
+  )
+  if (!response.ok) throw new Error(`Sonar PR inventory: HTTP ${response.status}`)
+  const payload = await response.json()
+  if (!Array.isArray(payload.pullRequests)) throw new Error('Missing Sonar PR inventory')
+  const matches = payload.pullRequests.filter(pr => pr.key === String(number))
+  if (matches.length > 1) throw new Error('Ambiguous Sonar analysis identity')
+  return matches[0]
 }
 
-async function waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log }) {
-  const analysis = await readAnalysis()
-  if (analysis?.commit?.sha === revision) return analysis
-  if (now() >= deadline) throw new Error(`Timed out waiting for Sonar queue revision ${revision}`)
-  log(`Waiting for Sonar queue revision ${revision}`)
-  await sleep(15_000)
-  return await waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log })
+function isAnalysisCheck(check, context, number) {
+  if (
+    check.app?.id !== 12526 ||
+    check.name !== 'SonarCloud Code Analysis' ||
+    check.head_sha !== context.sha
+  )
+    return false
+  const url = new URL(check.details_url)
+  return (
+    url.origin === 'https://sonarcloud.io' &&
+    url.searchParams.get('id') === PROJECT &&
+    url.searchParams.get('pullRequest') === String(number)
+  )
 }
 
-async function inventory(request, path, parameters, field) {
-  const keys = new Set()
-  let expected
-  for (let page = 1; ; page++) {
-    const payload = await request(path, { ...parameters, ps: PAGE_SIZE, p: page })
-    const total = inventoryTotal(payload)
-    expected ??= total
-    if (expected !== total) throw new Error('Sonar inventory changed during pagination')
-    const records = appendInventoryPage(payload, page, field, keys)
-    if (keys.size > expected) throw new Error('Sonar inventory exceeds its reported total')
-    if (keys.size === expected) return expected
-    if (records.length === 0) throw new Error('Sonar inventory ended before its reported total')
-  }
+async function completedAnalysis(api, fetchImpl, context) {
+  const pr = await findAnalysisPr(api, context)
+  if (!pr) return null
+  const analysis = await readAnalysis(fetchImpl, pr.number)
+  if (analysis?.commit?.sha !== context.sha) return null
+  if (!Number.isFinite(Date.parse(analysis.analysisDate)))
+    throw new Error('Missing Sonar analysis date')
+  const checks = await api(
+    `/commits/${context.sha}/check-runs?check_name=SonarCloud%20Code%20Analysis&filter=latest&per_page=100`
+  )
+  if (
+    !Array.isArray(checks.check_runs) ||
+    !Number.isSafeInteger(checks.total_count) ||
+    checks.total_count > 100 ||
+    checks.total_count !== checks.check_runs.length
+  )
+    throw new Error('Incomplete Sonar check inventory')
+  const check = checks.check_runs.find(candidate => isAnalysisCheck(candidate, context, pr.number))
+  if (!check || check.status !== 'completed') return null
+  if (check.conclusion !== 'success')
+    throw new Error(`Sonar app check did not pass: ${check.conclusion}`)
+  return { pr, analysis, check }
 }
 
-/** A queue receives its own short-lived analysis; PR results cannot qualify it. */
-export async function enforceSonarQueueGate(revision, dependencies = {}) {
-  const branch = queueBranch(revision)
+async function waitForAnalysis(read, deadline, { now, sleep, log }) {
+  const result = await read()
+  if (result) return result
+  if (now() >= deadline) throw new Error('Timed out waiting for genuine auxiliary Sonar analysis')
+  log('Waiting for the exact queue commit analysis and Sonar app check')
+  await sleep(15000)
+  return await waitForAnalysis(read, deadline, { now, sleep, log })
+}
+
+export async function enforceSonarQueueGate(runId, dependencies = {}) {
   const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch
+  const api = dependencies.api ?? githubClient(process.env.GITHUB_TOKEN, fetchImpl)
   const now = dependencies.now ?? Date.now
   const sleep = dependencies.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
   const log = dependencies.log ?? console.log
-  const deadline = now() + 10 * 60 * 1000
-  const request = async (path, parameters) => {
-    const url = new URL(path, BASE_URL)
-    for (const [key, value] of Object.entries(parameters)) url.searchParams.set(key, String(value))
-    const response = await fetchImpl(url, {
-      headers: { accept: 'application/json', 'user-agent': 'bsv-ts-stack-sonar-queue-gate' },
-      redirect: 'error',
-      signal: AbortSignal.timeout(15_000)
-    })
-    if (!response.ok) throw new Error(`Sonar API ${path} returned HTTP ${response.status}`)
-    return await response.json()
-  }
-  const readAnalysis = async () => {
-    const payload = await request('/api/project_branches/list', { project: PROJECT })
-    if (!Array.isArray(payload?.branches)) throw new Error('Missing Sonar branch inventory')
-    const matches = payload.branches.filter(candidate => candidate.name === branch)
-    if (matches.length > 1) throw new Error('Ambiguous Sonar queue branch')
-    return matches[0]
-  }
-
-  const before = await waitForAnalysis(readAnalysis, revision, deadline, { now, sleep, log })
-  if (
-    before.type !== 'SHORT' ||
-    before.isMain !== false ||
-    !Number.isFinite(Date.parse(before.analysisDate))
-  ) {
-    throw new Error('Queue must have a completed short-lived Sonar analysis')
-  }
-
-  const [quality, issueCount, hotspotCount] = await Promise.all([
-    request('/api/qualitygates/project_status', { projectKey: PROJECT, branch }),
-    inventory(
-      request,
-      '/api/issues/search',
-      {
-        componentKeys: PROJECT,
-        branch,
-        issueStatuses: 'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
-      },
-      'issues'
-    ),
-    inventory(
-      request,
-      '/api/hotspots/search',
-      { projectKey: PROJECT, branch, status: 'TO_REVIEW' },
-      'hotspots'
-    )
+  const context = queueContext(
+    await api(`/actions/runs/${positiveId(runId)}`),
+    dependencies.baseBranch ?? 'main'
+  )
+  await assertActiveQueue(api, context)
+  const before = await waitForAnalysis(
+    () => completedAnalysis(api, fetchImpl, context),
+    now() + 10 * 60 * 1000,
+    { now, sleep, log }
+  )
+  const options = parseArguments([
+    '--project',
+    PROJECT,
+    '--pull-request',
+    String(before.pr.number),
+    '--revision',
+    context.sha
   ])
-  const after = await readAnalysis()
-  if (JSON.stringify(before) !== JSON.stringify(after)) {
-    throw new Error('Sonar queue analysis changed while collecting findings')
+  // Auxiliary PRs always use the original zero-findings policy, never a PR-specific exception.
+  const result = await enforceSonarPullRequestGate(options, { fetchImpl, now, sleep, log })
+  const after = await readAnalysis(fetchImpl, before.pr.number)
+  if (JSON.stringify(before.analysis) !== JSON.stringify(after))
+    throw new Error('Sonar analysis changed during inventory collection')
+  assertAnalysisPr(await api(`/pulls/${before.pr.number}`), context)
+  await assertActiveQueue(api, context)
+  return {
+    ...result,
+    runId,
+    analysisDate: after.analysisDate,
+    checkRunId: before.check.id,
+    pullRequestUrl: before.pr.html_url
   }
-  const qualityGateStatus = quality?.projectStatus?.status
-  if (qualityGateStatus !== 'OK' || issueCount !== 0 || hotspotCount !== 0) {
-    throw new Error(
-      `Sonar queue gate failed at ${revision}: quality=${qualityGateStatus ?? 'missing'}, ` +
-        `newFindings=${issueCount}, unreviewedHotspots=${hotspotCount}`
-    )
-  }
-  const result = {
-    revision,
-    branch,
-    analysisDate: before.analysisDate,
-    qualityGateStatus,
-    issueCount,
-    hotspotCount
-  }
-  log(`Sonar queue zero-findings gate passed: ${JSON.stringify(result)}`)
-  return result
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (process.argv.length !== 3)
-      throw new Error('Usage: node scripts/sonar-queue-gate.mjs <queue SHA>')
-    await enforceSonarQueueGate(process.argv[2])
+    if (process.env.GITHUB_EVENT_NAME !== 'merge_group') throw new Error('Expected merge_group')
+    const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
+    const result = await enforceSonarQueueGate(Number(process.env.GITHUB_RUN_ID))
+    if (result.revision !== event.merge_group?.head_sha)
+      throw new Error('Event and canonical run revisions differ')
+    mkdirSync('.sonar-policy', { recursive: true })
+    writeFileSync(
+      `.sonar-policy/queue-${result.revision}.json`,
+      JSON.stringify(result, null, 2) + '\n'
+    )
+    console.log(`Sonar queue zero-findings gate passed: ${JSON.stringify(result)}`)
   } catch (error) {
     console.error(error instanceof Error ? error.message : error)
     process.exitCode = 1

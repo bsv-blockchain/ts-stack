@@ -22,6 +22,9 @@ permissions:
 
 jobs:
   ts-runner:
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary conformance' || 'ts-runner' }}
+    if: >-
+      !(github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

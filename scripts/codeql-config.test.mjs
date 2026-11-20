@@ -76,7 +76,10 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)
   assert.match(workflow, /^  workflow_dispatch:$/m)
-  assert.match(workflow, /^    name: Analyze \(\$\{\{ matrix\.language \}\}\)$/m)
+  assert.match(
+    workflow,
+    /^    name: .+ \|\| format\('Analyze \(\{0\}\)', matrix\.language\) \}\}$/m
+  )
   assert.doesNotMatch(
     workflow,
     /CODEQL_ADVANCED_ENABLED/,
