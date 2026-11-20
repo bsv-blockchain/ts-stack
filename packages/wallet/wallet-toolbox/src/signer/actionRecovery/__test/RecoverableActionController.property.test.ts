@@ -48,7 +48,7 @@ test.each(propertyTestBatches(fc.readConfigureGlobal()))(
   120000
 )
 
-test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+test.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
   'generated authorization delays never produce a second payment or lose the retained first final (property $path, $numRuns cases)',
   async propertyBatch => {
     const context = await _tu.createLegacyWalletSQLiteCopy('generated-signing-authority', 'legacy')

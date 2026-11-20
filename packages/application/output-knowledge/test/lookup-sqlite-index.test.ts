@@ -582,7 +582,7 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+it.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
   'matches a row-map model across generated updates, deletions and exact lost-ack retries (property $path, $numRuns cases)',
   async propertyBatch => {
     const { store } = await fixture()

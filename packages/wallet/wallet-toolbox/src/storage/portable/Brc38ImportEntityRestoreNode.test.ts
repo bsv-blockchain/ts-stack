@@ -1,4 +1,3 @@
-import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { randomUUID, createHash } from 'node:crypto'
 import fc from 'fast-check'
 import {
@@ -24,14 +23,7 @@ import { importBRC38, type BRC38WalletData } from './index'
 import * as ids from './Brc38ImportIdMap'
 import type { Knex } from 'knex'
 
-const MIN_PROPERTY_RUNS = 300
-fc.configureGlobal({
-  numRuns: Math.max(
-    MIN_PROPERTY_RUNS,
-    Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? MIN_PROPERTY_RUNS)
-  ),
-  seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
-})
+const RESTORE_HISTORY_LENGTH = 300
 
 const nativeTables = [
   'proven_txs',
@@ -372,82 +364,77 @@ describe('actual authenticated native restore and durable original provenance', 
     ).rejects.toThrow('provenance differs')
     expect(selects.some(sql => sql.includes('select `tableName`, `originalJson`'))).toBe(false)
   })
-  test.each(
-    propertyTestBatches({
-      ...fc.readConfigureGlobal(),
-      numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
-      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+  test('full300 actual source pages preserve native values and atomic original/map/cursor rollback without renewing ownership', async () => {
+    await open(data => {
+      for (let index = 0; index < RESTORE_HISTORY_LENGTH; index++)
+        data.tables.outputBaskets.push({
+          ...data.tables.outputBaskets[0],
+          basketId: 1000 + index,
+          name: 'property-' + index
+        })
     })
-  )(
-    'full300 actual source pages preserve native values and atomic original/map/cursor rollback without renewing ownership (property $path, $numRuns cases)',
-    async propertyBatch => {
-      await open(data => {
-        for (let index = 0; index < 300; index++)
-          data.tables.outputBaskets.push({
-            ...data.tables.outputBaskets[0],
-            basketId: 1000 + index,
-            name: 'property-' + index
-          })
-      })
-      await commit(0)
-      await commit(1)
-      await commit(2)
-      const fixed = JSON.stringify(admission),
-        load = ids.loadBrc38ImportIdMap
-      let rollback = false,
-        index = 0
-      jest.spyOn(ids, 'loadBrc38ImportIdMap').mockImplementation(async (...args) => {
-        const value = await load(...args)
-        return {
-          map: value.map,
-          async persist() {
-            await value.persist()
-            if (rollback) throw new Error('synthetic native restore property rollback')
-          }
+    await commit(0)
+    await commit(1)
+    await commit(2)
+    const fixed = JSON.stringify(admission),
+      load = ids.loadBrc38ImportIdMap
+    let rollback = false,
+      index = 0
+    jest.spyOn(ids, 'loadBrc38ImportIdMap').mockImplementation(async (...args) => {
+      const value = await load(...args)
+      return {
+        map: value.map,
+        async persist() {
+          await value.persist()
+          if (rollback) throw new Error('synthetic native restore property rollback')
         }
-      })
-      await fc.assert(
-        fc.asyncProperty(fc.boolean(), async fail => {
-          const fromRow = index + 3,
-            before = await receipt(),
-            budget = JSON.stringify(await target.k('brc38_import_original_budget'))
-          if (fail) {
-            rollback = true
-            try {
-              await expect(commit(fromRow)).rejects.toThrow('synthetic native restore property rollback')
-            } finally {
-              rollback = false
-            }
-            expect(await target.k('output_baskets').where({ basketId: 1000 + index })).toHaveLength(0)
-            expect(await receipt()).toEqual(before)
-            expect(JSON.stringify(await target.k('brc38_import_original_budget'))).toBe(budget)
+      }
+    })
+    await fc.assert(
+      fc.asyncProperty(fc.boolean(), async fail => {
+        const fromRow = index + 3,
+          before = await receipt(),
+          budget = JSON.stringify(await target.k('brc38_import_original_budget'))
+        if (fail) {
+          rollback = true
+          try {
+            await expect(commit(fromRow)).rejects.toThrow('synthetic native restore property rollback')
+          } finally {
+            rollback = false
           }
-          expect((await commit(fromRow)).nextRow).toBe(fromRow + 1)
-          expect(
+          expect(await target.k('output_baskets').where({ basketId: 1000 + index })).toHaveLength(0)
+          expect(await receipt()).toEqual(before)
+          expect(JSON.stringify(await target.k('brc38_import_original_budget'))).toBe(budget)
+        }
+        expect((await commit(fromRow)).nextRow).toBe(fromRow + 1)
+        expect(
+          (
+            await target
+              .k('output_baskets')
+              .where({ basketId: 1000 + index })
+              .first()
+          ).name
+        ).toBe('property-' + index)
+        expect(
+          JSON.parse(
             (
-              await target
-                .k('output_baskets')
-                .where({ basketId: 1000 + index })
-                .first()
-            ).name
-          ).toBe('property-' + index)
-          expect(
-            JSON.parse(
-              (
-                await target.k.transaction(
-                  async trx => await readBrc38ImportOriginal(trx, admission.scope, fromRow, 2097152)
-                )
-              ).originalJson
-            ).basketId
-          ).toBe(1000 + index)
-          expect(JSON.stringify(admission)).toBe(fixed)
-          index++
-        }),
-        propertyBatch
-      )
-      expect(index).toBe(300)
-    },
-    180000
-  )
+              await target.k.transaction(
+                async trx => await readBrc38ImportOriginal(trx, admission.scope, fromRow, 2097152)
+              )
+            ).originalJson
+          ).basketId
+        ).toBe(1000 + index)
+        expect(JSON.stringify(admission)).toBe(fixed)
+        index++
+      }),
+      {
+        // Each generated operation advances the same durable cursor.
+        numRuns: RESTORE_HISTORY_LENGTH,
+        seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
+        timeout: 10000
+      }
+    )
+    expect(index).toBe(RESTORE_HISTORY_LENGTH)
+  }, 180000)
 })

@@ -203,7 +203,7 @@ test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
   180000
 )
 
-test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }, MIN_PROPERTY_RUNS))(
   'generated independent journal writes and primary away-and-back refuse stale previews while retaining authenticated receipts (property $path, $numRuns cases)',
   async propertyBatch => {
     const { user } = await target.storage.findOrInsertUser(staged.selected.binding.identityKey),

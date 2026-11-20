@@ -277,8 +277,9 @@ already present in the frozen graph; no runtime package dependency changes. Depe
 
 ## Generated property campaigns
 
-The expensive generated histories run in groups of up to 50 cases. Each group
-gets its suite's existing Jest or Vitest timeout. The fixed seed, generated
+Independent generated histories run in groups of up to 50 cases. Shared-state
+fixtures that verify retention across a 300-case history reuse that fixture
+for the full history. Each group gets its suite's Jest or Vitest timeout. The fixed seed, generated
 case count and absolute fast-check replay offsets are preserved. A shrink
 path that names a counterexample within its shrink tree is replayed intact.
 CI rejects fast-check wall-clock shortcuts that can truncate a case-count

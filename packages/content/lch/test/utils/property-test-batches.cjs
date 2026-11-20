@@ -8,7 +8,9 @@ const PROPERTY_TEST_BATCH_SIZE = 50
  * Preserve fast-check's original stream offsets and counterexample paths. A
  * replay starting inside a shrink tree retains its original configuration.
  */
-function propertyTestBatches(selection) {
+function propertyTestBatches(selection, casesPerBatch = PROPERTY_TEST_BATCH_SIZE) {
+  if (!Number.isSafeInteger(casesPerBatch) || casesPerBatch < 1 || casesPerBatch > 300)
+    throw new RangeError('Property batch size must be from 1 through 300.')
   const numRuns = selection.numRuns ?? 100
   const seed = selection.seed ?? Date.now() % 0x80000000
   if (!Number.isSafeInteger(numRuns) || numRuns < 1)
@@ -22,12 +24,12 @@ function propertyTestBatches(selection) {
   if (!Number.isSafeInteger(first) || !Number.isSafeInteger(first + numRuns))
     throw new RangeError('Property test replay offset exceeds the safe range.')
 
-  return Array.from({ length: Math.ceil(numRuns / PROPERTY_TEST_BATCH_SIZE) }, (_, index) => {
-    const offset = index * PROPERTY_TEST_BATCH_SIZE
+  return Array.from({ length: Math.ceil(numRuns / casesPerBatch) }, (_, index) => {
+    const offset = index * casesPerBatch
     return {
       ...selection,
       seed,
-      numRuns: Math.min(PROPERTY_TEST_BATCH_SIZE, numRuns - offset),
+      numRuns: Math.min(casesPerBatch, numRuns - offset),
       path: String(first + offset)
     }
   })

@@ -289,7 +289,8 @@ describe('real private Knex staging store generated accounting and ownership', (
     180000
   )
 
-  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  // One physical reservation must survive a full native handoff history.
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }, MIN_PROPERTY_RUNS))(
     'real independent authentication binds preview charges and drains reads before physical owner handoff (property $path, $numRuns cases)',
     async propertyBatch => {
       const directory = await parent(),

@@ -11,7 +11,8 @@ type LocalRunOptions<T> = Omit<T, keyof PropertyRunSelection | 'reporter' | 'asy
 type PropertyBatch<T> = LocalRunOptions<T> & Required<PropertyRunSelection>
 
 export function propertyTestBatches<T extends PropertyRunSelection>(
-  selection: T
+  selection: T,
+  casesPerBatch?: number
 ): Array<PropertyBatch<T>>
 
 export function measuredPropertyCampaign<T extends PropertyRunSelection>(

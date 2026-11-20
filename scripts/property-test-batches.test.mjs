@@ -19,6 +19,20 @@ test('PR, scheduled and manual case counts register every generated offset once'
   }
 })
 
+test('stateful histories retain their complete 300-case sequence in each fixture', () => {
+  const batches = propertyTestBatches({ numRuns: 5000, seed: 18 }, 300)
+  assert.deepEqual(batches.slice(0, 2), [
+    { numRuns: 300, path: '0', seed: 18 },
+    { numRuns: 300, path: '300', seed: 18 }
+  ])
+  assert.deepEqual(batches.at(-1), { numRuns: 200, path: '4800', seed: 18 })
+  assert.equal(
+    batches.reduce((total, batch) => total + batch.numRuns, 0),
+    5000
+  )
+  assert.throws(() => propertyTestBatches({ numRuns: 300 }, 301), /batch size/)
+})
+
 test('replay paths keep their original seed and absolute generator offsets', () => {
   assert.deepEqual(propertyTestBatches({ numRuns: 53, path: '252', seed: 4 }), [
     { numRuns: 50, path: '252', seed: 4 },

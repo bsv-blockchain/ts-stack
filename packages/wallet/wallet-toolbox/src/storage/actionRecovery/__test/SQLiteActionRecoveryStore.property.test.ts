@@ -17,7 +17,7 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+test.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
   'generated recovery claims atomically retain or roll back plans and never replace the first result (property $path, $numRuns cases)',
   async propertyBatch => {
     const context = await _tu.createLegacyWalletSQLiteCopy('generated-recovery-records', 'legacy')

@@ -15,7 +15,8 @@ fc.configureGlobal({
   seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
   ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
-it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+// Each fixture retains its original proof through all 300 generated transitions.
+it.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
   'retains the original transaction across 300 generated native proof recovery and merge histories (property $path, $numRuns cases)',
   propertyBatch => {
     const f = purchaseEvidenceFixture(),

@@ -17,7 +17,7 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+test.each(propertyTestBatches(fc.readConfigureGlobal(), MIN_PROPERTY_RUNS))(
   'generated signing transitions retain the first final bytes across reopened stores and reject reordered steps (property $path, $numRuns cases)',
   async propertyBatch => {
     const context = await _tu.createLegacyWalletSQLiteCopy('generated-recovery-transitions', 'legacy')
