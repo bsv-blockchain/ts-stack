@@ -72,23 +72,18 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
-    // SQL stores monitor event names in a 64-character column.
+    // A callback token selects a feed. Keep the original key for restart and
+    // migration, and never carry an opaque event ID onto a different feed.
     const fingerprint = toHex(sha256(toArray(JSON.stringify([arcadeUrl, callbackToken]), 'utf8'))).slice(0, 40)
     this.cursorEvent = `ArcadeSSECursor.${fingerprint}`
     let lastEventId: string | undefined
     try {
       if (this.monitor.options.loadLastSSEEventId != null) {
         lastEventId = await this.monitor.options.loadLastSSEEventId()
-      } else {
-        const events = await this.storage.runAsStorageProvider(
-          async sp =>
-            await sp.findMonitorEvents({
-              partial: { event: this.cursorEvent },
-              paged: { limit: 1 },
-              orderDescending: true
-            })
-        )
-        const cursor: unknown = JSON.parse(events[0]?.details ?? 'null')
+      } else if (this.monitor.options.saveLastSSEEventId == null) {
+        const key = this.cursorEvent
+        const [details] = await this.storage.runAsStorageProvider(sp => sp.loadMonitorCheckpoint(key))
+        const cursor: unknown = JSON.parse(details ?? 'null')
         if (typeof cursor === 'string') lastEventId = cursor
       }
     } catch (e) {
@@ -152,6 +147,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
   private async reconnectIfDue(): Promise<void> {
     if (this.reconnectAfter == null || Date.now() < this.reconnectAfter) return
+    if (this.sseClient?.isDraining === true) return
     this.reconnectAfter = undefined
     try {
       await this.fetchNow()
@@ -166,7 +162,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       if (this.monitor.options.saveLastSSEEventId != null) {
         await this.monitor.options.saveLastSSEEventId(id)
       } else if (this.cursorEvent != null && this.monitor.options.loadLastSSEEventId == null) {
-        await this.monitor.logEvent(this.cursorEvent, JSON.stringify(id))
+        const key = this.cursorEvent
+        await this.storage.runAsStorageProvider(sp => sp.saveMonitorCheckpoint(key, JSON.stringify(id)))
       }
     } catch (error) {
       await this.logSetupEvent('Failed to persist acknowledged Arcade cursor')

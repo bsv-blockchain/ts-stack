@@ -3,7 +3,7 @@ import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
 import type { StorageProvider } from '../../storage/StorageProvider'
 import type { StorageWriterAdmission } from '../../storage/StorageActiveWrite'
 import { Monitor } from '../Monitor'
-import { optionalMonitorInteger } from '../monitorValidation'
+import { optionalMonitorInteger, requireMonitorInteger } from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -32,18 +32,21 @@ export class TaskReviewStatus extends WalletMonitorTask {
   private static readonly progressEvent = 'ReviewStatusProgress'
   private progress = { transaction: 0, request: 0 }
   private requestReviewAfter = 0
+  private provider: StorageProvider | undefined
+  private readonly pageSize: number | undefined
 
   override async asyncSetup(): Promise<void> {
-    const events = await this.storage.runAsStorageProvider(sp =>
-      sp.findMonitorEvents({
-        partial: { event: TaskReviewStatus.progressEvent },
-        orderDescending: true,
-        paged: { limit: 5 }
-      })
-    )
-    for (const event of events) {
+    await this.storage.runAsStorageProvider(async sp => await this.loadProgress(sp))
+  }
+
+  private async loadProgress(provider: StorageProvider): Promise<void> {
+    const checkpoints = await provider.loadMonitorCheckpoint(TaskReviewStatus.progressEvent)
+    this.progress = { transaction: 0, request: 0 }
+    this.requestReviewAfter = 0
+    this.provider = provider
+    for (const checkpoint of checkpoints) {
       try {
-        const value = JSON.parse(event.details ?? '') as Record<string, unknown>
+        const value = JSON.parse(checkpoint) as Record<string, unknown>
         const transaction = optionalMonitorInteger(value.transaction, 0, Number.MAX_SAFE_INTEGER)
         const request = optionalMonitorInteger(value.request, 0, Number.MAX_SAFE_INTEGER)
         if (transaction !== undefined && request !== undefined) {
@@ -62,6 +65,8 @@ export class TaskReviewStatus extends WalletMonitorTask {
     public agedMsecs = 1000 * 60 * 5
   ) {
     super(monitor, TaskReviewStatus.taskName)
+    const limit = monitor.options?.statusReviewPageSize
+    this.pageSize = limit == null ? undefined : requireMonitorInteger(limit, 'statusReviewPageSize', 1, 2048)
   }
 
   trigger(nowMsecsSinceEpoch: number): { run: boolean } {
@@ -82,6 +87,7 @@ export class TaskReviewStatus extends WalletMonitorTask {
     if (!selected.independent)
       return await this.storage.runAsStorageProvider(async sp => await this.reviewLegacy(sp, agedLimit))
 
+    if (this.provider !== selected.provider) await this.loadProgress(selected.provider)
     const admission: StorageWriterAdmission = async operation =>
       await this.storage.runAsStorageProvider(
         current =>
@@ -112,7 +118,10 @@ export class TaskReviewStatus extends WalletMonitorTask {
     admission: StorageWriterAdmission
   ): Promise<string | undefined> {
     const started = performance.now()
-    const page = await provider.reviewStatusPage?.({ agedLimit, admission }, this.progress.transaction)
+    const page = await provider.reviewStatusPage?.(
+      { agedLimit, admission, pageSize: this.pageSize },
+      this.progress.transaction
+    )
     if (page == null) return undefined
     const notices =
       Date.now() >= this.requestReviewAfter
@@ -125,14 +134,16 @@ export class TaskReviewStatus extends WalletMonitorTask {
     let request = this.progress.request
     if (notices != null) request = notices.complete === false ? (notices.after ?? 0) : 0
     const progress = { transaction: page.complete ? 0 : page.after, request }
-    await this.monitor.logEvent(
-      TaskReviewStatus.progressEvent,
-      JSON.stringify({
-        ...progress,
-        examined: page.examined,
-        failed: page.failed,
-        durationMsecs: Math.round(performance.now() - started)
-      })
+    await admission(() =>
+      provider.saveMonitorCheckpoint(
+        TaskReviewStatus.progressEvent,
+        JSON.stringify({
+          ...progress,
+          examined: page.examined,
+          failed: page.failed,
+          durationMsecs: Math.round(performance.now() - started)
+        })
+      )
     )
     if (notices != null && notices.complete !== false) this.requestReviewAfter = Date.now() + Monitor.oneMinute
     this.progress = progress

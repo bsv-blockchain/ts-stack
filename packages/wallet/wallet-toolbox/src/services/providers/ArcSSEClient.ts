@@ -343,6 +343,11 @@ export class ArcSSEClient {
     return this._lastEventId
   }
 
+  /** A stopped connection may still be committing its accepted prefix. */
+  get isDraining(): boolean {
+    return this.es == null && this.processingGeneration != null
+  }
+
   /** Open the SSE connection. Events are processed serially in exact arrival order. */
   connect(): void {
     if (this.es != null || this.processingGeneration != null) return

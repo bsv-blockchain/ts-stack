@@ -64,6 +64,12 @@ export interface MonitorOptions {
 
   taskRunWaitMsecs: number
 
+  /** Maximum physical rows per paged SQL status review. Default 1024, range 1–2048. */
+  statusReviewPageSize?: number
+
+  /** Maximum proof rows per confirmed-spend page. Default 32, range 1–128. */
+  confirmedSpendReviewPageSize?: number
+
   abandonedMsecs: number
 
   unprovenAttemptsLimitTest: number

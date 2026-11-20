@@ -1,9 +1,15 @@
 import { runInSeries } from '../../utility/runInSeries'
 import { Transaction } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
-import type { StorageWriterAdmission } from '../StorageActiveWrite'
+import type {
+  ConfirmedSpendCursor,
+  ConfirmedSpendPage,
+  ConfirmedSpendRecoveryPage,
+  StorageWriterAdmission
+} from '../StorageActiveWrite'
 import type { TableProvenTx } from '../schema/tables/TableProvenTx'
 import type { WalletServices } from '../../sdk/WalletServices.interfaces'
+import { WalletError } from '../../sdk/WalletError'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { sameSyncProof, validateSyncProof } from './validateSyncProof'
 import { classifyOutputUtxo } from '../../services/classifyOutputUtxo'
@@ -34,8 +40,7 @@ function inputOutpoints(proof: TableProvenTx): Map<string, number> {
   return inputs
 }
 
-/** Applies only positive evidence from a stable canonical proof. No explorer
- * absence, stale output flag, or foreign wallet transaction ID is authority. */
+/** Apply positive evidence only under the owning primary's captured epoch. */
 export async function reconcileConfirmedSpender(
   storage: StorageKnex,
   proof: TableProvenTx,
@@ -49,136 +54,187 @@ export async function reconcileConfirmedSpender(
   for (const target of targets) {
     if (!inputs.has(`${target.txid}.${target.vout}`)) throw new Error('Proven spender does not consume the target')
   }
+  if (!(await storage.supportsPrimaryWriteFences()) || !(await storage.hasMonitorState())) return 0
+
+  const byUser = new Map<number, ConfirmedSpendTarget[]>()
+  for (const target of targets) {
+    const group = byUser.get(target.userId) ?? []
+    group.push(target)
+    byUser.set(target.userId, group)
+  }
+  const users = await storage
+    .knex('users')
+    .select<{ userId: number; identityKey: string }[]>('userId', 'identityKey')
+    .where({ activeStorage: storage.getSettings().storageIdentityKey })
+    .whereIn('userId', [...byUser.keys()])
+    .orderBy('userId')
+  const captures: { userId: number; write: Awaited<ReturnType<StorageKnex['activeWriteTransaction']>> }[] = []
+  await runInSeries(users, async user => {
+    try {
+      captures.push({ userId: user.userId, write: await storage.activeWriteTransaction(user) })
+    } catch (error) {
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+    }
+  })
+  if (captures.length === 0) return 0
   await validateSyncProof(storage, proof)
 
-  const apply = async (trx: TrxToken): Promise<number> => {
-    const db = storage.toDb(trx)
-    const currentProof = await db('proven_txs')
-      .select('provenTxId')
-      .where('provenTxId', proof.provenTxId)
-      .forUpdate()
-      .first()
-    const observed = currentProof == null ? undefined : await storage.findProvenTxById(proof.provenTxId, trx)
-    if (observed == null || !sameSyncProof(observed, proof)) return 0
-    let changed = 0
-    await runInSeries(
-      targets.slice().sort((a, b) => a.outputId - b.outputId),
-      async target => {
-        const output = await db('outputs')
-          .where({ outputId: target.outputId, userId: target.userId })
-          .select('outputId', 'txid', 'vout', 'basketId', 'spendable', 'spentBy', 'updated_at', 'transactionId')
-          .forUpdate()
-          .first()
-        if (!output?.spendable || output.basketId == null || output.txid !== target.txid || output.vout !== target.vout)
-          return
-        const source = await db('transactions')
-          .where({ transactionId: output.transactionId, userId: target.userId })
-          .select('status')
-          .first()
-        if (source == null || !confirmedSourceStatuses.includes(source.status)) return
-        // This is a chain observation shared by all copies of the same outpoint.
-        // Keep ownership, existing local reservations and the wallet's history intact.
-        const now = new Date(Math.max(Date.now(), new Date(output.updated_at).getTime() + 1))
-        if ((await storage.updateOutput(target.outputId, { spendable: false, updated_at: now }, trx)) !== 1)
-          throw new Error('Confirmed spend lost its locked output')
-        await storage.insertMonitorEvent(
-          {
-            id: 0,
-            created_at: now,
-            updated_at: now,
-            event: 'ConfirmedOutputSpend',
-            details: JSON.stringify({
-              outputId: target.outputId,
-              userId: target.userId,
-              txid: target.txid,
-              vout: target.vout,
-              previousUpdatedAt: output.updated_at,
-              observedUpdatedAt: now,
-              provenTxId: proof.provenTxId,
-              spendingTxid: proof.txid,
-              height: proof.height,
-              blockHash: proof.blockHash,
-              vin: inputs.get(`${target.txid}.${target.vout}`)
-            })
-          },
-          trx
-        )
-        changed++
-      }
-    )
-    return changed
-  }
-  return admission == null
-    ? await storage.transaction(apply)
-    : await admission(async () => await storage.transaction(apply))
-}
-
-async function findTargets(storage: StorageKnex, inputs: Map<string, number>): Promise<ConfirmedSpendTarget[]> {
-  const keys = [...inputs.keys()]
-  const targets: ConfirmedSpendTarget[] = []
-  function* unmatchedBatches() {
-    for (let start = 0; start < keys.length && targets.length < matchLimit; start += 128) {
-      yield keys.slice(start, start + 128).map(key => [key.slice(0, 64), Number(key.slice(65))])
+  let changed = 0
+  await runInSeries(captures, async ({ userId, write }) => {
+    const apply = () => write.transaction(trx => applyConfirmedSpend(storage, proof, inputs, byUser.get(userId)!, trx))
+    try {
+      changed += await (admission == null ? apply() : admission(apply))
+    } catch (error) {
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
     }
-  }
-  await runInSeries(unmatchedBatches(), async batch => {
-    const txids = [...new Set(batch.map(([txid]) => String(txid)))]
-    const rows = await storage
-      .knex('transactions as t')
-      .join('outputs as o', 'o.transactionId', 't.transactionId')
-      .whereIn('t.txid', txids)
-      .whereIn(['t.txid', 'o.vout'], batch)
-      .whereRaw('?? = ?? AND ?? = ??', ['o.txid', 't.txid', 'o.userId', 't.userId'])
-      .whereIn('t.status', confirmedSourceStatuses)
-      .where('o.spendable', true)
-      .whereNotNull('o.basketId')
-      .select<ConfirmedSpendTarget[]>('o.outputId', 'o.txid', 'o.vout', 'o.userId')
-      .orderBy('o.outputId')
-      .limit(matchLimit - targets.length)
-    targets.push(...rows)
   })
-  return targets
+  return changed
 }
 
-/** Sweep proof inputs, including proofs learned as BEEF ancestors or by
- * synchronization. A periodic wrap revisits flags imported or restored late. */
+async function applyConfirmedSpend(
+  storage: StorageKnex,
+  proof: TableProvenTx,
+  inputs: Map<string, number>,
+  targets: ConfirmedSpendTarget[],
+  trx: TrxToken
+): Promise<number> {
+  const db = storage.toDb(trx)
+  const currentProof = await db('proven_txs')
+    .select('provenTxId')
+    .where('provenTxId', proof.provenTxId)
+    .forUpdate()
+    .first()
+  const observed = currentProof == null ? undefined : await storage.findProvenTxById(proof.provenTxId, trx)
+  if (observed == null || !sameSyncProof(observed, proof)) return 0
+  let changed = 0
+  await runInSeries(
+    targets.slice().sort((a, b) => a.outputId - b.outputId),
+    async target => {
+      const output = await db('outputs')
+        .where({ outputId: target.outputId, userId: target.userId })
+        .select('outputId', 'txid', 'vout', 'basketId', 'spendable', 'spentBy', 'updated_at', 'transactionId')
+        .forUpdate()
+        .first()
+      if (!output?.spendable || output.basketId == null || output.txid !== target.txid || output.vout !== target.vout)
+        return
+      const source = await db('transactions')
+        .where({ transactionId: output.transactionId, userId: target.userId })
+        .select('status')
+        .first()
+      if (source == null || !confirmedSourceStatuses.includes(source.status)) return
+      const now = new Date(Math.max(Date.now(), new Date(output.updated_at).getTime() + 1))
+      if ((await storage.updateOutput(target.outputId, { spendable: false, updated_at: now }, trx)) !== 1)
+        throw new Error('Confirmed spend lost its locked output')
+      const details = JSON.stringify({
+        ...target,
+        previousUpdatedAt: output.updated_at,
+        observedUpdatedAt: now,
+        provenTxId: proof.provenTxId,
+        spendingTxid: proof.txid,
+        height: proof.height,
+        blockHash: proof.blockHash,
+        vin: inputs.get(`${target.txid}.${target.vout}`)
+      })
+      await db('monitor_confirmed_spends').insert({ outputId: target.outputId, details }).onConflict('outputId').merge()
+      changed++
+    }
+  )
+  return changed
+}
+
+async function findTargets(storage: StorageKnex, keys: string[], afterOutput: number): Promise<ConfirmedSpendTarget[]> {
+  const batch = keys.map(key => [key.slice(0, 64), Number(key.slice(65))])
+  const txids = [...new Set(batch.map(([txid]) => String(txid)))]
+  return await storage
+    .knex('transactions as t')
+    .join('outputs as o', 'o.transactionId', 't.transactionId')
+    .join('users as u', 'u.userId', 'o.userId')
+    .where('u.activeStorage', storage.getSettings().storageIdentityKey)
+    .whereIn('t.txid', txids)
+    .whereIn(['t.txid', 'o.vout'], batch)
+    .whereRaw('?? = ?? AND ?? = ??', ['o.txid', 't.txid', 'o.userId', 't.userId'])
+    .whereIn('t.status', confirmedSourceStatuses)
+    .where('o.spendable', true)
+    .whereNotNull('o.basketId')
+    .where('o.outputId', '>', afterOutput)
+    .select<ConfirmedSpendTarget[]>('o.outputId', 'o.txid', 'o.vout', 'o.userId')
+    .orderBy('o.outputId')
+    .limit(matchLimit + 1)
+}
+
+const outpointsPerBatch = 128
+
+async function reviewSpendProof(
+  storage: StorageKnex,
+  proof: TableProvenTx,
+  tipHeight: number,
+  partial: ConfirmedSpendCursor | undefined,
+  admission: StorageWriterAdmission | undefined
+): Promise<{ repaired: number; unavailable: number; partial?: ConfirmedSpendCursor }> {
+  const keys = [...inputOutpoints(proof).keys()]
+  const cursor =
+    partial?.proofId === proof.provenTxId ? partial : { proofId: proof.provenTxId, inputOffset: 0, outputId: 0 }
+  const batch = keys.slice(cursor.inputOffset, cursor.inputOffset + outpointsPerBatch)
+  if (!batch.length) return { repaired: 0, unavailable: 0 }
+  const targets = await findTargets(storage, batch, cursor.outputId)
+  const selected = targets.slice(0, matchLimit)
+  let repaired = 0
+  let unavailable = 0
+  try {
+    repaired = await reconcileConfirmedSpender(storage, proof, selected, tipHeight, admission)
+  } catch {
+    // Retain the target keyset even if this group could not commit.
+    unavailable = 1
+  }
+  if (targets.length > matchLimit)
+    return { repaired, unavailable, partial: { ...cursor, outputId: selected[matchLimit - 1].outputId } }
+  const next = cursor.inputOffset + batch.length
+  return {
+    repaired,
+    unavailable,
+    partial: next < keys.length ? { ...cursor, inputOffset: next, outputId: 0 } : undefined
+  }
+}
+
+/** Page the proof store and the physical target IDs independently. A stale
+ * target can never hide later matches for the same proof. */
 export async function reviewConfirmedSpendPage(
   storage: StorageKnex,
   after: number,
   tipHeight: number,
-  admission?: StorageWriterAdmission
-): Promise<{ after: number; examined: number; repaired: number; unavailable: number }> {
-  const start = performance.now()
+  admission?: StorageWriterAdmission,
+  partial?: ConfirmedSpendCursor,
+  limit = pageSize
+): Promise<ConfirmedSpendPage> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128)
+    throw new RangeError('Invalid confirmed-spend proof page size')
+  const started = performance.now()
   const rows = await storage
     .knex('proven_txs')
     .select<{ provenTxId: number }[]>('provenTxId')
     .where('provenTxId', '>', after)
     .orderBy('provenTxId')
-    .limit(pageSize)
+    .limit(limit)
   let examined = 0
   let repaired = 0
   let unavailable = 0
   for (const { provenTxId } of rows) {
-    if (examined > 0 && performance.now() - start >= workMsecs) break
+    if (examined > 0 && performance.now() - started >= workMsecs) break
     const proof = await storage.findProvenTxById(provenTxId)
-    let repeat = false
+    examined++
     if (proof != null && proof.height + minimumDepth <= tipHeight) {
       try {
-        const targets = await findTargets(storage, inputOutpoints(proof))
-        const changed = await reconcileConfirmedSpender(storage, proof, targets, tipHeight, admission)
-        repaired += changed
-        repeat = changed > 0 && targets.length === matchLimit
+        const page = await reviewSpendProof(storage, proof, tipHeight, partial, admission)
+        repaired += page.repaired
+        unavailable += page.unavailable
+        if (page.partial != null) return { after, partial: page.partial, examined, repaired, unavailable }
       } catch {
-        // One orphan, corrupt proof or transient lookup must not block future
-        // proofs. The next pass reconsiders this row with fresh evidence.
         unavailable++
       }
     }
-    examined++
-    if (repeat) return { after, examined, repaired, unavailable }
     after = provenTxId
   }
-  return { after: examined === rows.length && rows.length < pageSize ? 0 : after, examined, repaired, unavailable }
+  return { after: examined === rows.length && rows.length < limit ? 0 : after, examined, repaired, unavailable }
 }
 
 interface ConfirmedSpendReceipt extends ConfirmedSpendTarget {
@@ -219,58 +275,102 @@ function stillQuarantined(
   )
 }
 
-/** Recover an observation invalidated by a deep reorg. Only reverse our exact
- * untouched flag, with a canonical funding proof and a positive exact-outpoint
- * unspent result. A competing spend, transport error or later wallet edit wins. */
-export async function reviewConfirmedSpendRecoveries(
-  storage: StorageKnex,
-  after: number,
-  admission?: StorageWriterAdmission
-): Promise<{ after: number; restored: number; unavailable: number }> {
-  const limit = 12
-  const scope = storage.knex
-  const ids = await scope('monitor_events')
+/** Migrate only live rollback evidence. The original audit events stay intact
+ * and this cursor is retired after the legacy range has been imported. */
+async function importLegacyReceipts(storage: StorageKnex, after: number): Promise<number | null> {
+  const ids = await storage
+    .knex('monitor_events')
     .select<{ id: number }[]>('id')
     .where({ event: 'ConfirmedOutputSpend' })
     .where('id', '>', after)
     .orderBy('id')
-    .limit(limit)
+    .limit(12)
+  await runInSeries(ids, async ({ id }) => {
+    const event = await storage.findMonitorEventById(id)
+    const receipt = readReceipt(event?.details)
+    if (receipt == null || event?.details == null) return
+    const details = event.details
+    await storage.transaction(async trx => {
+      const db = storage.toDb(trx)
+      const row = await db('outputs')
+        .where({ outputId: receipt.outputId })
+        .forUpdate()
+        .first('userId', 'txid', 'vout', 'spendable', 'spentBy', 'updated_at')
+      if (row != null && stillQuarantined(row, receipt)) {
+        await db('monitor_confirmed_spends')
+          .insert({ outputId: receipt.outputId, details })
+          .onConflict('outputId')
+          .ignore()
+      }
+    })
+  })
+  return ids.length < 12 ? null : ids.at(-1)!.id
+}
+
+/** Recover an observation invalidated by a deep reorg. A competing spend,
+ * transport error or later wallet edit wins. */
+export async function reviewConfirmedSpendRecoveries(
+  storage: StorageKnex,
+  after: number,
+  admission?: StorageWriterAdmission,
+  legacyAfter: number | null = 0
+): Promise<ConfirmedSpendRecoveryPage> {
+  const limit = 12
+  if (!(await storage.supportsPrimaryWriteFences()) || !(await storage.hasMonitorState()))
+    return { after, legacyAfter, restored: 0, unavailable: 0 }
   const started = performance.now()
+  if (legacyAfter != null) legacyAfter = await importLegacyReceipts(storage, legacyAfter)
+  const rows = await storage
+    .knex('monitor_confirmed_spends')
+    .select<{ outputId: number; details: string }[]>('outputId', 'details')
+    .where('outputId', '>', after)
+    .orderBy('outputId')
+    .limit(limit)
   let restored = 0
   let unavailable = 0
   let processed = 0
   const services = storage.getServices()
   const headers = new Map<number, string>()
   function* budgetedReceipts() {
-    for (const entry of ids) {
+    for (const row of rows) {
       if (processed > 0 && performance.now() - started >= workMsecs) return
-      yield entry.id
+      yield row
     }
   }
-  await runInSeries(budgetedReceipts(), async id => {
-    after = id
+  await runInSeries(budgetedReceipts(), async ({ outputId, details }) => {
+    after = outputId
     processed++
     try {
-      restored += await reviewSpendReceipt(storage, id, services, headers, admission)
-    } catch {
-      unavailable++
+      restored += await reviewSpendReceipt(storage, outputId, details, services, headers, admission)
+    } catch (error) {
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') unavailable++
     }
   })
-  return { after: processed === ids.length && ids.length < limit ? 0 : after, restored, unavailable }
+  return { after: processed === rows.length && rows.length < limit ? 0 : after, legacyAfter, restored, unavailable }
 }
 
 async function reviewSpendReceipt(
   storage: StorageKnex,
-  id: number,
+  outputId: number,
+  details: string,
   services: WalletServices,
   headers: Map<number, string>,
   admission?: StorageWriterAdmission
 ): Promise<number> {
-  const observation = await storage.findMonitorEventById(id)
-  const receipt = readReceipt(observation?.details)
-  if (receipt == null) return 0
+  const receipt = readReceipt(details)
+  // Fail closed on damaged durable evidence so it can be inspected and repaired.
+  if (receipt == null || receipt.outputId !== outputId) throw new Error('Invalid confirmed-spend receipt')
   const row = await storage.findOutputById(receipt.outputId, undefined, true)
-  if (row == null || !stillQuarantined(row, receipt)) return 0
+  if (row == null || !stillQuarantined(row, receipt)) {
+    await storage.knex('monitor_confirmed_spends').where({ outputId, details }).delete()
+    return 0
+  }
+  const user = await storage
+    .knex('users')
+    .where({ userId: receipt.userId, activeStorage: storage.getSettings().storageIdentityKey })
+    .first('identityKey', 'userId')
+  if (user == null) return 0
+  const write = await storage.activeWriteTransaction(user)
   let activeHash = headers.get(receipt.height)
   if (activeHash == null) {
     const header = await services.getHeaderForHeight(receipt.height)
@@ -290,16 +390,14 @@ async function reviewSpendReceipt(
   const recheck = await services.getHeaderForHeight(receipt.height)
   if (recheck.length !== 80 || asString(doubleSha256BE(recheck)) !== activeHash) return 0
 
-  const apply = async (trx: TrxToken): Promise<number> =>
-    await restoreReceiptedOutput(storage, id, receipt, funding, activeHash, trx)
-  return admission == null
-    ? await storage.transaction(apply)
-    : await admission(async () => await storage.transaction(apply))
+  const apply = () =>
+    write.transaction(trx => restoreReceiptedOutput(storage, details, receipt, funding, activeHash, trx))
+  return await (admission == null ? apply() : admission(apply))
 }
 
 async function restoreReceiptedOutput(
   storage: StorageKnex,
-  id: number,
+  details: string,
   receipt: ConfirmedSpendReceipt,
   funding: TableProvenTx,
   activeHash: string,
@@ -325,6 +423,8 @@ async function restoreReceiptedOutput(
     .select('status', 'provenTxId')
     .first()
   if (source?.status !== 'completed' || source.provenTxId !== funding.provenTxId) return 0
+  const removed = await sql('monitor_confirmed_spends').where({ outputId: receipt.outputId, details }).delete()
+  if (removed !== 1) return 0
   const now = new Date(Math.max(Date.now(), Date.parse(receipt.observedUpdatedAt) + 1))
   const changed = await storage.updateOutput(receipt.outputId, { spendable: true, updated_at: now }, trx)
   if (changed !== 1) throw new Error('Confirmed spend recovery lost its locked output')
@@ -334,7 +434,7 @@ async function restoreReceiptedOutput(
       created_at: now,
       updated_at: now,
       event: 'ConfirmedOutputSpendRestored',
-      details: JSON.stringify({ observationId: id, outputId: receipt.outputId, blockHash: activeHash })
+      details: JSON.stringify({ outputId: receipt.outputId, blockHash: activeHash })
     },
     trx
   )
