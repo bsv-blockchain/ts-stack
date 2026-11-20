@@ -109,6 +109,36 @@ export const nextVersion = ({ publishedVersion, currentVersion, impact }) => {
  *
  *   The migration decision, or "No consumer migration is required."
  */
+function addReleaseEntry(release, entry, file, errors) {
+  const [, name, impact] = entry
+  if (!IMPACTS.includes(impact)) {
+    errors.push(`${file} gives ${name} impact ${impact}; use patch, minor or major`)
+  } else if (name in release) {
+    errors.push(`${file} names ${name} more than once`)
+  } else {
+    release[name] = impact
+  }
+}
+
+function parseRelease(frontmatter, file, errors) {
+  const release = {}
+  let inRelease = false
+  for (const line of frontmatter.split(/\r?\n/)) {
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue
+    if (line.trimEnd() === 'release:') {
+      inRelease = true
+      continue
+    }
+    const entry = inRelease ? RELEASE_LINE.exec(line) : null
+    if (entry === null) {
+      errors.push(`${file} has an unsupported frontmatter line: ${line.trim()}`)
+    } else {
+      addReleaseEntry(release, entry, file, errors)
+    }
+  }
+  return release
+}
+
 export function parseChange(text, file = '<change>') {
   const errors = []
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text)
@@ -116,28 +146,7 @@ export function parseChange(text, file = '<change>') {
     return { errors: [`${file} must start with a --- frontmatter block`] }
   }
   const [, frontmatter, body] = match
-  const release = {}
-  let inRelease = false
-  for (const line of frontmatter.split(/\r?\n/)) {
-    if (line.trim() === '' || line.trimStart().startsWith('#')) continue
-    if (/^release:\s*$/.test(line)) {
-      inRelease = true
-      continue
-    }
-    const entry = inRelease ? RELEASE_LINE.exec(line) : null
-    if (entry === null) {
-      errors.push(`${file} has an unsupported frontmatter line: ${line.trim()}`)
-      continue
-    }
-    const [, name, impact] = entry
-    if (!IMPACTS.includes(impact)) {
-      errors.push(`${file} gives ${name} impact ${impact}; use patch, minor or major`)
-    } else if (name in release) {
-      errors.push(`${file} names ${name} more than once`)
-    } else {
-      release[name] = impact
-    }
-  }
+  const release = parseRelease(frontmatter, file, errors)
   if (Object.keys(release).length === 0)
     errors.push(`${file} must name at least one package under release:`)
   const sections = body.split(/^##\s+Migration\s*$/m)
@@ -220,10 +229,7 @@ export function loadChanges(root = ROOT) {
 }
 
 /** Combine every pending change into one plan per release group. */
-export function planRelease(root = ROOT) {
-  const { packages, changes, errors } = loadChanges(root)
-  const notes = readJson(root, RELEASE_NOTES)
-  const entries = new Map(notes.entries.map(entry => [entry.name, entry]))
+function groupChanges(packages, changes) {
   const groups = new Map()
   for (const change of changes) {
     for (const [name, impact] of Object.entries(change.release)) {
@@ -235,8 +241,15 @@ export function planRelease(root = ROOT) {
       groups.set(leader, group)
     }
   }
+  return groups
+}
+
+export function planRelease(root = ROOT) {
+  const { packages, changes, errors } = loadChanges(root)
+  const notes = readJson(root, RELEASE_NOTES)
+  const entries = new Map(notes.entries.map(entry => [entry.name, entry]))
   const plan = []
-  for (const [leader, group] of groups) {
+  for (const [leader, group] of groupChanges(packages, changes)) {
     const leaderProject = packages.get(leader)
     const leaderManifest = readJson(root, `${leaderProject.path}/package.json`)
     const leaderEntry = entries.get(leader)
@@ -276,12 +289,21 @@ export function planRelease(root = ROOT) {
 // Applying a plan
 
 const setManifestVersion = (text, version) => {
-  const updated = text.replace(/^(\s*"version"\s*:\s*)"[^"]*"/m, `$1"${version}"`)
-  if (updated === text && !text.includes(`"version": "${version}"`)) {
+  const lines = text.split('\n')
+  const index = lines.findIndex(line => line.trimStart().startsWith('"version"'))
+  const line = lines[index] ?? ''
+  const valueStart = line.indexOf('"', line.indexOf(':') + 1)
+  const valueEnd = line.indexOf('"', valueStart + 1)
+  if (index === -1 || line.indexOf(':') === -1 || valueStart === -1 || valueEnd === -1) {
     throw new Error('package.json has no "version" field to update')
   }
-  return updated
+  lines[index] = `${line.slice(0, valueStart + 1)}${version}${line.slice(valueEnd)}`
+  return lines.join('\n')
 }
+
+/** The first `x.y.z` version in a line, found without a backtracking regular expression. */
+const VERSION_IN_LINE = /\d{1,9}\.\d{1,9}\.\d{1,9}/
+const versionIndex = line => VERSION_IN_LINE.exec(line)?.index
 
 const changelogBullets = changes =>
   changes
@@ -304,9 +326,8 @@ export function insertChangelogSection(text, { version, date, changes }) {
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.startsWith('## '))
   const bullets = changelogBullets(changes)
-  const versionPattern = new RegExp(
-    String.raw`(^|[^\d.])${version.replaceAll('.', String.raw`\.`)}(?![\d.])`
-  )
+  const escapedVersion = version.replaceAll('.', '\\.')
+  const versionPattern = new RegExp(String.raw`(^|[^\d.])` + escapedVersion + String.raw`(?![\d.])`)
   const existing = headings.find(({ line }) => versionPattern.test(line))
   if (existing !== undefined) {
     const next = headings.find(({ index }) => index > existing.index)?.index ?? lines.length
@@ -315,8 +336,8 @@ export function insertChangelogSection(text, { version, date, changes }) {
     lines.splice(end, 0, '', bullets)
     return lines.join('\n')
   }
-  const unreleased = headings.find(({ line }) => /^## \[Unreleased\]/i.test(line))
-  const firstRelease = headings.find(({ line }) => /\d+\.\d+\.\d+/.test(line))
+  const unreleased = headings.find(({ line }) => line.toLowerCase().startsWith('## [unreleased]'))
+  const firstRelease = headings.find(({ line }) => versionIndex(line) !== undefined)
   let insertAt
   if (unreleased !== undefined) {
     insertAt = headings.find(({ index }) => index > unreleased.index)?.index ?? lines.length
@@ -324,9 +345,9 @@ export function insertChangelogSection(text, { version, date, changes }) {
     insertAt = firstRelease?.index ?? headings[0]?.index ?? lines.length
   }
   let heading = `## [${version}] - ${date}`
-  if (unreleased === undefined && firstRelease !== undefined) {
-    const prefix = /^## (?!\[)(.*?)\d+\.\d+\.\d+/.exec(firstRelease.line)?.[1]
-    if (prefix !== undefined) heading = `## ${prefix}${version}`
+  if (unreleased === undefined && firstRelease !== undefined && firstRelease.line[3] !== '[') {
+    const prefix = firstRelease.line.slice(3, versionIndex(firstRelease.line))
+    heading = `## ${prefix}${version}`
   }
   lines.splice(insertAt, 0, heading, '', bullets, '')
   return lines.join('\n')
@@ -357,11 +378,24 @@ function packagePages(root) {
 /** The documentation policy requires a package page `version` to match the manifest. */
 export function setPageVersion(text, version) {
   const frontmatter = frontmatterOf(text)
-  const updated = frontmatter.replace(
-    /^version:\s*(["']?)[^"'\n]*\1\s*$/m,
-    (_line, quote) => `version: ${quote}${version}${quote}`
-  )
+  const lines = frontmatter.split('\n')
+  const index = lines.findIndex(line => line.startsWith('version:'))
+  if (index === -1) return text
+  const value = lines[index].slice('version:'.length).trim()
+  const quote = value[0] === '"' || value[0] === "'" ? value[0] : ''
+  lines[index] = `version: ${quote}${version}${quote}`
+  const updated = lines.join('\n')
   return updated === frontmatter ? text : text.replace(frontmatter, updated)
+}
+
+/** Read a file, or return undefined when it does not exist (no separate existence check). */
+function readIfPresent(path) {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  }
 }
 
 const appendNote = (existing, addition, replace) =>
@@ -409,8 +443,8 @@ export function applyRelease(root = ROOT, { date = new Date().toISOString().slic
     }
 
     const changelogPath = join(root, item.path, 'CHANGELOG.md')
-    if (item.leader && existsSync(changelogPath)) {
-      const text = readFileSync(changelogPath, 'utf8')
+    const text = item.leader ? readIfPresent(changelogPath) : undefined
+    if (text !== undefined) {
       writeFileSync(
         changelogPath,
         insertChangelogSection(text, { version: item.version, date, changes: item.changes })
@@ -427,7 +461,7 @@ export function applyRelease(root = ROOT, { date = new Date().toISOString().slic
 // ---------------------------------------------------------------------------
 // Pull request guard
 
-const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
+const git = (root, args) => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
 
 const showJson = (root, revision, path) => {
   try {
@@ -488,7 +522,8 @@ const slugify = value =>
   value
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '')
+    .replace(/^-/, '')
+    .replace(/-$/, '')
     .slice(0, 48)
 
 function optionValues(argv, flag) {
@@ -544,57 +579,71 @@ function fail(errors) {
   process.exitCode = 1
 }
 
+function commandNew(rest, root) {
+  const release = {}
+  for (const spec of positional(rest)) {
+    const at = spec.lastIndexOf(':')
+    if (at <= 0) return fail([`expected <package>:<patch|minor|major>, got ${spec}`])
+    release[spec.slice(0, at)] = spec.slice(at + 1)
+  }
+  const [summary] = optionValues(rest, '--summary')
+  const [migration] = optionValues(rest, '--migration')
+  const [slug] = optionValues(rest, '--slug')
+  const result = createChange(root, {
+    release,
+    summary: summary ?? '',
+    migration: migration ?? '',
+    slug
+  })
+  if (result.errors.length > 0) return fail(result.errors)
+  console.log(`Created ${result.file}`)
+}
+
+function commandStatus(_rest, root) {
+  const { plan, errors } = planRelease(root)
+  if (errors.length > 0) return fail(errors)
+  printPlan(plan)
+}
+
+function commandCheck(rest, root) {
+  const { errors } = planRelease(root)
+  const [base] = optionValues(rest, '--base')
+  const [head] = optionValues(rest, '--head')
+  if (base !== undefined) {
+    const diff = checkDiff(root, base, head ?? 'HEAD')
+    errors.push(...diff.errors)
+    for (const warning of diff.warnings) console.log(`::warning::${warning}`)
+  }
+  if (errors.length > 0) return fail(errors)
+  console.log(`Release change files are valid (${listChangeFiles(root).length} pending).`)
+}
+
+function commandVersion(rest, root) {
+  const [date] = optionValues(rest, '--date')
+  const result = applyRelease(root, date ? { date } : {})
+  if (result.errors.length > 0) return fail(result.errors)
+  printPlan(result.plan)
+  if (result.changed) {
+    console.log('Now run `pnpm docs:facts` to regenerate the derived documentation.')
+  }
+}
+
+const COMMANDS = {
+  new: commandNew,
+  status: commandStatus,
+  check: commandCheck,
+  version: commandVersion
+}
+
 export function main(argv, root = ROOT) {
   const [command, ...rest] = argv
-  if (command === 'new') {
-    const release = {}
-    for (const spec of positional(rest)) {
-      const at = spec.lastIndexOf(':')
-      if (at <= 0) return fail([`expected <package>:<patch|minor|major>, got ${spec}`])
-      release[spec.slice(0, at)] = spec.slice(at + 1)
-    }
-    const [summary] = optionValues(rest, '--summary')
-    const [migration] = optionValues(rest, '--migration')
-    const [slug] = optionValues(rest, '--slug')
-    const result = createChange(root, {
-      release,
-      summary: summary ?? '',
-      migration: migration ?? '',
-      slug
-    })
-    if (result.errors.length > 0) return fail(result.errors)
-    console.log(`Created ${result.file}`)
-    return
+  const run = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
+  if (run === undefined) {
+    return fail([
+      `usage: release-changes.mjs <new|status|check|version> (got ${command ?? 'nothing'})`
+    ])
   }
-  if (command === 'status') {
-    const { plan, errors } = planRelease(root)
-    if (errors.length > 0) return fail(errors)
-    printPlan(plan)
-    return
-  }
-  if (command === 'check') {
-    const { errors } = planRelease(root)
-    const [base] = optionValues(rest, '--base')
-    const [head] = optionValues(rest, '--head')
-    if (base !== undefined) {
-      const diff = checkDiff(root, base, head ?? 'HEAD')
-      errors.push(...diff.errors)
-      for (const warning of diff.warnings) console.log(`::warning::${warning}`)
-    }
-    if (errors.length > 0) return fail(errors)
-    console.log(`Release change files are valid (${listChangeFiles(root).length} pending).`)
-    return
-  }
-  if (command === 'version') {
-    const [date] = optionValues(rest, '--date')
-    const result = applyRelease(root, date ? { date } : {})
-    if (result.errors.length > 0) return fail(result.errors)
-    printPlan(result.plan)
-    if (result.changed)
-      console.log('Now run `pnpm docs:facts` to regenerate the derived documentation.')
-    return
-  }
-  fail([`usage: release-changes.mjs <new|status|check|version> (got ${command ?? 'nothing'})`])
+  return run(rest, root)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
