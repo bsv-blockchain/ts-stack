@@ -99,7 +99,7 @@ export default class Script {
   }
 
   static #finalTopLevelReturn(chunks: ScriptChunk[]): ScriptChunk | undefined {
-    const last = chunks[chunks.length - 1]
+    const last = chunks.at(-1)
     if (last?.op !== OP.OP_RETURN) return undefined
     let depth = 0
     for (const chunk of chunks) {
