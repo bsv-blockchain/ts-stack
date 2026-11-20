@@ -100,12 +100,21 @@ additional historical `CHANGELOG.md`.
 A package change updates:
 
 - its README and API/reference docs when the consumer contract changes;
-- its exact entry in `governance/package-release-notes.json`, including the
-  source-versus-published boundary, SemVer impact, summary, and migration
-  decision;
-- a migration note with before/after examples for incompatible behavior;
-- a package-local changelog when that package already maintains one; and
+- one new change file under `changes/` with the SemVer impact, summary, and
+  migration decision (`pnpm change`; see `changes/README.md`);
+- a migration note with before/after examples for incompatible behavior; and
 - the pull request and release evidence needed to explain the change.
+
+A feature pull request does not edit the package version, its entry in
+`governance/package-release-notes.json`, a package-local changelog, the
+baseline package versions, or the generated ledgers. The `Version packages`
+workflow folds every pending change file into those files in one generated
+`chore: version packages` pull request. It computes each next version from the
+published baseline: the strongest pending impact wins, nested packages such as
+the wallet-toolbox client and mobile builds follow their enclosing package, and
+an unpublished candidate that already satisfies the impact is not bumped again.
+For a breaking change in a `0.y.z` package, choose `minor`; `major` moves the
+package to `1.0.0`.
 
 `pnpm docs:packages:check` rejects missing packages, version/release-type
 disagreement, missing API pages, and stale generated output. After an authorized

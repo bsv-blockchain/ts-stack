@@ -79,6 +79,13 @@ jobs:
           --base "$BASE_SHA"
           --head "$HEAD_SHA"
 
+      - name: Enforce release change files instead of direct version bumps
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/release-changes.mjs check --base "$BASE_SHA" --head "$HEAD_SHA"
+
       - name: Enforce test, manual-suite, and conformance skip governance
         run: |
           node scripts/test-governance.mjs
