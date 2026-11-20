@@ -65,6 +65,8 @@ describe('WAB-administered UMP pin fallback', () => {
     return { subject, first, second }
   }
 
+  afterEach(() => jest.restoreAllMocks())
+
   it('uses the pin only after normal lineage resolution remains ambiguous', async () => {
     const { subject, second } = interactor()
     jest.spyOn(subject as any, 'resolveNewestToken').mockReturnValue(undefined)
@@ -112,7 +114,7 @@ describe('WAB-administered UMP pin fallback', () => {
       message: 'published'
     }))
     Object.assign(subject as any, { broadcaster: { broadcast } })
-    const lock = jest.spyOn(PushDrop.prototype, 'lock').mockResolvedValue({ toHex: () => '51' } as any)
+    jest.spyOn(PushDrop.prototype, 'lock').mockResolvedValue(LockingScript.fromHex('51'))
     const fields = jest.spyOn(subject as any, 'tokenFields').mockReturnValue([])
     const oldInput = jest.spyOn(subject as any, 'resolveOldInput').mockResolvedValue({
       resolvedOldToken: undefined,
@@ -130,10 +132,10 @@ describe('WAB-administered UMP pin fallback', () => {
         outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'New UMP token output' }]
       }),
       expect.anything(),
-      'admin.example'
+      'admin.example',
+      false
     )
     expect(broadcast).toHaveBeenCalledWith(completed)
-    lock.mockRestore()
   })
 
   it('refuses ambiguous token outputs and mismatched broadcast identities', async () => {
