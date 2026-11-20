@@ -153,15 +153,15 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
 
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
