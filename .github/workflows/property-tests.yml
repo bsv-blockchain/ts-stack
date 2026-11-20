@@ -22,7 +22,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: property-fuzzing-${{ github.ref }}
+  group: property-fuzzing-${{ github.ref }}-${{ github.event_name == 'schedule' && 'scheduled' || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -112,6 +112,23 @@ jobs:
       - name: Verify the property test stand
         run: pnpm test:governance
 
+      - name: Provision the qualified Wallet Toolbox native fixtures
+        if: matrix.suite == 'wallet-toolbox'
+        run: |
+          pnpm -r --filter '@bsv/wallet-toolbox...' run build
+          bash scripts/provision-wallet-native-tests.sh
+
+      - name: Preserve Wallet Toolbox native fixture delivery evidence
+        if: always() && matrix.suite == 'wallet-toolbox'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: property-native-delivery-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-delivery.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build and run the assigned property campaign
         env:
           PROPERTY_SUITE: ${{ matrix.suite }}
@@ -134,8 +151,9 @@ jobs:
                 if [[ "$PROPERTY_SUITE" == wallet-toolbox ]]; then
                   export JEST_SHARD_LANE=wallet-toolbox-coverage
                   shard_count=4
+                else
+                  pnpm -r --filter "$package..." run build
                 fi
-                pnpm -r --filter "$package..." run build
                 pnpm --filter "$package" run test:property --shard="$PROPERTY_SHARD/$shard_count" \
                   --testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs"
                 ;;

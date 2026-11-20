@@ -288,8 +288,9 @@ whole-campaign time limit for comparable performance measurements.
 The scheduled campaign runs Output Knowledge, Wallet Toolbox, LCH and the
 remaining governed packages in separate jobs. Output Knowledge uses eight
 shards and Wallet Toolbox uses four with measured Jest file placement. LCH
-uses two shards. Each job records the same seed and case count, plus its own
-shard and failure log.
+uses two shards. Wallet jobs qualify and deliver the pinned native test
+executable before running any properties. Each job records the same seed and
+case count, plus its own shard and failure log.
 
 Edit the shared helper in `config/testing`, then run
 `node scripts/sync-property-test-batches.mjs` to update the copies used by

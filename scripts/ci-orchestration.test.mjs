@@ -92,6 +92,9 @@ test('property campaigns cover each heavy suite shard and continue collecting ev
   ])
   assert.match(workflow, /fail-fast: false/)
   assert.match(workflow, /run: pnpm test:governance/)
+  const provision = workflow.indexOf('bash scripts/provision-wallet-native-tests.sh')
+  const execute = workflow.indexOf('Build and run the assigned property campaign')
+  assert.ok(provision > 0 && provision < execute)
   assert.match(workflow, /--shard="\$PROPERTY_SHARD\/\$shard_count"/)
   assert.match(workflow, /--shard="\$PROPERTY_SHARD\/2"/)
   assert.match(
