@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { appendFile, chmod, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,8 +26,6 @@ fc.configureGlobal({
 // keeps its own original reservation deadline, including authenticated replay.
 const propertyCaseMilliseconds = 180000
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 
@@ -86,9 +85,9 @@ async function* partition(bytes: Uint8Array, widths: readonly number[], emptyEve
 }
 
 describe('actual complete authenticated private staging lifecycle', () => {
-  test(
-    'generated independent envelopes and partitions preserve all thirteen rows and original charged replay',
-    async () => {
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated independent envelopes and partitions preserve all thirteen rows and original charged replay (property $path, $numRuns cases)',
+    async propertyBatch => {
       const target = await fixture()
       try {
         await fc.assert(
@@ -162,7 +161,7 @@ describe('actual complete authenticated private staging lifecycle', () => {
               await target.empty()
             }
           ),
-          controls
+          propertyBatch
         )
       } finally {
         await target.close()
@@ -171,9 +170,9 @@ describe('actual complete authenticated private staging lifecycle', () => {
     propertyCaseMilliseconds
   )
 
-  test(
-    'generated ordinary authentication and semantic refusals release physical capacity before rejection',
-    async () => {
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated ordinary authentication and semantic refusals release physical capacity before rejection (property $path, $numRuns cases)',
+    async propertyBatch => {
       const target = await fixture(),
         valid = await encrypted()
       try {
@@ -212,7 +211,7 @@ describe('actual complete authenticated private staging lifecycle', () => {
               await target.empty()
             }
           ),
-          controls
+          propertyBatch
         )
       } finally {
         await target.close()
@@ -221,9 +220,9 @@ describe('actual complete authenticated private staging lifecycle', () => {
     propertyCaseMilliseconds
   )
 
-  test(
-    'generated source failure, cancellation and pre-admission refusal retain exact reasons and settle original ownership',
-    async () => {
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated source failure, cancellation and pre-admission refusal retain exact reasons and settle original ownership (property $path, $numRuns cases)',
+    async propertyBatch => {
       const target = await fixture(),
         bytes = await encrypted()
       try {
@@ -268,7 +267,7 @@ describe('actual complete authenticated private staging lifecycle', () => {
               await target.empty()
             }
           ),
-          controls
+          propertyBatch
         )
       } finally {
         await target.close()

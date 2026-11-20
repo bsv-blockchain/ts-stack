@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { WalletStorageManager } from '../WalletStorageManager'
 import { previewDestinationFixture, previewPrivateFixture, previewReceiptPolicy } from './Brc38ImportPreviewFixture'
 import { restoreProofFixture, restorePortableProof } from '../../../test/utils/Brc38ImportEntityRestoreFixture'
@@ -269,80 +270,85 @@ describe('actual native RESTORE inside the admitted private destination', () => 
       clock.mockRestore()
     }
   })
-  test('300 generated replay and cancellation schedules preserve complete native data, originals and fixed admission', async () => {
-    const { staged, destination, proof } = await open(),
-      db = staged.value.reservation.store.knex,
-      active = new Set<Promise<void>>()
-    await runInSeries(
-      Array.from({ length: 14 }, (_, index) => index),
-      async index => {
-        await destination.step(index)
-      }
-    )
-    const complete = await destination.status(),
-      admission = destination.admission,
-      tables = [
-        ...nativeTables,
-        'users',
-        'brc38_import_original',
-        'brc38_import_original_budget',
-        'brc38_import_journal',
-        'brc38_import_ids'
-      ],
-      snapshot = await Promise.all(tables.map(async table => await db(table))),
-      usage = await staged.root.usage(),
-      proofCalls = proof.isValidRootForHeight.mock.calls.length
-    let failed = false,
-      firstCause: unknown
-    expect(complete).toMatchObject({ state: 'COMPLETE', nextRow: 14 })
-    try {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.array(fc.record({ fromRow: fc.integer({ min: -1, max: 15 }), cancelled: fc.boolean() }), {
-            minLength: 1,
-            maxLength: 3
-          }),
-          schedules => {
-            const work = runInSeries(schedules, async schedule => {
-              const controller = new AbortController()
-              if (schedule.cancelled) controller.abort(new Error('generated private cancellation'))
-              if (!schedule.cancelled && schedule.fromRow === 13)
-                expect(await destination.step(schedule.fromRow, controller.signal)).toEqual(complete)
-              else await expect(destination.step(schedule.fromRow, controller.signal)).rejects.toThrow()
-              expect(await destination.status()).toEqual(complete)
-            })
-            active.add(work)
-            void work.then(
-              () => active.delete(work),
-              () => active.delete(work)
-            )
-            return work
-          }
-        ),
-        {
-          numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
-          seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
-          path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-          interruptAfterTimeLimit: 150000,
-          markInterruptAsFailure: true
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+    })
+  )(
+    '300 generated replay and cancellation schedules preserve complete native data, originals and fixed admission (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const { staged, destination, proof } = await open(),
+        db = staged.value.reservation.store.knex,
+        active = new Set<Promise<void>>()
+      await runInSeries(
+        Array.from({ length: 14 }, (_, index) => index),
+        async index => {
+          await destination.step(index)
         }
       )
-    } catch (cause) {
-      failed = true
-      firstCause = cause
-    }
-    const drained = await Promise.allSettled(active),
-      errors = drained.flatMap(value => (value.status === 'rejected' ? [value.reason] : []))
-    if (errors.length)
-      throw new AggregateError(
-        [...(failed ? [firstCause] : []), ...errors],
-        'Generated native restore retains physical work'
-      )
-    if (failed) throw firstCause
-    expect(await Promise.all(tables.map(async table => await db(table)))).toEqual(snapshot)
-    expect(await staged.root.usage()).toEqual(usage)
-    expect(destination.admission).toEqual(admission)
-    expect(proof.isValidRootForHeight).toHaveBeenCalledTimes(proofCalls)
-    expect((await db('users').first()).activeStorage).toBe('')
-  }, 180000)
+      const complete = await destination.status(),
+        admission = destination.admission,
+        tables = [
+          ...nativeTables,
+          'users',
+          'brc38_import_original',
+          'brc38_import_original_budget',
+          'brc38_import_journal',
+          'brc38_import_ids'
+        ],
+        snapshot = await Promise.all(tables.map(async table => await db(table))),
+        usage = await staged.root.usage(),
+        proofCalls = proof.isValidRootForHeight.mock.calls.length
+      let failed = false,
+        firstCause: unknown
+      expect(complete).toMatchObject({ state: 'COMPLETE', nextRow: 14 })
+      try {
+        await fc.assert(
+          fc.asyncProperty(
+            fc.array(fc.record({ fromRow: fc.integer({ min: -1, max: 15 }), cancelled: fc.boolean() }), {
+              minLength: 1,
+              maxLength: 3
+            }),
+            schedules => {
+              const work = runInSeries(schedules, async schedule => {
+                const controller = new AbortController()
+                if (schedule.cancelled) controller.abort(new Error('generated private cancellation'))
+                if (!schedule.cancelled && schedule.fromRow === 13)
+                  expect(await destination.step(schedule.fromRow, controller.signal)).toEqual(complete)
+                else await expect(destination.step(schedule.fromRow, controller.signal)).rejects.toThrow()
+                expect(await destination.status()).toEqual(complete)
+              })
+              active.add(work)
+              void work.then(
+                () => active.delete(work),
+                () => active.delete(work)
+              )
+              return work
+            }
+          ),
+          propertyBatch
+        )
+      } catch (cause) {
+        failed = true
+        firstCause = cause
+      }
+      const drained = await Promise.allSettled(active),
+        errors = drained.flatMap(value => (value.status === 'rejected' ? [value.reason] : []))
+      if (errors.length)
+        throw new AggregateError(
+          [...(failed ? [firstCause] : []), ...errors],
+          'Generated native restore retains physical work'
+        )
+      if (failed) throw firstCause
+      expect(await Promise.all(tables.map(async table => await db(table)))).toEqual(snapshot)
+      expect(await staged.root.usage()).toEqual(usage)
+      expect(destination.admission).toEqual(admission)
+      expect(proof.isValidRootForHeight).toHaveBeenCalledTimes(proofCalls)
+      expect((await db('users').first()).activeStorage).toBe('')
+    },
+    180000
+  )
 })

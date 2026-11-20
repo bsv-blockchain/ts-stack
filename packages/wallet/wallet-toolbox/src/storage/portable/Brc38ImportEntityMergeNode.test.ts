@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { randomUUID } from 'node:crypto'
 import { MerklePath, Script, Transaction } from '@bsv/sdk'
 import {
@@ -621,87 +622,92 @@ describe('actual authenticated thirteen-table merge application', () => {
     expect((await committing).nextRow).toBe(1)
     expect(await target.k('users').select('userId', 'activeStorage')).toEqual([{ userId: 7, activeStorage: '' }])
   })
-  test('bounded original300 status/clock scenarios retain the legacy monotonic BRC177 winner independently of row clock', async () => {
-    await open(data => {
-      for (const table of brc38ImportTableOrder) if (table !== 'transactions') data.tables[table] = []
-      delete data.tables.transactions[0].provenTxId
-      data.tables.transactions[0].status = 'nosend'
-      data.tables.transactions[0].noSendExpiryState = 'target-won'
-      data.tables.transactions[0].updated_at = '2000-01-01T00:00:00.000Z'
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
     })
-    const source = staged.value.reservation.store,
-      component = await source.withAuthenticatedImportRead(async (_json, metadata, reader) => {
-        const page = await prepareBrc38ImportPage(reader, metadata, admission, 1),
-          header = await prepareBrc38ImportPage(reader, metadata, admission, 0)
-        return {
-          data: await page.consume(async data => data),
-          references: page.references,
-          source: await header.consume(async data => {
-            if (data.kind !== 'header') throw new Error('Source header missing')
-            return data.source
+  )(
+    'bounded original300 status/clock scenarios retain the legacy monotonic BRC177 winner independently of row clock (property $path, $numRuns cases)',
+    async propertyBatch => {
+      await open(data => {
+        for (const table of brc38ImportTableOrder) if (table !== 'transactions') data.tables[table] = []
+        delete data.tables.transactions[0].provenTxId
+        data.tables.transactions[0].status = 'nosend'
+        data.tables.transactions[0].noSendExpiryState = 'target-won'
+        data.tables.transactions[0].updated_at = '2000-01-01T00:00:00.000Z'
+      })
+      const source = staged.value.reservation.store,
+        component = await source.withAuthenticatedImportRead(async (_json, metadata, reader) => {
+          const page = await prepareBrc38ImportPage(reader, metadata, admission, 1),
+            header = await prepareBrc38ImportPage(reader, metadata, admission, 0)
+          return {
+            data: await page.consume(async data => data),
+            references: page.references,
+            source: await header.consume(async data => {
+              if (data.kind !== 'header') throw new Error('Source header missing')
+              return data.source
+            })
+          }
+        }),
+        pool = knex({ ...target.k.client.config, pool: { min: 0, max: 1 } })
+      cleanup.push(async () => await pool.destroy())
+      await pool.raw('PRAGMA query_only = ON')
+      await fc.assert(
+        fc.asyncProperty(fc.integer({ min: 1, max: 100000 }), async skew => {
+          const id = await target.storage.insertTransaction({
+            transactionId: 0,
+            userId: 7,
+            created_at: new Date(0),
+            updated_at: new Date(Date.UTC(2000, 0, 1) + skew),
+            status: 'nosend',
+            reference: 'archive-ref',
+            txid: proof.txid,
+            isOutgoing: true,
+            satoshis: 5,
+            description: 'newer local description',
+            noSendExpiryState: 'reclaimed'
           })
-        }
-      }),
-      pool = knex({ ...target.k.client.config, pool: { min: 0, max: 1 } })
-    cleanup.push(async () => await pool.destroy())
-    await pool.raw('PRAGMA query_only = ON')
-    await fc.assert(
-      fc.asyncProperty(fc.integer({ min: 1, max: 100000 }), async skew => {
-        const id = await target.storage.insertTransaction({
-          transactionId: 0,
-          userId: 7,
-          created_at: new Date(0),
-          updated_at: new Date(Date.UTC(2000, 0, 1) + skew),
-          status: 'nosend',
-          reference: 'archive-ref',
-          txid: proof.txid,
-          isOutgoing: true,
-          satoshis: 5,
-          description: 'newer local description',
-          noSendExpiryState: 'reclaimed'
-        })
-        try {
-          let operations = 0
-          // Component policy oracle on real query-only storage. The full owner
-          // is separately exercised above; this loop never edits receipt fences.
-          const merge = await pool.transaction(
-            async trx =>
-              await prepareBrc38ImportEntityMerge(
-                trx,
-                target.storage,
-                admission.scope,
-                component.data,
-                component.references,
-                component.source,
-                2097152
-              )
-          )
-          await target.k
-            .transaction(async trx => {
-              operations = merge.operationCount
-              await merge.apply(trx)
-              const result = await trx('transactions').where({ transactionId: id }).first()
-              expect(result.noSendExpiryState).toBe('target-won')
-              expect(result.description).toBe('newer local description')
-              expect(target.storage.validateDate(result.updated_at).getTime()).toBe(Date.UTC(2000, 0, 1) + skew)
-              throw new Error('synthetic property rollback')
-            })
-            .catch(error => {
-              if (!(error instanceof Error) || error.message !== 'synthetic property rollback') throw error
-            })
-          expect(operations).toBe(1)
-        } finally {
-          await target.k('transactions').where({ transactionId: id }).delete()
-        }
-      }),
-      {
-        numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
-        seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true
-      }
-    )
-    expect((await readReceipt()).nextRow).toBe(1)
-  }, 180000)
+          try {
+            let operations = 0
+            // Component policy oracle on real query-only storage. The full owner
+            // is separately exercised above; this loop never edits receipt fences.
+            const merge = await pool.transaction(
+              async trx =>
+                await prepareBrc38ImportEntityMerge(
+                  trx,
+                  target.storage,
+                  admission.scope,
+                  component.data,
+                  component.references,
+                  component.source,
+                  2097152
+                )
+            )
+            await target.k
+              .transaction(async trx => {
+                operations = merge.operationCount
+                await merge.apply(trx)
+                const result = await trx('transactions').where({ transactionId: id }).first()
+                expect(result.noSendExpiryState).toBe('target-won')
+                expect(result.description).toBe('newer local description')
+                expect(target.storage.validateDate(result.updated_at).getTime()).toBe(Date.UTC(2000, 0, 1) + skew)
+                throw new Error('synthetic property rollback')
+              })
+              .catch(error => {
+                if (!(error instanceof Error) || error.message !== 'synthetic property rollback') throw error
+              })
+            expect(operations).toBe(1)
+          } finally {
+            await target.k('transactions').where({ transactionId: id }).delete()
+          }
+        }),
+        propertyBatch
+      )
+      expect((await readReceipt()).nextRow).toBe(1)
+    },
+    180000
+  )
 })

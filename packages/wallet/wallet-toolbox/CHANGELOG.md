@@ -29,6 +29,14 @@ unchanged. No wire or schema change, and no consumer migration.
   deriver may answer with a Promise (a native or off-thread deriver). The
   signing guard runs again after it.
 
+Add optional awaited host persistence, serialized profile activation and snapshot
+restore, and signed checkpoints for UMP updates. The built-in interactor holds
+wallet and overlay submission until the signed receipt is durable. A lost receipt
+can be reconstructed from the original signed Toolbox action after restart.
+Recovering an interrupted phone change lets WAB finalize the original rotation. Snapshot,
+BRC-100 and UMP wire formats are unchanged. See Optional durable profile state
+in the README for adoption and recovery guidance.
+
 # 2.17.0 — published
 
 Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages

@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { appendFile, stat } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -35,8 +36,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 const text = fc
@@ -199,305 +198,329 @@ async function begin() {
   expect(await target.k('brc38_import_original_budget')).toEqual([])
 }
 
-test('generated authenticated header and all thirteen table originals retain independent canonical bytes hashes and exact UTF8 charges', async () => {
-  await begin()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 0, max: 12 }), fc.integer({ min: 0, max: 256 }), async (index, reserved) => {
-      const trx = await target.writer.transaction()
-      try {
-        await verifyBrc38ImportProvenanceSchema(trx)
-        const headerBudget = allowance()
-        headerBudget.remaining -= reserved
-        const header = await prepared(trx, 0, headerBudget),
-          raw = canonical(header.original)
-        expect(headerBudget.remaining).toBe(65536 - reserved - 256 - 8 * Buffer.byteLength(raw))
-        await header.apply(trx)
-        // Provenance's native prefix is independently enforced. Prepare the actual
-        // archive table by its real position, then store it at the next prefix.
-        const table = brc38ImportTableOrder[index],
-          tableBudget = allowance()
-        tableBudget.remaining -= reserved
-        const original = await store().withAuthenticatedImportRead(async (_json, metadata, reader) => {
-          const page = await prepareBrc38ImportPage(reader, metadata, admission, index + 1)
-          return await page.consume(async data => {
-            expect(data.kind).toBe('table')
-            if (data.kind !== 'table') throw new Error('Expected actual archive table')
-            expect(data.table).toBe(table)
-            const incoming = await reader.row(table, data.fromIndex)
-            const value = await prepareBrc38ImportOriginals(trx, reader, admission, data, 1, tableBudget)
-            return { ...value, incoming }
-          })
-        })
-        const tableRaw = canonical(original.incoming)
-        expect(tableBudget.remaining).toBe(65536 - reserved - 256 - 8 * Buffer.byteLength(tableRaw))
-        await original.apply(trx)
-        const records = await trx('brc38_import_original').orderBy('sourceRow')
-        expect(records).toEqual([
-          {
-            ...admission.scope,
-            sourceRow: 0,
-            tableName: 'header',
-            originalJson: raw,
-            sha256: digest(raw),
-            logicalBytes: 512 + Buffer.byteLength(raw)
-          },
-          {
-            ...admission.scope,
-            sourceRow: 1,
-            tableName: table,
-            originalJson: tableRaw,
-            sha256: digest(tableRaw),
-            logicalBytes: 512 + Buffer.byteLength(tableRaw)
-          }
-        ])
-        expect(await trx('brc38_import_original_budget').first()).toMatchObject({
-          ...admission.scope,
-          rows: 2,
-          logicalBytes: 1024 + Buffer.byteLength(raw) + Buffer.byteLength(tableRaw),
-          maximumRows: admission.totalRows,
-          maximumLogicalBytes: JSON.parse(admission.originalLimitsJson)[1]
-        })
-        expect(await readBrc38ImportOriginal(trx, admission.scope, 1, Buffer.byteLength(tableRaw))).toEqual({
-          tableName: table,
-          originalJson: tableRaw
-        })
-        await expect(original.apply(trx)).rejects.toThrow('already consumed')
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-
-test('generated prepared authority is one-use and rereads the current native budget before writer application', async () => {
-  await begin()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 0, max: 256 }), fc.boolean(), async (reserved, reverse) => {
-      const trx = await target.writer.transaction()
-      try {
-        const budget = allowance()
-        budget.remaining -= reserved
-        const a = await prepared(trx, 0, budget),
-          b = await prepared(trx, 0, allowance()),
-          first = reverse ? b : a,
-          second = reverse ? a : b
-        await first.apply(trx)
-        const records = await trx('brc38_import_original'),
-          persistedBudget = await trx('brc38_import_original_budget')
-        await expect(second.apply(trx)).rejects.toThrow('differs')
-        await expect(second.apply(trx)).rejects.toThrow('already consumed')
-        await expect(first.apply(trx)).rejects.toThrow('already consumed')
-        expect(await trx('brc38_import_original')).toEqual(records)
-        expect(await trx('brc38_import_original_budget')).toEqual(persistedBudget)
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-
-test('generated fixed decoded quota and cancellation refuse before native effects and preserve transaction rollback', async () => {
-  await begin()
-  const before = await state(),
-    exactCharge = 256 + 8 * Buffer.byteLength(canonical(rawHeader))
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 1, max: 256 }), text, fc.boolean(), async (missing, suffix, preabort) => {
-      const trx = await target.writer.transaction()
-      try {
-        const small = { maximum: 65536, remaining: exactCharge - missing }
-        await expect(prepared(trx, 0, small)).rejects.toBeInstanceOf(SnapshotResourceLimitError)
-        expect(await trx('brc38_import_original')).toEqual([])
-        expect(await trx('brc38_import_original_budget')).toEqual([])
-        const controller = new AbortController(),
-          reason = new Error('provenance cancellation ' + suffix)
-        if (preabort) {
-          controller.abort(reason)
-          await expect(prepared(trx, 0, allowance(controller.signal))).rejects.toBe(reason)
-        } else {
-          const value = await prepared(trx, 0, allowance(controller.signal))
-          controller.abort(reason)
-          await expect(value.apply(trx)).rejects.toBe(reason)
-          await expect(value.apply(trx)).rejects.toThrow('already consumed')
-        }
-        expect(await trx('brc38_import_original')).toEqual([])
-        expect(await trx('brc38_import_original_budget')).toEqual([])
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-
-test('generated scoped bounded native reads refuse before original payload transfer and originals stay immutable', async () => {
-  await begin()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom('binding', 'archive', 'user', 'import', 'row', 'bytes'),
-      text,
-      fc.integer({ min: 1, max: 1000 }),
-      async (field, suffix, nonce) => {
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated authenticated header and all thirteen table originals retain independent canonical bytes hashes and exact UTF8 charges (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await begin()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 0, max: 12 }), fc.integer({ min: 0, max: 256 }), async (index, reserved) => {
         const trx = await target.writer.transaction()
         try {
-          const header = await prepared(trx, 0, allowance())
+          await verifyBrc38ImportProvenanceSchema(trx)
+          const headerBudget = allowance()
+          headerBudget.remaining -= reserved
+          const header = await prepared(trx, 0, headerBudget),
+            raw = canonical(header.original)
+          expect(headerBudget.remaining).toBe(65536 - reserved - 256 - 8 * Buffer.byteLength(raw))
           await header.apply(trx)
-          const raw = canonical(header.original),
-            scope = { ...admission.scope },
-            row = field === 'row' ? nonce : 0
-          if (field === 'binding') scope.bindingSha256 = digest('binding ' + suffix)
-          if (field === 'archive') scope.archiveSha256 = digest('archive ' + suffix)
-          if (field === 'user') scope.userId += nonce
-          if (field === 'import') scope.importId = randomUUID()
-          const maximum =
-              field === 'bytes'
-                ? Buffer.byteLength(raw) - Math.min(nonce, Buffer.byteLength(raw) - 1)
-                : Buffer.byteLength(raw),
-            queries: string[] = []
-          const observe = (query: { sql: string }) => {
-            queries.push(query.sql)
-          }
-          trx.on('query', observe)
-          try {
-            await expect(readBrc38ImportOriginal(trx, scope, row, maximum)).rejects.toThrow('differs')
-          } finally {
-            trx.removeListener('query', observe)
-          }
-          expect(queries).toHaveLength(1)
-          expect(queries[0]).toContain('CASE WHEN typeof(originalJson)')
-          expect(queries[0]).not.toContain('select `tableName`, `originalJson`')
-          const value = await readBrc38ImportOriginal(trx, admission.scope, 0, Buffer.byteLength(raw))
-          expect(value).toEqual({ tableName: 'header', originalJson: raw })
-          expect(Object.isFrozen(value)).toBe(true)
-          const records = await trx('brc38_import_original'),
-            budgets = await trx('brc38_import_original_budget')
-          await expect(
-            trx('brc38_import_original')
-              .where(admission.scope)
-              .update({ originalJson: raw + suffix })
-          ).rejects.toThrow('immutable')
-          await expect(trx('brc38_import_original').where(admission.scope).del()).rejects.toThrow('owned cleanup')
-          expect(await trx('brc38_import_original')).toEqual(records)
-          expect(await trx('brc38_import_original_budget')).toEqual(budgets)
+          // Provenance's native prefix is independently enforced. Prepare the actual
+          // archive table by its real position, then store it at the next prefix.
+          const table = brc38ImportTableOrder[index],
+            tableBudget = allowance()
+          tableBudget.remaining -= reserved
+          const original = await store().withAuthenticatedImportRead(async (_json, metadata, reader) => {
+            const page = await prepareBrc38ImportPage(reader, metadata, admission, index + 1)
+            return await page.consume(async data => {
+              expect(data.kind).toBe('table')
+              if (data.kind !== 'table') throw new Error('Expected actual archive table')
+              expect(data.table).toBe(table)
+              const incoming = await reader.row(table, data.fromIndex)
+              const value = await prepareBrc38ImportOriginals(trx, reader, admission, data, 1, tableBudget)
+              return { ...value, incoming }
+            })
+          })
+          const tableRaw = canonical(original.incoming)
+          expect(tableBudget.remaining).toBe(65536 - reserved - 256 - 8 * Buffer.byteLength(tableRaw))
+          await original.apply(trx)
+          const records = await trx('brc38_import_original').orderBy('sourceRow')
+          expect(records).toEqual([
+            {
+              ...admission.scope,
+              sourceRow: 0,
+              tableName: 'header',
+              originalJson: raw,
+              sha256: digest(raw),
+              logicalBytes: 512 + Buffer.byteLength(raw)
+            },
+            {
+              ...admission.scope,
+              sourceRow: 1,
+              tableName: table,
+              originalJson: tableRaw,
+              sha256: digest(tableRaw),
+              logicalBytes: 512 + Buffer.byteLength(tableRaw)
+            }
+          ])
+          expect(await trx('brc38_import_original_budget').first()).toMatchObject({
+            ...admission.scope,
+            rows: 2,
+            logicalBytes: 1024 + Buffer.byteLength(raw) + Buffer.byteLength(tableRaw),
+            maximumRows: admission.totalRows,
+            maximumLogicalBytes: JSON.parse(admission.originalLimitsJson)[1]
+          })
+          expect(await readBrc38ImportOriginal(trx, admission.scope, 1, Buffer.byteLength(tableRaw))).toEqual({
+            tableName: table,
+            originalJson: tableRaw
+          })
+          await expect(original.apply(trx)).rejects.toThrow('already consumed')
         } finally {
           await trx.rollback()
         }
         expect(await state()).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 30000)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated prepared authority is one-use and rereads the current native budget before writer application (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await begin()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 0, max: 256 }), fc.boolean(), async (reserved, reverse) => {
+        const trx = await target.writer.transaction()
+        try {
+          const budget = allowance()
+          budget.remaining -= reserved
+          const a = await prepared(trx, 0, budget),
+            b = await prepared(trx, 0, allowance()),
+            first = reverse ? b : a,
+            second = reverse ? a : b
+          await first.apply(trx)
+          const records = await trx('brc38_import_original'),
+            persistedBudget = await trx('brc38_import_original_budget')
+          await expect(second.apply(trx)).rejects.toThrow('differs')
+          await expect(second.apply(trx)).rejects.toThrow('already consumed')
+          await expect(first.apply(trx)).rejects.toThrow('already consumed')
+          expect(await trx('brc38_import_original')).toEqual(records)
+          expect(await trx('brc38_import_original_budget')).toEqual(persistedBudget)
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated fixed decoded quota and cancellation refuse before native effects and preserve transaction rollback (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await begin()
+    const before = await state(),
+      exactCharge = 256 + 8 * Buffer.byteLength(canonical(rawHeader))
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 1, max: 256 }), text, fc.boolean(), async (missing, suffix, preabort) => {
+        const trx = await target.writer.transaction()
+        try {
+          const small = { maximum: 65536, remaining: exactCharge - missing }
+          await expect(prepared(trx, 0, small)).rejects.toBeInstanceOf(SnapshotResourceLimitError)
+          expect(await trx('brc38_import_original')).toEqual([])
+          expect(await trx('brc38_import_original_budget')).toEqual([])
+          const controller = new AbortController(),
+            reason = new Error('provenance cancellation ' + suffix)
+          if (preabort) {
+            controller.abort(reason)
+            await expect(prepared(trx, 0, allowance(controller.signal))).rejects.toBe(reason)
+          } else {
+            const value = await prepared(trx, 0, allowance(controller.signal))
+            controller.abort(reason)
+            await expect(value.apply(trx)).rejects.toBe(reason)
+            await expect(value.apply(trx)).rejects.toThrow('already consumed')
+          }
+          expect(await trx('brc38_import_original')).toEqual([])
+          expect(await trx('brc38_import_original_budget')).toEqual([])
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated scoped bounded native reads refuse before original payload transfer and originals stay immutable (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await begin()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('binding', 'archive', 'user', 'import', 'row', 'bytes'),
+        text,
+        fc.integer({ min: 1, max: 1000 }),
+        async (field, suffix, nonce) => {
+          const trx = await target.writer.transaction()
+          try {
+            const header = await prepared(trx, 0, allowance())
+            await header.apply(trx)
+            const raw = canonical(header.original),
+              scope = { ...admission.scope },
+              row = field === 'row' ? nonce : 0
+            if (field === 'binding') scope.bindingSha256 = digest('binding ' + suffix)
+            if (field === 'archive') scope.archiveSha256 = digest('archive ' + suffix)
+            if (field === 'user') scope.userId += nonce
+            if (field === 'import') scope.importId = randomUUID()
+            const maximum =
+                field === 'bytes'
+                  ? Buffer.byteLength(raw) - Math.min(nonce, Buffer.byteLength(raw) - 1)
+                  : Buffer.byteLength(raw),
+              queries: string[] = []
+            const observe = (query: { sql: string }) => {
+              queries.push(query.sql)
+            }
+            trx.on('query', observe)
+            try {
+              await expect(readBrc38ImportOriginal(trx, scope, row, maximum)).rejects.toThrow('differs')
+            } finally {
+              trx.removeListener('query', observe)
+            }
+            expect(queries).toHaveLength(1)
+            expect(queries[0]).toContain('CASE WHEN typeof(originalJson)')
+            expect(queries[0]).not.toContain('select `tableName`, `originalJson`')
+            const value = await readBrc38ImportOriginal(trx, admission.scope, 0, Buffer.byteLength(raw))
+            expect(value).toEqual({ tableName: 'header', originalJson: raw })
+            expect(Object.isFrozen(value)).toBe(true)
+            const records = await trx('brc38_import_original'),
+              budgets = await trx('brc38_import_original_budget')
+            await expect(
+              trx('brc38_import_original')
+                .where(admission.scope)
+                .update({ originalJson: raw + suffix })
+            ).rejects.toThrow('immutable')
+            await expect(trx('brc38_import_original').where(admission.scope).del()).rejects.toThrow('owned cleanup')
+            expect(await trx('brc38_import_original')).toEqual(records)
+            expect(await trx('brc38_import_original_budget')).toEqual(budgets)
+          } finally {
+            await trx.rollback()
+          }
+          expect(await state()).toEqual(before)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
 
 // Direct native schema-unit proof. These private low-level admissions exercise
 // journal/provenance constraints only; they are not authenticated public import
 // handles and never activate or qualify a complete import/restore/merge.
-test('generated real schema guards enforce exact prefix scope fixed quota and immutable charges without duplicate effects', async () => {
-  await begin()
-  const before = await state(),
-    headerJson = canonical(rawHeader),
-    headerCharge = 512 + Buffer.byteLength(headerJson)
-  await fc.assert(
-    fc.asyncProperty(
-      text,
-      fc.integer({ min: 1, max: 1000 }),
-      fc.boolean(),
-      fc.boolean(),
-      async (suffix, nonce, rowBound, wrongDigest) => {
-        const trx = await target.writer.transaction()
-        try {
-          const json = canonical({ nativeSchemaFixture: suffix, nonce }),
-            charge = 512 + Buffer.byteLength(json),
-            limits = JSON.parse(admission.originalLimitsJson) as number[],
-            maximum = headerCharge + charge + (rowBound ? charge : 0)
-          limits[1] = maximum
-          const selected = {
-            ...admission,
-            scope: { ...admission.scope, importId: randomUUID() },
-            originalLimitsJson: JSON.stringify(limits),
-            totalRows: rowBound ? 2 : 3
-          }
-          await prepareBrc38ImportJournal(trx, selected, selected.initialDestinationSha256)
-          await trx('brc38_import_original_budget').insert({
-            ...selected.scope,
-            maximumRows: selected.totalRows,
-            maximumLogicalBytes: maximum,
-            rows: 0,
-            logicalBytes: 0
-          })
-          const header = {
-            ...selected.scope,
-            sourceRow: 0,
-            tableName: 'header',
-            originalJson: headerJson,
-            sha256: digest(headerJson),
-            logicalBytes: headerCharge
-          }
-          const emptyBudget = await trx('brc38_import_original_budget').where(selected.scope).first()
-          await expect(trx('brc38_import_original').insert({ ...header, sourceRow: nonce + 1 })).rejects.toThrow(
-            'prefix or quota'
-          )
-          await expect(
-            trx('brc38_import_original').insert({
-              ...header,
-              bindingSha256: digest('wrong scope ' + suffix)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated real schema guards enforce exact prefix scope fixed quota and immutable charges without duplicate effects (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await begin()
+    const before = await state(),
+      headerJson = canonical(rawHeader),
+      headerCharge = 512 + Buffer.byteLength(headerJson)
+    await fc.assert(
+      fc.asyncProperty(
+        text,
+        fc.integer({ min: 1, max: 1000 }),
+        fc.boolean(),
+        fc.boolean(),
+        async (suffix, nonce, rowBound, wrongDigest) => {
+          const trx = await target.writer.transaction()
+          try {
+            const json = canonical({ nativeSchemaFixture: suffix, nonce }),
+              charge = 512 + Buffer.byteLength(json),
+              limits = JSON.parse(admission.originalLimitsJson) as number[],
+              maximum = headerCharge + charge + (rowBound ? charge : 0)
+            limits[1] = maximum
+            const selected = {
+              ...admission,
+              scope: { ...admission.scope, importId: randomUUID() },
+              originalLimitsJson: JSON.stringify(limits),
+              totalRows: rowBound ? 2 : 3
+            }
+            await prepareBrc38ImportJournal(trx, selected, selected.initialDestinationSha256)
+            await trx('brc38_import_original_budget').insert({
+              ...selected.scope,
+              maximumRows: selected.totalRows,
+              maximumLogicalBytes: maximum,
+              rows: 0,
+              logicalBytes: 0
             })
-          ).rejects.toThrow('prefix or quota')
-          expect(await trx('brc38_import_original').where(selected.scope)).toEqual([])
-          expect(await trx('brc38_import_original_budget').where(selected.scope).first()).toEqual(emptyBudget)
-          await trx('brc38_import_original').insert(header)
-          await expect(trx('brc38_import_original').insert(header)).rejects.toThrow('prefix or quota')
-          const row = {
-            ...selected.scope,
-            sourceRow: 1,
-            tableName: 'nativeSchemaFixture',
-            originalJson: json,
-            sha256: wrongDigest ? digest('not the original ' + suffix) : digest(json),
-            logicalBytes: charge
-          }
-          await trx('brc38_import_original').insert(row)
-          const rows = await trx('brc38_import_original').where(selected.scope).orderBy('sourceRow'),
-            budget = await trx('brc38_import_original_budget').where(selected.scope).first()
-          expect(rows).toEqual([header, row])
-          expect(budget).toMatchObject({
-            ...selected.scope,
-            maximumRows: rowBound ? 2 : 3,
-            maximumLogicalBytes: maximum,
-            rows: 2,
-            logicalBytes: headerCharge + charge
-          })
-          await expect(trx('brc38_import_original').insert({ ...row, sourceRow: 2 })).rejects.toThrow('prefix or quota')
-          await expect(
-            trx('brc38_import_original_budget')
-              .where(selected.scope)
-              .update({ maximumLogicalBytes: maximum + nonce })
-          ).rejects.toThrow('immutable')
-          await expect(trx('brc38_import_original_budget').where(selected.scope).del()).rejects.toThrow('owned cleanup')
-          if (wrongDigest)
-            await expect(readBrc38ImportOriginal(trx, selected.scope, 1, Buffer.byteLength(json))).rejects.toThrow(
-              'differs'
+            const header = {
+              ...selected.scope,
+              sourceRow: 0,
+              tableName: 'header',
+              originalJson: headerJson,
+              sha256: digest(headerJson),
+              logicalBytes: headerCharge
+            }
+            const emptyBudget = await trx('brc38_import_original_budget').where(selected.scope).first()
+            await expect(trx('brc38_import_original').insert({ ...header, sourceRow: nonce + 1 })).rejects.toThrow(
+              'prefix or quota'
             )
-          else
-            expect(await readBrc38ImportOriginal(trx, selected.scope, 1, Buffer.byteLength(json))).toEqual({
+            await expect(
+              trx('brc38_import_original').insert({
+                ...header,
+                bindingSha256: digest('wrong scope ' + suffix)
+              })
+            ).rejects.toThrow('prefix or quota')
+            expect(await trx('brc38_import_original').where(selected.scope)).toEqual([])
+            expect(await trx('brc38_import_original_budget').where(selected.scope).first()).toEqual(emptyBudget)
+            await trx('brc38_import_original').insert(header)
+            await expect(trx('brc38_import_original').insert(header)).rejects.toThrow('prefix or quota')
+            const row = {
+              ...selected.scope,
+              sourceRow: 1,
               tableName: 'nativeSchemaFixture',
-              originalJson: json
+              originalJson: json,
+              sha256: wrongDigest ? digest('not the original ' + suffix) : digest(json),
+              logicalBytes: charge
+            }
+            await trx('brc38_import_original').insert(row)
+            const rows = await trx('brc38_import_original').where(selected.scope).orderBy('sourceRow'),
+              budget = await trx('brc38_import_original_budget').where(selected.scope).first()
+            expect(rows).toEqual([header, row])
+            expect(budget).toMatchObject({
+              ...selected.scope,
+              maximumRows: rowBound ? 2 : 3,
+              maximumLogicalBytes: maximum,
+              rows: 2,
+              logicalBytes: headerCharge + charge
             })
-          expect(await trx('brc38_import_original').where(selected.scope).orderBy('sourceRow')).toEqual(rows)
-          expect(await trx('brc38_import_original_budget').where(selected.scope).first()).toEqual(budget)
-          expect((await readBrc38ImportJournal(trx, selected)).nextRow).toBe(0)
-        } finally {
-          await trx.rollback()
+            await expect(trx('brc38_import_original').insert({ ...row, sourceRow: 2 })).rejects.toThrow(
+              'prefix or quota'
+            )
+            await expect(
+              trx('brc38_import_original_budget')
+                .where(selected.scope)
+                .update({ maximumLogicalBytes: maximum + nonce })
+            ).rejects.toThrow('immutable')
+            await expect(trx('brc38_import_original_budget').where(selected.scope).del()).rejects.toThrow(
+              'owned cleanup'
+            )
+            if (wrongDigest)
+              await expect(readBrc38ImportOriginal(trx, selected.scope, 1, Buffer.byteLength(json))).rejects.toThrow(
+                'differs'
+              )
+            else
+              expect(await readBrc38ImportOriginal(trx, selected.scope, 1, Buffer.byteLength(json))).toEqual({
+                tableName: 'nativeSchemaFixture',
+                originalJson: json
+              })
+            expect(await trx('brc38_import_original').where(selected.scope).orderBy('sourceRow')).toEqual(rows)
+            expect(await trx('brc38_import_original_budget').where(selected.scope).first()).toEqual(budget)
+            expect((await readBrc38ImportJournal(trx, selected)).nextRow).toBe(0)
+          } finally {
+            await trx.rollback()
+          }
+          expect(await state()).toEqual(before)
         }
-        expect(await state()).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 30000)
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)

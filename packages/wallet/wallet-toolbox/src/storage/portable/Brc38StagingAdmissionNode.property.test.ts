@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -66,45 +67,49 @@ async function runModelCase(slots: number, attempts: readonly boolean[]): Promis
   }
 }
 jest.setTimeout(180000)
-test('300 native capacity schedules preserve independent reservation arithmetic and exact release', async () => {
-  const active = new Set<Promise<void>>()
-  let failed = false,
-    firstCause: unknown
-  try {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: 1, max: 3 }),
-        fc.array(fc.boolean(), { minLength: 1, maxLength: 4 }),
-        (slots, attempts) => {
-          const work = runModelCase(slots, attempts)
-          active.add(work)
-          void work.then(
-            () => active.delete(work),
-            () => active.delete(work)
-          )
-          return work
-        }
-      ),
-      {
-        numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
-        seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true
-      }
-    )
-  } catch (cause) {
-    failed = true
-    firstCause = cause
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
+    seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
+    path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+  })
+)(
+  '300 native capacity schedules preserve independent reservation arithmetic and exact release (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const active = new Set<Promise<void>>()
+    let failed = false,
+      firstCause: unknown
+    try {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.integer({ min: 1, max: 3 }),
+          fc.array(fc.boolean(), { minLength: 1, maxLength: 4 }),
+          (slots, attempts) => {
+            const work = runModelCase(slots, attempts)
+            active.add(work)
+            void work.then(
+              () => active.delete(work),
+              () => active.delete(work)
+            )
+            return work
+          }
+        ),
+        propertyBatch
+      )
+    } catch (cause) {
+      failed = true
+      firstCause = cause
+    }
+    // fast-check can report interruption before its active async callback settles.
+    // Drain that exact owned promise before Jest is permitted to tear down.
+    const drained = await Promise.allSettled(active)
+    const failures = drained.flatMap(result => (result.status === 'rejected' ? [result.reason] : []))
+    if (failures.length !== 0)
+      throw new AggregateError(
+        [...(failed ? [firstCause] : []), ...failures],
+        'Native capacity property and physical drain failed'
+      )
+    if (failed) throw firstCause
   }
-  // fast-check can report interruption before its active async callback settles.
-  // Drain that exact owned promise before Jest is permitted to tear down.
-  const drained = await Promise.allSettled(active)
-  const failures = drained.flatMap(result => (result.status === 'rejected' ? [result.reason] : []))
-  if (failures.length !== 0)
-    throw new AggregateError(
-      [...(failed ? [firstCause] : []), ...failures],
-      'Native capacity property and physical drain failed'
-    )
-  if (failed) throw firstCause
-})
+)

@@ -9,6 +9,8 @@ import {
   Validation
 } from '@bsv/sdk'
 import { Wallet } from '../../../src/Wallet'
+import { OverlayUMPTokenInteractor, PendingUMPUpdate, UMPToken } from '../../../src/CWIStyleWalletManager'
+import { WalletPermissionsManager } from '../../../src/WalletPermissionsManager'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../src/utility/actionBatchDigest'
 import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
@@ -140,6 +142,105 @@ describe('in-memory action batch workspace', () => {
     expect(storedAfterCommit).toHaveLength(1)
     const begun = await begin.mock.results[0].value
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
+  })
+
+  test('recovers the original signed UMP update from the wallet after a lost receipt and restart', async () => {
+    const interactor = new OverlayUMPTokenInteractor({} as never, {} as never)
+    const field = Array<number>(32).fill(1)
+    const token: UMPToken = {
+      passwordSalt: field,
+      passwordPresentationPrimary: field,
+      passwordRecoveryPrimary: field,
+      presentationRecoveryPrimary: field,
+      passwordPrimaryPrivileged: field,
+      presentationRecoveryPrivileged: field,
+      presentationHash: field,
+      recoveryHash: field,
+      presentationKeyEncrypted: field,
+      passwordKeyEncrypted: field,
+      recoveryKeyEncrypted: field
+    }
+    const overlayBroadcast = jest.fn(async (transaction: Transaction) => ({
+      status: 'success' as const,
+      txid: transaction.id('hex'),
+      message: 'published'
+    }))
+    Object.assign(interactor, { broadcaster: { broadcast: overlayBroadcast } })
+    const walletBroadcast = jest.mocked(ctx.services.postBeef)
+    const oldOutpoint = await interactor.buildAndSend(ctx.wallet, 'admin.invalid', token)
+    const oldProof = overlayBroadcast.mock.calls[0][0].toBEEF()
+    const previous = { ...token, currentOutpoint: oldOutpoint }
+    const intended = { ...token, passwordSalt: Array<number>(32).fill(2) }
+    Object.assign(interactor, {
+      findByOutpoint: async () => ({ beef: oldProof, outputIndex: Number(oldOutpoint.split('.')[1]) })
+    })
+    walletBroadcast.mockClear()
+    overlayBroadcast.mockClear()
+    const operationId = 'ab'.repeat(16)
+    let receipt: number[] | undefined
+    let outpoint: string | undefined
+    await expect(
+      interactor.buildAndSend(ctx.wallet, 'admin.invalid', intended, previous, {
+        operationId,
+        onCompleted: async (transaction, originalOutpoint) => {
+          receipt = transaction
+          outpoint = originalOutpoint
+          throw new Error('receipt write interrupted')
+        }
+      })
+    ).rejects.toThrow('receipt write interrupted')
+    expect(walletBroadcast).not.toHaveBeenCalled()
+    expect(overlayBroadcast).not.toHaveBeenCalled()
+    const original = Transaction.fromAtomicBEEF(receipt!)
+    const txid = original.id('hex')
+    expect(ctx.wallet.actionBatch.hasWorkspace).toBe(false)
+
+    ctx.wallet = new Wallet({
+      chain: ctx.chain,
+      keyDeriver: ctx.keyDeriver,
+      storage: ctx.storage,
+      services: ctx.services,
+      monitor: ctx.monitor
+    })
+    const wallet = new WalletPermissionsManager(ctx.wallet, 'admin.invalid')
+    const pending: PendingUMPUpdate = {
+      version: 1,
+      operationId,
+      rootIdentityKey: ctx.wallet.identityKey,
+      previousSnapshot: [1],
+      proposedToken: [1],
+      activeProfileId: Array<number>(16).fill(0),
+      stage: 'submitting'
+    }
+    await expect(interactor.recoverCheckpoint(wallet, 'app.invalid', intended, previous, pending)).rejects.toThrow(
+      'Only the wallet administrator'
+    )
+    await expect(
+      interactor.recoverCheckpoint(wallet, 'admin.invalid', intended, previous, {
+        ...pending,
+        operationId: 'cd'.repeat(16)
+      })
+    ).resolves.toBeUndefined()
+    await expect(interactor.recoverCheckpoint(wallet, 'admin.invalid', token, previous, pending)).rejects.toThrow(
+      'no unique intended UMP output'
+    )
+    const recovered = await interactor.recoverCheckpoint(wallet, 'admin.invalid', intended, previous, pending)
+    expect(recovered?.outpoint).toBe(outpoint)
+    expect(Transaction.fromAtomicBEEF(recovered!.transaction).toHex()).toBe(original.toHex())
+    expect(walletBroadcast).not.toHaveBeenCalled()
+
+    const send = jest.spyOn(ctx.wallet, 'createAction')
+    await expect(
+      interactor.publishCheckpoint(wallet, 'admin.invalid', intended, previous, {
+        ...pending,
+        ...recovered,
+        stage: 'signed'
+      })
+    ).resolves.toBe(outpoint)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toMatchObject({ options: { sendWith: [txid] } })
+    expect(walletBroadcast).toHaveBeenCalledTimes(1)
+    expect(overlayBroadcast.mock.calls[0][0].toHex()).toBe(original.toHex())
   })
 
   test('staged noSend actions listed by txid can be aborted without exposing an internal reference', async () => {
