@@ -1,5 +1,9 @@
 # CHANGELOG for `@bsv/webrtpay`
 
+## 0.2.4 (unreleased)
+
+- Prepare `0.2.4`: Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
 All notable changes to this package are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and the package adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
