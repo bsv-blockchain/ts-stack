@@ -50,7 +50,10 @@ export interface SigmaPermissionModuleOptions {
   privilegedKeyDeriver?: SigmaPrivilegedKeyDeriver
   /** Required for security levels 1/2 and every privileged request. */
   authorize?: SigmaAuthorizationHandler
-  /** Duration of a successful protocol grant. Defaults to five minutes. */
+  /**
+   * How long a remembered approval lasts, in milliseconds: a grant under
+   * 'grant', a plain public-key approval under 'each'. Defaults to five minutes.
+   */
   authorizationTTL?: number
   /** How requests are authorized. Defaults to 'each'. */
   proofAuthorization?: SigmaProofAuthorization

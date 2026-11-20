@@ -8,7 +8,7 @@ never leaves the wallet. This lets Bitcoin Script contracts that verify
 Schnorr-style Sigma-protocol proofs ("s-puzzles") be unlocked with a
 wallet-held key.
 
-The specification is the `sigma` BRC (draft, not yet numbered).
+The specification is BRC-230 (in review).
 
 The proof scalar is derived from the BRC-42 child key and is never the child
 key itself (scalar isolation).
@@ -142,7 +142,9 @@ value is refused when the module is created.
 
 Call `sigma.dispose()` when the host tears down the wallet. It clears cached
 and pending authorization state, and the module refuses every later request,
-including one whose prompt was still open; no key is derived for it.
+security level 0 included, and including one whose prompt was still open; no
+key is derived for it. Disposal is final: a host that needs to continue
+constructs a new module.
 
 The authorization request passed to `authorize` carries the originator, the
 security level, the logical protocol ID, the key ID, the counterparty, the
@@ -158,7 +160,8 @@ privileged flag and reason, and the operation, plus:
 
 ## Security and permissions
 
-Permissions follow the same model as the ECPM module:
+Authorization is scoped as follows; under `proofAuthorization: 'grant'` these
+are BRC-43 permission semantics:
 
 - Security level 0 requests that are not privileged need no prompt.
 - Level 1 requires the authorization callback, scoped to the originator and
@@ -208,6 +211,10 @@ Limits to know before relying on a key:
 - The originator is at most 1,024 bytes.
 - The key ID is not part of the grant scope: a remembered approval covers
   every key ID under the logical protocol.
+- At most 64 authorization decisions can be pending at once, across every
+  application the module serves. Under the default `'each'`, each distinct
+  request in flight counts as one. A request beyond the limit fails with
+  "Sigma: authorization queue is full" until a pending decision settles.
 - `plaintext` must be a plain array of byte values; a `Uint8Array` is refused.
 - Points passed to the exported verifiers should be built with `parsePoint33`.
 

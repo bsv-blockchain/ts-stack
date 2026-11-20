@@ -2,8 +2,10 @@ const MAX_CACHED_GRANTS = 1024
 const MAX_PENDING_GRANTS = 64
 
 /**
- * Time-limited authorization grants keyed by scope, plus at most one pending
- * decision per scope so that concurrent equivalent requests share one prompt.
+ * Time-limited remembered approvals keyed by grant scope, plus at most one
+ * pending decision per decision key so that concurrent equivalent requests
+ * share one prompt. The decision key is the grant scope under 'grant' and the
+ * whole authorization request under 'each'.
  */
 export class GrantStore {
   readonly #lifetime: number
@@ -14,7 +16,7 @@ export class GrantStore {
     this.#lifetime = lifetime
   }
 
-  /** True while an unexpired grant exists for `scope`; drops expired grants on the way. */
+  /** True while an unexpired approval exists for `scope`; drops expired ones on the way. */
   covers(scope: string): boolean {
     const now = Date.now()
     for (const [oldScope, oldExpiry] of this.#expiryByScope) {
@@ -27,7 +29,10 @@ export class GrantStore {
     return false
   }
 
-  /** Joins the pending decision for `scope`, or starts one with `ask`. */
+  /**
+   * Joins the pending decision for `scope`, or starts one with `ask`. `scope` is
+   * the decision key: the grant scope under 'grant', the whole request under 'each'.
+   */
   async decide(scope: string, ask: () => boolean | Promise<boolean>): Promise<boolean> {
     let decision = this.#decisionByScope.get(scope)
     if (decision === undefined) {
@@ -44,7 +49,7 @@ export class GrantStore {
     }
   }
 
-  /** Records a fresh grant for `scope`, evicting the oldest grant when full. */
+  /** Remembers an approval for `scope`, evicting the oldest one when full. */
   remember(scope: string): void {
     this.#expiryByScope.delete(scope)
     if (this.#expiryByScope.size >= MAX_CACHED_GRANTS) {

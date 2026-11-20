@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/sigma-permission-module'
 version: '0.1.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc98', 'sigma', 'cryptography']
@@ -27,7 +27,7 @@ never leaves the wallet. This lets Bitcoin Script contracts that verify
 Schnorr-style Sigma-protocol proofs ("s-puzzles") be unlocked with a
 wallet-held key.
 
-The specification is the `sigma` BRC (draft, not yet numbered).
+The specification is BRC-230 (in review).
 
 The proof scalar is derived from the BRC-42 child key and is never the child
 key itself (scalar isolation).
@@ -124,13 +124,16 @@ const sigma = createSigmaModule({
       counterparty: request.counterparty,
       privileged: request.privileged,
       operation: request.operation,
-      contextSha256: request.contextSha256
+      applicationBase: request.applicationBase,
+      contextSha256: request.contextSha256,
+      inputSha256: request.inputSha256
     })
   },
   privilegedKeyDeriver: async reason => {
     return await acquirePrivilegedKeyDeriver(reason)
   },
-  authorizationTTL: 5 * 60 * 1000
+  authorizationTTL: 5 * 60 * 1000,
+  proofAuthorization: 'each'
 })
 
 const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
@@ -138,13 +141,46 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 })
 ```
 
-`authorizationTTL` is the duration of a successful grant in milliseconds and
-defaults to five minutes. Call `sigma.dispose()` when the host tears down the
-wallet; it clears cached and pending authorization state.
+`authorizationTTL` is how long a remembered approval lasts, in milliseconds,
+and defaults to five minutes.
+
+`proofAuthorization` chooses how requests that need authorization are
+authorized:
+
+- `'each'` (the default): an approved `key` request with no base is remembered
+  for `authorizationTTL` and covers only later `key` requests with no base.
+  Every `key` request with a base, and every `schnorr`, `dleq` and `or`
+  request, calls `authorize`, and its approval covers that one request.
+- `'grant'`: one approval is remembered as a grant covering every operation,
+  any context and any key ID under that logical protocol for
+  `authorizationTTL`.
+
+`'each'` is the default because a proof can release coins locked to its
+statement point, and no spending authorization stands behind it. Any other
+value is refused when the module is created.
+
+Call `sigma.dispose()` when the host tears down the wallet. It clears cached
+and pending authorization state, and the module refuses every later request,
+security level 0 included, and including one whose prompt was still open; no
+key is derived for it. Disposal is final: a host that needs to continue
+constructs a new module.
+
+The authorization request passed to `authorize` carries the originator, the
+security level, the logical protocol ID, the key ID, the counterparty, the
+privileged flag and reason, and the operation, plus:
+
+- `contextSha256`: the lowercase hex SHA-256 of `ctx`, for `schnorr`, `dleq`
+  and `or`.
+- `applicationBase`: `true` when the application chose the base point, that
+  is for `key` with a base and for every `dleq`.
+- `inputSha256`: the lowercase hex SHA-256 of the whole operation input, the
+  request's `plaintext` as received (for `key` with no base, the hash of zero
+  bytes).
 
 ## Security and permissions
 
-Permissions follow the same model as the ECPM module:
+Authorization is scoped as follows; under `proofAuthorization: 'grant'` these
+are BRC-43 permission semantics:
 
 - Security level 0 requests that are not privileged need no prompt.
 - Level 1 requires the authorization callback, scoped to the originator and
@@ -153,15 +189,25 @@ Permissions follow the same model as the ECPM module:
 - Privileged requests always require authorization, and a privileged grant is
   scoped to the approved `privilegedReason`, separate from non-privileged
   grants.
-- `seekPermission: false` fails unless an applicable grant is already cached.
+- `seekPermission: false` fails unless an applicable grant is already cached;
+  under `'each'` that is possible only for `key` with no base.
 
-A grant is not scoped by operation or context. Once granted, it covers every
-operation and any context under that logical protocol until it expires. The
-`operation` and `contextSha256` fields of an authorisation request are
+Under the default `proofAuthorization: 'each'`, only a plain public-key
+request is remembered; every proof, and every `key` request with a base, is
+authorized on its own. Concurrent requests share one pending decision only
+when they are identical: the same grant scope, operation, key ID,
+counterparty and whole input.
+
+Under `proofAuthorization: 'grant'`, a grant is not scoped by operation or
+context. Once granted, it covers every operation and any context under that
+logical protocol until it expires, and concurrent requests in one grant scope
+share one pending decision. The `operation`, `contextSha256`,
+`applicationBase` and `inputSha256` fields of an authorisation request are then
 information for the prompt, not a limit on what the grant allows.
 
-A proof spends whatever was locked to the statement point. An application with
-a grant can therefore spend those outputs.
+A proof spends whatever was locked to the statement point. Under `'grant'`, an
+application with a grant can therefore spend those outputs without asking
+again.
 
 Limits to know before relying on a key:
 
@@ -182,8 +228,12 @@ Limits to know before relying on a key:
 - The authorization handler must return exactly `true`; any other value is a
   denial.
 - The originator is at most 1,024 bytes.
-- The key ID is not part of the grant scope: a grant covers every key ID under
-  the logical protocol.
+- The key ID is not part of the grant scope: a remembered approval covers
+  every key ID under the logical protocol.
+- At most 64 authorization decisions can be pending at once, across every
+  application the module serves. Under the default `'each'`, each distinct
+  request in flight counts as one. A request beyond the limit fails with
+  "Sigma: authorization queue is full" until a pending decision settles.
 - `plaintext` must be a plain array of byte values; a `Uint8Array` is refused.
 - Points passed to the exported verifiers should be built with `parsePoint33`.
 
@@ -233,8 +283,8 @@ other two proofs the same way.
 | `point64`               | Encodes a point as 64 bytes, x then y, big-endian.                              |
 
 The types `SigmaPermissionModuleOptions`, `SigmaAuthorizationRequest`,
-`SigmaAuthorizationHandler`, `SigmaKeyDeriver`, `SigmaPrivilegedKeyDeriver` and
-`SigmaOperation` are exported too.
+`SigmaAuthorizationHandler`, `SigmaKeyDeriver`, `SigmaPrivilegedKeyDeriver`,
+`SigmaProofAuthorization` and `SigmaOperation` are exported too.
 
 ## Verification
 
