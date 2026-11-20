@@ -1,7 +1,9 @@
 import { awaitFromSync } from '../../utility/promiseFromSync'
 import { WERR_NOT_ACTIVE } from '../../sdk/WERR_errors'
+import type { StorageProvider } from '../../storage/StorageProvider'
 import type { StorageWriterAdmission } from '../../storage/StorageActiveWrite'
 import { Monitor } from '../Monitor'
+import { optionalMonitorInteger, requireMonitorInteger } from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -27,52 +29,124 @@ export class TaskReviewStatus extends WalletMonitorTask {
     this.checkNowRequested = value
   }
 
+  private static readonly progressEvent = 'ReviewStatusProgress'
+  private progress = { transaction: 0, request: 0 }
+  private requestReviewAfter = 0
+  private provider: StorageProvider | undefined
+  private readonly pageSize: number | undefined
+
+  override async asyncSetup(): Promise<void> {
+    await this.storage.runAsStorageProvider(async sp => await this.loadProgress(sp))
+  }
+
+  private async loadProgress(provider: StorageProvider): Promise<void> {
+    const checkpoints = await provider.loadMonitorCheckpoint(TaskReviewStatus.progressEvent)
+    this.progress = { transaction: 0, request: 0 }
+    this.requestReviewAfter = 0
+    this.provider = provider
+    for (const checkpoint of checkpoints) {
+      try {
+        const value = JSON.parse(checkpoint) as Record<string, unknown>
+        const transaction = optionalMonitorInteger(value.transaction, 0, Number.MAX_SAFE_INTEGER)
+        const request = optionalMonitorInteger(value.request, 0, Number.MAX_SAFE_INTEGER)
+        if (transaction !== undefined && request !== undefined) {
+          this.progress = { transaction, request }
+          return
+        }
+      } catch {
+        // Retain the prior checkpoint if one event was damaged.
+      }
+    }
+  }
+
   constructor(
     monitor: Monitor,
     public triggerMsecs = 1000 * 60 * 15,
     public agedMsecs = 1000 * 60 * 5
   ) {
     super(monitor, TaskReviewStatus.taskName)
+    const limit = monitor.options?.statusReviewPageSize
+    this.pageSize = limit == null ? undefined : requireMonitorInteger(limit, 'statusReviewPageSize', 1, 2048)
   }
 
   trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
-      run: this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs
+      run:
+        this.triggerMsecs > 0 &&
+        nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch >
+          (this.progress.transaction > 0 || this.progress.request > 0 ? Monitor.oneSecond : this.triggerMsecs)
     }
   }
 
   async runTask(): Promise<string> {
-    let log = ''
-
     const agedLimit = new Date(Date.now() - this.agedMsecs)
     const selected = await this.storage.runAsStorageProvider(async sp => ({
       provider: sp,
       independent: typeof sp.supportsPrimaryWriteFences === 'function' && (await sp.supportsPrimaryWriteFences())
     }))
-    let r: { log: string }
-    if (selected.independent) {
-      const admission: StorageWriterAdmission = async operation =>
-        await this.storage.runAsStorageProvider(
-          current =>
-            awaitFromSync(() => {
-              if (current !== selected.provider)
-                throw new WERR_NOT_ACTIVE('Review preparation belongs to a replaced provider')
-              return operation()
-            }),
-          true
-        )
-      const reconciliation = await selected.provider.reconcileCompletedProvenTxReqs(admission)
-      const review = await selected.provider.reviewStatus({ agedLimit, admission })
-      r = { log: reconciliation.log + review.log }
-    } else
-      r = await this.storage.runAsStorageProvider(async sp => {
-        const reconciliation = await sp.reconcileCompletedProvenTxReqs()
-        const review = await sp.reviewStatus({ agedLimit })
-        return { log: reconciliation.log + review.log }
-      })
+    if (!selected.independent)
+      return await this.storage.runAsStorageProvider(async sp => await this.reviewLegacy(sp, agedLimit))
 
-    if (r.log.length > 0) log += `${r.log}`
+    if (this.provider !== selected.provider) await this.loadProgress(selected.provider)
+    const admission: StorageWriterAdmission = async operation =>
+      await this.storage.runAsStorageProvider(
+        current =>
+          awaitFromSync(() => {
+            if (current !== selected.provider)
+              throw new WERR_NOT_ACTIVE('Review preparation belongs to a replaced provider')
+            return operation()
+          }),
+        true
+      )
+    const bounded = await this.reviewPage(selected.provider, agedLimit, admission)
+    return bounded ?? (await this.reviewLegacy(selected.provider, agedLimit, admission))
+  }
 
-    return log
+  private async reviewLegacy(
+    provider: StorageProvider,
+    agedLimit: Date,
+    admission?: StorageWriterAdmission
+  ): Promise<string> {
+    const notices = await provider.reconcileCompletedProvenTxReqs(admission)
+    const review = await provider.reviewStatus({ agedLimit, admission })
+    return notices.log + review.log
+  }
+
+  private async reviewPage(
+    provider: StorageProvider,
+    agedLimit: Date,
+    admission: StorageWriterAdmission
+  ): Promise<string | undefined> {
+    const started = performance.now()
+    const page = await provider.reviewStatusPage?.(
+      { agedLimit, admission, pageSize: this.pageSize },
+      this.progress.transaction
+    )
+    if (page == null) return undefined
+    const notices =
+      Date.now() >= this.requestReviewAfter
+        ? await provider.reconcileCompletedProvenTxReqs(admission, {
+            after: this.progress.request,
+            limit: 8,
+            deadline: performance.now() + 800
+          })
+        : undefined
+    let request = this.progress.request
+    if (notices != null) request = notices.complete === false ? (notices.after ?? 0) : 0
+    const progress = { transaction: page.complete ? 0 : page.after, request }
+    await admission(() =>
+      provider.saveMonitorCheckpoint(
+        TaskReviewStatus.progressEvent,
+        JSON.stringify({
+          ...progress,
+          examined: page.examined,
+          failed: page.failed,
+          durationMsecs: Math.round(performance.now() - started)
+        })
+      )
+    )
+    if (notices != null && notices.complete !== false) this.requestReviewAfter = Date.now() + Monitor.oneMinute
+    this.progress = progress
+    return page.log + (notices?.log ?? '')
   }
 }
