@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 const IMPACTS = new Set(['patch', 'minor', 'major', 'initial'])
 const FIELDS = ['schemaVersion', 'packages', 'summary', 'migration']
+const FENCE = /^(`{3,}|~{3,})(.*)$/
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 function closesFence(match, fence) {
@@ -13,18 +14,28 @@ function closesFence(match, fence) {
   )
 }
 
+function openingFence(line, comments) {
+  let hidden = comments.active
+  for (const token of line.matchAll(/<!--|-->/g)) {
+    if (token[0] === '<!--') hidden = true
+    comments.active = token[0] === '<!--'
+  }
+  return hidden ? null : FENCE.exec(line)
+}
+
 function releaseNoteBlocks(body) {
-  const visible = body.replace(/<!--[\s\S]*?(?:-->|$)/g, '')
   const blocks = []
+  const comments = { active: false }
   let fence
   let note
-  for (const line of visible.replaceAll('\r\n', '\n').split('\n')) {
-    const match = /^(`{3,}|~{3,})(.*)$/.exec(line)
+  for (const line of body.replaceAll('\r\n', '\n').split('\n')) {
     if (fence === undefined) {
+      const match = openingFence(line, comments)
       fence = match?.[1]
       note = match?.[2].trim() === 'release-note' ? [] : undefined
       continue
     }
+    const match = FENCE.exec(line)
     if (closesFence(match, fence)) {
       if (note !== undefined) blocks.push(note.join('\n'))
       fence = undefined

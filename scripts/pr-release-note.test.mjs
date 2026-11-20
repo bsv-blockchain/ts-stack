@@ -121,6 +121,20 @@ test('PR text stays data and is not echoed in validation errors', () => {
   )
 })
 
+test('HTML comment syntax inside a fenced JSON value remains literal data', () => {
+  const value = { ...note(), summary: 'Preserve <!-- comments --> in generated documentation.' }
+  assert.deepEqual(parseReleaseNote(body(value)), value)
+  const concealed = {
+    ...note(),
+    summary: 'Before<!--',
+    unknown: 'unexpected field',
+    after: '-->After'
+  }
+  assert.deepEqual(parseReleaseNote(body(concealed)), concealed)
+  assert.ok(validateReleaseNote(parseReleaseNote(body(concealed)), projects).length > 0)
+  assert.throws(() => parseReleaseNote(`<!-- --> <!--\n${body(note())}\n-->`))
+})
+
 test('reruns fetch the live description instead of using stale event/body environment', async () => {
   const pr = pullRequest()
   const fetchImpl = async (url, options) => {
