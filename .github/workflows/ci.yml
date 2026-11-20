@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
   # Release acceptance must be able to exercise the complete current tree.
   workflow_dispatch:
     inputs:
@@ -32,6 +33,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,6 +46,14 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.22.1
+
+      - name: Validate the current PR release note
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/pr-release-note.mjs
 
       - name: Install locked repository, wallet and mobile control dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack --filter @bsv/wallet-toolbox --filter @bsv/wallet-toolbox-mobile
