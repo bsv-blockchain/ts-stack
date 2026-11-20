@@ -41,7 +41,7 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "chalk": "^6.0.0",
     "dotenv": "^17.4.2",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.8",
     "fs-extra": "^11.4.0",
     "jest": "^30.5.1",
     "jest-diff": "^30.5.1",
