@@ -78,7 +78,9 @@ jobs:
           --head "$HEAD_SHA"
 
       - name: Enforce test, manual-suite, and conformance skip governance
-        run: node scripts/test-governance.mjs
+        run: |
+          node scripts/test-governance.mjs
+          node scripts/sync-property-test-batches.mjs --check
 
       - name: Verify synchronized service security policies
         run: |

@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { previewDestinationFixture, previewReceiptPolicy as policy } from './Brc38ImportPreviewFixture'
 import { withBrc38KnexImportReadDestination } from './Brc38KnexDestinationFence'
 import { importPageFixture } from './Brc38ImportPageFixture'
@@ -260,40 +261,45 @@ describe('actual bounded indexed identities for all thirteen native import entit
     )
     expect(apply).not.toHaveBeenCalled()
   })
-  test('full300 native natural-key identities match an independent oracle across accepted incoming number identities', async () => {
-    const value = page('outputBaskets')
-    if (value.table !== 'outputBaskets') throw new Error('Basket missing')
-    await read(async trx => {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.constantFrom(0, -7, 1e300, Number.MAX_SAFE_INTEGER),
-          fc.boolean(),
-          async (incoming, present) => {
-            const data: Brc38PreparedImportData = {
-                ...value,
-                rows: [
-                  {
-                    ...value.rows[0],
-                    basketId: incoming,
-                    name: present ? value.rows[0].name : 'unknown-natural-key'
-                  }
-                ]
-              },
-              [found] = await prepareBrc38ImportEntityTargets(trx, 7, data, createSyncMap(), 65536)
-            expect(found.found).toBe(present)
-            expect(found.localId).toBe(present ? -7 : undefined)
-          }
-        ),
-        {
-          numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
-          seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-          path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-          interruptAfterTimeLimit: 150000,
-          markInterruptAsFailure: true
-        }
-      )
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
     })
-  }, 180000)
+  )(
+    'full300 native natural-key identities match an independent oracle across accepted incoming number identities (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const value = page('outputBaskets')
+      if (value.table !== 'outputBaskets') throw new Error('Basket missing')
+      await read(async trx => {
+        await fc.assert(
+          fc.asyncProperty(
+            fc.constantFrom(0, -7, 1e300, Number.MAX_SAFE_INTEGER),
+            fc.boolean(),
+            async (incoming, present) => {
+              const data: Brc38PreparedImportData = {
+                  ...value,
+                  rows: [
+                    {
+                      ...value.rows[0],
+                      basketId: incoming,
+                      name: present ? value.rows[0].name : 'unknown-natural-key'
+                    }
+                  ]
+                },
+                [found] = await prepareBrc38ImportEntityTargets(trx, 7, data, createSyncMap(), 65536)
+              expect(found.found).toBe(present)
+              expect(found.localId).toBe(present ? -7 : undefined)
+            }
+          ),
+          propertyBatch
+        )
+      })
+    },
+    180000
+  )
   async function payload(data: Brc38PreparedImportData, maximum = 65536, signal?: AbortSignal) {
     return await read(async trx => {
       const targets = await prepareBrc38ImportEntityTargets(trx, 7, data, map, 65536, signal)
@@ -464,34 +470,39 @@ describe('actual bounded indexed identities for all thirteen native import entit
       )
     ).rejects.toThrow('query-only')
   })
-  test('full300 SQL allocation charges match an independent native-byte oracle including NUL and Unicode', async () => {
-    const data = page('outputBaskets')
-    if (data.table !== 'outputBaskets') throw new Error('Property basket missing')
-    await fc.assert(
-      fc.asyncProperty(
-        fc.constantFrom('', 'a\u0000b', 'é', '🙂'),
-        fc.integer({ min: 0, max: 256 }),
-        async (part, repetitions) => {
-          const name = part.repeat(repetitions)
-          await target.k('output_baskets').where({ basketId: -7 }).update({ name })
-          const raw: Record<string, unknown> = await target.k('output_baskets').where({ basketId: -7 }).first(),
-            expected = Object.values(raw).reduce<number>(
-              (sum, value) => sum + 256 + 16 * (value === null ? 0 : Buffer.byteLength(String(value))),
-              0
-            ),
-            input: Brc38PreparedImportData = { ...data, rows: [{ ...data.rows[0], name }] },
-            [existing] = await payload(input)
-          expect(existing.allocationBytes).toBe(expected)
-          await expect(payload(input, expected - 1)).rejects.toThrow('allocation budget')
-        }
-      ),
-      {
-        numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
-        seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true
-      }
-    )
-  }, 180000)
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+    })
+  )(
+    'full300 SQL allocation charges match an independent native-byte oracle including NUL and Unicode (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const data = page('outputBaskets')
+      if (data.table !== 'outputBaskets') throw new Error('Property basket missing')
+      await fc.assert(
+        fc.asyncProperty(
+          fc.constantFrom('', 'a\u0000b', 'é', '🙂'),
+          fc.integer({ min: 0, max: 256 }),
+          async (part, repetitions) => {
+            const name = part.repeat(repetitions)
+            await target.k('output_baskets').where({ basketId: -7 }).update({ name })
+            const raw: Record<string, unknown> = await target.k('output_baskets').where({ basketId: -7 }).first(),
+              expected = Object.values(raw).reduce<number>(
+                (sum, value) => sum + 256 + 16 * (value === null ? 0 : Buffer.byteLength(String(value))),
+                0
+              ),
+              input: Brc38PreparedImportData = { ...data, rows: [{ ...data.rows[0], name }] },
+              [existing] = await payload(input)
+            expect(existing.allocationBytes).toBe(expected)
+            await expect(payload(input, expected - 1)).rejects.toThrow('allocation budget')
+          }
+        ),
+        propertyBatch
+      )
+    },
+    180000
+  )
 })

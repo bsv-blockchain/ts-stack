@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { brc38StagingBinding, type Brc38StagingBinding } from './Brc38StagingBinding'
 import type { KnexBrc38StagingLimits } from './Brc38StagingBinding'
@@ -26,67 +27,69 @@ const selected = fc.record({
 })
 
 describe('private staging resume binding preserves each independent identity', () => {
-  test('every identity and destination epoch changes resume identity without mutating the caller', () => {
-    fc.assert(
-      fc.property(selected, value => {
-        const input = { ...value }
-        const result = brc38StagingBinding(input, { ...limits })
-        expect(input).toEqual(value)
-        expect(result.binding).toEqual(value)
-        expect(result.binding).not.toBe(input)
-        expect(Object.isFrozen(result)).toBe(true)
-        expect(Object.isFrozen(result.binding)).toBe(true)
-        expect(JSON.parse(result.bindingJson)).toEqual(value)
-        expect(brc38StagingBinding({ ...value }, { ...limits }).digest).toBe(result.digest)
+  test.each(
+    propertyTestBatches({ ...fc.readConfigureGlobal(), path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '' })
+  )(
+    'every identity and destination epoch changes resume identity without mutating the caller (property $path, $numRuns cases)',
+    propertyBatch => {
+      fc.assert(
+        fc.property(selected, value => {
+          const input = { ...value }
+          const result = brc38StagingBinding(input, { ...limits })
+          expect(input).toEqual(value)
+          expect(result.binding).toEqual(value)
+          expect(result.binding).not.toBe(input)
+          expect(Object.isFrozen(result)).toBe(true)
+          expect(Object.isFrozen(result.binding)).toBe(true)
+          expect(JSON.parse(result.bindingJson)).toEqual(value)
+          expect(brc38StagingBinding({ ...value }, { ...limits }).digest).toBe(result.digest)
 
-        const variants: Brc38StagingBinding[] = [
-          {
-            ...value,
-            archiveSha256: (value.archiveSha256[0] === '0' ? '1' : '0') + value.archiveSha256.slice(1)
-          },
-          { ...value, identityKey: value.identityKey + 'x' },
-          { ...value, chain: value.chain === 'main' ? 'test' : 'main' },
-          { ...value, sourceStorageIdentityKey: value.sourceStorageIdentityKey + 'x' },
-          { ...value, targetStorageIdentityKey: value.targetStorageIdentityKey + 'x' },
-          { ...value, targetGeneration: value.targetGeneration + 1 }
-        ]
-        for (const changed of variants) {
-          expect(brc38StagingBinding(changed, { ...limits }).digest).not.toBe(result.digest)
-        }
-        for (const field of Object.keys(limits) as Array<keyof KnexBrc38StagingLimits>) {
-          expect(brc38StagingBinding(value, { ...limits, [field]: limits[field] + 1 }).digest).not.toBe(result.digest)
-        }
-        input.identityKey += 'changed-after-binding'
-        expect(result.binding.identityKey).toBe(value.identityKey)
-      }),
-      {
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true,
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
-      }
-    )
-  })
+          const variants: Brc38StagingBinding[] = [
+            {
+              ...value,
+              archiveSha256: (value.archiveSha256[0] === '0' ? '1' : '0') + value.archiveSha256.slice(1)
+            },
+            { ...value, identityKey: value.identityKey + 'x' },
+            { ...value, chain: value.chain === 'main' ? 'test' : 'main' },
+            { ...value, sourceStorageIdentityKey: value.sourceStorageIdentityKey + 'x' },
+            { ...value, targetStorageIdentityKey: value.targetStorageIdentityKey + 'x' },
+            { ...value, targetGeneration: value.targetGeneration + 1 }
+          ]
+          for (const changed of variants) {
+            expect(brc38StagingBinding(changed, { ...limits }).digest).not.toBe(result.digest)
+          }
+          for (const field of Object.keys(limits) as Array<keyof KnexBrc38StagingLimits>) {
+            expect(brc38StagingBinding(value, { ...limits, [field]: limits[field] + 1 }).digest).not.toBe(result.digest)
+          }
+          input.identityKey += 'changed-after-binding'
+          expect(result.binding.identityKey).toBe(value.identityKey)
+        }),
+        propertyBatch
+      )
+    }
+  )
 
-  test('invalid profile, digest, chain and generation refuse without modifying the supplied record', () => {
-    fc.assert(
-      fc.property(selected, fc.constantFrom(-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY), (value, generation) => {
-        const invalid = { ...value, targetGeneration: generation }
-        expect(() => brc38StagingBinding(invalid, limits)).toThrow(RangeError)
-        expect(Object.is(invalid.targetGeneration, generation)).toBe(true)
-        expect(() => brc38StagingBinding({ ...value, archiveSha256: value.archiveSha256.slice(1) }, limits)).toThrow(
-          TypeError
-        )
-        for (const field of ['identityKey', 'sourceStorageIdentityKey', 'targetStorageIdentityKey'] as const) {
-          expect(() => brc38StagingBinding({ ...value, [field]: '' }, limits)).toThrow(TypeError)
-          expect(() => brc38StagingBinding({ ...value, [field]: 'a'.repeat(257) }, limits)).toThrow(TypeError)
-        }
-        expect(() => brc38StagingBinding({ ...value, chain: 'other' as 'main' }, limits)).toThrow(TypeError)
-      }),
-      {
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true,
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
-      }
-    )
-  })
+  test.each(
+    propertyTestBatches({ ...fc.readConfigureGlobal(), path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '' })
+  )(
+    'invalid profile, digest, chain and generation refuse without modifying the supplied record (property $path, $numRuns cases)',
+    propertyBatch => {
+      fc.assert(
+        fc.property(selected, fc.constantFrom(-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY), (value, generation) => {
+          const invalid = { ...value, targetGeneration: generation }
+          expect(() => brc38StagingBinding(invalid, limits)).toThrow(RangeError)
+          expect(Object.is(invalid.targetGeneration, generation)).toBe(true)
+          expect(() => brc38StagingBinding({ ...value, archiveSha256: value.archiveSha256.slice(1) }, limits)).toThrow(
+            TypeError
+          )
+          for (const field of ['identityKey', 'sourceStorageIdentityKey', 'targetStorageIdentityKey'] as const) {
+            expect(() => brc38StagingBinding({ ...value, [field]: '' }, limits)).toThrow(TypeError)
+            expect(() => brc38StagingBinding({ ...value, [field]: 'a'.repeat(257) }, limits)).toThrow(TypeError)
+          }
+          expect(() => brc38StagingBinding({ ...value, chain: 'other' as 'main' }, limits)).toThrow(TypeError)
+        }),
+        propertyBatch
+      )
+    }
+  )
 })
