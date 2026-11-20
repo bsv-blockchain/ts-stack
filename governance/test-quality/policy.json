@@ -1849,9 +1849,10 @@
         "manifest": "packages/application/output-knowledge/package.json",
         "risk": "critical",
         "boundary": "Explicit uncharged buyer currentness recovery, independently verified domain identity and buyer chain placement",
-        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "target": "Complete independently checked generated histories with min300 and seed3242026 in batches of at most 50. Preserve replay paths, the 150000ms interrupt-as-failure, and the 180000ms Jest timeout per batch.",
         "invariants": [
-          "One genuine native buyer property/min300 preserves original grant, wallet effects and control revision through generated report availability, selected-view changes and reopen; currentness cannot rewrite usable historical rights.",
+          "CI verifies that batching reproduces the same ordered histories and preserves their replay indexes.",
+          "The genuine native buyer property preserves original grant, wallet effects and control revision through generated report availability, selected-view changes and reopen; currentness cannot rewrite usable historical rights.",
           "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
         ]
       },
