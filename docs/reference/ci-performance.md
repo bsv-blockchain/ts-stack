@@ -262,7 +262,10 @@ earlier suites' retained worker state from sharing these properties' execution
 context. The buyer-alias property retains its 300-case minimum, seed, replay
 setting, assertions and a 180-second timeout per group of up to 50 histories. Every coverage batch instruments the
 complete source inventory, and all same-attempt batch receipts must reconcile
-before the original global and patch coverage gates can pass.
+before the original global and patch coverage gates can pass. The instrumented
+native wallet purchase suite has a 30-second operation watchdog. Its fixture
+drains SQLite opens already in progress before deleting the database directory
+and rejects new opens once teardown starts.
 Aggregation compares recomputed Istanbul maps in their complete serialized JSON
 form with the uploaded reports, retaining every file, counter, location and source
 map. Library class instances and their persisted JSON are equivalent at this
