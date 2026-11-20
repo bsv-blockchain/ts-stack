@@ -761,8 +761,7 @@ describe('ColorPermissionModule boundaries', () => {
     const listings = wallet.listOutputsCalls.filter(
       call => call.basket === toolbox.specOpBasketPrefixOutputs
     )
-    expect(listings.length).toBeGreaterThanOrEqual(2)
-    expect(listings.every(call => call.limit === 10_000)).toBe(true)
+    expect(listings.map(call => call.limit)).toEqual([10_000, 10_000])
   })
 
   it('leaves outputs that require a processing profile out of inventory', async () => {
