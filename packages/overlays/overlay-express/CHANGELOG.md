@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- `ArcadeProvider` counts `SEEN_MULTIPLE_NODES` and `STUMP_PROCESSING` as a successful broadcast. Arcade (bsv-blockchain/broadcaster) answers a re-submit of a transaction it already holds with the stored state, so an overlay that receives a transaction after the wallet broadcast it could see these states and report a failure for a propagated or mined transaction. `PENDING_RETRY` and `UNKNOWN` still fall through to the next broadcaster. No migration.
 - Add `configureScriptVerifier(verifier)` and `EngineConfig.scriptVerifier` to pass a script backend, such as a preloaded `BdkVerifier` from `@bsv/verifast`, to the engine's SPV verification. Off by default; `@bsv/verifast` is not a dependency. Additive; no migration.
 
 - Prepare `2.8.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
