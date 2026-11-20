@@ -1,0 +1,2 @@
+Disposable Sonar queue canary B.
+Independent text change; never targets main.
