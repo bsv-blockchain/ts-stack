@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import {
   assertBase64,
@@ -58,81 +59,83 @@ const contracts = [
 ]
 
 describe('portable row decoding agrees with independent standard codecs', () => {
-  test('generated rows retain unknown data and decode every declared field without changing source rows', () => {
-    fc.assert(
-      fc.property(
-        fc.constantFrom(...contracts),
-        fc.uint8Array({ maxLength: 128 }),
-        fc.integer({ min: 0, max: 2000000000000 }),
-        fc.string({ maxLength: 64 }),
-        (contract, bytes, time, text) => {
-          const row: PortableRow = { unrelated: text, unrelatedNumber: time }
-          const expected: Record<string, unknown> = { ...row }
-          for (const field of contract.binary) {
-            row[field] = Buffer.from(bytes).toString('base64')
-            expected[field] = [...bytes]
+  test.each(
+    propertyTestBatches({ ...fc.readConfigureGlobal(), path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '' })
+  )(
+    'generated rows retain unknown data and decode every declared field without changing source rows (property $path, $numRuns cases)',
+    propertyBatch => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...contracts),
+          fc.uint8Array({ maxLength: 128 }),
+          fc.integer({ min: 0, max: 2000000000000 }),
+          fc.string({ maxLength: 64 }),
+          (contract, bytes, time, text) => {
+            const row: PortableRow = { unrelated: text, unrelatedNumber: time }
+            const expected: Record<string, unknown> = { ...row }
+            for (const field of contract.binary) {
+              row[field] = Buffer.from(bytes).toString('base64')
+              expected[field] = [...bytes]
+            }
+            for (const field of contract.date) {
+              row[field] = new Date(time).toISOString()
+              expected[field] = new Date(time)
+            }
+            for (const field of contract.json) {
+              row[field] = { text, integer: time, flag: true }
+              expected[field] = JSON.stringify(row[field])
+            }
+            const before = JSON.stringify(row)
+            expect(() => validatePortableRows(contract.kind, [row], 'rows')).not.toThrow()
+            expect(decodePortableRow(contract.kind, row)).toEqual(expected)
+            expect(JSON.stringify(row)).toBe(before)
+            for (const field of contract.date) {
+              expect(() =>
+                validatePortableRows(contract.kind, [{ ...row, [field]: text + 'not-an-iso-date' }], 'rows')
+              ).toThrow(`BRC-38 rows[0].${field}`)
+            }
+            for (const field of contract.binary) {
+              expect(() =>
+                validatePortableRows(contract.kind, [{ ...row, [field]: '#' + row[field] }], 'rows')
+              ).toThrow(`BRC-38 rows[0].${field}`)
+            }
+            for (const field of contract.json) {
+              expect(() => validatePortableRows(contract.kind, [{ ...row, [field]: [] }], 'rows')).toThrow(
+                `BRC-38 rows[0].${field}`
+              )
+            }
           }
-          for (const field of contract.date) {
-            row[field] = new Date(time).toISOString()
-            expected[field] = new Date(time)
-          }
-          for (const field of contract.json) {
-            row[field] = { text, integer: time, flag: true }
-            expected[field] = JSON.stringify(row[field])
-          }
-          const before = JSON.stringify(row)
-          expect(() => validatePortableRows(contract.kind, [row], 'rows')).not.toThrow()
-          expect(decodePortableRow(contract.kind, row)).toEqual(expected)
-          expect(JSON.stringify(row)).toBe(before)
-          for (const field of contract.date) {
-            expect(() =>
-              validatePortableRows(contract.kind, [{ ...row, [field]: text + 'not-an-iso-date' }], 'rows')
-            ).toThrow(`BRC-38 rows[0].${field}`)
-          }
-          for (const field of contract.binary) {
-            expect(() => validatePortableRows(contract.kind, [{ ...row, [field]: '#' + row[field] }], 'rows')).toThrow(
-              `BRC-38 rows[0].${field}`
-            )
-          }
-          for (const field of contract.json) {
-            expect(() => validatePortableRows(contract.kind, [{ ...row, [field]: [] }], 'rows')).toThrow(
-              `BRC-38 rows[0].${field}`
-            )
-          }
-        }
-      ),
-      {
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true,
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
-      }
-    )
-  })
+        ),
+        propertyBatch
+      )
+    }
+  )
 
-  test('primitive validation retains caller values and exact failing paths', () => {
-    fc.assert(
-      fc.property(
-        fc.integer(),
-        fc.string({ maxLength: 128 }),
-        fc.uint8Array({ maxLength: 128 }),
-        (integer, text, bytes) => {
-          expect(requireNumber(integer, 'field')).toBe(integer)
-          expect(requireString(text, 'field')).toBe(text)
-          expect(() => requireNumber(integer + 0.5, 'field')).toThrow('BRC-38 field must be an integer')
-          expect(() => requireString(integer, 'field')).toThrow('BRC-38 field must be a string')
-          expect(() => assertBase64(Buffer.from(bytes).toString('base64'), 'field')).not.toThrow()
-          expect(() => assertIsoDate(new Date(Math.abs(integer)).toISOString(), 'field')).not.toThrow()
-          expect(() => assertIsoDate('2026-02-30T00:00:00.000Z', 'field')).toThrow('BRC-38 field is invalid')
-          expect(() => validatePortableRows('unmapped', [null as unknown as PortableRow], 'rows')).toThrow(
-            'BRC-38 rows[0] must be an object'
-          )
-        }
-      ),
-      {
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true,
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
-      }
-    )
-  })
+  test.each(
+    propertyTestBatches({ ...fc.readConfigureGlobal(), path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '' })
+  )(
+    'primitive validation retains caller values and exact failing paths (property $path, $numRuns cases)',
+    propertyBatch => {
+      fc.assert(
+        fc.property(
+          fc.integer(),
+          fc.string({ maxLength: 128 }),
+          fc.uint8Array({ maxLength: 128 }),
+          (integer, text, bytes) => {
+            expect(requireNumber(integer, 'field')).toBe(integer)
+            expect(requireString(text, 'field')).toBe(text)
+            expect(() => requireNumber(integer + 0.5, 'field')).toThrow('BRC-38 field must be an integer')
+            expect(() => requireString(integer, 'field')).toThrow('BRC-38 field must be a string')
+            expect(() => assertBase64(Buffer.from(bytes).toString('base64'), 'field')).not.toThrow()
+            expect(() => assertIsoDate(new Date(Math.abs(integer)).toISOString(), 'field')).not.toThrow()
+            expect(() => assertIsoDate('2026-02-30T00:00:00.000Z', 'field')).toThrow('BRC-38 field is invalid')
+            expect(() => validatePortableRows('unmapped', [null as unknown as PortableRow], 'rows')).toThrow(
+              'BRC-38 rows[0] must be an object'
+            )
+          }
+        ),
+        propertyBatch
+      )
+    }
+  )
 })

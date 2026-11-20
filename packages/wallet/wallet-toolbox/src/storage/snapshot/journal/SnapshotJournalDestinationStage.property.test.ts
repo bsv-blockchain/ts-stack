@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { knex, type Knex } from 'knex'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -32,8 +33,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 const limits = { maximumBytes: 1048576, maximumPages: 256 }
@@ -144,44 +143,49 @@ function rawPage(text = 'é\u0000😀'): SnapshotJournalDeltaPage {
     after: { revision: metadata.revision, id1: 7, id2: 0, exactText: '' }
   }
 }
-test('generated ordinary writer rollback preserves complete raw pages and leaves no charge or checkpoint drift', async () => {
-  const state = await begin()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.record({
-        text: fc.array(fc.constantFrom('x', 'é', '中', '😀', '\u0000'), { maxLength: 16 }).map(chars => chars.join('')),
-        bytes: fc.uint8Array({ maxLength: 128 }),
-        nullable: fc.boolean(),
-        flag: fc.boolean()
-      }),
-      async value => {
-        const data = rawPage(value.text)
-        if (!data.changes[0].present) throw new Error('Expected raw row')
-        data.changes[0].row.rawTx = value.bytes
-        data.changes[0].row.nullable = value.nullable ? null : value.text
-        data.changes[0].row.rawBoolean = Number(value.flag)
-        data.changes[0].row.boolean = value.flag
-        await expect(
-          db.transaction(async trx => {
-            const result = await stageSnapshotJournalDestinationPage(trx, binding, state, data, limits)
-            expect(result.checkpoint).toMatchObject({ sequence: 1, streamIndex: 1 })
-            const rows = await trx('snapshot_reconciliation_stage_pages').select('payload', 'bytes')
-            expect(rows).toHaveLength(1)
-            expect(rows[0].bytes).toBe(rows[0].payload.byteLength)
-            expect(decodeSnapshotJournalDeltaFrame(rows[0].payload, { stream: 'scope', tableId: 0 })).toEqual(data)
-            throw new Error('Generated actual writer rollback')
-          })
-        ).rejects.toThrow('Generated actual writer rollback')
-        expect(await db('snapshot_reconciliation_stage_pages')).toEqual([])
-        expect(await db('snapshot_reconciliation_stage_budgets')).toEqual([])
-        expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
-          state
-        )
-      }
-    ),
-    controls
-  )
-})
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated ordinary writer rollback preserves complete raw pages and leaves no charge or checkpoint drift (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const state = await begin()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          text: fc
+            .array(fc.constantFrom('x', 'é', '中', '😀', '\u0000'), { maxLength: 16 })
+            .map(chars => chars.join('')),
+          bytes: fc.uint8Array({ maxLength: 128 }),
+          nullable: fc.boolean(),
+          flag: fc.boolean()
+        }),
+        async value => {
+          const data = rawPage(value.text)
+          if (!data.changes[0].present) throw new Error('Expected raw row')
+          data.changes[0].row.rawTx = value.bytes
+          data.changes[0].row.nullable = value.nullable ? null : value.text
+          data.changes[0].row.rawBoolean = Number(value.flag)
+          data.changes[0].row.boolean = value.flag
+          await expect(
+            db.transaction(async trx => {
+              const result = await stageSnapshotJournalDestinationPage(trx, binding, state, data, limits)
+              expect(result.checkpoint).toMatchObject({ sequence: 1, streamIndex: 1 })
+              const rows = await trx('snapshot_reconciliation_stage_pages').select('payload', 'bytes')
+              expect(rows).toHaveLength(1)
+              expect(rows[0].bytes).toBe(rows[0].payload.byteLength)
+              expect(decodeSnapshotJournalDeltaFrame(rows[0].payload, { stream: 'scope', tableId: 0 })).toEqual(data)
+              throw new Error('Generated actual writer rollback')
+            })
+          ).rejects.toThrow('Generated actual writer rollback')
+          expect(await db('snapshot_reconciliation_stage_pages')).toEqual([])
+          expect(await db('snapshot_reconciliation_stage_budgets')).toEqual([])
+          expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
+            state
+          )
+        }
+      ),
+      propertyBatch
+    )
+  }
+)
 
 async function intakeChain(): Promise<SnapshotJournalDestinationCheckpoint> {
   let state = await begin()
@@ -263,73 +267,77 @@ async function consumeChainPage(
   ).checkpoint
 }
 
-test('generated actual page loss matches an independent ordered custody model and every example rolls back', async () => {
-  const initial = await intakeChain()
-  const model = [
-    { sequence: 9, streamIndex: 8, examined: 1 },
-    { sequence: 10, streamIndex: 8, examined: 1 },
-    { sequence: 11, streamIndex: 8, examined: 1 },
-    { sequence: 16, streamIndex: 13, examined: 0 }
-  ]
-  const before = await db('snapshot_reconciliation_stage_chains').where({ tableId: 8 }).select()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.record({
-        hole: fc.integer({ min: -1, max: 3 }),
-        prefix: fc.integer({ min: 0, max: 3 }),
-        nonce: fc.uint8Array({ maxLength: 32 })
-      }),
-      async example => {
-        await expect(
-          db.transaction(async trx => {
-            let state = initial
-            for (let index = 0; index < example.prefix; index++) {
-              const result = await readSnapshotJournalDestinationPromotionPage(trx, binding, state)
-              expect(result?.receipt).toMatchObject(model[index])
-              if (!result) throw new Error('Expected model prefix')
-              state = await consumeChainPage(trx, state, result.receipt.sequence, result.page.examined)
-            }
-            const hole = example.hole < example.prefix ? -1 : example.hole
-            if (hole >= 0)
-              await trx('snapshot_reconciliation_stage_pages').where({ sequence: model[hole].sequence }).delete()
-            await trx('test_staged_rows').insert({
-              id: 123,
-              value: Buffer.from(example.nonce).toString('hex')
-            })
-            for (let index = example.prefix; index < model.length; index++) {
-              if (index === hole) {
-                const queries: string[] = []
-                const capture = (query: { sql: string }) => queries.push(query.sql)
-                trx.on('query', capture)
-                try {
-                  await expect(readSnapshotJournalDestinationPromotionPage(trx, binding, state)).rejects.toThrow(
-                    'Invalid or exhausted'
-                  )
-                } finally {
-                  trx.removeListener('query', capture)
-                }
-                expect(queries.some(sql => sql.includes('substr') && sql.includes('payload'))).toBe(false)
-                break
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated actual page loss matches an independent ordered custody model and every example rolls back (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const initial = await intakeChain()
+    const model = [
+      { sequence: 9, streamIndex: 8, examined: 1 },
+      { sequence: 10, streamIndex: 8, examined: 1 },
+      { sequence: 11, streamIndex: 8, examined: 1 },
+      { sequence: 16, streamIndex: 13, examined: 0 }
+    ]
+    const before = await db('snapshot_reconciliation_stage_chains').where({ tableId: 8 }).select()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          hole: fc.integer({ min: -1, max: 3 }),
+          prefix: fc.integer({ min: 0, max: 3 }),
+          nonce: fc.uint8Array({ maxLength: 32 })
+        }),
+        async example => {
+          await expect(
+            db.transaction(async trx => {
+              let state = initial
+              for (let index = 0; index < example.prefix; index++) {
+                const result = await readSnapshotJournalDestinationPromotionPage(trx, binding, state)
+                expect(result?.receipt).toMatchObject(model[index])
+                if (!result) throw new Error('Expected model prefix')
+                state = await consumeChainPage(trx, state, result.receipt.sequence, result.page.examined)
               }
-              const result = await readSnapshotJournalDestinationPromotionPage(trx, binding, state)
-              expect(result?.receipt).toMatchObject(model[index])
-              if (!result) throw new Error('Expected independent next staged frame')
-              state = await consumeChainPage(trx, state, result.receipt.sequence, result.page.examined)
-            }
-            if (hole < 0) expect(await readSnapshotJournalDestinationPromotionPage(trx, binding, state)).toBeUndefined()
-            throw new Error('Generated custody model rollback')
-          })
-        ).rejects.toThrow('Generated custody model rollback')
-        expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
-          initial
-        )
-        expect(await db('snapshot_reconciliation_stage_chains').where({ tableId: 8 }).select()).toEqual(before)
-        expect(
-          await db('snapshot_reconciliation_stage_pages').where({ tableId: 8 }).orderBy('sequence').select('sequence')
-        ).toEqual(model.map(({ sequence }) => ({ sequence })))
-        expect(await db('test_staged_rows')).toEqual([])
-      }
-    ),
-    controls
-  )
-})
+              const hole = example.hole < example.prefix ? -1 : example.hole
+              if (hole >= 0)
+                await trx('snapshot_reconciliation_stage_pages').where({ sequence: model[hole].sequence }).delete()
+              await trx('test_staged_rows').insert({
+                id: 123,
+                value: Buffer.from(example.nonce).toString('hex')
+              })
+              for (let index = example.prefix; index < model.length; index++) {
+                if (index === hole) {
+                  const queries: string[] = []
+                  const capture = (query: { sql: string }) => queries.push(query.sql)
+                  trx.on('query', capture)
+                  try {
+                    await expect(readSnapshotJournalDestinationPromotionPage(trx, binding, state)).rejects.toThrow(
+                      'Invalid or exhausted'
+                    )
+                  } finally {
+                    trx.removeListener('query', capture)
+                  }
+                  expect(queries.some(sql => sql.includes('substr') && sql.includes('payload'))).toBe(false)
+                  break
+                }
+                const result = await readSnapshotJournalDestinationPromotionPage(trx, binding, state)
+                expect(result?.receipt).toMatchObject(model[index])
+                if (!result) throw new Error('Expected independent next staged frame')
+                state = await consumeChainPage(trx, state, result.receipt.sequence, result.page.examined)
+              }
+              if (hole < 0)
+                expect(await readSnapshotJournalDestinationPromotionPage(trx, binding, state)).toBeUndefined()
+              throw new Error('Generated custody model rollback')
+            })
+          ).rejects.toThrow('Generated custody model rollback')
+          expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
+            initial
+          )
+          expect(await db('snapshot_reconciliation_stage_chains').where({ tableId: 8 }).select()).toEqual(before)
+          expect(
+            await db('snapshot_reconciliation_stage_pages').where({ tableId: 8 }).orderBy('sequence').select('sequence')
+          ).toEqual(model.map(({ sequence }) => ({ sequence })))
+          expect(await db('test_staged_rows')).toEqual([])
+        }
+      ),
+      propertyBatch
+    )
+  }
+)

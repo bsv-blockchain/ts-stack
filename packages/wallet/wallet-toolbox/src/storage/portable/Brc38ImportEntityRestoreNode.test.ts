@@ -23,14 +23,7 @@ import { importBRC38, type BRC38WalletData } from './index'
 import * as ids from './Brc38ImportIdMap'
 import type { Knex } from 'knex'
 
-const MIN_PROPERTY_RUNS = 300
-fc.configureGlobal({
-  numRuns: Math.max(
-    MIN_PROPERTY_RUNS,
-    Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? MIN_PROPERTY_RUNS)
-  ),
-  seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
-})
+const RESTORE_HISTORY_LENGTH = 300
 
 const nativeTables = [
   'proven_txs',
@@ -373,7 +366,7 @@ describe('actual authenticated native restore and durable original provenance', 
   })
   test('full300 actual source pages preserve native values and atomic original/map/cursor rollback without renewing ownership', async () => {
     await open(data => {
-      for (let index = 0; index < 300; index++)
+      for (let index = 0; index < RESTORE_HISTORY_LENGTH; index++)
         data.tables.outputBaskets.push({
           ...data.tables.outputBaskets[0],
           basketId: 1000 + index,
@@ -435,13 +428,13 @@ describe('actual authenticated native restore and durable original provenance', 
         index++
       }),
       {
-        numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
+        // Each generated operation advances the same durable cursor.
+        numRuns: RESTORE_HISTORY_LENGTH,
         seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
         path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true
+        timeout: 10000
       }
     )
-    expect(index).toBe(300)
+    expect(index).toBe(RESTORE_HISTORY_LENGTH)
   }, 180000)
 })

@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '2.2.0'
+version: '2.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-22'
-last_verified: '2026-10-22'
+last_updated: '2026-11-19'
+last_verified: '2026-11-19'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -22,7 +22,9 @@ before adopting it.
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
 
-The 2.2.0 source candidate is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
+The 2.3.0 source candidate is additive and needs no migration. It adds the subpath `@bsv/templates/R1Comb.ts`, the R1C vault lock of the BSV Wallet (see below); the root entry is unchanged.
+
+2.2.0 (published) is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
 
 The 2.0.0 source candidate is a breaking release: `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL` are removed, and [BRC-162](https://brc.dev/162) token outputs and their strict CBOR payloads move to `Bsv21Binary`. The SDK peer range is unchanged in source, and 2.0.0 is the first release to publish `^3.0.0` alongside `^2.1.6`.
 
@@ -50,11 +52,9 @@ console.log(decodedData) // ['APP', '{"action":"vote"}']
 
 ## CommonJS compatibility
 
-The 1.10.3 candidate fixes SDK default-import double wrapping in CommonJS.
-Both module formats retain the same root/wildcard exports and script encodings.
-Packed acceptance constructs and signs scripts, including Mandala, multisig,
-MultiPushDrop and R1K1 recovery, with published SDK 2.8.0 and the candidate SDK.
-This source candidate is not yet published.
+Since 1.10.3, SDK classes are imported by name, so CommonJS consumers no longer
+hit SDK default-import double wrapping. Both module formats export the same
+root and subpath entries and build the same script bytes.
 
 ## What it provides
 
@@ -63,6 +63,7 @@ This source candidate is not yet published.
 - **P2MSKH** — Pay-to-Multisig-Key-Hash; M-of-N threshold signing with wallet support
 - **Bsv21Binary** — BRC-162 (BSV-21 binary) token outputs with one canonical encoding per value, `bigint` amounts, and a strict CBOR payload codec (`encodeStrictCbor`, `decodeStrictCbor`, `tryDecodeStrictCbor`)
 - **R1K1Wallet** — Salted P-256 hardware signing with independent secp256k1 recovery
+- **R1Comb** (subpath `@bsv/templates/R1Comb.ts`) — 1-of-N (N = 1..5) P-256 vault lock, byte-identical to the BSV Wallet Vault; about 45 KB per lock
 - **Script utilities** — Type detection, parsing, serialization helpers
 - **Wallet integration** — Templates accept WalletInterface for BRC-29/BRC-42 derivation
 
@@ -216,6 +217,32 @@ does not display or independently validate the Bitcoin transaction. PIN and
 touch policies protect key use, not transaction intent; review the transaction
 on a trusted host before approving it.
 
+### Lock an R1C vault output to 1..5 P-256 keys
+
+```ts
+import type { Transaction } from '@bsv/sdk'
+import * as R1Comb from '@bsv/templates/R1Comb.ts'
+
+declare const p256PublicKeysHex: string[] // 1..5 keys, 33- or 65-byte SEC1
+declare const saltHex64: string // 32 random bytes per output; keep it with the wallet
+declare const signWithYubiKeyPiv: (digestHex: string) => Promise<number[]> // DER ECDSA
+declare const tx: Transaction // version 1; input 0 spends the locked output
+declare const sourceSatoshis: number
+
+const keys = p256PublicKeysHex.map(k => R1Comb.compressPubkey(k))
+const lockingScript = R1Comb.buildLock({
+  commitments: keys.map(k => R1Comb.commitment(k, saltHex64)),
+  saltHex64
+})
+const preimage = R1Comb.sighashPreimage(tx, 0, sourceSatoshis)
+const derSig = await signWithYubiKeyPiv(R1Comb.signerDigest(preimage))
+const unlockingScript = R1Comb.buildUnlock({ preimage, derSig, pubkeyHex33: keys[0], saltHex64 })
+R1Comb.verifyVaultInput({ tx, inputIndex: 0, sourceSatoshis, lockingScript, unlockingScript })
+```
+
+Any one committed key opens the output alone. No key appears on the chain
+until it spends. Every refusal throws `R1CombError`.
+
 ## Key concepts
 
 - **ScriptTemplate Interface** — Implements `lock()` to create locking script and `unlock()` to sign/spend
@@ -231,10 +258,11 @@ on a trusted host before approving it.
 ## When to use this
 
 - Creating standard locking scripts for transactions
-- Building applications that need P2PKH or multisig payment flows
+- Building applications that need multisig payment flows (P2PKH itself is in `@bsv/sdk`)
 - Storing data on-chain with OP_RETURN
 - Implementing multi-owner token systems with PushDrop
 - Building hardware-backed outputs with an intentionally inconvenient K1 recovery path
+- Locking funds to any one of up to five P-256 hardware keys (R1Comb)
 - Learning Bitcoin Script patterns
 
 ## When NOT to use this
@@ -260,6 +288,7 @@ on a trusted host before approving it.
 - **Signature generation async** — All `unlock().sign()` calls are async; use await
 - **R1 salt backup** — Losing an output's private salt makes its R1 path unusable; retain the K1 recovery key and salt metadata separately
 - **Miner policy** — R1K1Wallet's synthesized P-256 script exceeds common 500 KB policy limits
+- **R1C transaction version** — An R1Comb spend must be a version-1 transaction; `buildUnlock` refuses any other preimage. Losing the output's salt makes it unspendable
 - **OP_RETURN encoding** — Data is UTF-8 by default; encode as hex first and specify `enc: 'hex'` for binary
 
 ## Related packages

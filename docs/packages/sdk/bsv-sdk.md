@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.1'
+version: '4.1.2'
 npm: '@bsv/sdk'
 last_updated: '2026-11-13'
 last_verified: '2026-11-13'
@@ -15,14 +15,24 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+## Script ASM for data outputs
+
+The 4.1.2 source candidate prints the top-level `OP_RETURN` when a script read
+from bytes is converted to ASM. Plain hex tokens still encode data pushes.
+If ordinary instruction tokens would change suffix bytes, the printer places
+one final `0x<hex>` token immediately after the top-level `OP_RETURN`.
+The raw token supplies the whole suffix verbatim and requires nonempty,
+even-length hex. For example, `OP_0 OP_RETURN 02ab` encodes as `006a0202ab`,
+and `OP_0 OP_RETURN 0x02ab` encodes as `006a02ab`.
+
 ## LocalKVStore removal patch
 
-The 4.1.1 source candidate makes `LocalKVStore.remove` reject a wallet response
+The SDK makes `LocalKVStore.remove` reject a wallet response
 with a positive `totalOutputs` and an empty page instead of repeatedly querying
 offset zero. The error identifies the key and reported total; rejection releases
 the per-key operation lock. An absent key still returns `[]`, and ordinary
 removal, `set` and `get` are unchanged. No API, wire or stored-data migration is
-required. This source candidate has not been published.
+required.
 
 ## GlobalKVStore tag-count compatibility patch
 
