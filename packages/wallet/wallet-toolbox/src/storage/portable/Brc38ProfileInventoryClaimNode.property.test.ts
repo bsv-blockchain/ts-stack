@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import createKnex, { type Knex } from 'knex'
 import { createHash } from 'node:crypto'
@@ -22,8 +23,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 type Mode = 'creation' | 'retirement'
@@ -128,143 +127,155 @@ async function fixture(filename = 'profile-inventory.sqlite') {
 }
 
 describe('actual inventory transaction grants do not borrow authority from object shape or stale rows', () => {
-  test('generated grants detach binding and recheck every selected durable scope field and state', async () => {
-    const target = await fixture()
-    try {
-      await fc.assert(
-        fc.asyncProperty(
-          id,
-          digest,
-          mode,
-          fc.constantFrom('root', 'policy', 'profile', 'binding', 'state'),
-          async (id, digest, mode, changed) => {
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated grants detach binding and recheck every selected durable scope field and state (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const target = await fixture()
+      try {
+        await fc.assert(
+          fc.asyncProperty(
+            id,
+            digest,
+            mode,
+            fc.constantFrom('root', 'policy', 'profile', 'binding', 'state'),
+            async (id, digest, mode, changed) => {
+              const selected = inventory(id),
+                expected = { ...selected },
+                row = nativeRow(selected, digest, mode)
+              await target.reset(selected, digest, mode)
+              await target.db.transaction(async trx => {
+                const grant = await make(mode)(trx, target.directory, selected, digest)
+                expect(grant).toEqual({
+                  directory: join(target.directory, expected.profileId),
+                  bindingSha256: digest,
+                  inventory: expected
+                })
+                expect(Object.isFrozen(grant)).toBe(true)
+                expect(Object.isFrozen(grant.inventory)).toBe(true)
+                expect(grant.inventory).not.toBe(selected)
+                ;(selected as { rootId: string }).rootId = uuid('90000000', id)
+                await check(mode)(grant)
+                await expect(check(mode)({ ...grant, inventory: { ...grant.inventory } })).rejects.toThrow(
+                  'actual profile inventory'
+                )
+                await expect(check(mode === 'creation' ? 'retirement' : 'creation')(grant)).rejects.toThrow(
+                  'actual profile inventory'
+                )
+                if (changed === 'root')
+                  await trx('profile_inventory_capacity')
+                    .where({ slot: 1 })
+                    .update({ rootId: uuid('90000000', id) })
+                else if (changed === 'policy')
+                  await trx('profile_inventory_capacity')
+                    .where({ slot: 1 })
+                    .update({ policySha256: distinct(policySha256) })
+                else if (changed === 'profile')
+                  await trx('profile_inventory')
+                    .where({ id: expected.profileId })
+                    .update({ id: uuid('90000000', id) })
+                else if (changed === 'binding')
+                  await trx('profile_inventory')
+                    .where({ id: expected.profileId })
+                    .update({ bindingSha256: distinct(digest) })
+                else await trx('profile_inventory').where({ id: expected.profileId }).update({ state: 'published' })
+                await expect(check(mode)(grant)).rejects.toThrow('scope or durable state differs')
+                await trx('profile_inventory_capacity')
+                  .where({ slot: 1 })
+                  .update({ rootId: expected.rootId, policySha256 })
+                await trx('profile_inventory').update(row)
+                await check(mode)(grant)
+                expect(grant.inventory).toEqual(expected)
+                expect((await trx('profile_inventory').first()).bindingSha256).toBe(digest)
+              })
+            }
+          ),
+          propertyBatch
+        )
+      } finally {
+        await target.close()
+      }
+    },
+    30000
+  )
+
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated committed and rolled-back reservations never keep a completed writer grant alive (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const target = await fixture()
+      try {
+        await fc.assert(
+          fc.asyncProperty(id, digest, mode, fc.boolean(), async (id, digest, mode, commit) => {
             const selected = inventory(id),
-              expected = { ...selected },
               row = nativeRow(selected, digest, mode)
+            await target.reset(selected, digest, mode, false)
+            const trx = await target.db.transaction()
+            let grant: Brc38ProfileCreationGrant | undefined
+            try {
+              await trx('profile_inventory').insert(row)
+              grant = await make(mode)(trx, target.directory, selected, digest)
+              await check(mode)(grant)
+              if (commit) await trx.commit()
+              else await trx.rollback()
+            } finally {
+              if (!trx.isCompleted()) await trx.rollback()
+            }
+            if (grant === undefined) throw new Error('Owned generated grant was not created')
+            await expect(check(mode)(grant)).rejects.toThrow('writer has completed')
+            expect(await target.db('profile_inventory').select('*')).toEqual(commit ? [row] : [])
+            await expect(check(mode)({ ...grant })).rejects.toThrow('actual profile inventory')
+            if (commit)
+              await target.db.transaction(async next => {
+                const successor = await make(mode)(next, target.directory, selected, digest)
+                expect(successor).not.toBe(grant)
+                await check(mode)(successor)
+                await expect(check(mode)(grant!)).rejects.toThrow('writer has completed')
+              })
+          }),
+          propertyBatch
+        )
+      } finally {
+        await target.close()
+      }
+    },
+    30000
+  )
+
+  test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+    'generated wrong catalog filenames and nontransaction owners reject before any authority query (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const target = await fixture('other-owned.sqlite')
+      try {
+        await fc.assert(
+          fc.asyncProperty(id, digest, mode, async (id, digest, mode) => {
+            const selected = inventory(id)
             await target.reset(selected, digest, mode)
             await target.db.transaction(async trx => {
-              const grant = await make(mode)(trx, target.directory, selected, digest)
-              expect(grant).toEqual({
-                directory: join(target.directory, expected.profileId),
-                bindingSha256: digest,
-                inventory: expected
-              })
-              expect(Object.isFrozen(grant)).toBe(true)
-              expect(Object.isFrozen(grant.inventory)).toBe(true)
-              expect(grant.inventory).not.toBe(selected)
-              ;(selected as { rootId: string }).rootId = uuid('90000000', id)
-              await check(mode)(grant)
-              await expect(check(mode)({ ...grant, inventory: { ...grant.inventory } })).rejects.toThrow(
-                'actual profile inventory'
+              const queries: string[] = []
+              trx.on('query', (value: { sql: string }) => queries.push(value.sql))
+              await expect(make(mode)(trx, target.directory, selected, digest)).rejects.toThrow(
+                'actual native catalog transaction'
               )
-              await expect(check(mode === 'creation' ? 'retirement' : 'creation')(grant)).rejects.toThrow(
-                'actual profile inventory'
-              )
-              if (changed === 'root')
-                await trx('profile_inventory_capacity')
-                  .where({ slot: 1 })
-                  .update({ rootId: uuid('90000000', id) })
-              else if (changed === 'policy')
-                await trx('profile_inventory_capacity')
-                  .where({ slot: 1 })
-                  .update({ policySha256: distinct(policySha256) })
-              else if (changed === 'profile')
-                await trx('profile_inventory')
-                  .where({ id: expected.profileId })
-                  .update({ id: uuid('90000000', id) })
-              else if (changed === 'binding')
-                await trx('profile_inventory')
-                  .where({ id: expected.profileId })
-                  .update({ bindingSha256: distinct(digest) })
-              else await trx('profile_inventory').where({ id: expected.profileId }).update({ state: 'published' })
-              await expect(check(mode)(grant)).rejects.toThrow('scope or durable state differs')
-              await trx('profile_inventory_capacity')
-                .where({ slot: 1 })
-                .update({ rootId: expected.rootId, policySha256 })
-              await trx('profile_inventory').update(row)
-              await check(mode)(grant)
-              expect(grant.inventory).toEqual(expected)
-              expect((await trx('profile_inventory').first()).bindingSha256).toBe(digest)
+              expect(queries).toHaveLength(0)
             })
-          }
-        ),
-        controls
-      )
-    } finally {
-      await target.close()
-    }
-  }, 30000)
-
-  test('generated committed and rolled-back reservations never keep a completed writer grant alive', async () => {
-    const target = await fixture()
-    try {
-      await fc.assert(
-        fc.asyncProperty(id, digest, mode, fc.boolean(), async (id, digest, mode, commit) => {
-          const selected = inventory(id),
-            row = nativeRow(selected, digest, mode)
-          await target.reset(selected, digest, mode, false)
-          const trx = await target.db.transaction()
-          let grant: Brc38ProfileCreationGrant | undefined
-          try {
-            await trx('profile_inventory').insert(row)
-            grant = await make(mode)(trx, target.directory, selected, digest)
-            await check(mode)(grant)
-            if (commit) await trx.commit()
-            else await trx.rollback()
-          } finally {
-            if (!trx.isCompleted()) await trx.rollback()
-          }
-          if (grant === undefined) throw new Error('Owned generated grant was not created')
-          await expect(check(mode)(grant)).rejects.toThrow('writer has completed')
-          expect(await target.db('profile_inventory').select('*')).toEqual(commit ? [row] : [])
-          await expect(check(mode)({ ...grant })).rejects.toThrow('actual profile inventory')
-          if (commit)
-            await target.db.transaction(async next => {
-              const successor = await make(mode)(next, target.directory, selected, digest)
-              expect(successor).not.toBe(grant)
-              await check(mode)(successor)
-              await expect(check(mode)(grant!)).rejects.toThrow('writer has completed')
-            })
-        }),
-        controls
-      )
-    } finally {
-      await target.close()
-    }
-  }, 30000)
-
-  test('generated wrong catalog filenames and nontransaction owners reject before any authority query', async () => {
-    const target = await fixture('other-owned.sqlite')
-    try {
-      await fc.assert(
-        fc.asyncProperty(id, digest, mode, async (id, digest, mode) => {
-          const selected = inventory(id)
-          await target.reset(selected, digest, mode)
-          await target.db.transaction(async trx => {
-            const queries: string[] = []
-            trx.on('query', (value: { sql: string }) => queries.push(value.sql))
-            await expect(make(mode)(trx, target.directory, selected, digest)).rejects.toThrow(
-              'actual native catalog transaction'
-            )
-            expect(queries).toHaveLength(0)
-          })
-          const queries: string[] = [],
-            capture = (value: { sql: string }) => queries.push(value.sql)
-          target.db.on('query', capture)
-          try {
-            await expect(
-              make(mode)(target.db as unknown as Knex.Transaction, target.directory, selected, digest)
-            ).rejects.toThrow('actual SQLite transaction')
-            expect(queries).toHaveLength(0)
-          } finally {
-            target.db.removeListener('query', capture)
-          }
-          expect((await target.db('profile_inventory').first()).state).toBe(state(mode))
-        }),
-        controls
-      )
-    } finally {
-      await target.close()
-    }
-  }, 30000)
+            const queries: string[] = [],
+              capture = (value: { sql: string }) => queries.push(value.sql)
+            target.db.on('query', capture)
+            try {
+              await expect(
+                make(mode)(target.db as unknown as Knex.Transaction, target.directory, selected, digest)
+              ).rejects.toThrow('actual SQLite transaction')
+              expect(queries).toHaveLength(0)
+            } finally {
+              target.db.removeListener('query', capture)
+            }
+            expect((await target.db('profile_inventory').first()).state).toBe(state(mode))
+          }),
+          propertyBatch
+        )
+      } finally {
+        await target.close()
+      }
+    },
+    30000
+  )
 })

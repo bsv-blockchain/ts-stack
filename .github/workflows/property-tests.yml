@@ -27,9 +27,35 @@ concurrency:
 
 jobs:
   property-tests:
-    name: Property fuzzing / all governed packages
+    name: Property fuzzing / ${{ matrix.suite }} ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: other-packages
+            shard: 'all'
+          - suite: output-knowledge
+            shard: '1'
+          - suite: output-knowledge
+            shard: '2'
+          - suite: output-knowledge
+            shard: '3'
+          - suite: output-knowledge
+            shard: '4'
+          - suite: wallet-toolbox
+            shard: '1'
+          - suite: wallet-toolbox
+            shard: '2'
+          - suite: wallet-toolbox
+            shard: '3'
+          - suite: wallet-toolbox
+            shard: '4'
+          - suite: lch
+            shard: '1'
+          - suite: lch
+            shard: '2'
     permissions:
       contents: read
     steps:
@@ -75,28 +101,63 @@ jobs:
           )
           NODE
 
-      - name: Build and run the full property campaign
+      - name: Verify the property test stand
+        run: pnpm test:governance
+
+      - name: Build and run the assigned property campaign
+        env:
+          PROPERTY_SUITE: ${{ matrix.suite }}
+          PROPERTY_SHARD: ${{ matrix.shard }}
+          JEST_SHARD_DURATIONS: ${{ github.workspace }}/governance/ci-lane-durations.json
         run: |
-          set -o pipefail
-          pnpm test:property 2>&1 | tee property-tests.log
+          set -euo pipefail
+          {
+            case "$PROPERTY_SUITE" in
+              other-packages)
+                pnpm build:property
+                pnpm -r --workspace-concurrency=4 \
+                  --filter '!@bsv/ts-stack' --filter '!@bsv/output-knowledge' --filter '!@bsv/wallet-toolbox' --filter '!@bsv/lch' \
+                  --if-present run test:property
+                ;;
+              output-knowledge|wallet-toolbox)
+                package="@bsv/$PROPERTY_SUITE"
+                export JEST_SHARD_LANE=output-knowledge-tests
+                if [[ "$PROPERTY_SUITE" == wallet-toolbox ]]; then
+                  export JEST_SHARD_LANE=wallet-toolbox-coverage
+                fi
+                pnpm -r --filter "$package..." run build
+                pnpm --filter "$package" run test:property --shard="$PROPERTY_SHARD/4" \
+                  --testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs"
+                ;;
+              lch)
+                pnpm -r --filter '@bsv/lch...' run build
+                pnpm --filter '@bsv/lch' run test:property --shard="$PROPERTY_SHARD/2"
+                ;;
+              *) exit 2 ;;
+            esac
+          } 2>&1 | tee property-tests.log
 
       - name: Record campaign replay details
         if: always()
+        env:
+          PROPERTY_SUITE: ${{ matrix.suite }}
+          PROPERTY_SHARD: ${{ matrix.shard }}
         run: |
           {
             echo "## Property fuzzing campaign"
             echo
-            echo "- Cases per property: \`$FAST_CHECK_NUM_RUNS\`"
-            echo "- Seed: \`$FAST_CHECK_SEED\`"
+            echo "- Suite: $PROPERTY_SUITE $PROPERTY_SHARD"
+            echo "- Cases per property: \`${FAST_CHECK_NUM_RUNS:-unconfigured}\`"
+            echo "- Seed: \`${FAST_CHECK_SEED:-unconfigured}\`"
             echo "- Shrink path: \`${FAST_CHECK_PATH:-<none>}\`"
-            echo "- Replay: \`FAST_CHECK_NUM_RUNS=$FAST_CHECK_NUM_RUNS FAST_CHECK_SEED=$FAST_CHECK_SEED FAST_CHECK_PATH='$FAST_CHECK_PATH' pnpm test:property\`"
+            echo "- Replay: \`FAST_CHECK_NUM_RUNS=${FAST_CHECK_NUM_RUNS:-} FAST_CHECK_SEED=${FAST_CHECK_SEED:-} FAST_CHECK_PATH='${FAST_CHECK_PATH:-}' pnpm test:property\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve the failing seed, shrink path, and counterexample log
-        if: failure()
+        if: failure() && hashFiles('property-tests.log') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: property-fuzzing-failure-${{ github.run_id }}
+          name: property-fuzzing-failure-${{ github.run_id }}-${{ matrix.suite }}-${{ matrix.shard }}
           path: property-tests.log
           if-no-files-found: error
           retention-days: 30

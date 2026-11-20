@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { randomUUID, createHash } from 'node:crypto'
 import fc from 'fast-check'
 import {
@@ -371,77 +372,82 @@ describe('actual authenticated native restore and durable original provenance', 
     ).rejects.toThrow('provenance differs')
     expect(selects.some(sql => sql.includes('select `tableName`, `originalJson`'))).toBe(false)
   })
-  test('full300 actual source pages preserve native values and atomic original/map/cursor rollback without renewing ownership', async () => {
-    await open(data => {
-      for (let index = 0; index < 300; index++)
-        data.tables.outputBaskets.push({
-          ...data.tables.outputBaskets[0],
-          basketId: 1000 + index,
-          name: 'property-' + index
-        })
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
     })
-    await commit(0)
-    await commit(1)
-    await commit(2)
-    const fixed = JSON.stringify(admission),
-      load = ids.loadBrc38ImportIdMap
-    let rollback = false,
-      index = 0
-    jest.spyOn(ids, 'loadBrc38ImportIdMap').mockImplementation(async (...args) => {
-      const value = await load(...args)
-      return {
-        map: value.map,
-        async persist() {
-          await value.persist()
-          if (rollback) throw new Error('synthetic native restore property rollback')
-        }
-      }
-    })
-    await fc.assert(
-      fc.asyncProperty(fc.boolean(), async fail => {
-        const fromRow = index + 3,
-          before = await receipt(),
-          budget = JSON.stringify(await target.k('brc38_import_original_budget'))
-        if (fail) {
-          rollback = true
-          try {
-            await expect(commit(fromRow)).rejects.toThrow('synthetic native restore property rollback')
-          } finally {
-            rollback = false
+  )(
+    'full300 actual source pages preserve native values and atomic original/map/cursor rollback without renewing ownership (property $path, $numRuns cases)',
+    async propertyBatch => {
+      await open(data => {
+        for (let index = 0; index < 300; index++)
+          data.tables.outputBaskets.push({
+            ...data.tables.outputBaskets[0],
+            basketId: 1000 + index,
+            name: 'property-' + index
+          })
+      })
+      await commit(0)
+      await commit(1)
+      await commit(2)
+      const fixed = JSON.stringify(admission),
+        load = ids.loadBrc38ImportIdMap
+      let rollback = false,
+        index = 0
+      jest.spyOn(ids, 'loadBrc38ImportIdMap').mockImplementation(async (...args) => {
+        const value = await load(...args)
+        return {
+          map: value.map,
+          async persist() {
+            await value.persist()
+            if (rollback) throw new Error('synthetic native restore property rollback')
           }
-          expect(await target.k('output_baskets').where({ basketId: 1000 + index })).toHaveLength(0)
-          expect(await receipt()).toEqual(before)
-          expect(JSON.stringify(await target.k('brc38_import_original_budget'))).toBe(budget)
         }
-        expect((await commit(fromRow)).nextRow).toBe(fromRow + 1)
-        expect(
-          (
-            await target
-              .k('output_baskets')
-              .where({ basketId: 1000 + index })
-              .first()
-          ).name
-        ).toBe('property-' + index)
-        expect(
-          JSON.parse(
+      })
+      await fc.assert(
+        fc.asyncProperty(fc.boolean(), async fail => {
+          const fromRow = index + 3,
+            before = await receipt(),
+            budget = JSON.stringify(await target.k('brc38_import_original_budget'))
+          if (fail) {
+            rollback = true
+            try {
+              await expect(commit(fromRow)).rejects.toThrow('synthetic native restore property rollback')
+            } finally {
+              rollback = false
+            }
+            expect(await target.k('output_baskets').where({ basketId: 1000 + index })).toHaveLength(0)
+            expect(await receipt()).toEqual(before)
+            expect(JSON.stringify(await target.k('brc38_import_original_budget'))).toBe(budget)
+          }
+          expect((await commit(fromRow)).nextRow).toBe(fromRow + 1)
+          expect(
             (
-              await target.k.transaction(
-                async trx => await readBrc38ImportOriginal(trx, admission.scope, fromRow, 2097152)
-              )
-            ).originalJson
-          ).basketId
-        ).toBe(1000 + index)
-        expect(JSON.stringify(admission)).toBe(fixed)
-        index++
-      }),
-      {
-        numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
-        seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-        path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-        interruptAfterTimeLimit: 150000,
-        markInterruptAsFailure: true
-      }
-    )
-    expect(index).toBe(300)
-  }, 180000)
+              await target
+                .k('output_baskets')
+                .where({ basketId: 1000 + index })
+                .first()
+            ).name
+          ).toBe('property-' + index)
+          expect(
+            JSON.parse(
+              (
+                await target.k.transaction(
+                  async trx => await readBrc38ImportOriginal(trx, admission.scope, fromRow, 2097152)
+                )
+              ).originalJson
+            ).basketId
+          ).toBe(1000 + index)
+          expect(JSON.stringify(admission)).toBe(fixed)
+          index++
+        }),
+        propertyBatch
+      )
+      expect(index).toBe(300)
+    },
+    180000
+  )
 })

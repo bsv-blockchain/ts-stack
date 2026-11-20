@@ -77,6 +77,37 @@ function workflowJobBlocks(workflow) {
   }))
 }
 
+test('property campaigns cover each heavy suite shard and continue collecting evidence after failures', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/property-tests.yml', import.meta.url),
+    'utf8'
+  )
+  const matrix = viewPropertyMatrix(workflow)
+  assert.deepEqual(matrix, [
+    'other-packages/all',
+    ...['output-knowledge', 'wallet-toolbox'].flatMap(suite =>
+      ['1', '2', '3', '4'].map(shard => suite + '/' + shard)
+    ),
+    'lch/1',
+    'lch/2'
+  ])
+  assert.match(workflow, /fail-fast: false/)
+  assert.match(workflow, /run: pnpm test:governance/)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/4"/)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/2"/)
+  assert.match(
+    workflow,
+    /--filter '!@bsv\/output-knowledge' --filter '!@bsv\/wallet-toolbox' --filter '!@bsv\/lch'/
+  )
+  assert.match(workflow, /name: property-fuzzing-failure-.*matrix.suite.*matrix.shard/)
+})
+
+function viewPropertyMatrix(workflow) {
+  return Array.from(workflow.matchAll(/- suite: ([\w-]+)\n +shard: '(\w+)'/g), match =>
+    match.slice(1).join('/')
+  )
+}
+
 test('mutation planning and engine controls stay in the explicit background audit', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const background = readFileSync(

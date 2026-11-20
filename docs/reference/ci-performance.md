@@ -260,7 +260,7 @@ The alias coordinator, disclosure and buyer-alias native history properties each
 run in a fresh serial process before their shard's remaining suites. This prevents
 earlier suites' retained worker state from sharing these properties' execution
 context. The buyer-alias property retains its 300-case minimum, seed, replay
-setting, assertions and 150-second interruption limit. Every batch instruments the
+setting, assertions and a 180-second timeout per group of up to 50 histories. Every coverage batch instruments the
 complete source inventory, and all same-attempt batch receipts must reconcile
 before the original global and patch coverage gates can pass.
 Aggregation compares recomputed Istanbul maps in their complete serialized JSON
@@ -271,6 +271,25 @@ entire test or coverage maps. Test-union, identity and coverage requirements rem
 unchanged.
 The three reporting libraries are direct, exact-version development dependencies
 already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
+
+## Generated property campaigns
+
+The expensive generated histories run in groups of up to 50 cases. Each group
+gets its suite's existing Jest or Vitest timeout. The fixed seed, generated
+case count and absolute fast-check replay offsets are preserved. A shrink
+path that names a counterexample within its shrink tree is replayed intact.
+CI rejects fast-check wall-clock shortcuts that can truncate a case-count
+campaign. The opt-in coordinator and disclosure diagnostics retain their
+whole-campaign time limit for comparable performance measurements.
+
+The scheduled campaign runs Output Knowledge, Wallet Toolbox, LCH and the
+remaining governed packages in separate jobs. The two largest suites use the
+existing measured Jest file placement. Each job records the same seed and
+case count, plus its own shard and failure log.
+
+Edit the shared helper in `config/testing`, then run
+`node scripts/sync-property-test-batches.mjs` to update the copies used by
+package-local test runners. `pnpm test:governance` checks the policy and copies.
 
 ## Application coverage placement
 

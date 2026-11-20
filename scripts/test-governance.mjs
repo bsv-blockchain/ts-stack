@@ -402,7 +402,8 @@ function validatePropertyWorkflow(root, propertyTesting, errors) {
     'FAST_CHECK_NUM_RUNS',
     'FAST_CHECK_SEED',
     'FAST_CHECK_PATH',
-    'pnpm test:property'
+    'pnpm test:governance',
+    'run test:property'
   ]
   for (const requiredFragment of requiredFragments) {
     if (!workflow.includes(requiredFragment)) {
@@ -750,6 +751,43 @@ function maskNonCode(source) {
   return masked.join('')
 }
 
+const PROPERTY_MEASUREMENT_SUITES = new Set([
+  'packages/application/output-knowledge/test/private-purchase-alias-coordinator.property.test.ts',
+  'packages/application/output-knowledge/test/private-purchase-alias-disclosure.property.test.ts'
+])
+
+export function findPropertyDeadlineControls(source) {
+  const executable = maskNonCode(source)
+  const timer =
+    /\b(?:interruptAfterTimeLimit|skipAllAfterTimeLimit|markInterruptAsFailure)\b|\bmeasuredPropertyCampaign(?=\s*(?:\(|,|\}|as\b))/g
+  const quotedKey =
+    /(['"])(interruptAfterTimeLimit|skipAllAfterTimeLimit|markInterruptAsFailure)\1\s*([:\]])/g
+  const references = [...executable.matchAll(timer)].map(match => ({
+    name: match[0],
+    line: lineNumberAt(source, match.index)
+  }))
+  for (const match of source.matchAll(quotedKey)) {
+    const delimiter = match.index + match[0].length - 1
+    if (executable[delimiter] === match[3]) {
+      references.push({ name: match[2], line: lineNumberAt(source, match.index) })
+    }
+  }
+  return references.sort((left, right) => left.line - right.line)
+}
+
+function validatePropertyDeadlineControls(root, testFiles, errors) {
+  for (const file of testFiles) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8')
+    for (const { name, line } of findPropertyDeadlineControls(source)) {
+      if (name !== 'measuredPropertyCampaign' || !PROPERTY_MEASUREMENT_SUITES.has(file)) {
+        errors.push(
+          `${file}:${line} uses ${name}; run properties in bounded batches with a per-test timeout`
+        )
+      }
+    }
+  }
+}
+
 export function findUnboundedLoops(source) {
   const executable = maskNonCode(source)
   const pattern = /\b(?:for\s*\(\s*;\s*;\s*\)|while\s*\(\s*true\s*\))/g
@@ -963,6 +1001,16 @@ export function evaluateTestGovernance({
   const warnings = []
   const review = { today, warnings }
   const { manualFiles, requiredFiles } = collectTestInventory(root)
+  validatePropertyDeadlineControls(
+    root,
+    [
+      ...requiredFiles,
+      ...manualFiles,
+      ...walkFiles(root, 'scripts', name => TEST_FILE_PATTERN.test(name)),
+      ...walkFiles(root, 'config', name => TEST_FILE_PATTERN.test(name))
+    ],
+    errors
+  )
   const propertyTesting = policy.propertyTesting
   const { excludedManifestPaths, manifestPaths } = validatePropertyTesting(
     root,
