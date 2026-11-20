@@ -3,10 +3,10 @@ id: pkg-authsocket
 title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: '2.1.11'
+version: '2.1.12'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/authsocket'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket'

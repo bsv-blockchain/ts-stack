@@ -1,6 +1,6 @@
 # @bsv/overlay-discovery-services
 
-Patch candidate `2.2.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `2.2.10`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-discovery-services)](https://www.npmjs.com/package/@bsv/overlay-discovery-services)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-discovery-services)](https://www.npmjs.com/package/@bsv/overlay-discovery-services)

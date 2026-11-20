@@ -1,9 +1,5 @@
 # CHANGELOG for `@bsv/overlay-express`
 
-## 2.7.4 (unreleased)
-
-- Refresh packed first-party dependency ranges for the next wallet interoperability release; no independent API migration.
-
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Table of Contents
@@ -22,6 +18,9 @@ All notable changes to this project will be documented in this file. The format 
   `ArcadeProvider.ts` import path remain as deprecated aliases. The `Arcade` provider name
   in broadcast results, the `arcade*` instance fields, hostnames, HTTP paths and headers
   are unchanged. No consumer migration is required.
+
+- Prepare `2.9.0`: Adds optional script verifier configuration and accepts Arcade SEEN_MULTIPLE_NODES and STUMP_PROCESSING as successful rebroadcast states. Existing deployments retain JavaScript verification. Operators may configure a preloaded verifier; no wire or data migration is required.
+
 
 - `ArcadeProvider` counts `SEEN_MULTIPLE_NODES` and `STUMP_PROCESSING` as a successful broadcast. Arcade (bsv-blockchain/broadcaster) answers a re-submit of a transaction it already holds with the stored state, so an overlay that receives a transaction after the wallet broadcast it could see these states and report a failure for a propagated or mined transaction. `PENDING_RETRY` and `UNKNOWN` still fall through to the next broadcaster. No migration.
 - Add `configureScriptVerifier(verifier)` and `EngineConfig.scriptVerifier` to pass a script backend, such as a preloaded `BdkVerifier` from `@bsv/verifast`, to the engine's SPV verification. Off by default; `@bsv/verifast` is not a dependency. Additive; no migration.

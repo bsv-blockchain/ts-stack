@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms-permission-module",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

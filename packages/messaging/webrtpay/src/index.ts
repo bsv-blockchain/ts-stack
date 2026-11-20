@@ -1,4 +1,4 @@
-export const VERSION = '0.2.3'
+export const VERSION = '0.2.4'
 
 export * from './types.js'
 export * from './util/bytes.js'

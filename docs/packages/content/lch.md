@@ -4,9 +4,9 @@ title: '@bsv/lch'
 kind: package
 domain: content
 npm: '@bsv/lch'
-version: '0.3.0'
-last_updated: '2026-09-18'
-last_verified: '2026-09-18'
+version: '0.3.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch'
 status: experimental

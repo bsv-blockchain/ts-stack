@@ -1,6 +1,6 @@
 # @bsv/simple
 
-Patch candidate `0.7.2` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.7.3`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 A high-level TypeScript library that makes BSV blockchain development simple. Build wallets, send payments, create tokens, issue credentials, and more — in just a few lines of code.
 
