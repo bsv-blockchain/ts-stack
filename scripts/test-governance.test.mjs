@@ -20,6 +20,7 @@ import {
   evaluateTestGovernance,
   findDirectSkips,
   findEmptyTests,
+  findPropertyDeadlineControls,
   findUnboundedLoops
 } from './test-governance.mjs'
 
@@ -53,6 +54,29 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.walletManualSuites, 31)
   assert.equal(result.summary.conformanceSkipFiles, 20)
   assert.equal(result.summary.conformanceSkips, 213)
+})
+
+test('property governance rejects campaign-wide deadlines and permits per-case timeouts', () => {
+  const stop = 'interruptAfterTimeLimit'
+  const skip = 'skipAllAfterTimeLimit'
+  const failure = 'markInterruptAsFailure'
+  const diagnostic = 'measuredPropertyCampaign'
+  const source = [
+    `// ${stop}: 10`,
+    `const comment = "${skip}: 10"`,
+    'fc.configureGlobal({ timeout: 10, numRuns: 300 })',
+    `fc.configureGlobal({ ${stop}: 10 })`,
+    `fc.assert(property, { '${skip}': 10 })`,
+    `config['${failure}'] = true`,
+    `${diagnostic}(options, 100)`
+  ].join('\n')
+
+  assert.deepEqual(findPropertyDeadlineControls(source), [
+    { name: stop, line: 4 },
+    { name: skip, line: 5 },
+    { name: failure, line: 6 },
+    { name: diagnostic, line: 7 }
+  ])
 })
 
 test('mutation governance rejects admission campaigns and enforces bounded finding-only audits', () => {

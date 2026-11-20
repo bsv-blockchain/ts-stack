@@ -13,7 +13,12 @@ import { createKnexPrimaryHandoffControl } from './KnexPrimaryHandoffControl'
 import type { PrimaryHandoffControl, PrimaryHandoffControlOptions } from './PrimaryHandoffControl'
 import { SNAPSHOT_SYNC_MIGRATION, verifySnapshotSyncPrimaryFence } from './schema/snapshotSyncMigration'
 import { captureKnexActiveWrite } from './KnexActiveWriteFence'
-import type { StorageActiveWrite, StorageStatusReviewArgs, StorageWriterAdmission } from './StorageActiveWrite'
+import type {
+  ConfirmedSpendCursor,
+  StorageActiveWrite,
+  StorageStatusReviewArgs,
+  StorageWriterAdmission
+} from './StorageActiveWrite'
 import {
   parseSnapshotJournalFieldArchiveReference,
   type SnapshotJournalFieldArchiveReference
@@ -175,14 +180,15 @@ import {
 } from './schema/tables'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { TablePreparedBeef } from './schema/tables/TablePreparedBeef.interfaces'
-import { KnexMigrations } from './schema/KnexMigrations'
+import { dropMonitorStateForDataDeletion, KnexMigrations, MONITOR_STATE_MIGRATION } from './schema/KnexMigrations'
 import { knex as createKnex, Knex } from 'knex'
 import { AdminStatsResult, StorageProvider, StorageProviderOptions } from './StorageProvider'
 import { purgeData } from './methods/purgeData'
 import { listActions } from './methods/listActionsKnex'
 import { listOutputs } from './methods/listOutputsKnex'
 import { DBType } from './StorageReader'
-import { reviewStatus } from './methods/reviewStatus'
+import { reviewStatus, reviewStatusPage } from './methods/reviewStatus'
+import { reviewConfirmedSpendPage, reviewConfirmedSpendRecoveries } from './methods/reconcileConfirmedSpends'
 import { ServicesCallHistory, WalletServices } from '../sdk/WalletServices.interfaces'
 import {
   AuthId,
@@ -3104,6 +3110,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return event.id
   }
 
+  async hasMonitorState(): Promise<boolean> {
+    return await this.knex.schema.hasTable('monitor_checkpoints')
+  }
+
+  override async loadMonitorCheckpoint(event: string): Promise<string[]> {
+    if (await this.hasMonitorState()) {
+      const row = await this.knex('monitor_checkpoints').where({ name: event }).first('details')
+      if (row != null) return [row.details]
+    }
+    return await super.loadMonitorCheckpoint(event)
+  }
+
+  override async saveMonitorCheckpoint(event: string, details: string): Promise<void> {
+    if (!(await this.hasMonitorState())) return await super.saveMonitorCheckpoint(event, details)
+    await this.knex('monitor_checkpoints')
+      .insert({ name: event, details, updatedAt: Date.now() })
+      .onConflict('name')
+      .merge()
+  }
+
   override async insertSyncState(syncState: TableSyncState, trx?: TrxToken): Promise<number> {
     const id = await this.insertPackedWalletRow('sync_states', 'syncStateId', syncState, trx, ['when'], ['init'])
     syncState.syncStateId = id
@@ -3992,6 +4018,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       await this.stopPreparedBeefTasks()
       // Only using migrations to migrate down, don't need valid properties for settings table.
       const migrationSource = new KnexMigrations('test', '', '', 1024)
+      migrationSource.migrations[MONITOR_STATE_MIGRATION].down = dropMonitorStateForDataDeletion
       migrationSource.migrations[SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION].down = async () => {
         /* Full erasure drops the archive tables below. */
       }
@@ -4010,7 +4037,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
 
       // Check if this is a SQLite database by looking at the Knex client config
-      const isSQLite = knexDatabaseSystem(this.knex.client) === 'sqlite'
+      const system = knexDatabaseSystem(this.knex.client)
+      const isSQLite = system === 'sqlite'
 
       // For SQLite, disable transactions during migrations and turn off foreign keys.
       // PRAGMA foreign_keys is silently ignored inside transactions, so we must
@@ -4029,12 +4057,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
 
       try {
-        // An interrupted, unpublished generation has no journal entry to roll back.
-        // Explicit full deletion still removes its owned auxiliary schema first.
+        // MySQL can commit monitor DDL before the migrator records it.
+        if (system === 'mysql') await dropMonitorStateForDataDeletion(this.knex)
         // The journal migrations exist only on their supported SQL backends.
         // Preserve ordinary migration adapters and PostgreSQL cleanup without
         // routing them through SQLite/MySQL-specific journal DDL.
-        const system = knexDatabaseSystem(this.knex.client)
         if (system === 'sqlite' || system === 'mysql') {
           await dropSnapshotJournalSourceForDataDeletion(this.knex)
           await dropSnapshotJournalDestinationForDataDeletion(this.knex)
@@ -4133,8 +4160,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return await captureKnexActiveWrite(this, auth, () => !this.snapshotAdmissionStopped)
   }
 
-  protected override async *completedProofRequests(): AsyncIterable<TableProvenTxReq> {
-    let after = 0
+  protected override async *completedProofRequests(after = 0): AsyncIterable<TableProvenTxReq> {
     for (;;) {
       const ids: Array<{ provenTxReqId: number }> = await this.knex('proven_tx_reqs')
         .select('provenTxReqId')
@@ -4312,6 +4338,30 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
     return await purgeData(this, params, trx)
+  }
+
+  override async reviewConfirmedSpendPage(
+    after: number,
+    tipHeight: number,
+    admission?: StorageWriterAdmission,
+    partial?: ConfirmedSpendCursor,
+    limit?: number
+  ) {
+    if (!(await this.supportsPrimaryWriteFences()) || !(await this.hasMonitorState())) return undefined
+    return await reviewConfirmedSpendPage(this, after, tipHeight, admission, partial, limit)
+  }
+
+  override reviewConfirmedSpendRecoveries(
+    after: number,
+    admission?: StorageWriterAdmission,
+    legacyAfter?: number | null
+  ) {
+    return reviewConfirmedSpendRecoveries(this, after, admission, legacyAfter)
+  }
+
+  override async reviewStatusPage(args: StorageStatusReviewArgs, after: number) {
+    if (!(await this.supportsPrimaryWriteFences())) return undefined
+    return await reviewStatusPage(this, args, after)
   }
 
   override async reviewStatus(args: StorageStatusReviewArgs): Promise<{ log: string }> {

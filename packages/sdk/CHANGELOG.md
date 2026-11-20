@@ -1,3 +1,24 @@
+# 4.1.2 unpublished patch candidate
+
+- `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
+  instructions in the usual ASM. If that notation would change any suffix bytes,
+  the entire suffix prints as one final `0x<hex>` token immediately after
+  `OP_RETURN`. `Script.fromASM` restores that suffix byte for byte. Existing
+  ASM input, including explicit `OP_PUSHDATA*` operands, retains its encoding.
+
+# 4.1.1
+
+- A non-array tag container raises TypeError (an Error subclass) with the existing
+  diagnostic; valid tag arrays and other validation errors are unchanged.
+- Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries
+  and signed-token decoding. Larger tag arrays retain every entry.
+- Validate the freshly signed token before requesting a funded wallet action,
+  retaining token-byte-bound refusal before any spend.
+- Retain unique, non-empty strings, the 256-byte UTF-8 per-tag bound, signed-token
+  field/payload bounds and signature/controller checks. Wallet tags/labels are unchanged.
+- Pair client/overlay SDK4.1.1 with Overlay Topics2.0.4; existing stored token bytes
+  and records need no migration. Older validators may still reject larger tag sets.
+
 # 4.1.0 unpublished integration candidate
 
 Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
@@ -280,6 +301,14 @@ replay, payment authorization, wire change or consumer migration is introduced.
 - [Template for New Releases](#template-for-new-releases)
 
 ## [Unreleased]
+
+### LocalKVStore removal stops on an inconsistent empty page
+
+- `LocalKVStore.remove` throws when `listOutputs` returns an empty page while
+  reporting a positive `totalOutputs`, naming that total, the page (offset 0),
+  and the key. It no longer repeats the same request. `set` and lookup keep
+  their existing behavior. No migration is required for a wallet that returns
+  a consistent page.
 
 ### Optional client timeout configuration (4.0.1 patch candidate)
 

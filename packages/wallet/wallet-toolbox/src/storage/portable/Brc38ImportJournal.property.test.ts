@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { importJournalFixture } from './Brc38ImportJournalFixture'
 import { readBrc38ImportJournal, commitBrc38ImportJournalStep } from './Brc38ImportJournal'
@@ -57,44 +58,49 @@ async function verifyPage(fixture: Fixture, ids: readonly number[], index: numbe
 }
 
 describe('destination-authoritative bounded import journal properties', () => {
-  test('independently observes exact prefix/IDs across every rollback and lost-ack boundary', async () => {
-    const incoming = fc.uniqueArray(
-      fc.oneof(
-        fc.integer({ min: -1000000, max: 1000000 }),
-        fc.constantFrom(0, Number.MAX_SAFE_INTEGER + 1, 1e21, -1e21, Number.MAX_VALUE)
-      ),
-      { minLength: 1, maxLength: 24, selector: value => String(value) }
-    )
-    const active = new Set<Promise<void>>()
-    try {
-      await fc.assert(
-        fc.asyncProperty(incoming, async ids => {
-          const work = (async () => {
-            const fixture = await importJournalFixture(ids.length)
-            try {
-              await fixture.prepare()
-              await runInSeries(ids.entries(), async ([index]) => await verifyPage(fixture, ids, index))
-            } finally {
-              await fixture.close()
-            }
-          })()
-          active.add(work)
-          try {
-            await work
-          } finally {
-            active.delete(work)
-          }
-        }),
-        {
-          numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
-          seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
-          path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? '',
-          interruptAfterTimeLimit: 150000,
-          markInterruptAsFailure: true
-        }
+  test.each(
+    propertyTestBatches({
+      ...fc.readConfigureGlobal(),
+      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? process.env.FC_NUM_RUNS ?? 300)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026),
+      path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
+    })
+  )(
+    'independently observes exact prefix/IDs across every rollback and lost-ack boundary (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const incoming = fc.uniqueArray(
+        fc.oneof(
+          fc.integer({ min: -1000000, max: 1000000 }),
+          fc.constantFrom(0, Number.MAX_SAFE_INTEGER + 1, 1e21, -1e21, Number.MAX_VALUE)
+        ),
+        { minLength: 1, maxLength: 24, selector: value => String(value) }
       )
-    } finally {
-      await Promise.allSettled(active)
-    }
-  }, 180000)
+      const active = new Set<Promise<void>>()
+      try {
+        await fc.assert(
+          fc.asyncProperty(incoming, async ids => {
+            const work = (async () => {
+              const fixture = await importJournalFixture(ids.length)
+              try {
+                await fixture.prepare()
+                await runInSeries(ids.entries(), async ([index]) => await verifyPage(fixture, ids, index))
+              } finally {
+                await fixture.close()
+              }
+            })()
+            active.add(work)
+            try {
+              await work
+            } finally {
+              active.delete(work)
+            }
+          }),
+          propertyBatch
+        )
+      } finally {
+        await Promise.allSettled(active)
+      }
+    },
+    180000
+  )
 })

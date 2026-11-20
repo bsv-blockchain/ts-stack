@@ -1,5 +1,111 @@
 # BSV Wallet Toolbox
 
+## Optional durable profile state (2.18.0 source candidate)
+
+`CWIStyleWalletManager` and its `WalletAuthenticationManager` subclass accept an
+optional host store through `setStatePersistence`. Attach it before authentication.
+The host awaits and verifies its own durable commits; `saveSnapshot()` continues
+to return bytes and does not itself write device storage. Existing callers that
+do not attach a store keep that contract. Snapshot v1/v2 and on-chain UMP formats,
+KDFs, BRC-100 calls, defaults and peer ranges are unchanged.
+
+```ts
+import type { WalletAuthenticationManager, WalletStatePersistence } from '@bsv/wallet-toolbox'
+
+declare const manager: WalletAuthenticationManager
+declare const durableDeviceStore: WalletStatePersistence
+manager.setStatePersistence(durableDeviceStore)
+```
+
+The host must store both snapshot and pending-update capabilities privately,
+partitioned by account, network and service configuration. Never log those bytes.
+Fence application requests while changing profiles. Activation publishes the new
+profile ID and underlying wallet together after construction succeeds. Opted-in
+snapshot restores, profile operations and UMP updates serialize. Public wallet calls
+are blocked while those operations run or await recovery. A failed builder retains the
+previous SDK identity; a host builder with external side effects must additionally
+restore or withhold its own serving runtime.
+
+A UMP update records `prepared`, `submitting`, `signed` and `published` stages.
+The built-in interactor signs with `noSend`, saves the exact signed receipt,
+then releases the same transaction through the wallet and the overlay. The
+underlying wallet must retain its staged action so `sendWith` can release it
+after restart. Custom interactors opt in with `checkpointVersion: 1` and must
+await the signed checkpoint before any publication.
+
+Funding and input checks run before the signing checkpoint. If planning fails,
+the manager can clear the prepared update. Destroying the manager clears its
+in-memory session. The host retains the durable checkpoint for that account.
+
+After an interrupted update, authenticate or restore the original account, then
+load its retained checkpoint with `loadPendingUMPUpdate` before serving wallet
+requests. Call `recoverPendingUMPUpdate` to verify the exact successor or
+re-publish the original transaction after checking its owner, fields, unique
+token output and predecessor input. With Toolbox `Wallet` or
+`WalletPermissionsManager` and locally readable Toolbox storage, a submitting
+checkpoint can recover the original signed transaction using the operation ID. Recovery saves
+that receipt before sending it. Custom interactors can implement
+`recoverCheckpoint` to recover the same authenticated receipt from their own
+durable action store. An unknown signing outcome remains pending. Resume an
+interrupted phone-number change after recovery to finalize its existing rotation.
+
+`syncUMPToken()` retains its boolean return. `getUMPTokenSyncStatus()` additionally
+distinguishes unchanged, updated, authoritative not-found and unknown results.
+With an attached store, refresh verifies the discovered owner where the
+interactor supports it, rebuilds the selected runtime and persists the result. An unavailable
+selected profile requires an explicit choice; it does not silently activate the
+default. Lookup errors preserve prior state. Applications may retain offline reads
+from a committed cache, but should block new UMP mutations without a verified
+current account. `retryStatePersistence()` retries a device save without publishing.
+
+Adoption is optional and is a minor additive API change. There is no automatic
+schema migration: the host owns its storage and upgrade/restore tests. Before
+rolling back, stop new operations, reconcile pending updates with the original
+qualified artifact, retain their checkpoints and export a current legacy-compatible
+snapshot. Do not discard a checkpoint or restore a spent predecessor as current.
+Source merge, package publication and application release remain separate actions.
+
+## Certificate pagination
+
+The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
+the size of the matching set at every offset, including full and empty later
+pages in IndexedDB. Non-empty final pages use the skipped rows plus the page;
+other pages count without a page window. User, deletion, type and certifier
+filters and returned certificate fields are unchanged. Upgrade the affected
+local storage package or remote Storage service to receive corrected totals.
+No API, wire or schema migration is required.
+
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Setup factory action batching
+
+The 2.17.0 source candidate adds optional `actionBatchMode` to the `Setup` and
+`SetupClient` factory arguments. Select `legacy` when your application broadcasts
+its own `noSend` transactions and needs the existing per-action storage path:
+
+```ts
+import { SetupClient, type SetupClientWalletArgs } from '@bsv/wallet-toolbox'
+
+declare const options: SetupClientWalletArgs
+const { wallet } = await SetupClient.createWallet({ ...options, actionBatchMode: 'legacy' })
+```
+
+The browser client exposes the same `SetupClient` option. Omission keeps `auto`,
+including its existing storage-capability negotiation and fallback. When batching
+is available, related signed `noSend` actions can remain staged until a subsequent
+batch commit. The new option does not recover previously discarded batches or
+change signing, BRC-100 calls or database schemas. Existing consumers need no
+migration; package publication and consumer upgrades are separate steps.
+
 ## Sync and recovery candidate
 
 PR569 adds bounded wallet sync, portable recovery and durable primary handoff.

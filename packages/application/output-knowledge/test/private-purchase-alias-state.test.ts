@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, test } from '@jest/globals'
 import fc from 'fast-check'
 import {
@@ -157,53 +158,55 @@ test('an unconfirmed alias cache preserves every pending external job and report
   expect(state.original?.txid).toBe(candidate(1).txid)
   expect(state.unconfirmed[0]?.txid).toBe(candidate(3).txid)
 })
-test('generated retained alias histories preserve historical release and all unresolved exact-txid operations', () => {
-  fc.assert(
-    fc.property(
-      fc.integer({ min: 1, max: 4 }),
-      fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }),
-      (capacity, admissions) => {
-        let state = admit(retain(initial(capacity), 1), 1)
-        state = releasePrivatePurchaseAlias(state, candidate(1).txid)
-        const historical = structuredClone(state.historical)
-        const pending = new Map<string, string>()
-        for (let index = 0; index < admissions.length; index++) {
-          const n = index + 2,
-            outcome = retainPrivatePurchaseAlias(state, {
-              purchaseCommitment: identity,
-              entry: candidate(n)
-            })
-          if (outcome.status === 'retained') {
-            state = advancePrivatePurchaseAliasAdmission(
-              outcome.state,
-              candidate(n).txid,
-              'pending'
-            )
-            if (admissions[index])
-              state = advancePrivatePurchaseAliasAdmission(state, candidate(n).txid, 'admitted')
-            else pending.set(candidate(n).txid, candidate(n).operationId)
+test.each(
+  propertyTestBatches({ ...fc.readConfigureGlobal(), ...(replay ? { path: replay } : {}) })
+)(
+  'generated retained alias histories preserve historical release and all unresolved exact-txid operations (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 4 }),
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }),
+        (capacity, admissions) => {
+          let state = admit(retain(initial(capacity), 1), 1)
+          state = releasePrivatePurchaseAlias(state, candidate(1).txid)
+          const historical = structuredClone(state.historical)
+          const pending = new Map<string, string>()
+          for (let index = 0; index < admissions.length; index++) {
+            const n = index + 2,
+              outcome = retainPrivatePurchaseAlias(state, {
+                purchaseCommitment: identity,
+                entry: candidate(n)
+              })
+            if (outcome.status === 'retained') {
+              state = advancePrivatePurchaseAliasAdmission(
+                outcome.state,
+                candidate(n).txid,
+                'pending'
+              )
+              if (admissions[index])
+                state = advancePrivatePurchaseAliasAdmission(state, candidate(n).txid, 'admitted')
+              else pending.set(candidate(n).txid, candidate(n).operationId)
+            }
+            expect(parsePrivatePurchaseAliasState(state).historical).toEqual(historical)
+            for (const [txid, operationId] of pending)
+              expect(state.unconfirmed).toContainEqual({
+                ...candidate(Number.parseInt(txid, 16)),
+                operationId,
+                admission: 'pending'
+              })
+            expect(state.unconfirmed).toHaveLength(capacity)
           }
-          expect(parsePrivatePurchaseAliasState(state).historical).toEqual(historical)
-          for (const [txid, operationId] of pending)
-            expect(state.unconfirmed).toContainEqual({
-              ...candidate(Number.parseInt(txid, 16)),
-              operationId,
-              admission: 'pending'
-            })
-          expect(state.unconfirmed).toHaveLength(capacity)
+          const selected = retain(state, admissions.length + 1000, true)
+          expect(selected.unconfirmed).toEqual(state.unconfirmed)
+          expect(selected.historical).toEqual(historical)
         }
-        const selected = retain(state, admissions.length + 1000, true)
-        expect(selected.unconfirmed).toEqual(state.unconfirmed)
-        expect(selected.historical).toEqual(historical)
-      }
-    ),
-    {
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true,
-      ...(replay ? { path: replay } : {})
-    }
-  )
-}, 180000)
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)
 
 test('same-txid proof metadata uses a mutable role while first financial and historical records stay fixed', () => {
   let state = admit(retain(initial(), 1), 1)

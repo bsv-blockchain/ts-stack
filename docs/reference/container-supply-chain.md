@@ -128,6 +128,13 @@ candidate; this record does not claim a publication or deployment. A deployed
 rollback uses a previously verified complete image digest; it must not restore
 the vulnerable base libraries by removing the pins.
 
+`wallet-infra` is the only image that installs nginx, so its pin lives in that
+Dockerfile rather than in the base-wide `runtimePackagePins`. It installs
+`nginx=1.30.7-r0` from Alpine v3.24 main, which fixes the HTTP/2 RCEs
+CVE-2026-123633 and CVE-2026-123007, and its `nginx.conf` sets `http2 off` on
+the cleartext 8080 listener so the image never accepts h2c. A base refresh to a
+newer Alpine branch must update the nginx pin to that branch's fixed build.
+
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore
 fails `npm ci` before publication instead of silently producing a different

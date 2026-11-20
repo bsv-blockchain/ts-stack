@@ -30,5 +30,37 @@
       "gzip": 67000,
       "brotli": 57000
     }
-  }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./R1Comb.ts",
+      "requiredExports": [
+        "R1CombError",
+        "R1C_LOCK_LEN",
+        "R1C_VERIFY_FLAGS",
+        "bakedCommitments",
+        "buildLock",
+        "buildUnlock",
+        "commitment",
+        "compressPubkey",
+        "fullR",
+        "sighashPreimage",
+        "signerDigest",
+        "verifyVaultInput"
+      ],
+      "prohibitedExports": [],
+      "maximumBytes": {
+        "vite": {
+          "raw": 257000,
+          "gzip": 75500,
+          "brotli": 63000
+        },
+        "esbuild": {
+          "raw": 195500,
+          "gzip": 70200,
+          "brotli": 59200
+        }
+      }
+    }
+  ]
 }

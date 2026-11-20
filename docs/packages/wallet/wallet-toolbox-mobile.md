@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.16.0'
-last_updated: '2026-11-09'
-last_verified: '2026-11-09'
+version: '2.18.0'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,36 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+## Certificate pagination
+
+The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
+the size of the matching set at every offset, including full and empty later
+pages in IndexedDB. Non-empty final pages use the skipped rows plus the page;
+other pages count without a page window. User, deletion, type and certifier
+filters and returned certificate fields are unchanged. Upgrade the affected
+local storage package or remote Storage service to receive corrected totals.
+No API, wire or schema migration is required.
+
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Coordinated 2.17.0 version
+
+The 2.17.0 source candidate preserves the required version lockstep with the core
+and browser client distributions. The new setup-factory `actionBatchMode` option
+belongs to those distributions; the mobile entry point exports neither `Setup`
+nor `SetupClient`. Existing mobile `Wallet` construction, its `actionBatchMode`
+option and default `auto` behavior remain unchanged. No mobile consumer or storage
+migration is required. Publication is separate from this source candidate.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and

@@ -1,4 +1,81 @@
-# 2.16.0 unpublished integration candidate
+# 2.18.0 source candidate
+
+Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
+app's patch of 2.15.3. These host hooks are opt-in. The Monitor changes below
+apply to supported stores by default.
+
+- `Wallet.setAdminOriginator(originator)` names the host's own originator (the
+  domain its `WalletPermissionsManager` uses as `adminOriginator`) once; it
+  cannot be changed. `Wallet.adminOriginator` reads it.
+  - `listActions` keeps output `customInstructions` for that originator only.
+    Every other originator still sees them redacted. (Knex and IndexedDB
+    storage do not return them; a host storage may.)
+  - `createAction` marks the validated storage arguments `isAdminOriginator`
+    (`AdminValidCreateActionArgs`). It comes from the originator argument,
+    never from action fields.
+  - An admin action keeps a minimal funding plan: no change-pool growth
+    (`targetNetCount`), no surplus shaping, no migration inputs, and a first
+    change output that takes the surplus as it is. A host that approves an
+    exact input set (a vault spend, for example) keeps it exact.
+- `StorageProvider.validateResolvedActionInput` (optional,
+  `ValidateResolvedActionInput`): called for each `createAction` input after its
+  source output is resolved from authenticated storage or verified BEEF. Throw
+  to refuse the action.
+- `StorageProviderOptions.refuseOfflineNosendAbort` (default false): when true,
+  `abortAction` refuses to invalidate a signed nosend action while the chain
+  service gives no answer, and asks for a retry. The default keeps the offline
+  fallback and its `abortAction-offline-fallback` note.
+- `completeSignedTransaction` awaits `keyDeriver.derivePrivateKeys`, so a batch
+  deriver may answer with a Promise (a native or off-thread deriver). The
+  signing guard runs again after it.
+
+Add optional awaited host persistence, serialized profile activation and snapshot
+restore, and signed checkpoints for UMP updates. The built-in interactor holds
+wallet and overlay submission until the signed receipt is durable. A lost receipt
+can be reconstructed from the original signed Toolbox action after restart.
+Recovering an interrupted phone change lets WAB finalize the original rotation. Snapshot,
+BRC-100 and UMP wire formats are unchanged. See Optional durable profile state
+in the README for adoption and recovery guidance.
+
+- Bound the Wallet Storage Monitor’s status, proof, and reorg review work so
+  other tasks can continue. Resume ARC events from the last durably handled
+  event and reconcile exact outpoints when a confirmed spender has a verified
+  Merkle proof and the local primary epoch. Normal Knex migrations install
+  bounded checkpoint and receipt storage and retain eligible legacy evidence.
+
+# 2.17.0 — published
+
+Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages
+report offset plus page length; full pages and empty later pages use an unpaged
+count with the same user, deletion, type and certifier filters. SQL aggregate
+hardening and packed/native hydration remain intact. No API, wire or schema
+migration is needed; upgrade the local storage package or remote Storage service
+to receive the corrected totals.
+
+- Add optional `actionBatchMode` to Node and browser setup-factory arguments and
+  forward it to the existing Wallet controller. Explicit `legacy` selects
+  per-action persistence for callers that broadcast their own `noSend`
+  transactions; omission keeps `auto` and its existing negotiation and fallback.
+- Preserve root-key selection, active/backup storage, service configuration,
+  privileged-key lookup and script verification when Node `Setup.createWallet`
+  delegates to `SetupClient.createWallet`.
+- Keep core, client and mobile package versions aligned with the existing nested
+  package policy. The mobile entry point does not expose the setup factories;
+  its existing Wallet construction and default action-batch mode remain unchanged.
+
+Fix permission-module action spending calculations to use the transformed inputs
+and outputs sent to the wallet. Preserve caller input descriptions by outpoint
+when modules reorder inputs, and output descriptions by their retained metadata,
+so spending-authorization line items retain the correct attribution. Amount
+validation, recipient verification and storage service-charge checks remain
+unchanged. No consumer or data migration is needed.
+
+This is a minor release for the additive public factory option. Existing callers
+need no migration. No wire or schema change is introduced, and previously
+uncommitted in-memory batches are not recovered by selecting a different mode.
+Publication and service or application upgrades remain separate actions.
+
+# 2.16.0 — published 2026-11-13
 
 Reuse the existing bounded identity-group packet writer for direct local-to-remote
 journal uploads. Small per-change notifications share up to 128 identities/one

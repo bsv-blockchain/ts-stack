@@ -1,3 +1,5 @@
+import { registerUMPActionReceiptReader, umpUpdateActionLabel } from './utility/umpActionReceipt'
+import { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
 import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
 import { promiseFromSync } from './utility/promiseFromSync'
 export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
@@ -143,7 +145,14 @@ import {
 } from './sdk/types'
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_REVIEW_ACTIONS
+} from './sdk/WERR_errors'
+import type { AdminValidCreateActionArgs } from './utility/adminOriginator'
 import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
@@ -377,6 +386,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   readonly actionBatch: ActionBatchController
   readonly scriptVerifier?: WalletScriptVerifier
   readonly telemetry: Telemetry
+  private adminOriginatorValue?: string
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -440,6 +450,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.services != null) {
       this.storage.setServices(this.services)
     }
+    registerUMPActionReceiptReader(this, (operationId, originator) =>
+      this.readStoredUMPActionReceipt(operationId, originator)
+    )
   }
 
   async destroy(): Promise<void> {
@@ -647,6 +660,33 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // List Methods
   /// ///////////////
 
+  /** Read the signed request only after binding its transaction ID to the authorized account and operation label. */
+  private async readStoredUMPActionReceipt(operationId: string, originator: string): Promise<number[] | undefined> {
+    if (!this.storage.isActiveStorageProvider()) return undefined
+    const label = umpUpdateActionLabel(operationId)
+    const { totalActions, actions } = await this.listActions(
+      { labels: [label], includeLabels: true, limit: 2 },
+      originator
+    )
+    if (totalActions === 0 && actions.length === 0) return undefined
+    const [action] = actions
+    if (totalActions !== 1 || actions.length !== 1 || !action.isOutgoing || action.labels?.includes(label) !== true)
+      throw new Error('Could not bind the retained wallet action to its UMP update.')
+    if (action.status === 'unsigned') return undefined
+
+    return await this.storage.runAsStorageProvider(async storage => {
+      const requests = await storage.findProvenTxReqs({ partial: { txid: action.txid }, paged: { limit: 2 } })
+      if (requests.length !== 1) return undefined
+      const [request] = requests
+      if (request.inputBEEF == null || request.status === 'invalid' || request.status === 'doubleSpend')
+        return undefined
+      const beef = new Beef()
+      await storage.mergeReqToBeefToShareExternally(request, beef, [])
+      await verifyUnlockScripts(action.txid, beef, this.scriptVerifier)
+      return beef.toBinaryAtomic(action.txid)
+    })
+  }
+
   async listActions(
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -656,14 +696,53 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const storageArgs = this.actionBatch.hasWorkspace ? { ...vargs, limit: 10000, offset: 0 } : vargs
     const r = this.actionBatch.overlayListActions(await this.storage.listActions(storageArgs), vargs)
     // Implement security policy to block customInstructions from output results.
-    for (const action of r.actions) {
-      if (action.outputs != null) {
-        for (const output of action.outputs) {
-          output.customInstructions = undefined
+    // The host's own admin originator keeps them: its customInstructions are its
+    // own wallet-private metadata.
+    if (!this.isAdminOriginator(originator)) {
+      for (const action of r.actions) {
+        if (action.outputs != null) {
+          for (const output of action.outputs) {
+            output.customInstructions = undefined
+          }
         }
       }
     }
     return r
+  }
+
+  /**
+   * The host's own originator (the domain its WalletPermissionsManager uses as
+   * adminOriginator), if the host set one. Undefined by default.
+   */
+  get adminOriginator(): string | undefined {
+    return this.adminOriginatorValue
+  }
+
+  /**
+   * Names the host's own originator. Trusted host code calls this once, where
+   * it builds the wallet; it cannot be changed afterwards. For calls from this
+   * originator only:
+   * - listActions returns output customInstructions (redacted for every other
+   *   originator, as before);
+   * - createAction tells storage the action is the admin's
+   *   (AdminValidCreateActionArgs.isAdminOriginator), which keeps its funding
+   *   plan minimal and lets a storage validateResolvedActionInput hook allow
+   *   inputs that other originators may not spend.
+   * The flag is derived from the originator argument, never from action fields.
+   */
+  setAdminOriginator(originator: OriginatorDomainNameStringUnder250Bytes): void {
+    validateOriginator(originator)
+    if (typeof originator !== 'string' || originator === '') {
+      throw new WERR_INVALID_PARAMETER('originator', 'a non-empty originator domain')
+    }
+    if (this.adminOriginatorValue !== undefined) {
+      throw new WERR_INVALID_OPERATION('The admin originator is already set')
+    }
+    this.adminOriginatorValue = originator
+  }
+
+  private isAdminOriginator(originator?: OriginatorDomainNameStringUnder250Bytes): boolean {
+    return this.adminOriginatorValue !== undefined && originator === this.adminOriginatorValue
   }
 
   get storageParty(): string {
@@ -1166,6 +1245,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
       const { auth, vargs } = this.validateAuthAndArgs(args, validateCreateActionArgs, logger)
       logger?.log('validated args')
 
+      // Decided from the originator argument only, never from action fields.
+      ;(vargs as AdminValidCreateActionArgs).isAdminOriginator = this.isAdminOriginator(originator)
       vargs.includeAllSourceTransactions = this.includeAllSourceTransactions
       if (this.randomVals != null && this.randomVals.length > 1) {
         vargs.randomVals = [...this.randomVals]

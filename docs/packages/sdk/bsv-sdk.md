@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.0'
+version: '4.1.2'
 npm: '@bsv/sdk'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,7 +15,38 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The unpublished 4.1.0 candidate adds bounded BRC-118 payment transport to `AuthFetch` and retains recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+## Script ASM for data outputs
+
+The 4.1.2 source candidate prints the top-level `OP_RETURN` when a script read
+from bytes is converted to ASM. Plain hex tokens still encode data pushes.
+If ordinary instruction tokens would change suffix bytes, the printer places
+one final `0x<hex>` token immediately after the top-level `OP_RETURN`.
+The raw token supplies the whole suffix verbatim and requires nonempty,
+even-length hex. For example, `OP_0 OP_RETURN 02ab` encodes as `006a0202ab`,
+and `OP_0 OP_RETURN 0x02ab` encodes as `006a02ab`.
+
+## LocalKVStore removal patch
+
+The SDK makes `LocalKVStore.remove` reject a wallet response
+with a positive `totalOutputs` and an empty page instead of repeatedly querying
+offset zero. The error identifies the key and reported total; rejection releases
+the per-key operation lock. An absent key still returns `[]`, and ordinary
+removal, `set` and `get` are unchanged. No API, wire or stored-data migration is
+required.
+
+## GlobalKVStore tag-count compatibility patch
+
+The source candidate restores tag sets larger than 32 entries. Client creation,
+tag-filter queries, token decoding, overlay admission and history preserve all
+tags. Upgrade both client and overlay SDKs to 4.1.1 and deploy Overlay Topics
+2.0.4 for the lookup-query fix. Existing token bytes and stored records require
+no migration. Each tag still must be unique, non-empty and at most 256 UTF-8
+bytes; token payload, request and cryptographic checks remain unchanged. Wallet
+output tags, action labels and other overlay protocols' count policies are unchanged.
+A non-array tag container raises `TypeError` (still an `Error` subclass) with the
+existing diagnostic; valid arrays and other validation errors are unchanged.
+
+The 4.1.0 release adds bounded BRC-118 payment transport to `AuthFetch` and retains recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
 
 Ordinary HTTP fallback retains native text, URLSearchParams, typed Blob and
 FormData serialization and inferred Content-Type, including cached peers.

@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { mkdtemp, open, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -34,9 +35,7 @@ const MIN_PROPERTY_RUNS = 300
 fc.configureGlobal({
   numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
   seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
 
 const policy = { maximumFileBytes: 1048576, maximumChunkBytes: 64 }
@@ -615,39 +614,44 @@ test.each([false, true])(
   }
 )
 
-test('generated bounded file chunks retain exact independent bytes and cleanup', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.uint8Array({ minLength: 1, maxLength: 512 }),
-      fc.integer({ min: 1, max: 64 }),
-      async (bytes, width) => {
-        const stage = await createBrc39NodeFileQuarantine(
-          parent,
-          async chunks => {
-            expect(await collect(chunks)).toEqual(Buffer.from(bytes))
-          },
-          policy
-        )
-        try {
-          await append(stage, bytes, width)
-          await stage.validateAuthenticated()
-          expect(await stage.withAuthenticatedChunks(collect)).toEqual(Buffer.from(bytes))
-        } finally {
-          await stage.discard()
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
+    seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+    path: process.env.FAST_CHECK_PATH ?? '',
+    endOnFailure: true
+  })
+)(
+  'generated bounded file chunks retain exact independent bytes and cleanup (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uint8Array({ minLength: 1, maxLength: 512 }),
+        fc.integer({ min: 1, max: 64 }),
+        async (bytes, width) => {
+          const stage = await createBrc39NodeFileQuarantine(
+            parent,
+            async chunks => {
+              expect(await collect(chunks)).toEqual(Buffer.from(bytes))
+            },
+            policy
+          )
+          try {
+            await append(stage, bytes, width)
+            await stage.validateAuthenticated()
+            expect(await stage.withAuthenticatedChunks(collect)).toEqual(Buffer.from(bytes))
+          } finally {
+            await stage.discard()
+          }
+          expect(await readdir(parent)).toEqual([])
         }
-        expect(await readdir(parent)).toEqual([])
-      }
-    ),
-    {
-      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
-      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-      path: process.env.FAST_CHECK_PATH ?? '',
-      endOnFailure: true,
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true
-    }
-  )
-}, 180000)
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)
 
 test.each([0, -1, 65, NaN, 1.5])('actual read with invalid reported progress %s refuses', async bytesRead => {
   const handles = observeHandles(),

@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { knex, type Knex } from 'knex'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -25,8 +26,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 let db: Knex
@@ -125,238 +124,249 @@ const promotionOrder = [
   'provenTxReqs'
 ]
 
-test('generated prefixes traverse all fifteen source streams and twelve promotion tables before acknowledgement and coherent succession', async () => {
-  await fc.assert(
-    fc.asyncProperty(history, async value => {
-      await expect(
-        db.transaction(async trx => {
-          const actual = {
-            ...binding,
-            source: { ...binding.source },
-            low: snapshotJournalRevision(String(value.generation)),
-            receipt: {
-              ...binding.receipt,
-              highWater: snapshotJournalRevision(String(value.generation + 2))
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated prefixes traverse all fifteen source streams and twelve promotion tables before acknowledgement and coherent succession (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(history, async value => {
+        await expect(
+          db.transaction(async trx => {
+            const actual = {
+              ...binding,
+              source: { ...binding.source },
+              low: snapshotJournalRevision(String(value.generation)),
+              receipt: {
+                ...binding.receipt,
+                highWater: snapshotJournalRevision(String(value.generation + 2))
+              }
             }
-          }
-          let state = await beginSnapshotJournalDestinationWindow(trx, actual, sessionId)
-          let expectedSequence = 0
-          for (let index = 0; index < value.prefix; index++) {
-            const after = {
-              revision: snapshotJournalRevision(String(value.generation + 1)),
-              id1: value.id + index,
-              id2: 0,
-              exactText: ''
+            let state = await beginSnapshotJournalDestinationWindow(trx, actual, sessionId)
+            let expectedSequence = 0
+            for (let index = 0; index < value.prefix; index++) {
+              const after = {
+                revision: snapshotJournalRevision(String(value.generation + 1)),
+                id1: value.id + index,
+                id2: 0,
+                exactText: ''
+              }
+              const before = state
+              state = (
+                await advanceSnapshotJournalDestinationWindow(
+                  trx,
+                  actual,
+                  state,
+                  { phase: 'intake', examined: 1, complete: false, after },
+                  async k => {
+                    await k('test_staged_rows').insert({ id: index + 1, value: value.value })
+                  }
+                )
+              ).checkpoint
+              expectedSequence++
+              expect(state).toMatchObject({
+                phase: 'intake',
+                streamIndex: 0,
+                sequence: expectedSequence,
+                after
+              })
+              const duplicate = jest.fn(async () => undefined)
+              await expect(
+                advanceSnapshotJournalDestinationWindow(
+                  trx,
+                  actual,
+                  before,
+                  { phase: 'intake', examined: 1, complete: false, after },
+                  duplicate
+                )
+              ).rejects.toThrow('Invalid or stale')
+              expect(duplicate).not.toHaveBeenCalled()
+              expect(await readSnapshotJournalDestinationWindow(trx, actual)).toEqual(state)
             }
-            const before = state
-            state = (
-              await advanceSnapshotJournalDestinationWindow(
-                trx,
-                actual,
-                state,
-                { phase: 'intake', examined: 1, complete: false, after },
-                async k => {
-                  await k('test_staged_rows').insert({ id: index + 1, value: value.value })
-                }
-              )
-            ).checkpoint
-            expectedSequence++
+            for (let streamIndex = 0; streamIndex < 15; streamIndex++) {
+              expect(state).toMatchObject({
+                phase: 'intake',
+                streamIndex,
+                tableIndex: 0,
+                promotionSequence: 0
+              })
+              state = (
+                await advanceSnapshotJournalDestinationWindow(
+                  trx,
+                  actual,
+                  state,
+                  {
+                    phase: 'intake',
+                    examined: 0,
+                    complete: true,
+                    ...(state.after === undefined ? {} : { after: state.after })
+                  },
+                  async () => undefined
+                )
+              ).checkpoint
+              expectedSequence++
+              expect(state.sequence).toBe(expectedSequence)
+            }
+            const observed: string[] = []
+            for (const [tableIndex, name] of promotionOrder.entries()) {
+              expect(state).toMatchObject({
+                phase: 'promoting',
+                streamIndex: 15,
+                tableIndex,
+                promotionSequence: 0
+              })
+              state = (
+                await advanceSnapshotJournalDestinationWindow(
+                  trx,
+                  actual,
+                  state,
+                  { phase: 'promoting', examined: 0, complete: true, promotionSequence: 0 },
+                  async () => {
+                    observed.push(name)
+                  }
+                )
+              ).checkpoint
+              expectedSequence++
+            }
+            expect(observed).toEqual(promotionOrder)
             expect(state).toMatchObject({
-              phase: 'intake',
-              streamIndex: 0,
+              phase: 'acknowledged',
               sequence: expectedSequence,
-              after
-            })
-            const duplicate = jest.fn(async () => undefined)
-            await expect(
-              advanceSnapshotJournalDestinationWindow(
-                trx,
-                actual,
-                before,
-                { phase: 'intake', examined: 1, complete: false, after },
-                duplicate
-              )
-            ).rejects.toThrow('Invalid or stale')
-            expect(duplicate).not.toHaveBeenCalled()
-            expect(await readSnapshotJournalDestinationWindow(trx, actual)).toEqual(state)
-          }
-          for (let streamIndex = 0; streamIndex < 15; streamIndex++) {
-            expect(state).toMatchObject({
-              phase: 'intake',
-              streamIndex,
-              tableIndex: 0,
+              streamIndex: 15,
+              tableIndex: 12,
               promotionSequence: 0
             })
-            state = (
+            expect(await readSnapshotJournalDestinationWindow(trx, actual)).toEqual(state)
+            const next = {
+              ...actual,
+              low: actual.receipt.highWater,
+              receipt: {
+                ...actual.receipt,
+                requestId: '57'.repeat(32),
+                highWater: snapshotJournalRevision(String(value.generation + 3))
+              }
+            }
+            const cleanup = jest.fn(async (k: Knex) => {
+              await k('test_staged_rows').del()
+            })
+            const successor = await succeedSnapshotJournalDestinationWindow(
+              trx,
+              actual,
+              state,
+              next,
+              '93'.repeat(32),
+              cleanup
+            )
+            expect(successor).toMatchObject({
+              phase: 'intake',
+              streamIndex: 0,
+              tableIndex: 0,
+              sequence: 0
+            })
+            const progress = (
               await advanceSnapshotJournalDestinationWindow(
                 trx,
-                actual,
-                state,
-                {
-                  phase: 'intake',
-                  examined: 0,
-                  complete: true,
-                  ...(state.after === undefined ? {} : { after: state.after })
-                },
+                next,
+                successor,
+                { phase: 'intake', examined: 0, complete: true },
                 async () => undefined
               )
             ).checkpoint
-            expectedSequence++
-            expect(state.sequence).toBe(expectedSequence)
-          }
-          const observed: string[] = []
-          for (const [tableIndex, name] of promotionOrder.entries()) {
-            expect(state).toMatchObject({
-              phase: 'promoting',
-              streamIndex: 15,
-              tableIndex,
-              promotionSequence: 0
-            })
-            state = (
+            expect(
+              await succeedSnapshotJournalDestinationWindow(trx, actual, state, next, '93'.repeat(32), cleanup)
+            ).toEqual(progress)
+            expect(cleanup).toHaveBeenCalledTimes(1)
+            expect(await trx('test_staged_rows')).toEqual([])
+            throw new Error('Generated window history rollback')
+          })
+        ).rejects.toThrow('Generated window history rollback')
+        expect(await db('snapshot_reconciliation_windows')).toEqual([])
+        expect(await db('test_staged_rows')).toEqual([])
+      }),
+      propertyBatch
+    )
+  }
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated callback failures and primary changes roll back every actual write and checkpoint (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(history, fc.boolean(), async (value, changePrimary) => {
+        const state = await begin()
+        const apply = jest.fn(async (k: Knex) => {
+          await k('test_staged_rows').insert({ id: value.id, value: value.value })
+          if (changePrimary) {
+            await k('users').where('userId', 7).update('activeStorage', 'another')
+            await k('users').where('userId', 7).update('activeStorage', 'destination')
+          } else throw new Error('Generated callback failure')
+        })
+        await expect(
+          db.transaction(
+            async trx =>
               await advanceSnapshotJournalDestinationWindow(
                 trx,
-                actual,
-                state,
-                { phase: 'promoting', examined: 0, complete: true, promotionSequence: 0 },
-                async () => {
-                  observed.push(name)
-                }
-              )
-            ).checkpoint
-            expectedSequence++
-          }
-          expect(observed).toEqual(promotionOrder)
-          expect(state).toMatchObject({
-            phase: 'acknowledged',
-            sequence: expectedSequence,
-            streamIndex: 15,
-            tableIndex: 12,
-            promotionSequence: 0
-          })
-          expect(await readSnapshotJournalDestinationWindow(trx, actual)).toEqual(state)
-          const next = {
-            ...actual,
-            low: actual.receipt.highWater,
-            receipt: {
-              ...actual.receipt,
-              requestId: '57'.repeat(32),
-              highWater: snapshotJournalRevision(String(value.generation + 3))
-            }
-          }
-          const cleanup = jest.fn(async (k: Knex) => {
-            await k('test_staged_rows').del()
-          })
-          const successor = await succeedSnapshotJournalDestinationWindow(
-            trx,
-            actual,
-            state,
-            next,
-            '93'.repeat(32),
-            cleanup
-          )
-          expect(successor).toMatchObject({
-            phase: 'intake',
-            streamIndex: 0,
-            tableIndex: 0,
-            sequence: 0
-          })
-          const progress = (
-            await advanceSnapshotJournalDestinationWindow(
-              trx,
-              next,
-              successor,
-              { phase: 'intake', examined: 0, complete: true },
-              async () => undefined
-            )
-          ).checkpoint
-          expect(
-            await succeedSnapshotJournalDestinationWindow(trx, actual, state, next, '93'.repeat(32), cleanup)
-          ).toEqual(progress)
-          expect(cleanup).toHaveBeenCalledTimes(1)
-          expect(await trx('test_staged_rows')).toEqual([])
-          throw new Error('Generated window history rollback')
-        })
-      ).rejects.toThrow('Generated window history rollback')
-      expect(await db('snapshot_reconciliation_windows')).toEqual([])
-      expect(await db('test_staged_rows')).toEqual([])
-    }),
-    controls
-  )
-})
-
-test('generated callback failures and primary changes roll back every actual write and checkpoint', async () => {
-  await fc.assert(
-    fc.asyncProperty(history, fc.boolean(), async (value, changePrimary) => {
-      const state = await begin()
-      const apply = jest.fn(async (k: Knex) => {
-        await k('test_staged_rows').insert({ id: value.id, value: value.value })
-        if (changePrimary) {
-          await k('users').where('userId', 7).update('activeStorage', 'another')
-          await k('users').where('userId', 7).update('activeStorage', 'destination')
-        } else throw new Error('Generated callback failure')
-      })
-      await expect(
-        db.transaction(
-          async trx =>
-            await advanceSnapshotJournalDestinationWindow(
-              trx,
-              binding,
-              state,
-              { phase: 'intake', examined: 0, complete: true },
-              apply
-            )
-        )
-      ).rejects.toThrow(changePrimary ? 'Invalid or stale' : 'Generated callback failure')
-      expect(apply).toHaveBeenCalledTimes(1)
-      expect(await db('test_staged_rows')).toEqual([])
-      expect(await db('snapshot_sync_primary_epochs')).toEqual([])
-      expect((await db('users').first()).activeStorage).toBe('destination')
-      expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(state)
-    }),
-    controls
-  )
-})
-
-test('generated repeated and regressed journal positions cannot invoke the destination callback', async () => {
-  await fc.assert(
-    fc.asyncProperty(history, async value => {
-      await expect(
-        db.transaction(async trx => {
-          const state = await beginSnapshotJournalDestinationWindow(trx, binding, sessionId)
-          const after = {
-            revision: snapshotJournalRevision('2'),
-            id1: value.id + 1,
-            id2: 0,
-            exactText: value.value
-          }
-          const next = (
-            await advanceSnapshotJournalDestinationWindow(
-              trx,
-              binding,
-              state,
-              { phase: 'intake', examined: 1, complete: false, after },
-              async () => undefined
-            )
-          ).checkpoint
-          for (const cursor of [after, { ...after, id1: value.id }]) {
-            const apply = jest.fn(async () => undefined)
-            await expect(
-              advanceSnapshotJournalDestinationWindow(
-                trx,
                 binding,
-                next,
-                { phase: 'intake', examined: 1, complete: false, after: cursor },
+                state,
+                { phase: 'intake', examined: 0, complete: true },
                 apply
               )
-            ).rejects.toThrow('Invalid or stale')
-            expect(apply).not.toHaveBeenCalled()
-            expect(await readSnapshotJournalDestinationWindow(trx, binding)).toEqual(next)
-          }
-          throw new Error('Generated monotonic cursor rollback')
-        })
-      ).rejects.toThrow('Generated monotonic cursor rollback')
-      expect(await db('snapshot_reconciliation_windows')).toEqual([])
-    }),
-    controls
-  )
-})
+          )
+        ).rejects.toThrow(changePrimary ? 'Invalid or stale' : 'Generated callback failure')
+        expect(apply).toHaveBeenCalledTimes(1)
+        expect(await db('test_staged_rows')).toEqual([])
+        expect(await db('snapshot_sync_primary_epochs')).toEqual([])
+        expect((await db('users').first()).activeStorage).toBe('destination')
+        expect(await db.transaction(async trx => await readSnapshotJournalDestinationWindow(trx, binding))).toEqual(
+          state
+        )
+      }),
+      propertyBatch
+    )
+  }
+)
+
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated repeated and regressed journal positions cannot invoke the destination callback (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(history, async value => {
+        await expect(
+          db.transaction(async trx => {
+            const state = await beginSnapshotJournalDestinationWindow(trx, binding, sessionId)
+            const after = {
+              revision: snapshotJournalRevision('2'),
+              id1: value.id + 1,
+              id2: 0,
+              exactText: value.value
+            }
+            const next = (
+              await advanceSnapshotJournalDestinationWindow(
+                trx,
+                binding,
+                state,
+                { phase: 'intake', examined: 1, complete: false, after },
+                async () => undefined
+              )
+            ).checkpoint
+            for (const cursor of [after, { ...after, id1: value.id }]) {
+              const apply = jest.fn(async () => undefined)
+              await expect(
+                advanceSnapshotJournalDestinationWindow(
+                  trx,
+                  binding,
+                  next,
+                  { phase: 'intake', examined: 1, complete: false, after: cursor },
+                  apply
+                )
+              ).rejects.toThrow('Invalid or stale')
+              expect(apply).not.toHaveBeenCalled()
+              expect(await readSnapshotJournalDestinationWindow(trx, binding)).toEqual(next)
+            }
+            throw new Error('Generated monotonic cursor rollback')
+          })
+        ).rejects.toThrow('Generated monotonic cursor rollback')
+        expect(await db('snapshot_reconciliation_windows')).toEqual([])
+      }),
+      propertyBatch
+    )
+  }
+)

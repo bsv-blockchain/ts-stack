@@ -280,6 +280,33 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
+    test('REFUSES offline when the host set refuseOfflineNosendAbort, and proceeds once the chain answers', async () => {
+      for (const storage of storages) {
+        Object.assign(storage, { refuseOfflineNosendAbort: true })
+        const seed = await seedNoSendTx(storage, '57'.repeat(32))
+        for (const down of [
+          () => {
+            throw new Error('indexer down')
+          },
+          (): GetStatusForTxidsResult => ({ name: 'mock', status: 'error', results: [] })
+        ]) {
+          storage.setServices(mockServices(down))
+          await expect(storage.abortAction(seed.auth, { reference: seed.reference })).rejects.toMatchObject({
+            code: 'WERR_INVALID_OPERATION',
+            message: expect.stringContaining('chain service did not answer')
+          })
+          await expectStatuses(storage, seed, 'nosend')
+          const req = await getReq(storage, seed.provenTxReqId)
+          expect(countHistoryNotes(req, 'abortAction-offline-fallback')).toBe(0)
+        }
+        storage.setServices(mockServices(txids => successResult(txids, ['unknown'])))
+        await expect(storage.abortAction(seed.auth, { reference: seed.reference })).resolves.toMatchObject({
+          aborted: true
+        })
+        await expectStatuses(storage, seed, 'failed', 'invalid')
+      }
+    })
+
     test('records an abortAction-skipped-onchain history note on the proven_tx_req', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '66'.repeat(32))
