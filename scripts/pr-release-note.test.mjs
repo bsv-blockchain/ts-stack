@@ -141,6 +141,9 @@ test('HTML comment syntax inside a fenced JSON value remains literal data', () =
   assert.deepEqual(parseReleaseNote(body(concealed)), concealed)
   assert.ok(validateReleaseNote(parseReleaseNote(body(concealed)), projects).length > 0)
   assert.throws(() => parseReleaseNote(`<!-- --> <!--\n${body(note())}\n-->`))
+  assert.deepEqual(parseReleaseNote(`<!-- comment --!>\n${body(note())}`), note())
+  assert.deepEqual(parseReleaseNote(`<!--\ncomment\n--!>\n${body(note())}`), note())
+  assert.throws(() => parseReleaseNote(`<!--\n${body(note())}\n--!>`))
 })
 
 test('reruns fetch the live description instead of using stale event/body environment', async () => {

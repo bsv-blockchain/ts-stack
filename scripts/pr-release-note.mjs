@@ -27,7 +27,7 @@ function closesFence(match, fence) {
 
 function openingFence(line, comments) {
   let hidden = comments.active
-  for (const token of line.matchAll(/<!--|-->/g)) {
+  for (const token of line.matchAll(/<!--|--!?>/g)) {
     if (token[0] === '<!--') hidden = true
     comments.active = token[0] === '<!--'
   }
