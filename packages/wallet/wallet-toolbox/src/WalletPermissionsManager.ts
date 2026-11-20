@@ -761,6 +761,59 @@ function noSendChangeOnSignedTransaction(
   return noSendChange.map(outpoint => `${signedTxid}.${outpoint.slice(outpoint.lastIndexOf('.') + 1)}`)
 }
 
+/**
+ * The form in which the layers below the manager read a protocol, basket or
+ * label name: the key deriver and the SDK identifier validation both trim and
+ * lowercase it. Every reserved-name decision uses this form, so that a case or
+ * whitespace variant of a reserved name cannot pass as an ordinary name.
+ */
+function canonicalReservedName(name: string): string {
+  // A non-string (a String object, for example) has no canonical form here, but
+  // the lower layers can still coerce it to a reserved name. Refuse it.
+  if (typeof name !== 'string') throw new TypeError('A protocol, basket or label name must be a string.')
+  return name.trim().toLowerCase()
+}
+
+/** Whether a protocol, basket or label name belongs to a permission module (`p <scheme> ...`). */
+function isPermissionModuleName(name: string | undefined): boolean {
+  return name != null && canonicalReservedName(name).startsWith('p ')
+}
+
+/** Modules match their own names exactly, so they receive the canonical spelling. */
+function canonicalizeModuleLabels<T extends string[] | undefined>(labels: T): T {
+  if (labels == null) return labels
+  return labels.map(label => (isPermissionModuleName(label) ? canonicalReservedName(label) : label)) as T
+}
+
+/** Replaces the module-owned name in single-name wallet arguments by its canonical spelling. */
+function withCanonicalModuleName(args: object, canonicalName: string): object {
+  const named = args as { basket?: unknown; protocolID?: unknown }
+  if (typeof named.basket === 'string' && isPermissionModuleName(named.basket)) {
+    return { ...args, basket: canonicalName }
+  }
+  if (Array.isArray(named.protocolID) && isPermissionModuleName(named.protocolID[1])) {
+    return { ...args, protocolID: [named.protocolID[0], canonicalName] }
+  }
+  return args
+}
+
+function canonicalizeCreateActionModuleNames(args: CreateActionArgs): void {
+  if (args.labels != null) args.labels = canonicalizeModuleLabels(args.labels)
+  for (const output of args.outputs ?? []) {
+    if (isPermissionModuleName(output.basket)) output.basket = canonicalReservedName(output.basket!)
+  }
+}
+
+function canonicalizeInternalizeActionModuleNames(args: InternalizeActionArgs): void {
+  if (args.labels != null) args.labels = canonicalizeModuleLabels(args.labels)
+  for (const outIndex in args.outputs) {
+    const remittance = args.outputs[outIndex].insertionRemittance
+    if (remittance != null && isPermissionModuleName(remittance.basket)) {
+      remittance.basket = canonicalReservedName(remittance.basket)
+    }
+  }
+}
+
 export class WalletPermissionsManager implements WalletInterface {
   /** A reference to the BRC-100 wallet instance. */
   private readonly underlying: WalletInterface
@@ -997,11 +1050,13 @@ export class WalletPermissionsManager implements WalletInterface {
     underlyingCall: (transformedArgs: object, originator: string) => Promise<T>
   ): Promise<T | null> {
     // Check if this is a P-protocol/basket
-    if (!basketOrProtocolName.startsWith('p ')) {
+    if (!isPermissionModuleName(basketOrProtocolName)) {
       return null // If not, caller should continue normal flow
     }
 
-    const schemeID = basketOrProtocolName.split(' ')[1]
+    const canonicalName = canonicalReservedName(basketOrProtocolName)
+    const schemeID = canonicalName.split(' ')[1]
+    args = withCanonicalModuleName(args, canonicalName)
     const module = this.config.permissionModules?.[schemeID]
 
     if (module == null) {
@@ -1055,7 +1110,8 @@ export class WalletPermissionsManager implements WalletInterface {
    * Splits labels into P and non-P lists, registering any P-modules encountered.
    *
    * P-labels follow BRC-111 format: `p <moduleId> <payload>`
-   * - Must start with "p " (lowercase p + space)
+   * - Must start with "p " (lowercase p + space) after the wallet trims and lowercases the label;
+   *   a case or whitespace variant is the same label, and modules receive the canonical spelling
    * - Module ID must be at least 1 character with no spaces
    * - Single space separates module ID from payload
    * - Payload must be at least 1 character
@@ -1075,8 +1131,9 @@ export class WalletPermissionsManager implements WalletInterface {
     const nonPLabels: string[] = []
     if (labels == null) return nonPLabels
 
-    for (const label of labels) {
-      if (label.startsWith('p ')) {
+    for (const rawLabel of labels) {
+      if (isPermissionModuleName(rawLabel)) {
+        const label = canonicalReservedName(rawLabel)
         // Remove "p " prefix to get "moduleId payload"
         const remainder = label.slice(2)
 
@@ -1102,7 +1159,7 @@ export class WalletPermissionsManager implements WalletInterface {
         this.addPModuleByScheme(schemeID, 'label', pModulesByScheme)
       } else {
         // Regular label - add to list for normal permission checks
-        nonPLabels.push(label)
+        nonPLabels.push(rawLabel)
       }
     }
 
@@ -4463,6 +4520,7 @@ export class WalletPermissionsManager implements WalletInterface {
     originator?: string
   ): ReturnType<WalletInterface['createAction']> {
     const vargs = validateCreateActionArgs(args)
+    canonicalizeCreateActionModuleNames(args)
     // 1) Identify unique P-modules involved (one per schemeID) from both baskets and labels
     const pModulesByScheme = new Map<string, PermissionsModule>()
     const nonPBaskets = this.collectNonPBaskets(args.outputs, pModulesByScheme)
@@ -4620,8 +4678,8 @@ export class WalletPermissionsManager implements WalletInterface {
     if (outputs == null) return nonPBaskets
     for (const out of outputs) {
       if (!out.basket) continue
-      if (out.basket.startsWith('p ')) {
-        this.addPModuleByScheme(out.basket.split(' ')[1], 'basket', pModulesByScheme)
+      if (isPermissionModuleName(out.basket)) {
+        this.addPModuleByScheme(canonicalReservedName(out.basket).split(' ')[1], 'basket', pModulesByScheme)
       } else {
         nonPBaskets.push(out.basket)
       }
@@ -4666,7 +4724,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originalOutputDescriptions.set(output.outputDescription, description)
       }
       // P-basket custom instructions are encrypted after the permission modules run.
-      if (output.customInstructions && output.basket?.startsWith('p ') !== true) {
+      if (output.customInstructions && !isPermissionModuleName(output.basket)) {
         output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
       }
     })
@@ -4685,7 +4743,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (args.outputs === undefined) return args
     const outputs = await Promise.all(
       args.outputs.map(async output =>
-        !output.customInstructions || output.basket?.startsWith('p ') !== true
+        !output.customInstructions || !isPermissionModuleName(output.basket)
           ? output
           : { ...output, customInstructions: await this.maybeEncryptMetadata(output.customInstructions) }
       )
@@ -5212,6 +5270,7 @@ export class WalletPermissionsManager implements WalletInterface {
     ...args: Parameters<WalletInterface['listActions']>
   ): ReturnType<WalletInterface['listActions']> {
     const [requestArgs, originator] = args
+    if (requestArgs.labels != null) requestArgs.labels = canonicalizeModuleLabels(requestArgs.labels)
     const { remainingLabels: labelsForPermissionChecks } = parseBrc114ActionTimeLabels(requestArgs.labels)
 
     // 1) Identify unique P-modules involved (one per schemeID, preserving label order)
@@ -5278,8 +5337,8 @@ export class WalletPermissionsManager implements WalletInterface {
       const output = requestArgs.outputs[outIndex]
       if (output.protocol !== 'basket insertion') continue
       const { basket, customInstructions } = output.insertionRemittance!
-      if (basket.startsWith('p ')) {
-        this.addPModuleByScheme(basket.split(' ')[1], 'basket', pModulesByScheme)
+      if (isPermissionModuleName(basket)) {
+        this.addPModuleByScheme(canonicalReservedName(basket).split(' ')[1], 'basket', pModulesByScheme)
       } else {
         nonPModuleBaskets.push({ outIndex, basket, customInstructions })
       }
@@ -5335,7 +5394,7 @@ export class WalletPermissionsManager implements WalletInterface {
       const remittance = output.insertionRemittance
       const customInstructions = remittance?.customInstructions
       if (output.protocol !== 'basket insertion' || remittance == null || !customInstructions) continue
-      if (!remittance.basket.startsWith('p ')) continue
+      if (!isPermissionModuleName(remittance.basket)) continue
       encryptionTasks.push(
         this.maybeEncryptMetadata(customInstructions).then(encrypted => {
           remittance.customInstructions = encrypted
@@ -5374,6 +5433,7 @@ export class WalletPermissionsManager implements WalletInterface {
     ...args: Parameters<WalletInterface['internalizeAction']>
   ): ReturnType<WalletInterface['internalizeAction']> {
     const [requestArgs, originator] = args
+    canonicalizeInternalizeActionModuleNames(requestArgs)
 
     // 1) Identify unique P-modules involved (one per schemeID) from both baskets and labels
     const pModulesByScheme = new Map<string, PermissionsModule>()
@@ -5518,6 +5578,16 @@ export class WalletPermissionsManager implements WalletInterface {
     ...args: Parameters<WalletInterface['revealSpecificKeyLinkage']>
   ): ReturnType<WalletInterface['revealSpecificKeyLinkage']> {
     const [requestArgs, originator] = args
+    // Key linkage discloses the derived key. A permission module has no hook
+    // for this method, and an admin protocol belongs to the wallet itself, so
+    // neither namespace is open to an application.
+    const linkedProtocolName = requestArgs.protocolID[1]
+    if (
+      !this.isAdminOriginator(originator!) &&
+      (isPermissionModuleName(linkedProtocolName) || this.isAdminProtocol(requestArgs.protocolID))
+    ) {
+      throw new Error(`Key linkage for the reserved protocol “${linkedProtocolName}” is not available.`)
+    }
     await this.ensureProtocolPermission({
       originator: originator!,
       privileged: requestArgs.privileged!,
@@ -5893,7 +5963,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * If it violates these rules and the caller is not admin, we consider it "admin-only."
    */
   private isAdminProtocol(proto: WalletProtocol): boolean {
-    const protocolName = proto[1]
+    const protocolName = canonicalReservedName(proto[1])
     if (protocolName.startsWith('admin')) {
       return true
     }
@@ -5909,6 +5979,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * If it violates these rules and the caller is not admin, we consider it "admin-only."
    */
   private isAdminLabel(label: string): boolean {
+    label = canonicalReservedName(label)
     if (label.startsWith('admin')) {
       return true
     }
@@ -5926,6 +5997,7 @@ export class WalletPermissionsManager implements WalletInterface {
    *  - Must not start with `p ` (future specially permissioned baskets)
    */
   private isAdminBasket(basket: string): boolean {
+    basket = canonicalReservedName(basket)
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
     // Lists P-basket outputs past their permission modules.

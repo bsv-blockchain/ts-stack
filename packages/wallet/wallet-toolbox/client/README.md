@@ -1,6 +1,6 @@
 # @bsv/wallet-toolbox-client
 
-## Optional durable profile state (2.17.0 source candidate)
+## Optional durable profile state (2.18.0 source candidate)
 
 `CWIStyleWalletManager` and its `WalletAuthenticationManager` subclass accept an
 optional host store through `setStatePersistence`. Attach it before authentication.
@@ -21,25 +21,26 @@ The host must store both snapshot and pending-update capabilities privately,
 partitioned by account, network and service configuration. Never log those bytes.
 Fence application requests while changing profiles. Activation publishes the new
 profile ID and underlying wallet together after construction succeeds. Opted-in
-root/profile operations serialize, await persistence and refuse public wallet calls
-while their state is changing or needs recovery. A failed builder retains the
+snapshot restores, profile operations and UMP updates serialize. Public wallet calls
+are blocked while those operations run or await recovery. A failed builder retains the
 previous SDK identity; a host builder with external side effects must additionally
 restore or withhold its own serving runtime.
 
 A UMP update records `prepared`, `submitting`, `signed` and `published` stages.
-The signed stage retains the exact transaction before overlay publication. Store
-callbacks are awaited; custom interactors opt in with `checkpointVersion: 1` and
-must implement the action checkpoint and original-transaction publication contract.
-A submitting-stage error may have spent the predecessor: do not repeat the
-operation. After restart, authenticate/restore the original account, call
-`loadPendingUMPUpdate` with its retained checkpoint, then
-`recoverPendingUMPUpdate`. Recovery accepts the verified exact successor or
-re-publishes the retained original transaction after checking its owner, fields,
-unique token output and predecessor input. It never creates another wallet action.
-A merely prepared operation can be cleared because execution was not admitted.
-A submitting operation without a signed receipt remains explicitly unresolved
-until the original wallet action is reconciled; absence from discovery cannot
-prove that action never occurred.
+The built-in interactor signs with `noSend`, saves the exact signed receipt,
+then releases the same transaction through the wallet and the overlay. The
+underlying wallet must retain its staged action so `sendWith` can release it
+after restart. Custom interactors opt in with `checkpointVersion: 1` and must
+await the signed checkpoint before any publication.
+
+After an interrupted update, authenticate or restore the original account,
+call `loadPendingUMPUpdate` with the retained checkpoint, then call
+`recoverPendingUMPUpdate`. Recovery verifies the exact successor or re-publishes
+the original transaction after checking its owner, fields, unique token output
+and predecessor input. A prepared checkpoint can be cleared before admission.
+A submitting checkpoint without a receipt requires reconciliation of the
+original wallet action. Resume an interrupted phone-number change after recovery
+to finalize its existing staged rotation.
 
 `syncUMPToken()` retains its boolean return. `getUMPTokenSyncStatus()` additionally
 distinguishes unchanged, updated, authoritative not-found and unknown results.

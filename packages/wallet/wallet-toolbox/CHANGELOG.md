@@ -1,13 +1,42 @@
-# 2.17.0 source candidate
+# 2.18.0 source candidate
 
-Add optional awaited host persistence, serialized profile/root transitions, atomic
-profile activation, explicit UMP refresh status and owner checks, and checkpointed
-recovery of the original UMP update. Snapshots and BRC-100/UMP wire formats are
-unchanged. Existing callers retain manual snapshot ownership. Opted-in hosts must
-retain private checkpoints through local write, broadcast and activation failures;
-reconcile them before retry or rollback. See Optional durable profile state in the
-README. This extends the existing unpublished minor candidate; no publication or
-application release is performed.
+Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
+app's patch of 2.15.3. Every change is opt-in; with none of it set, behaviour is
+unchanged. No wire or schema change, and no consumer migration.
+
+- `Wallet.setAdminOriginator(originator)` names the host's own originator (the
+  domain its `WalletPermissionsManager` uses as `adminOriginator`) once; it
+  cannot be changed. `Wallet.adminOriginator` reads it.
+  - `listActions` keeps output `customInstructions` for that originator only.
+    Every other originator still sees them redacted. (Knex and IndexedDB
+    storage do not return them; a host storage may.)
+  - `createAction` marks the validated storage arguments `isAdminOriginator`
+    (`AdminValidCreateActionArgs`). It comes from the originator argument,
+    never from action fields.
+  - An admin action keeps a minimal funding plan: no change-pool growth
+    (`targetNetCount`), no surplus shaping, no migration inputs, and a first
+    change output that takes the surplus as it is. A host that approves an
+    exact input set (a vault spend, for example) keeps it exact.
+- `StorageProvider.validateResolvedActionInput` (optional,
+  `ValidateResolvedActionInput`): called for each `createAction` input after its
+  source output is resolved from authenticated storage or verified BEEF. Throw
+  to refuse the action.
+- `StorageProviderOptions.refuseOfflineNosendAbort` (default false): when true,
+  `abortAction` refuses to invalidate a signed nosend action while the chain
+  service gives no answer, and asks for a retry. The default keeps the offline
+  fallback and its `abortAction-offline-fallback` note.
+- `completeSignedTransaction` awaits `keyDeriver.derivePrivateKeys`, so a batch
+  deriver may answer with a Promise (a native or off-thread deriver). The
+  signing guard runs again after it.
+
+Add optional awaited host persistence, serialized profile activation and snapshot
+restore, and signed checkpoints for UMP updates. The built-in interactor holds
+wallet and overlay submission until the signed receipt is durable. Recovering an
+interrupted phone change lets WAB finalize the original rotation. Snapshot,
+BRC-100 and UMP wire formats are unchanged. See Optional durable profile state
+in the README for adoption and recovery guidance.
+
+# 2.17.0 — published
 
 Fix `listCertificates` totals for paged IndexedDB results. Non-empty final pages
 report offset plus page length; full pages and empty later pages use an unpaged
