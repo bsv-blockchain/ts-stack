@@ -218,23 +218,37 @@ export async function reviewConfirmedSpendPage(
   let examined = 0
   let repaired = 0
   let unavailable = 0
-  for (const { provenTxId } of rows) {
-    if (examined > 0 && performance.now() - started >= workMsecs) break
+  let pending: ConfirmedSpendCursor | undefined
+  function* budgetedProofs() {
+    for (const { provenTxId } of rows) {
+      if (pending != null || (examined > 0 && performance.now() - started >= workMsecs)) return
+      yield provenTxId
+    }
+  }
+  await runInSeries(budgetedProofs(), async provenTxId => {
     const proof = await storage.findProvenTxById(provenTxId)
     examined++
-    if (proof != null && proof.height + minimumDepth <= tipHeight) {
-      try {
-        const page = await reviewSpendProof(storage, proof, tipHeight, partial, admission)
-        repaired += page.repaired
-        unavailable += page.unavailable
-        if (page.partial != null) return { after, partial: page.partial, examined, repaired, unavailable }
-      } catch {
-        unavailable++
-      }
+    if (proof == null || proof.height + minimumDepth > tipHeight) {
+      after = provenTxId
+      return
     }
-    after = provenTxId
+    try {
+      const page = await reviewSpendProof(storage, proof, tipHeight, partial, admission)
+      repaired += page.repaired
+      unavailable += page.unavailable
+      pending = page.partial
+    } catch {
+      unavailable++
+    }
+    if (pending == null) after = provenTxId
+  })
+  return {
+    after: pending == null && examined === rows.length && rows.length < limit ? 0 : after,
+    partial: pending,
+    examined,
+    repaired,
+    unavailable
   }
-  return { after: examined === rows.length && rows.length < limit ? 0 : after, examined, repaired, unavailable }
 }
 
 interface ConfirmedSpendReceipt extends ConfirmedSpendTarget {
@@ -359,7 +373,7 @@ async function reviewSpendReceipt(
 ): Promise<number> {
   const receipt = readReceipt(details)
   // Fail closed on damaged durable evidence so it can be inspected and repaired.
-  if (receipt == null || receipt.outputId !== outputId) throw new Error('Invalid confirmed-spend receipt')
+  if (receipt?.outputId !== outputId) throw new Error('Invalid confirmed-spend receipt')
   const row = await storage.findOutputById(receipt.outputId, undefined, true)
   if (row == null || !stillQuarantined(row, receipt)) {
     await storage.knex('monitor_confirmed_spends').where({ outputId, details }).delete()

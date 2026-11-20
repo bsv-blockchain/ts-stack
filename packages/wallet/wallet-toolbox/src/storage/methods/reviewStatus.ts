@@ -295,30 +295,27 @@ export async function reviewStatusPage(
     }
   }
   await runInSeries(budgetedRows(), async row => {
-    if (row.activeStorage === activeStorage && row.identityKey != null) {
-      try {
-        const needsRepair =
-          Boolean(row.needsRepair) ||
-          (Boolean(row.terminal) &&
-            row.txid != null &&
-            (await hasOutstandingTerminalEvidence(storage, row.txid, row.userId)))
-        if (needsRepair) {
-          attempted++
-          const user = { userId: row.userId, identityKey: row.identityKey }
-          const write = await storage.activeWriteTransaction(user)
-          const outcome = await reviewFencedTransaction(storage, args, user, row.transactionId, write, admit)
-          if (log.length < 2048) log += outcome.slice(0, 2048 - log.length)
-        }
-      } catch (error) {
-        // The next sweep retries failures without blocking later IDs.
-        if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') {
-          failed++
-          if (log.length < 1920) log += `transaction ${row.transactionId} review failed\n`
-        }
-      }
-    }
     after = row.transactionId
     examined++
+    if (row.activeStorage !== activeStorage || row.identityKey == null) return
+    try {
+      const needsRepair =
+        Boolean(row.needsRepair) ||
+        (Boolean(row.terminal) &&
+          row.txid != null &&
+          (await hasOutstandingTerminalEvidence(storage, row.txid, row.userId)))
+      if (!needsRepair) return
+      attempted++
+      const user = { userId: row.userId, identityKey: row.identityKey }
+      const write = await storage.activeWriteTransaction(user)
+      const outcome = await reviewFencedTransaction(storage, args, user, row.transactionId, write, admit)
+      if (log.length < 2048) log += outcome.slice(0, 2048 - log.length)
+    } catch (error) {
+      // The next sweep retries failures without blocking later IDs.
+      if (WalletError.fromUnknown(error).code === 'WERR_NOT_ACTIVE') return
+      failed++
+      if (log.length < 1920) log += `transaction ${row.transactionId} review failed\n`
+    }
   })
   return { log, after, complete: examined === rows.length && rows.length < limit, examined, failed }
 }
