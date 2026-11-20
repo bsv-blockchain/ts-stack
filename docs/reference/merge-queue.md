@@ -6,7 +6,7 @@ version: '1.0.0'
 last_updated: '2026-11-20'
 last_verified: '2026-11-20'
 review_cadence_days: 30
-status: draft
+status: experimental
 tags: [reference, ci, github-actions]
 ---
 
@@ -44,9 +44,13 @@ The isolated vendor probes
 [#1640](https://github.com/bsv-blockchain/ts-stack/pull/1640) use independent text
 files and the same starting commit on a disposable base branch. They test vendor
 reporting only; they do not qualify the Actions workflows or change `main`.
-Both Socket checks reported success on both synthetic commits. Sonar reported
-on the individual PR heads but had not reported on either queue commit when
-this prerequisite change was prepared. The final outcome is recorded in
+Both Socket checks reported success on both synthetic commits:
+`1bd8e42a07419f330c8502a7b3abfe9b93240ba6` and
+`828c63d772438a6133a90d12a5a65278b4afc20f`. Sonar reported on both individual PR
+heads but never on those queue commits. GitHub removed PR1639 at 17:55:47 UTC
+with `checks_timed_out`. PR1640 was then dequeued during cleanup. Neither PR
+merged or changed its head. The temporary ruleset and all three canary branches
+were removed, and the unchanged main source and ruleset were verified. See
 [the rollout handle](https://github.com/bsv-blockchain/ts-stack/discussions/1638).
 
 Complete the rollout in this order:
