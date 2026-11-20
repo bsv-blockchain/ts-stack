@@ -1,6 +1,6 @@
 import BigNumber from '@bsv/sdk/primitives/BigNumber'
 import * as Utils from '@bsv/sdk/primitives/utils'
-import { parsePlaintext, parsePoint33, point64, scalar32 } from '../encoding.js'
+import { isBytes, parsePlaintext, parsePoint33, point64, scalar32 } from '../encoding.js'
 
 const filled = (length: number, value: number): number[] => Array.from({ length }, () => value)
 const G33 = Utils.toArray(
@@ -78,5 +78,24 @@ describe('sigma encoding', () => {
       expect(() => parsePlaintext('or', bad)).toThrow()
     }
     expect(() => parsePlaintext('or', [3, 1, ...H33, ...H33, 9])).toThrow()
+  })
+
+  it('isBytes reads every index through the built-in iterator', () => {
+    expect(isBytes([0, 1, 255])).toBe(true)
+    expect(isBytes([])).toBe(true)
+    // A hole is not a byte.
+    // eslint-disable-next-line no-sparse-arrays -- the hole is the case under test.
+    expect(isBytes([1, , 3])).toBe(false)
+    // An iterator set on the array itself must not hide a non-byte element.
+    const disguised: number[] = [1, 256, 3]
+    Object.defineProperty(disguised, Symbol.iterator, {
+      value: function* () {
+        yield 1
+        yield 2
+        yield 3
+      }
+    })
+    expect([...disguised]).toEqual([1, 2, 3])
+    expect(isBytes(disguised)).toBe(false)
   })
 })

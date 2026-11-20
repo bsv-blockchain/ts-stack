@@ -13,11 +13,16 @@ const MAX_RING = 8
 const bytesToHex = (bytes: number[]): string =>
   bytes.map(b => b.toString(16).padStart(2, '0')).join('')
 
-/** True for an array whose every index holds an integer from 0 to 255. */
+const arrayValues = Array.prototype.values
+
+/**
+ * True for an array whose every index holds an integer from 0 to 255. Reads
+ * through the built-in array iterator, so holes count as non-bytes and an
+ * iterator the caller set on the array itself is ignored.
+ */
 export function isBytes(value: unknown): value is number[] {
   if (!Array.isArray(value)) return false
-  for (let i = 0; i < value.length; i++) {
-    const b: unknown = value[i]
+  for (const b of arrayValues.call(value) as IterableIterator<unknown>) {
     if (typeof b !== 'number' || !Number.isInteger(b) || b < 0 || b > 255) return false
   }
   return true

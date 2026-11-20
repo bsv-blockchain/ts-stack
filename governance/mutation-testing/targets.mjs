@@ -10912,7 +10912,7 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/wallet/sigma-permission-module/package.json',
       propertyTest:
         'packages/wallet/sigma-permission-module/src/__tests__/SigmaPermissionModule.property.test.ts',
-      mutate: ['src/SigmaPermissionModule.ts', 'src/encoding.ts', 'src/sigma.ts'],
+      mutate: ['src/SigmaPermissionModule.ts', 'src/grants.ts', 'src/encoding.ts', 'src/sigma.ts'],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
     },
     'chirp-codec': {
