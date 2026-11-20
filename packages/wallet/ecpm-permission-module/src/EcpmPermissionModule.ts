@@ -72,6 +72,7 @@ export class EcpmPermissionModule implements PermissionsModule {
   readonly #authorizationTTL: number
   readonly #grants = new Map<string, number>()
   readonly #pendingGrants = new Map<string, Promise<boolean>>()
+  #authorizationEpoch = 0
 
   constructor(options: EcpmPermissionModuleOptions) {
     const ownedOptions = dataRecord(options, 'ECPM options')
@@ -103,8 +104,9 @@ export class EcpmPermissionModule implements PermissionsModule {
     this.#authorizationTTL = authorizationTTL
   }
 
-  /** Clears cached and pending authorization state. */
+  /** Clears authorization state and invalidates in-flight requests. */
   dispose(): void {
+    this.#authorizationEpoch++
     this.#grants.clear()
     this.#pendingGrants.clear()
   }
@@ -128,9 +130,16 @@ export class EcpmPermissionModule implements PermissionsModule {
       throw new Error('ECPM: originator is invalid or too long')
     }
 
+    const authorizationEpoch = this.#authorizationEpoch
     const parsed = this.#parseRequest(ownedRequest.args as object)
     await this.#ensureAuthorized(parsed, ownedRequest.originator)
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
+    }
     const keyDeriver = await this.#selectKeyDeriver(parsed)
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
+    }
     const derivedKey = keyDeriver.derivePrivateKey(
       parsed.derivationProtocolID,
       parsed.keyID,
@@ -255,6 +264,7 @@ export class EcpmPermissionModule implements PermissionsModule {
   }
 
   async #ensureAuthorized(parsed: ParsedEcpmRequest, originator: string): Promise<void> {
+    const authorizationEpoch = this.#authorizationEpoch
     const authorization: EcpmAuthorizationRequest = {
       originator,
       securityLevel: parsed.derivationProtocolID[0],
@@ -305,6 +315,9 @@ export class EcpmPermissionModule implements PermissionsModule {
       approved = await pending
     } finally {
       if (this.#pendingGrants.get(scope) === pending) this.#pendingGrants.delete(scope)
+    }
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
     }
     if (approved !== true) throw new Error('ECPM: user denied permission')
     this.#grants.delete(scope)
