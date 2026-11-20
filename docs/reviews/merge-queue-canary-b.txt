@@ -1,0 +1,2 @@
+Temporary merge queue vendor canary B.
+This text-only change targets a disposable branch, never main.
