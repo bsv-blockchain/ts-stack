@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.7.1`: Accepts bounded canonical base64 PeerPay transactions and tightens payment and synchronization boundaries. Canonical PeerPay base64 transactions are accepted; noncanonical or oversized inputs remain rejected.
+
+
 - Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 ### 2.7.0 candidate — live socket reconnection, room restoration and reported status

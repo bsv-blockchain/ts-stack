@@ -3,10 +3,10 @@ id: pkg-group-messaging
 title: '@bsv/group-messaging'
 kind: package
 domain: messaging
-version: '0.1.0'
+version: '0.1.1'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/group-messaging'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/group-messaging'

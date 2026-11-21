@@ -1,6 +1,6 @@
 # @bsv/402-pay
 
-Patch candidate `0.3.5` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.3.6`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 [BRC-121](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) Simple 402 Payments -- server middleware and client for BSV micropayments over HTTP.
 
