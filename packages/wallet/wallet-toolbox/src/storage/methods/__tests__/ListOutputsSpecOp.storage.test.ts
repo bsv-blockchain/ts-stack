@@ -63,7 +63,7 @@ describe('invalid-change special-operation storage parity', () => {
   function setVerdicts(storage: StorageProvider, spentTxids: Set<string>): void {
     storage.setServices({
       hashOutputScript: () => 'aa'.repeat(32),
-      getUtxoStatus: async (_hash, _format, outpoint) => ({
+      getUtxoStatus: async (...[_hash, _format, outpoint]: Parameters<WalletServices['getUtxoStatus']>) => ({
         name: 'mock',
         status: 'success',
         details: [],
