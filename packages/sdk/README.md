@@ -367,6 +367,18 @@ await tx.broadcast()
 
 For a more detailed tutorial and advanced examples, check our [Documentation](#documentation).
 
+### Script ASM
+
+`Script.toASM()` includes the top-level `OP_RETURN` of a script read from
+bytes. Ordinary data pushes still use plain hex. For example,
+`OP_0 OP_RETURN 6869` encodes as `006a026869`.
+
+If ordinary ASM would lose bytes in the suffix, such as an incomplete push or
+a longer-than-needed push encoding, `toASM()` prints the entire suffix as a
+single final `0x<hex>` token immediately after the top-level `OP_RETURN`.
+`Script.fromASM('OP_0 OP_RETURN 0x02ab')` produces `006a02ab` byte for byte.
+The raw token requires a nonempty, even number of hex digits.
+
 ### Script verification
 
 `Spend` accepts explicit `verifyFlags` for applications that know the spending

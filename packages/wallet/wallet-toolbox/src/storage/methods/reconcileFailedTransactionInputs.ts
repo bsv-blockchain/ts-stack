@@ -408,13 +408,13 @@ export async function applyCapturedTerminalFailure(
 
 /** Replay only recorded terminal evidence, under the caller's actual user
  * writer. History chooses comparison data, never a SQL actor or primary grant. */
-export async function quarantineRecordedTerminalInputs(
+async function recordedTerminalInputs(
   req: EntityProvenTxReq,
   storage: StorageProvider,
   userId: number,
-  trx: sdk.TrxToken
-): Promise<void> {
-  if (!['invalid', 'doubleSpend'].includes(req.status)) return
+  trx?: sdk.TrxToken
+): Promise<LocalInput[]> {
+  if (!['invalid', 'doubleSpend'].includes(req.status)) return []
   const notes = req.history.notes ?? []
   if (
     notes.some(
@@ -423,8 +423,7 @@ export async function quarantineRecordedTerminalInputs(
         note.inputConflict === true
     )
   ) {
-    await quarantineReqInputs(req, storage, trx, undefined, userId, undefined, true)
-    return
+    return await findLocalInputs(req, storage, trx, userId)
   }
   const spent = new Set<string>()
   const parents = new Set<string>()
@@ -434,11 +433,30 @@ export async function quarantineRecordedTerminalInputs(
     if (note.what === 'proactiveFailedParentQuarantine' && typeof note.parentTxids === 'string')
       for (const txid of note.parentTxids.split(',')) if (/^[a-f0-9]{64}$/.test(txid)) parents.add(txid)
   }
-  if (spent.size) await quarantineReqInputs(req, storage, trx, undefined, userId, spent, true)
-  const failed: string[] = []
+  if (spent.size === 0 && parents.size === 0) return []
+  const failed = new Set<string>()
   for (const txid of parents) {
     const current = await storage.findProvenTxReqs({ partial: { txid }, trx })
-    if (current.some(parent => ['invalid', 'doubleSpend'].includes(parent.status))) failed.push(txid)
+    if (current.some(parent => ['invalid', 'doubleSpend'].includes(parent.status))) failed.add(txid)
   }
-  if (failed.length) await quarantineReqInputsFromFailedParents(req, failed, storage, trx, undefined, userId, true)
+  return (await findLocalInputs(req, storage, trx, userId)).filter(
+    ({ outpoint }) => spent.has(`${outpoint.txid}.${outpoint.vout}`) || failed.has(outpoint.txid)
+  )
+}
+
+export async function hasSpendableRecordedTerminalInputs(
+  req: EntityProvenTxReq,
+  storage: StorageProvider,
+  userId: number
+): Promise<boolean> {
+  return (await recordedTerminalInputs(req, storage, userId)).some(({ output }) => output.spendable)
+}
+
+export async function quarantineRecordedTerminalInputs(
+  req: EntityProvenTxReq,
+  storage: StorageProvider,
+  userId: number,
+  trx: sdk.TrxToken
+): Promise<void> {
+  await quarantineLocalInputs(await recordedTerminalInputs(req, storage, userId, trx), storage, trx, true)
 }

@@ -4,9 +4,9 @@ title: '@bsv/color-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/color-permission-module'
-version: '0.2.0'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+version: '0.2.2'
+last_updated: '2026-11-19'
+last_verified: '2026-11-19'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc207', 'brc162', 'tokens']
@@ -96,6 +96,8 @@ app-built transaction, after every token input is found admitted and unspent. A 
 for the transaction's token amounts; the module does not re-evaluate them. Reads
 (`p color assets` and balances) report wallet state alone and never query the
 overlay; spendability is checked only when spending.
+`p color assets` and the check of an app's explicit token inputs read every held
+token output in one listing; wallet-toolbox refuses that listing above 10,000 outputs.
 
 Derivative modules subclass `ColorPermissionModule`, whose members are
 `protected`, and use its exported evaluation helpers (`transactionTokens`,

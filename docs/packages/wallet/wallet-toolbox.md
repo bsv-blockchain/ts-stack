@@ -4,7 +4,7 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.17.0'
+version: '2.18.0'
 last_updated: '2026-11-13'
 last_verified: '2026-11-13'
 review_cadence_days: 30
@@ -173,6 +173,36 @@ only as a generic signal. Monitor and daemon startup await retryable ChainTracks
 subscriptions, teardown closes SSE/subscriptions before storage, persisted
 diagnostics are bounded, and monitor operational logging requires the additive
 `MonitorOptions.logging` callback.
+
+For fenced SQLite and MySQL stores, the multi-user Monitor reviews status and
+confirmed spends in physical keyset pages. It can correct an output only while
+its store holds the user's primary epoch. Passive copies follow their primary
+through normal synchronization. Recovery reopens an unchanged output only after
+a reorg invalidates its recorded spender and the canonical funding proof and
+positive outpoint check both pass. The receipt belongs to its SQL store. A
+handoff does not give another store authority to reopen the output from the flag
+alone.
+
+The normal Knex migration adds `monitor_checkpoints` and
+`monitor_confirmed_spends`. Each checkpoint replaces one row and each output
+has at most one live spend receipt. The Monitor reads earlier cursor events and
+imports receipts still eligible for recovery in bounded pages. Keep the legacy
+`ConfirmedOutputSpend` records through that import. Diagnostic log retention
+can then run separately from Monitor state. Keep both new tables for an
+application rollback and for whole-store backups.
+
+The default page sizes are 1,024 transaction rows and 32 proof rows. Tune
+`MonitorOptions.statusReviewPageSize` from 1 to 2,048 or
+`MonitorOptions.confirmedSpendReviewPageSize` from 1 to 128 for a store's
+capacity. At a five-second scheduler interval, a million proofs take about
+43 hours to sweep at 32 proofs per page before accounting for slow database
+work or unusually large transactions. Time budgets limit when a page starts
+another operation. The Monitor still waits for an operation already in progress
+and resumes from the durable cursor on the next tick.
+
+The default Arcade cursor is scoped to its endpoint and callback feed. A token
+change selects a fresh feed and starts from its beginning. Hosts that can prove
+feed continuity across a rotation can supply both cursor persistence hooks.
 
 An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
 argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it

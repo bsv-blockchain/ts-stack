@@ -1,4 +1,5 @@
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync, mapAwaitFromSync } from '../utility/promiseFromSync'
+import type { ValidateResolvedActionInput } from '../utility/adminOriginator'
 import type { PrimaryHandoffControl, PrimaryHandoffControlOptions } from './PrimaryHandoffControl'
 import type { ReqHistoryNote } from '../sdk/types'
 import { StorageReqWrite } from './StorageReqWrite'
@@ -169,7 +170,14 @@ type AbortActionStorageResult =
 const MAX_AUTH_PROOF_REQUEST_FALLBACK_ROWS = 10_000
 const MAX_AUTH_PROOF_REQUEST_TXIDS = 1_000
 
-import type { StorageActiveWrite, StorageStatusReviewArgs, StorageWriterAdmission } from './StorageActiveWrite'
+import type {
+  ConfirmedSpendCursor,
+  ConfirmedSpendPage,
+  ConfirmedSpendRecoveryPage,
+  StorageActiveWrite,
+  StorageStatusReviewArgs,
+  StorageWriterAdmission
+} from './StorageActiveWrite'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -181,6 +189,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   readonly actionBatchMaxReservedOutputs: number
   readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: WalletScriptVerifier
+  /** See StorageProviderOptions.refuseOfflineNosendAbort. */
+  readonly refuseOfflineNosendAbort: boolean
+  /**
+   * Optional host policy for each createAction input, run after the input's
+   * source output is resolved. See ValidateResolvedActionInput.
+   */
+  validateResolvedActionInput?: ValidateResolvedActionInput
 
   /**
    * Safe lower bound for the proof audit. Built-in providers return the minimum
@@ -230,6 +245,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.actionBatchMaxReservedOutputs = maxReservedOutputs
     this.managedChangePolicy = validateManagedChangePolicy(options.managedChangePolicy)
     this.scriptVerifier = options.scriptVerifier
+    this.refuseOfflineNosendAbort = options.refuseOfflineNosendAbort === true
   }
 
   /** @internal Capture once before preparation; supported providers fence each
@@ -975,12 +991,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const write = await this.activeWriteTransaction(auth)
     const userId = auth.userId
     let r: AbortActionStorageResult | undefined
+    let chainUnanswered = false
     for (let attempt = 0; attempt < 2; attempt++) {
       // IndexedDB write transactions can auto-commit while awaiting non-database
       // promises. Observe the chain before opening the write transaction, then
       // bind the observation to the exact row and txid re-read below.
       const preflight = await this.findAbortableTransaction(userId, args)
       const chainObservation = await this.observeAbortChainProtection(preflight.tx)
+      chainUnanswered = this.refuseOfflineNosendAbort && chainObservation?.serviceUnreachable === true
       r = await write.transaction(async trx => {
         const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
         if (tx.noSendExpiryState != null && auth.isActive !== true) {
@@ -1048,7 +1066,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         // and propagating in mempool returns 'known' (depth===0) and
         // protecting it avoids orphaning during the propagation window.
         //
-        // Service-unreachable handling: proceed with abort. Refusal is
+        // Service-unreachable handling: proceed with abort, unless the host
+        // set refuseOfflineNosendAbort, which asks the caller to retry. Refusal is
         // reserved for positive on-chain confirmation. When the network
         // confirmation pathway is itself unavailable (services throw or
         // gracefully return r.status !== 'success'), confirmation is not
@@ -1063,7 +1082,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           if (
             chainObservation == null ||
             chainObservation.transactionId !== tx.transactionId ||
-            chainObservation.txid !== tx.txid
+            chainObservation.txid !== tx.txid ||
+            (this.refuseOfflineNosendAbort && chainObservation.serviceUnreachable)
           ) {
             return { __abortAction: 'retry-chain-check' as const }
           }
@@ -1093,6 +1113,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (!('__abortAction' in r) || r.__abortAction !== 'retry-chain-check') break
     }
     if (r == null || ('__abortAction' in r && r.__abortAction === 'retry-chain-check')) {
+      if (chainUnanswered) {
+        throw new WERR_INVALID_OPERATION(
+          'The chain service did not answer, so this signed action may already be on chain; retry abortAction when it answers'
+        )
+      }
       throw new WERR_INVALID_OPERATION('Action changed while its chain status was being checked; retry abortAction')
     }
     if ('__abortAction' in r) {
@@ -1566,6 +1591,31 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return verifyOneOrNone(await this.findMonitorEvents({ partial: { id }, trx }))
   }
 
+  /** @internal Read newest first. Older providers use their existing local monitor records. */
+  async loadMonitorCheckpoint(event: string): Promise<string[]> {
+    return (await this.findMonitorEvents({ partial: { event }, orderDescending: true, paged: { limit: 5 } })).flatMap(
+      row => (row.details == null ? [] : [row.details])
+    )
+  }
+
+  /** @internal A checkpoint replaces its previous value on every successful commit. */
+  async saveMonitorCheckpoint(event: string, details: string): Promise<void> {
+    await this.transaction(async trx => {
+      const [previous] = await this.findMonitorEvents({
+        partial: { event },
+        orderDescending: true,
+        paged: { limit: 1 },
+        trx
+      })
+      const now = new Date()
+      if (previous == null) {
+        await this.insertMonitorEvent({ id: 0, event, details, created_at: now, updated_at: now }, trx)
+      } else if ((await this.updateMonitorEvent(previous.id, { details, updated_at: now }, trx)) !== 1) {
+        throw new WERR_INTERNAL('Monitor checkpoint disappeared before update')
+      }
+    })
+  }
+
   async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
     // Validate an existing reference, including historical types; acquisition remains strict.
     const write =
@@ -1841,9 +1891,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * This is called by TaskReviewStatus so a completed request with
    * `notified = false` is retried and can become eligible for normal purge.
    */
-  async reconcileCompletedProvenTxReqs(admission?: StorageWriterAdmission): Promise<{ log: string }> {
+  async reconcileCompletedProvenTxReqs(
+    admission?: StorageWriterAdmission,
+    page?: { after: number; limit: number; deadline: number }
+  ): Promise<{ log: string; after?: number; complete?: boolean }> {
     let log = ''
-    for await (const reqApi of this.completedProofRequests()) {
+    let after = page?.after ?? 0
+    let processed = 0
+    for await (const reqApi of this.completedProofRequests(after)) {
+      if (page != null && (processed >= page.limit || (processed > 0 && performance.now() >= page.deadline)))
+        return { log, after, complete: false }
+      after = reqApi.provenTxReqId
+      processed++
       const req = new EntityProvenTxReq(reqApi)
       if (req.provenTxId == null || req.provenTxId <= 0) {
         log += `completed req ${req.id} cannot reconcile without provenTxId\n`
@@ -1865,13 +1924,40 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (req.notified) log += `completed req ${req.id} transaction notifications reconciled\n`
     }
 
-    return { log }
+    return page == null ? { log } : { log, after, complete: true }
   }
 
   /** Older providers keep their existing serialized scan. SQL providers can
    * override with a metadata keyset, hydrating one bounded request at a time. */
-  protected async *completedProofRequests(): AsyncIterable<TableProvenTxReq> {
-    for (const req of await this.findProvenTxReqs({ partial: { status: 'completed', notified: false } })) yield req
+  protected async *completedProofRequests(after = 0): AsyncIterable<TableProvenTxReq> {
+    for (const req of await this.findProvenTxReqs({ partial: { status: 'completed', notified: false } }))
+      if (req.provenTxReqId > after) yield req
+  }
+
+  reviewConfirmedSpendPage(
+    _after: number,
+    _tipHeight: number,
+    _admission?: StorageWriterAdmission,
+    _partial?: ConfirmedSpendCursor,
+    _limit?: number
+  ): Promise<ConfirmedSpendPage | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  reviewConfirmedSpendRecoveries(
+    _after: number,
+    _admission?: StorageWriterAdmission,
+    _legacyAfter?: number | null
+  ): Promise<ConfirmedSpendRecoveryPage | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  /** Providers with indexed financial scopes can return a bounded repair page. */
+  reviewStatusPage(
+    _args: StorageStatusReviewArgs,
+    _after: number
+  ): Promise<{ log: string; after: number; complete: boolean; examined: number; failed: number } | undefined> {
+    return Promise.resolve(undefined)
   }
 
   private async prepareProofRecoveryOutputVerdicts(
@@ -2198,6 +2284,15 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * limit accepts -1 for an explicit operator-selected unlimited mode.
    */
   managedChangePolicy?: ManagedChangePolicyOptions
+  /**
+   * When true, abortAction refuses to invalidate a signed nosend transaction
+   * while the chain service gives no answer, and asks the caller to retry.
+   * Default false: the abort proceeds offline and writes an
+   * 'abortAction-offline-fallback' history note. A host that holds funds a
+   * wrong abort could strand (outputs of a transaction that is in fact on
+   * chain) can choose the refusal.
+   */
+  refuseOfflineNosendAbort?: boolean
 }
 
 export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel {

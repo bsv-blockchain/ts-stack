@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import {
   canonicalTestReference,
   collectExpectedCanonicalChunks
@@ -45,9 +46,7 @@ const MIN_PROPERTY_RUNS = 300
 fc.configureGlobal({
   numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
   seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
 
 const policy = {
@@ -400,41 +399,47 @@ test('pending export output settles before cancellation cleanup and source canno
   }
   expect(output.discarded).toBe(1)
 })
-test('generated bounded exports preserve independent codec bytes and reject corrupted complete tags', async () => {
-  const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
-  const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
-  const replayPath = process.env.FAST_CHECK_PATH
-  await fc.assert(
-    fc.asyncProperty(
-      fc.uint8Array({ maxLength: 2048 }),
-      fc.integer({ min: 1, max: 128 }),
-      fc.boolean(),
-      async (payload, width, corrupt) => {
-        const value = document()
-        value.sourceStorage.storageName = 'synthetic-' + Buffer.from(payload).toString('base64')
-        const output = stage()
-        await encryptBrc39StreamToQuarantine(plaintextSource(value, width), 'Cafe\u0301', output, {
-          ...options,
-          policy: { ...policy, maximumChunkBytes: width }
-        })
-        const file = new Uint8Array(Buffer.concat(output.parts))
-        if (corrupt) {
-          file[file.length - 1] ^= 1
-          await expect(decryptBRC39(file, 'Caf\u00e9')).rejects.toThrow()
-        } else expect(await decryptBRC39(file, 'Caf\u00e9')).toEqual(value)
-        expect(output.parts.every(part => part.length <= width)).toBe(true)
-        expect(output.discarded).toBe(0)
-      }
-    ),
-    {
-      numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(300, requestedRuns) : 300,
-      seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
-      ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {}),
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true
-    }
-  )
-}, 180000)
+
+const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
+const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
+const replayPath = process.env.FAST_CHECK_PATH
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(300, requestedRuns) : 300,
+    seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
+    ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+  })
+)(
+  'generated bounded exports preserve independent codec bytes and reject corrupted complete tags (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uint8Array({ maxLength: 2048 }),
+        fc.integer({ min: 1, max: 128 }),
+        fc.boolean(),
+        async (payload, width, corrupt) => {
+          const value = document()
+          value.sourceStorage.storageName = 'synthetic-' + Buffer.from(payload).toString('base64')
+          const output = stage()
+          await encryptBrc39StreamToQuarantine(plaintextSource(value, width), 'Cafe\u0301', output, {
+            ...options,
+            policy: { ...policy, maximumChunkBytes: width }
+          })
+          const file = new Uint8Array(Buffer.concat(output.parts))
+          if (corrupt) {
+            file[file.length - 1] ^= 1
+            await expect(decryptBRC39(file, 'Caf\u00e9')).rejects.toThrow()
+          } else expect(await decryptBRC39(file, 'Caf\u00e9')).toEqual(value)
+          expect(output.parts.every(part => part.length <= width)).toBe(true)
+          expect(output.discarded).toBe(0)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)
 test.each([1, 15, 16, 17, 31, 33, 65, 97, 128])(
   'bounded decrypt width %i authenticates before semantics and reports complete bytes',
   async width => {
