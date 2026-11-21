@@ -539,6 +539,35 @@ builder.addChangeOutput()  // Explicit self-derived change destination
 
 ---
 
+#### `tags()`
+
+Add tags to the current output. Tags let you find specific outputs within a basket with `wallet.listOutputs({ basket, tags })`. Repeated calls add to the existing tags; duplicates are dropped.
+
+```typescript
+tags(values: string[]): OutputBuilder
+```
+
+**Parameters:**
+- `values` - Non-empty array of non-empty tag strings
+
+**Returns:** `OutputBuilder` (same output, can chain more output methods)
+
+**Throws:** `Error` if values is not a non-empty array; `TypeError` if any tag is empty or not a string
+
+**Example:**
+```typescript
+// Mint a token you can look up later
+await new TransactionBuilder(wallet, 'Mint token')
+  .addP2PKHOutput({ satoshis: 1 })
+  .basket('tokens')
+  .tags(['token', 'gold'])
+  .build();
+
+const { outputs } = await wallet.listOutputs({ basket: 'tokens', tags: ['gold'] });
+```
+
+---
+
 #### `outputDescription()`
 
 Set or update the description for the current output.
@@ -739,6 +768,34 @@ builder.options({
   trustSelf: 'known',
   signAndProcess: true
 });
+```
+
+---
+
+#### `labels()`
+
+Add labels to the transaction (passed to `wallet.createAction()` as `labels`). Labels let you find and filter past transactions with `wallet.listActions({ labels })`. Repeated calls add to the existing labels; duplicates are dropped. Also callable from `OutputBuilder` and `InputBuilder`.
+
+```typescript
+labels(values: string[]): TransactionBuilder
+```
+
+**Parameters:**
+- `values` - Non-empty array of non-empty label strings
+
+**Returns:** `TransactionBuilder`
+
+**Throws:** `Error` if values is not a non-empty array; `TypeError` if any label is empty or not a string
+
+**Example:**
+```typescript
+await new TransactionBuilder(wallet, 'Treasury deposit')
+  .labels(['treasury', 'funds-received'])
+  .addP2PKHOutput({ satoshis: 5000 })
+  .basket('treasury')
+  .build();
+
+const { actions } = await wallet.listActions({ labels: ['funds-received'] });
 ```
 
 ---
