@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.18.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,17 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+## Broadcaster service errors
+
+The 2.18.1 source candidate scores broadcaster answers that judge nothing about
+the transaction as service errors: ARC HTTP 401 and 403 (a keyless request to
+the default arc.taal.com, or a refused key), WhatsOnChain 401, 403, 408,
+exhausted 429 and 5xx answers that relay no node refusal, and a Bitails per-
+transaction connection reset. Such a transaction now stays queued for retry or
+fails over instead of being marked invalid with its inputs released. No API,
+wire, configuration or schema migration is required. Source is not publication
+or deployment.
 
 ## Certificate pagination
 
