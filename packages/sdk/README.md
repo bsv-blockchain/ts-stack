@@ -8,6 +8,18 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## Plain HTTP 400 wallet errors (4.1.3 patch candidate)
+
+`HTTPWalletJSON` keeps the typed `isError` path for integer wallet-error codes,
+including `WERR_REVIEW_ACTIONS`. When a wallet answers HTTP 400 with a JSON
+object that has no `isError` property and a string `message` of at most 4096
+UTF-8 bytes, the thrown `Error` includes that message and `HTTP status 400`.
+A string `name` and `code` of at most 128 characters are copied onto the
+error, so `error.name === 'WERR_INSUFFICIENT_FUNDS'`
+matches the BSV Desktop body. Blank, non-string, or oversized messages stay on
+the generic status error. Other HTTP statuses do not copy the response body.
+No BRC-100 call or storage-schema migration is required.
+
 ## LocalKVStore removal (4.1.1 patch candidate)
 
 `LocalKVStore.remove` rejects if the wallet reports a positive `totalOutputs`
