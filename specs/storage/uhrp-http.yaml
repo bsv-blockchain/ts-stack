@@ -39,7 +39,8 @@ info:
 
     Source: /docs/BRCs/overlays/0026.md
   license:
-    name: Open BSV Licence
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 servers:
   - url: https://{host}

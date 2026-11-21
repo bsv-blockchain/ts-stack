@@ -3,7 +3,7 @@ import { Bitails } from '../Bitails'
 
 function rawTransaction(): { rawTx: string; txid: string } {
   const tx = new Transaction()
-  tx.addOutput({ satoshis: 1, lockingScript: new LockingScript([0x51]) })
+  tx.addOutput({ satoshis: 1, lockingScript: LockingScript.fromBinary([0x51]) })
   return { rawTx: tx.toHex(), txid: tx.id('hex') }
 }
 
@@ -18,8 +18,9 @@ describe('Bitails broadcast boundary', () => {
       }
     }
 
-    await expect(new Bitails('main', { httpClient, requestTimeoutMsecs: 25 }).postRaws([rawTx.toUpperCase()])).resolves
-      .toMatchObject({ status: 'success', txidResults: [{ txid, status: 'success' }] })
+    await expect(
+      new Bitails('main', { httpClient, requestTimeoutMsecs: 25 }).postRaws([rawTx.toUpperCase()])
+    ).resolves.toMatchObject({ status: 'success', txidResults: [{ txid, status: 'success' }] })
     expect(options?.data).toEqual({ raws: [rawTx] })
     expect(options?.signal).toBeInstanceOf(AbortSignal)
   })

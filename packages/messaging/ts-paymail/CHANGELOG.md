@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.5.1`: Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
+
 - Prepare `2.5.0`: add BRC-235 public profile lookup (`0ace65da5987`) and reverse lookup (`43dcf83ddc5f`) capabilities, routes, client methods and profile-certificate helpers. A host serving only these two routes advertises nothing else. No migration.
 
 - Prepare `2.4.12` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.

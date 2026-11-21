@@ -1,3 +1,4 @@
+import { awaitVoidFromSync } from '../../../utility/promiseFromSync'
 import { ProvenTxReqStatus, ProvenTxReqTerminalStatus, ReqHistoryNote } from '../../../sdk/types'
 import { TrxToken } from '../../../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
@@ -6,6 +7,34 @@ import { StorageProvider } from '../../StorageProvider'
 import { WalletStorageManager } from '../../WalletStorageManager'
 import { TableProvenTxReq, TableProvenTxReqDynamics } from '../tables/TableProvenTxReq'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
+
+/** Field selection only. Binary/TEXT may be separately retained descriptor
+ * DATA; this neither parses histories nor authenticates a source or pointer.
+ * Existing merge retains status/attempts/proof/payload fields and selects only
+ * batch plus the maximum timestamp before its separately prepared histories. */
+export type ProvenTxReqMergeRow<Binary, Text = string> = Omit<
+  TableProvenTxReq,
+  'rawTx' | 'inputBEEF' | 'history' | 'notify'
+> & {
+  rawTx: Binary
+  inputBEEF?: Binary
+  history: Text
+  notify: Text
+}
+export function planProvenTxReqMergeMetadata<Binary, Text = string>(
+  current: ProvenTxReqMergeRow<Binary, Text>,
+  incoming: ProvenTxReqMergeRow<Binary, Text>
+): ProvenTxReqMergeRow<Binary, Text> {
+  let batch = current.batch
+  if (!batch && incoming.batch) batch = incoming.batch
+  else if (batch && incoming.batch && batch !== incoming.batch)
+    throw new WERR_INTERNAL('ProvenTxReq merge batch not equal.')
+  return {
+    ...current,
+    batch,
+    updated_at: new Date(Math.max(incoming.updated_at.getTime(), current.updated_at.getTime()))
+  }
+}
 
 export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
   static readonly wasBroadcastStatuses: ProvenTxReqStatus[] = ['unmined', 'callback', 'unconfirmed', 'completed']
@@ -26,11 +55,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     return new EntityProvenTxReq(reqApi)
   }
 
-  static fromTxid(
-    txid: string,
-    rawTx: number[] | Uint8Array,
-    inputBEEF?: number[] | Uint8Array
-  ): EntityProvenTxReq {
+  static fromTxid(txid: string, rawTx: number[] | Uint8Array, inputBEEF?: number[] | Uint8Array): EntityProvenTxReq {
     const now = new Date()
     return new EntityProvenTxReq({
       provenTxReqId: 0,
@@ -329,9 +354,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       await sp.updateProvenTxReqDynamics(this.id, update, trx)
     } else {
       const wsm = storage as WalletStorageManager
-      await wsm.runAsStorageProvider(async sp => {
-        await sp.updateProvenTxReqDynamics(this.id, update, trx)
-      })
+      await wsm.runAsStorageProvider(sp => awaitVoidFromSync(() => sp.updateProvenTxReqDynamics(this.id, update, trx)))
     }
   }
 
@@ -626,15 +649,24 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
-    if (!this.batch && ei.batch) this.batch = ei.batch
-    else if (this.batch && ei.batch && this.batch !== ei.batch) {
-      throw new WERR_INTERNAL('ProvenTxReq merge batch not equal.')
-    }
+    const previousBatch = this.batch
+    const previousHistory = this.apiHistory
+    const previousNotify = this.apiNotify
+    const previousUpdatedAt = this.updated_at.getTime()
+    const metadata = planProvenTxReqMergeMetadata(this.api, ei)
+    this.batch = metadata.batch
 
     this.mergeHistory(ei, syncMap, true)
     this.mergeNotifyTransactionIds(ei, syncMap)
 
-    this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
+    this.updated_at = metadata.updated_at
+    if (
+      this.batch === previousBatch &&
+      this.apiHistory === previousHistory &&
+      this.apiNotify === previousNotify &&
+      this.updated_at.getTime() === previousUpdatedAt
+    )
+      return false
     await storage.updateProvenTxReq(this.id, this.toApi(), trx)
     return false
   }
