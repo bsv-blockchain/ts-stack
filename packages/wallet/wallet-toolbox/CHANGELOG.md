@@ -1,3 +1,16 @@
+# 2.18.1 source candidate
+
+- A sendMax (`maxPossibleSatoshis`) output is funded from unproven change when the
+  wallet's confirmed coins cannot pay the fee, as an ordinary payment is. Funding tries
+  confirmed coins first; with none, the sendMax output was reduced to minus the fee of a
+  transaction with no inputs, that plan counted as funded, and `createAction` failed in
+  the signer with "The o.satoshis parameter must be a valid number of satoshis".
+  `generateChangeSdk` now refuses a zero or negative sendMax adjustment with
+  `WERR_INSUFFICIENT_FUNDS`, which moves ordinary funding on to the next tier and makes an
+  action batch extend its reservation. No API, wire or schema migration. The ordinary
+  path runs in Storage, so a remote Storage server must be upgraded for it; the action
+  batch path is fixed by upgrading the wallet host.
+
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet

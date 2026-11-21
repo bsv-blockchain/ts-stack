@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.18.1'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -14,6 +14,13 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+## sendMax from unproven change
+
+The 2.18.1 source candidate lets a sendMax (`maxPossibleSatoshis`) `createAction`
+be funded from unproven change when the wallet holds no confirmed coins, instead
+of failing with an invalid output amount. No API, wire or schema migration is
+required. Source is not publication or deployment.
 
 ## Certificate pagination
 
