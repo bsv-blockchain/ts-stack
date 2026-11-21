@@ -334,7 +334,11 @@ describe('Wallet.acquireCertificate compatibility', () => {
     try {
       const args = issuanceArgs()
       const certificateFields = { name: 'encrypted-name' }
-      const configured = configure(wallet, args, certificateFields)
+      const configured: ReturnType<typeof configure> & { identity?: string; invalidHmac?: boolean } = configure(
+        wallet,
+        args,
+        certificateFields
+      )
       mockIssuanceDependencies(
         wallet,
         args,
@@ -419,7 +423,9 @@ function mockIssuanceDependencies(
     })
   )
   jest.mocked(sdk.verifyNonce).mockResolvedValue(true)
-  jest.spyOn(wallet, 'verifyHmac').mockResolvedValue({ valid: !invalidHmac })
+  jest
+    .spyOn(wallet, 'verifyHmac')
+    .mockResolvedValue({ valid: !invalidHmac } as Awaited<ReturnType<Wallet['verifyHmac']>>)
   jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(true)
   jest.spyOn(MasterCertificate, 'decryptFields').mockResolvedValue({
     ...certificateFields

@@ -27,6 +27,22 @@ tx.addOutput({
 })
 ```
 
+## Module compatibility
+
+Published 1.10.3 repairs CommonJS SDK import interop reported
+in [stack#571](https://github.com/bsv-blockchain/ts-stack/issues/571). Both
+`require('@bsv/templates')` and ESM imports construct and sign the same scripts;
+root and `@bsv/templates/MandalaToken.ts` exports retain their public shape.
+No API or script-encoding migration is required.
+
+The unpublished 1.10.4 candidate retains that runtime repair and adds the packed
+consumer-check command. `pnpm pack:check` runs synthetic signed spends from exact packed artifacts in
+clean CJS and ESM consumers with published SDK 2.8.0 and the candidate SDK.
+For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a local
+SDK 2.8.0 tarball. The check verifies the reviewed registry SHA-512 digest and
+installed version for either the downloaded or supplied artifact; resolver age
+policy and lifecycle-script restrictions stay unchanged.
+
 ## Current Templates
 
 | Name                                    | Description                                           |
@@ -38,6 +54,7 @@ tx.addOutput({
 | [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners       |
 | [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold             |
 | [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key     |
+| [R1Comb](./src/R1Comb.ts)               | Let any one of 1..5 P-256 hardware keys open a vault  |
 
 ### Signing trust boundary
 
@@ -261,6 +278,50 @@ does not display or independently validate the Bitcoin transaction. A PIN or
 touch policy protects key use, not transaction intent; review transactions on
 a trusted host before approving them.
 
+### R1C vault: `R1Comb`
+
+`R1Comb` (subpath `@bsv/templates/R1Comb.ts`, not in the root entry) is a
+1-of-N lock (N = 1..5) that any one committed P-256 key opens
+alone. It is the script of the BSV Wallet Vault, made for keys that sign P-256
+only, such as a YubiKey PIV slot. No key appears on the chain until it spends:
+the lock holds `HASH160(salt || combTable(key))` for each key, and the unlock
+reveals one comb table, the salt and a P-256 signature that the script checks
+in full over an OP_PUSH_TX sighash preimage.
+
+```ts
+import type { Transaction } from '@bsv/sdk'
+import * as R1Comb from '@bsv/templates/R1Comb.ts'
+
+declare const p256PublicKeysHex: string[] // 1..5 keys, 33- or 65-byte SEC1
+declare const saltHex64: string // 32 random bytes per output; keep it with the wallet
+declare const signWithYubiKeyPiv: (digestHex: string) => Promise<number[]> // DER ECDSA
+declare const tx: Transaction // version 1; input 0 spends the locked output
+declare const sourceSatoshis: number
+
+const keys = p256PublicKeysHex.map(k => R1Comb.compressPubkey(k))
+const lockingScript = R1Comb.buildLock({
+  commitments: keys.map(k => R1Comb.commitment(k, saltHex64)),
+  saltHex64
+})
+
+const preimage = R1Comb.sighashPreimage(tx, 0, sourceSatoshis)
+// Sign this 32-byte digest unchanged (PIV GENERAL AUTHENTICATE). Either DER S form is accepted.
+const derSig = await signWithYubiKeyPiv(R1Comb.signerDigest(preimage))
+const unlockingScript = R1Comb.buildUnlock({ preimage, derSig, pubkeyHex33: keys[0], saltHex64 })
+R1Comb.verifyVaultInput({ tx, inputIndex: 0, sourceSatoshis, lockingScript, unlockingScript })
+```
+
+- A lock is 45,199 bytes for one key and 45,175 + 25·N bytes for N = 2..5
+  (`R1C_LOCK_LEN`). An unlock is at most 2,560 bytes (`R1C_UNLOCK_LEN`).
+- The spending transaction must be version 1, and the signature scope is
+  `SIGHASH_ALL | FORKID`. `buildUnlock` refuses anything else.
+- Losing the salt makes the output unspendable: every key's commitment
+  includes it.
+- `verifyVaultInput` runs the SDK interpreter with `R1C_VERIFY_FLAGS`. Run it
+  on every input before broadcast.
+- The locks and unlocks are byte-identical to the Vault's. See
+  `test/vectors/r1comb/README.md`.
+
 ## Contribution Guidelines
 
 We're always looking for contributors to add the coolest new templates. Whatever kinds of scripts you come up with - all contributions are welcome.
@@ -286,8 +347,8 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).

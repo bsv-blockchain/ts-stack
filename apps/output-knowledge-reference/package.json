@@ -4,7 +4,7 @@
   "private": true,
   "author": "BSV Association",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && vite build --ssr src/proposalNodeServer.ts --outDir dist-proposals && node scripts/copy-notices.mjs",

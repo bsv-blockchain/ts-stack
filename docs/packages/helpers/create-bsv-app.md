@@ -4,8 +4,8 @@ title: 'create-bsv-app'
 kind: package
 domain: helpers
 version: '1.3.0'
-last_updated: '2026-11-02'
-last_verified: '2026-11-02'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/create-bsv-app'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app'
@@ -60,5 +60,5 @@ for the starter catalogue, modes, flags, merge rules, and security boundaries.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE).

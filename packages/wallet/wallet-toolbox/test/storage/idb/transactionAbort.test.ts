@@ -7,7 +7,7 @@ import 'fake-indexeddb/auto'
 describe('idb transactionAbort tests', () => {
   jest.setTimeout(99999999)
 
-  let storages: StorageProvider[] = []
+  let storages: StorageIdb[] = []
   const chain: sdk.Chain = 'test'
   const _env = _tu.getEnv(chain)
 
@@ -44,7 +44,7 @@ describe('idb transactionAbort tests', () => {
         expect(r).toEqual([1, 2])
       } catch (e) {
         aborted = true
-        logger('Transaction aborted', e?.['name'])
+        logger('Transaction aborted', typeof e === 'object' && e !== null && 'name' in e ? e.name : undefined)
       }
       expect(aborted).toBe(false)
       count = await storage.countProvenTxs({ partial: {} })
@@ -61,13 +61,13 @@ describe('idb transactionAbort tests', () => {
         const r = await storage.transaction(async tx => {
           const r12 = await _tu.insertTestProvenTx(storage, '12'.repeat(32), tx)
           const r23 = await _tu.insertTestProvenTx(storage, '23'.repeat(32), tx)
-          tx['abort']()
+          storage.toDbTrx([], 'readwrite', tx).abort()
           return [r12.provenTxId, r23.provenTxId]
         })
         expect(r).toEqual([1, 2])
       } catch (e) {
         aborted = true
-        logger('Transaction aborted', e?.['name'])
+        logger('Transaction aborted', typeof e === 'object' && e !== null && 'name' in e ? e.name : undefined)
       }
       expect(aborted).toBe(true)
       count = await storage.countProvenTxs({ partial: {} })
@@ -89,7 +89,7 @@ describe('idb transactionAbort tests', () => {
         expect(r).toEqual([1, 2])
       } catch (e) {
         aborted = true
-        logger('Transaction aborted', e?.['name'])
+        logger('Transaction aborted', typeof e === 'object' && e !== null && 'name' in e ? e.name : undefined)
       }
       expect(aborted).toBe(true)
       count = await storage.countProvenTxs({ partial: {} })

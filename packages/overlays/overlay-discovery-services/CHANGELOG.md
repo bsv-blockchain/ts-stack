@@ -1,5 +1,9 @@
 # CHANGELOG for `@bsv/overlay-discovery-services`
 
+## 2.2.7 (unreleased)
+
+- Refresh packed first-party dependency ranges for the next wallet interoperability release; no independent API migration.
+
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Table of Contents
@@ -8,6 +12,9 @@ All notable changes to this project will be documented in this file. The format 
 - [1.6.1 - 2026-02-05](#161---2026-02-05)
 
 ## [Unreleased]
+
+- Prepare `2.2.10`: Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
 
 - Prepare `2.2.9` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 

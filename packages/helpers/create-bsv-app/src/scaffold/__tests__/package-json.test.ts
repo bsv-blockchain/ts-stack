@@ -80,7 +80,7 @@ describe('a raise across a major version', () => {
     const wanted = {
       '@bsv/sdk': '^4.0.1',
       '@bsv/auth': '^0.1.8',
-      '@bsv/wallet-relay': '^0.7.0',
+      '@bsv/wallet-relay': '^0.8.0',
       '@bsv/wallet-helper': '^0.1.11'
     }
     const changes = mergePackageJsonDeps(dir, wanted)
