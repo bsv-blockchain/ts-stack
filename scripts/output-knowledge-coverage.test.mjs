@@ -13,7 +13,11 @@ const directory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
 const identity = { sha: 'a'.repeat(40), run: '1', attempt: '1', configuration: 'b'.repeat(64) }
-const expected = ['a', 'b', 'c', 'd', 'e', 'f'].map(name => `test/${name}.test.ts`)
+// One test file per shard, so every shard selects exactly one.
+const expected = Array.from(
+  { length: APPLICATION_COVERAGE_SHARDS },
+  (_, index) => `test/${String.fromCodePoint(97 + index)}.test.ts`
+)
 
 test('canonical path ordering retains deterministic code units and the original input array', () => {
   const input = ['é', 'a', '😀', 'A', '_', '-']

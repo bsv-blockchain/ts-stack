@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Prepare `0.1.1`: Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
+
 - Prepare `0.1.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 ### Added

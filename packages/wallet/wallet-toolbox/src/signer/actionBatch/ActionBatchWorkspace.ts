@@ -1,3 +1,4 @@
+import { awaitVoidFromSync, promiseFromSync, awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
@@ -167,7 +168,7 @@ class ActionBatchWorkspace {
       {
         length: capabilities.packedUploads == null ? 1 : Math.max(1, capabilities.maxConcurrentUploads)
       },
-      async () => {}
+      () => promiseFromSync(() => {})
     )
   }
 
@@ -363,25 +364,30 @@ class ActionBatchWorkspace {
     })
   }
 
-  private async extend(
+  private extend(
     targetSatoshis: number,
     requestedOutputs: number,
     explicitOutpoints: Array<{ txid: string; vout: number }>,
     includeSourceTransactions: boolean
   ): Promise<{ outputCount: number; satoshis: number }> {
-    const extension = await this.wallet.storage.extendActionBatch({
-      batchId: this.batchId,
-      targetSatoshis: Math.max(1, Math.ceil(targetSatoshis)),
-      requestedOutputs: Math.max(1, Math.ceil(requestedOutputs)),
-      explicitOutpoints,
-      includeSourceTransactions
-    })
-    this.mergeExtension(extension)
-    this.expiresAt = Date.parse(extension.expiresAt)
-    return {
-      outputCount: extension.reservedOutputs.length,
-      satoshis: extension.reservedOutputs.reduce((sum, output) => sum + output.satoshis, 0)
-    }
+    return mapAwaitFromSync(
+      () =>
+        this.wallet.storage.extendActionBatch({
+          batchId: this.batchId,
+          targetSatoshis: Math.max(1, Math.ceil(targetSatoshis)),
+          requestedOutputs: Math.max(1, Math.ceil(requestedOutputs)),
+          explicitOutpoints,
+          includeSourceTransactions
+        }),
+      extension => {
+        this.mergeExtension(extension)
+        this.expiresAt = Date.parse(extension.expiresAt)
+        return {
+          outputCount: extension.reservedOutputs.length,
+          satoshis: extension.reservedOutputs.reduce((sum, output) => sum + output.satoshis, 0)
+        }
+      }
+    )
   }
 
   async resume(): Promise<void> {
@@ -596,15 +602,17 @@ class ActionBatchWorkspace {
     if (packed == null || items.length === 0) return
     const lane = this.eagerUploadCursor++ % this.eagerUploadLanes.length
     this.eagerUploadLanes[lane] = this.eagerUploadLanes[lane]
-      .then(async () => {
-        await this.wallet.storage.putActionBatchPack({
-          batchId: this.batchId,
-          items,
-          maxPackBytes: packed.maxPackBytes,
-          maxItems: packed.maxItems,
-          preferredEncodings: packed.encodings
-        })
-      })
+      .then(() =>
+        awaitVoidFromSync(() =>
+          this.wallet.storage.putActionBatchPack({
+            batchId: this.batchId,
+            items,
+            maxPackBytes: packed.maxPackBytes,
+            maxItems: packed.maxItems,
+            preferredEncodings: packed.encodings
+          })
+        )
+      )
       .catch(() => {
         // Eager upload is speculative. Prepare remains the source of truth:
         // anything this attempt did not persist is reported missing and
@@ -612,8 +620,8 @@ class ActionBatchWorkspace {
       })
   }
 
-  private async awaitEagerUploads(): Promise<void> {
-    await Promise.all(this.eagerUploadLanes)
+  private awaitEagerUploads(): Promise<void> {
+    return awaitVoidFromSync(() => Promise.all(this.eagerUploadLanes))
   }
 
   private flushEagerPacks(final: boolean): void {
@@ -924,13 +932,15 @@ export class ActionBatchController {
     return this.workspace?.overlayListOutputs(persisted, args) ?? persisted
   }
 
-  private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
-    const run = this.serial.then(operation)
-    this.serial = run.then(
-      () => {},
-      () => {}
-    )
-    return await run
+  private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    return awaitFromSync(() => {
+      const run = this.serial.then(operation)
+      this.serial = run.then(
+        () => {},
+        () => {}
+      )
+      return run
+    })
   }
 
   private async negotiate(): Promise<StorageCapabilities['actionBatch'] | undefined> {
@@ -958,9 +968,13 @@ export class ActionBatchController {
     return this.workspace
   }
 
-  private async retire(workspace: ActionBatchWorkspace): Promise<void> {
-    await workspace.abort().catch(() => undefined)
-    if (this.workspace === workspace) this.workspace = undefined
+  private retire(workspace: ActionBatchWorkspace): Promise<void> {
+    return mapAwaitFromSync(
+      () => workspace.abort().catch(() => undefined),
+      () => {
+        if (this.workspace === workspace) this.workspace = undefined
+      }
+    )
   }
 
   private async recover(
@@ -999,73 +1013,77 @@ export class ActionBatchController {
     }
   }
 
-  async plan(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
-    return await this.runExclusive(async () => {
-      if (!args.isNewTx) return undefined
-      const workspace = this.workspace
-      if (workspace != null) {
-        // Workspace membership is an explicit transaction-graph relationship.
-        // Time adjacency, a shared Wallet instance, or a shared originator are
-        // not sufficient: unrelated work must remain on the legacy path.
-        if (!workspace.references(args)) return undefined
-        return await this.recover(workspace, args)
-      }
-      if (!args.isNoSend) return undefined
-      let begun: ActionBatchWorkspace | undefined
-      try {
-        begun = await this.begin(args)
-      } catch (error) {
-        // The reservation ceiling bounds the optimization, not the public
-        // createAction contract. A first action that cannot fit must retain
-        // the pre-batch persistence path.
-        if (isActionBatchCapacityError(error)) return undefined
-        throw error
-      }
-      if (begun == null) return undefined
-      try {
-        return await begun.plan(args)
-      } catch (error) {
-        await this.retire(begun)
-        if (isActionBatchCapacityError(error)) return undefined
-        throw error
-      }
+  plan(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
+    return awaitFromSync(() => {
+      return this.runExclusive(async () => {
+        if (!args.isNewTx) return undefined
+        const workspace = this.workspace
+        if (workspace != null) {
+          // Workspace membership is an explicit transaction-graph relationship.
+          // Time adjacency, a shared Wallet instance, or a shared originator are
+          // not sufficient: unrelated work must remain on the legacy path.
+          if (!workspace.references(args)) return undefined
+          return await this.recover(workspace, args)
+        }
+        if (!args.isNoSend) return undefined
+        let begun: ActionBatchWorkspace | undefined
+        try {
+          begun = await this.begin(args)
+        } catch (error) {
+          // The reservation ceiling bounds the optimization, not the public
+          // createAction contract. A first action that cannot fit must retain
+          // the pre-batch persistence path.
+          if (isActionBatchCapacityError(error)) return undefined
+          throw error
+        }
+        if (begun == null) return undefined
+        try {
+          return await begun.plan(args)
+        } catch (error) {
+          await this.retire(begun)
+          if (isActionBatchCapacityError(error)) return undefined
+          throw error
+        }
+      })
     })
   }
 
-  async process(
+  process(
     prior: PendingSignAction | undefined,
     args: ValidProcessActionArgs
   ): Promise<StorageProcessActionResults | undefined> {
-    return await this.runExclusive(async () => {
-      const workspace = this.workspace
-      if (workspace == null) return undefined
-      if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
-      if (prior == null && !workspace.referencesSendWith(args.options.sendWith)) return undefined
-      if (prior != null) workspace.stage(prior, args)
-      const referencesWorkspace = workspace.referencesSendWith(args.options.sendWith)
-      if (prior != null && args.isNoSend && args.isSendWith && !referencesWorkspace) {
-        // The new action belongs to the workspace, but its explicit sendWith
-        // list does not. Preserve the staged action and fulfill the unrelated
-        // broadcast through the ordinary path; returning an empty result here
-        // would silently drop an explicit caller request.
-        return await this.wallet.storage.processAction({
-          isNewTx: false,
-          isSendWith: true,
-          isNoSend: false,
-          isDelayed: args.isDelayed,
-          sendWith: [...args.options.sendWith],
-          logger: args.logger
-        })
-      }
-      const shouldCommit = referencesWorkspace || (prior != null && !args.isNoSend)
-      if (!shouldCommit) return { sendWithResults: [] }
-      const sendWith = [...args.options.sendWith]
-      if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) {
-        sendWith.push(prior.tx.id('hex'))
-      }
-      const result = await this.recover(workspace, sendWith, args.isDelayed)
-      this.workspace = undefined
-      return result
+    return awaitFromSync(() => {
+      return this.runExclusive(async () => {
+        const workspace = this.workspace
+        if (workspace == null) return undefined
+        if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
+        if (prior == null && !workspace.referencesSendWith(args.options.sendWith)) return undefined
+        if (prior != null) workspace.stage(prior, args)
+        const referencesWorkspace = workspace.referencesSendWith(args.options.sendWith)
+        if (prior != null && args.isNoSend && args.isSendWith && !referencesWorkspace) {
+          // The new action belongs to the workspace, but its explicit sendWith
+          // list does not. Preserve the staged action and fulfill the unrelated
+          // broadcast through the ordinary path; returning an empty result here
+          // would silently drop an explicit caller request.
+          return await this.wallet.storage.processAction({
+            isNewTx: false,
+            isSendWith: true,
+            isNoSend: false,
+            isDelayed: args.isDelayed,
+            sendWith: [...args.options.sendWith],
+            logger: args.logger
+          })
+        }
+        const shouldCommit = referencesWorkspace || (prior != null && !args.isNoSend)
+        if (!shouldCommit) return { sendWithResults: [] }
+        const sendWith = [...args.options.sendWith]
+        if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) {
+          sendWith.push(prior.tx.id('hex'))
+        }
+        const result = await this.recover(workspace, sendWith, args.isDelayed)
+        this.workspace = undefined
+        return result
+      })
     })
   }
 
@@ -1073,26 +1091,30 @@ export class ActionBatchController {
     return this.workspace?.ownsReference(reference) ?? false
   }
 
-  async abort(): Promise<boolean> {
-    return await this.runExclusive(async () => {
-      if (this.workspace == null) return false
-      await this.workspace.abort()
-      this.workspace = undefined
-      return true
+  abort(): Promise<boolean> {
+    return awaitFromSync(() => {
+      return this.runExclusive(async () => {
+        if (this.workspace == null) return false
+        await this.workspace.abort()
+        this.workspace = undefined
+        return true
+      })
     })
   }
 
-  async abortAction(referenceOrTxid: string): Promise<boolean> {
-    return await this.runExclusive(async () => {
-      const workspace = this.workspace
-      if (workspace == null) return false
-      const aborted = workspace.abortAction(referenceOrTxid)
-      if (!aborted) return false
-      if (workspace.isEmpty) {
-        await workspace.abort()
-        this.workspace = undefined
-      }
-      return true
+  abortAction(referenceOrTxid: string): Promise<boolean> {
+    return awaitFromSync(() => {
+      return this.runExclusive(async () => {
+        const workspace = this.workspace
+        if (workspace == null) return false
+        const aborted = workspace.abortAction(referenceOrTxid)
+        if (!aborted) return false
+        if (workspace.isEmpty) {
+          await workspace.abort()
+          this.workspace = undefined
+        }
+        return true
+      })
     })
   }
 }

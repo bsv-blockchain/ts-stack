@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { Beef, MerklePath } from '@bsv/sdk'
 import {
@@ -15,33 +16,38 @@ fc.configureGlobal({
   ...(Number.isSafeInteger(seed) ? { seed } : {}),
   ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
-it('preserves every selected raw subject and parent under 300 plain/Atomic/current-leaf serialization and byte-budget histories', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.nat(2147483647),
-      fc.boolean(),
-      fc.boolean(),
-      fc.integer({ min: 0, max: 3 }),
-      async (lockTime, plain, leaf, cut) => {
-        const f = retainedBeefFixture(lockTime),
-          input = plain ? Beef.fromBinary(f.bytes).toBinary() : f.bytes,
-          config = { maximumBytes: cut === 1 ? input.length - 1 : 4194304 }
-        let subject = f.txid
-        if (cut === 2) subject = plain ? 'aa'.repeat(32) : f.parent.id('hex')
-        if (cut === 1 || cut === 2)
-          expect(() => retainTransactionBEEF(input, subject, config)).toThrow()
-        else {
-          const saved = retainTransactionBEEF(input, subject, config)
-          if (cut === 3)
-            expect(() => hydrateRetainedTransactionBEEF(saved, subject, f.parent, config)).toThrow(
-              'subject differs'
-            )
-          else assertRestored(f, saved, leaf, config)
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'preserves every selected raw subject and parent under 300 plain/Atomic/current-leaf serialization and byte-budget histories (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.nat(2147483647),
+        fc.boolean(),
+        fc.boolean(),
+        fc.integer({ min: 0, max: 3 }),
+        async (lockTime, plain, leaf, cut) => {
+          const f = retainedBeefFixture(lockTime),
+            input = plain ? Beef.fromBinary(f.bytes).toBinary() : f.bytes,
+            config = { maximumBytes: cut === 1 ? input.length - 1 : 4194304 }
+          let subject = f.txid
+          if (cut === 2) subject = plain ? 'aa'.repeat(32) : f.parent.id('hex')
+          if (cut === 1 || cut === 2)
+            expect(() => retainTransactionBEEF(input, subject, config)).toThrow()
+          else {
+            const saved = retainTransactionBEEF(input, subject, config)
+            if (cut === 3)
+              expect(() =>
+                hydrateRetainedTransactionBEEF(saved, subject, f.parent, config)
+              ).toThrow('subject differs')
+            else assertRestored(f, saved, leaf, config)
+          }
         }
-      }
+      ),
+      propertyBatch
     )
-  )
-}, 150000)
+  },
+  150000
+)
 function assertRestored(
   f: ReturnType<typeof retainedBeefFixture>,
   saved: number[],
