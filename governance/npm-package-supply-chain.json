@@ -55,7 +55,7 @@
   },
   "licensePolicy": {
     "requireDeclaredLicense": true,
-    "internalLicense": "Open BSV License Version 6",
+    "internalLicense": "Apache-2.0",
     "denied": [
       {
         "pattern": "(^|[^A-Z])AGPL(?:-|$)",

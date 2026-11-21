@@ -218,7 +218,7 @@ Generated with `pnpm doc` (ts2md): [client entry](./docs/client.md) (`@bsv/eqc`)
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0 — see [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

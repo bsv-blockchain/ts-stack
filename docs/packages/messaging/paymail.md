@@ -3,10 +3,10 @@ id: pkg-paymail
 title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: '2.5.0'
+version: '2.5.1'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-29'
-last_verified: '2026-10-29'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/paymail'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail'

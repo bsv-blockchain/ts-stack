@@ -28,7 +28,8 @@ info:
     Source of truth: /go/merkle-service/docs/api.md
     Implementation:  /go/merkle-service/cmd/api-server/main.go
   license:
-    name: Open BSV Licence
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 servers:
   - url: http://{host}:{port}

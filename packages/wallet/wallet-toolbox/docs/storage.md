@@ -2730,7 +2730,7 @@ paymentReplayStore?: PaymentReplayStore
 
 ###### Property preAuthRateLimit
 
-Pre-authentication IP rate limiting. Defaults to 300 requests per minute.
+Pre-authentication IP rate limiting. Defaults to 3,000 requests per minute.
 Use a shared store when multiple server processes or replicas must enforce
 one aggregate limit.
 
