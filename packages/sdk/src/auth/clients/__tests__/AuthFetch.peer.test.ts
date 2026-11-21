@@ -220,9 +220,19 @@ describe('AuthFetch authenticated peer lifecycle', () => {
     )
     expect(sendCertificateResponse).toHaveBeenCalledWith('server-identity-key', [certificateToSend])
 
+    // Holding no requested certificate is answered with an empty list, so the server can
+    // decide now rather than at its certificate deadline.
     getVerifiableCertificatesMock.mockResolvedValue([])
     await certificatesRequested?.('server-identity-key', requestedCertificates)
-    expect(sendCertificateResponse).toHaveBeenCalledTimes(1)
+    expect(sendCertificateResponse).toHaveBeenCalledTimes(2)
+    expect(sendCertificateResponse).toHaveBeenLastCalledWith('server-identity-key', [])
+
+    // A wallet error or declined disclosure is not "no certificates": nothing is sent.
+    getVerifiableCertificatesMock.mockRejectedValue(new Error('user declined disclosure'))
+    await expect(
+      certificatesRequested?.('server-identity-key', requestedCertificates)
+    ).rejects.toThrow('user declined disclosure')
+    expect(sendCertificateResponse).toHaveBeenCalledTimes(2)
     expect(authFetch.peers['https://service.example'].pendingCertificateRequests).toEqual([])
   })
 
