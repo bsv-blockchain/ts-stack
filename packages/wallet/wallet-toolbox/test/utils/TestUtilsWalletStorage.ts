@@ -1,3 +1,5 @@
+import { promiseFromSync } from '../../src/utility/promiseFromSync'
+import type { WalletScriptVerifier } from '../../src/sdk/WalletScriptVerifier'
 import * as dotenv from 'dotenv'
 import path from 'node:path'
 import { promises as fsp } from 'node:fs'
@@ -5,6 +7,7 @@ import { Knex, knex as makeKnex } from 'knex'
 import {
   Beef,
   CachedKeyDeriver,
+  type ChainTracker,
   CreateActionArgs,
   CreateActionOutput,
   CreateActionResult,
@@ -18,7 +21,6 @@ import {
   SignActionResult,
   Transaction,
   type TelemetryConfig,
-  type SpendVerifierInterface,
   Utils,
   WalletAction,
   WalletActionInput,
@@ -316,7 +318,7 @@ export abstract class TestUtilsWalletStorage {
     privKeyHex?: string
     actionBatchMode?: ActionBatchMode
     telemetry?: TelemetryConfig
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     args.rootKeyHex ||= '1'.repeat(64)
@@ -415,7 +417,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
     actionBatchMode?: ActionBatchMode
     telemetry?: TelemetryConfig
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     const wo = await _tu.createWalletOnly({
@@ -1114,7 +1116,7 @@ export abstract class TestUtilsWalletStorage {
         let wrapperFunction = (...args: unknown[]) => {
           let callbackFnIndex = -1
           let startTime = Date.now()
-          const _callBack = args.find((arg, i) => {
+          const _callBack = args.find((arg, i): arg is (...values: unknown[]) => unknown => {
             const _isFunction = typeof arg === 'function'
             if (_isFunction) {
               callbackFnIndex = i
@@ -1124,7 +1126,12 @@ export abstract class TestUtilsWalletStorage {
           if (_callBack) {
             let callbackWrapper = (...callbackArgs: unknown[]) => {
               let endTime = Date.now()
-              _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+              _notifyPerformance({
+                functionName: `${objectName}.${fName}`,
+                args,
+                startTime,
+                endTime
+              })
               _callBack(...callbackArgs)
             }
             args[callbackFnIndex] = callbackWrapper
@@ -1138,12 +1145,22 @@ export abstract class TestUtilsWalletStorage {
             return (originalReturnObject as Promise<unknown>)
               .then((resolveArgs: unknown) => {
                 let endTime = Date.now()
-                _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+                _notifyPerformance({
+                  functionName: `${objectName}.${fName}`,
+                  args,
+                  startTime,
+                  endTime
+                })
                 return resolveArgs
               })
               .catch((error: unknown) => {
                 let endTime = Date.now()
-                _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+                _notifyPerformance({
+                  functionName: `${objectName}.${fName}`,
+                  args,
+                  startTime,
+                  endTime
+                })
                 throw error
               })
           }
@@ -1153,7 +1170,7 @@ export abstract class TestUtilsWalletStorage {
           }
           return originalReturnObject
         }
-        obj[fName] = wrapperFunction
+        ;(obj as Record<string, unknown>)[fName] = wrapperFunction
       }
 
       return obj
@@ -1655,6 +1672,62 @@ export abstract class TestUtilsWalletStorage {
     return mockData
   }
 
+  /** Explicit offline authority for the pinned legacy test wallet only. It
+   * accepts exact fixture height/root pairs, never arbitrary supplied proofs.
+   * Callers separately supply any authored monitor block headers. */
+  static async installOfflineLegacyChainTracker(
+    ctx: TestWalletNoSetup,
+    headers: ReadonlyArray<{ height: number; merkleRoot: string }> = []
+  ): Promise<ChainTracker> {
+    if (
+      ctx.chain !== 'test' ||
+      ctx.identityKey !== '03ac2d10bdb0023f4145cc2eba2fcd2ad3070cb2107b0b48170c46a9440e4cc3fe'
+    )
+      throw new Error('Offline legacy authority requires its exact pinned test profile')
+    const stored: Array<{ height: number; merkleRoot: string }> = await ctx.activeStorage
+      .knex('proven_txs')
+      .select('height', 'merkleRoot')
+      .limit(4097)
+    if (stored.length === 0 || stored.length > 4096 || headers.length > 64)
+      throw new Error('Offline legacy authority exceeds its fixture inventory')
+    const roots = new Set<string>()
+    let currentHeight = 0
+    for (const { height, merkleRoot } of [...stored, ...headers]) {
+      if (!Number.isSafeInteger(height) || height < 1 || !/^[0-9a-fA-F]{64}$/.test(merkleRoot))
+        throw new Error('Invalid offline legacy chain fixture')
+      roots.add(`${String(height)}:${merkleRoot.toLowerCase()}`)
+      currentHeight = Math.max(currentHeight, height)
+    }
+    const tracker: ChainTracker = {
+      isValidRootForHeight(root, height, signal) {
+        return promiseFromSync(() => {
+          signal?.throwIfAborted()
+          return roots.has(`${String(height)}:${root.toLowerCase()}`)
+        })
+      },
+      currentHeight(signal) {
+        return promiseFromSync(() => {
+          signal?.throwIfAborted()
+          return currentHeight
+        })
+      }
+    }
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(tracker)
+    jest.spyOn(ctx.services, 'getHeight').mockResolvedValue(currentHeight)
+    // Monitor proof processing receives its configured Chaintracks directly,
+    // independently of Services.getChainTracker. Bind both authority paths.
+    for (const authority of new Set([ctx.monitor.chaintracks, ctx.monitor.chaintracksWithEvents])) {
+      if (authority === undefined) continue
+      jest
+        .spyOn(authority, 'isValidRootForHeight')
+        .mockImplementation((root, height) => tracker.isValidRootForHeight(root, height))
+      jest.spyOn(authority, 'currentHeight').mockResolvedValue(currentHeight)
+    }
+
+    jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
+    return tracker
+  }
+
   static mockPostServicesAsSuccess(ctxs: TestWalletOnly[]): void {
     mockPostServices(ctxs, 'success')
   }
@@ -2132,7 +2205,11 @@ function mockPostServices(
       const r: PostBeefResult = {
         name: 'mock',
         status: 'success',
-        txidResults: txids.map(txid => ({ txid, status, ...(status === 'error' ? { serviceError: true } : {}) }))
+        txidResults: txids.map(txid => ({
+          txid,
+          status,
+          ...(status === 'error' ? { serviceError: true } : {})
+        }))
       }
       return Promise.resolve([r])
     })

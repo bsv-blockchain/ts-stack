@@ -1,9 +1,9 @@
 {
   "name": "@bsv/output-knowledge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Durable BRC-192 application output knowledge and interchangeable source adapters",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -205,7 +205,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt",
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
@@ -231,7 +233,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.8",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.76.0",

@@ -3,8 +3,8 @@ id: wallet-backup-recovery
 title: 'Wallet Backup and Recovery'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, recovery, brc100, brc38, brc39]
@@ -121,11 +121,32 @@ records. Storage operators should also use the
 
 ## Make recovery understandable in the product
 
+For device-based backups, expose the available source devices and retained
+generations, their recovery points, and whether each initial copy completed.
+A newly registered empty device can have the newest timestamp. Do not treat
+that timestamp, a matching identity or a zero balance as proof that it is the
+right recovery source. Keep older known-good copies reachable, and provide a
+supported way to select one when automatic recovery cannot establish coverage.
+If the backup protocol combines histories from several devices, qualify that
+replay and its conflict rules; do not improvise a database merge in the UI.
+
+Complete source selection and validate the recovered inventory before starting
+the new installation's backup writers. Test two successive reinstalls, including
+a newer empty or incomplete device alongside an older complete backup. A single
+successful reinstall does not establish this behavior. These device/generation
+controls belong to the wallet host's backup system; the BRC-39 file helpers do
+not discover remote backups or choose a source device.
+
 Present separate statuses for key recovery and wallet-data backup. Show the
 selected profile/network, last completed export or backup time, last successful
 restore test, and any records created since the recovery point. Do not mark a
 wallet “fully backed up” merely because a seed was displayed, a download was
 started, or a remote replica is reachable.
+
+After a receive, show whether its transaction and derivation records are covered
+by an acknowledged retained recovery point. An on-chain confirmation alone does
+not establish that those records survived elsewhere. Keep pending or failed
+backup status visible before users uninstall or replace a device.
 
 Suggested wording to adapt to the product's verified behavior:
 

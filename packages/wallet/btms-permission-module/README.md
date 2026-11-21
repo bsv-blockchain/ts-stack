@@ -1,6 +1,6 @@
 # @bsv/btms-permission-module
 
-Patch candidate `1.2.4` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `1.2.5`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 Framework-agnostic wallet permission checks for BTMS token access, transfers,
 and burns.
@@ -148,7 +148,7 @@ exports, dependency installation, and strict type resolution.
 
 ## License
 
-Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

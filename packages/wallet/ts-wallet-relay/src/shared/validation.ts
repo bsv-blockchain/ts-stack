@@ -391,6 +391,19 @@ export function validateSessionInfo(
       'session response backendIdentityKey'
     )
   }
+  if (record.topic !== undefined) {
+    result.topic = requirePairingTopic(record.topic, 'session response topic')
+  }
+  if (record.protocolID !== undefined) {
+    const protocolID = requireBoundedString(
+      record.protocolID,
+      'session response protocolID',
+      1,
+      512
+    )
+    requireProtocolId(protocolID, 'session response protocolID')
+    result.protocolID = protocolID
+  }
   if (record.qrDataUrl !== undefined) {
     result.qrDataUrl = requireQrDataUrl(record.qrDataUrl, 'session QR data URL')
   }

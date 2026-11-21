@@ -32,7 +32,9 @@ describe('CWI wallet proxy and UMP failure paths', () => {
   ] as const
 
   function manager(authenticated = true) {
-    const underlying = Object.fromEntries(proxyMethods.map(method => [method, jest.fn(async () => ({ method }))]))
+    const underlying: Record<string, jest.Mock<Promise<unknown>, []>> = Object.fromEntries(
+      proxyMethods.map(method => [method, jest.fn(async () => ({ method }))])
+    )
     underlying.waitForAuthentication = jest.fn(async () => ({ authenticated: true }))
     const subject = Object.create(CWIStyleWalletManager.prototype) as CWIStyleWalletManager
     Object.assign(subject as any, {

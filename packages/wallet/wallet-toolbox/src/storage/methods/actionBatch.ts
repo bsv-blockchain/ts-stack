@@ -1,3 +1,6 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
+import { WalletError } from '../../sdk/WalletError'
+import type { StorageActiveWrite, StorageWriterAdmission } from '../StorageActiveWrite'
 import { type ValidCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, Script } from '@bsv/sdk'
 import {
@@ -149,17 +152,43 @@ async function releaseBatchState(
   )
 }
 
-export async function cleanupExpiredActionBatches(storage: StorageProvider): Promise<number> {
+export async function cleanupExpiredActionBatches(
+  storage: StorageProvider,
+  admission?: StorageWriterAdmission
+): Promise<number> {
   const now = new Date()
-  const expired = await storage.findExpiredActionBatches(now)
+  const expired =
+    typeof storage.expiredActionBatchCandidates === 'function'
+      ? storage.expiredActionBatchCandidates(now)
+      : (async function* () {
+          yield* await storage.findExpiredActionBatches(now)
+        })()
+  const fenced =
+    typeof storage.supportsPrimaryWriteFences === 'function' && (await storage.supportsPrimaryWriteFences())
   let released = 0
-  for (const batch of expired) {
-    await storage.transaction(async trx => {
-      const current = await storage.findActionBatchForUpdate(batch.userId, batch.batchId, trx)
-      if (current == null || !canExpire(current, now)) return
-      await releaseBatchState(storage, current, 'expired', trx)
-      released++
-    })
+  for await (const batch of expired) {
+    try {
+      let write: StorageActiveWrite | undefined
+      if (fenced) {
+        // Each batch is an independent SQL-only step. Its capture precedes
+        // writer admission; no wallet payload or external observation survives.
+        const user = verifyOne(await storage.findUsers({ partial: { userId: batch.userId } }))
+        write = await storage.activeWriteTransaction(user)
+      }
+      const release = async (trx: TrxToken): Promise<boolean> => {
+        const current = await storage.findActionBatchForUpdate(batch.userId, batch.batchId, trx, true)
+        if (current == null || !canExpire(current, now)) return false
+        await releaseBatchState(storage, current, 'expired', trx)
+        return true
+      }
+      // Report only committed releases. A profile retirement cannot free its
+      // reservations, blobs or manifest through a service-wide cleanup pass.
+      const commit = () =>
+        awaitFromSync(() => (write == null ? storage.transaction(release) : write.transaction(release)))
+      if (await (admission != null && write?.prepareOutsideManager === true ? admission(commit) : commit())) released++
+    } catch (error) {
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') throw error
+    }
   }
   return released
 }
@@ -407,8 +436,13 @@ export async function beginActionBatch(
   auth: AuthId,
   args: BeginActionBatchArgs
 ): Promise<BeginActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
-  await cleanupExpiredActionBatches(storage)
+  if (
+    typeof storage.requiresActionBatchReservationCleanup !== 'function' ||
+    storage.requiresActionBatchReservationCleanup()
+  )
+    await cleanupExpiredActionBatches(storage)
   if ((await storage.findActionBatch(userId, args.batchId)) != null) {
     throw new WERR_INVALID_PARAMETER('batchId', 'unique')
   }
@@ -470,7 +504,7 @@ export async function beginActionBatch(
   )
   const fundingOutputs = funding.map(reservationOutput)
   const batch = newBatch(userId, args.batchId)
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     await storage.insertActionBatch(batch, trx)
     await reserveOutputs(storage, batch, [...fixedOutputs, ...fundingOutputs], trx)
   })
@@ -478,7 +512,7 @@ export async function beginActionBatch(
   try {
     fundingResult = await makeFundingResult(storage, args.firstAction, [...fundingOutputs, ...fixedOutputs])
   } catch (error) {
-    await storage.transaction(async trx => await releaseBatchState(storage, batch, 'aborted', trx))
+    await write.transaction(trx => awaitFromSync(() => releaseBatchState(storage, batch, 'aborted', trx)))
     throw error
   }
   const explicitIds = new Set(fixedOutputs.map(output => output.outputId))
@@ -517,8 +551,13 @@ export async function extendActionBatch(
   auth: AuthId,
   args: ExtendActionBatchArgs
 ): Promise<ExtendActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
-  await cleanupExpiredActionBatches(storage)
+  if (
+    typeof storage.requiresActionBatchReservationCleanup !== 'function' ||
+    storage.requiresActionBatchReservationCleanup()
+  )
+    await cleanupExpiredActionBatches(storage)
   const batch = requireLiveBatch(await storage.findActionBatch(userId, args.batchId), args.batchId)
   const basket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
   const alreadyReserved = await storage.findActionBatchOutputIds(batch.actionBatchId)
@@ -588,7 +627,7 @@ export async function extendActionBatch(
   const fundingShape = argsToFundingShape(args.includeSourceTransactions)
   const fundingResult = await makeFundingResult(storage, fundingShape, [...fundingOutputs, ...explicit])
   const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     const current = requireLiveBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx), args.batchId)
     const additions = [...new Map([...fundingOutputs, ...explicit].map(output => [output.outputId, output])).values()]
     const currentReserved = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
@@ -645,8 +684,9 @@ export async function renewActionBatch(
   auth: AuthId,
   batchId: string
 ): Promise<RenewActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
-  return await storage.transaction(async trx => {
+  return await write.transaction(async trx => {
     const batch = requireLiveBatch(await storage.findActionBatchForUpdate(userId, batchId, trx), batchId)
     const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
     await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
@@ -679,10 +719,15 @@ export async function resumeActionBatch(
   auth: AuthId,
   args: ResumeActionBatchArgs
 ): Promise<ResumeActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   validateResumeOutpoints(storage, args)
-  await cleanupExpiredActionBatches(storage)
-  return await storage.transaction(async trx => {
+  if (
+    typeof storage.requiresActionBatchReservationCleanup !== 'function' ||
+    storage.requiresActionBatchReservationCleanup()
+  )
+    await cleanupExpiredActionBatches(storage)
+  return await write.transaction(async trx => {
     const batch = await storage.findActionBatchForUpdate(userId, args.batchId, trx)
     const state = actionBatchErrorState(batch)
     if (state != null && state !== 'expired') {
@@ -1017,121 +1062,124 @@ async function persistAction(
   return await req.insertOrMerge(storage, trx)
 }
 
-async function persistManifestAtomically(
+function persistManifestAtomically(
   storage: StorageProvider,
   userId: number,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
-  validated: { actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array; beef: Beef }
+  validated: { actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array; beef: Beef },
+  write: StorageActiveWrite
 ): Promise<{
   batch: TableActionBatch
   alreadyCommitted: boolean
   share?: GetReqsAndBeefResult
 }> {
-  return await storage.transaction(async trx => {
-    const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
-    if (current == null) throw new WERR_ACTION_BATCH_STATE('missing', batch.batchId)
-    if (current.status === 'committed') {
-      if (current.manifestDigest !== manifest.digest) {
-        throw new WERR_INVALID_OPERATION('batch committed with another manifest')
+  return awaitFromSync(() => {
+    return write.transaction(async trx => {
+      const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
+      if (current == null) throw new WERR_ACTION_BATCH_STATE('missing', batch.batchId)
+      if (current.status === 'committed') {
+        if (current.manifestDigest !== manifest.digest) {
+          throw new WERR_INVALID_OPERATION('batch committed with another manifest')
+        }
+        return { batch: current, alreadyCommitted: true }
       }
-      return { batch: current, alreadyCommitted: true }
-    }
-    if (current.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', batch.batchId)
-    if (current.manifestDigest != null && current.manifestDigest !== manifest.digest) {
-      throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
-    }
-    const needsReacquire = current.status === 'expired' || activeExpiry(current)
-    if (needsReacquire) {
-      if (current.hardExpiresAt.getTime() <= Date.now()) {
-        throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
+      if (current.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', batch.batchId)
+      if (current.manifestDigest != null && current.manifestDigest !== manifest.digest) {
+        throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
       }
-      await reacquireManifestInputs(storage, userId, current, validated, trx)
-    } else {
-      requireLiveBatch(current, batch.batchId)
-    }
-    const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
-    const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
-    const inputOutpoints = [
-      ...new Map(
-        validated.actions
-          .flatMap(({ action }) => action.plan.inputs)
-          .filter(input => !stagedTxids.has(input.sourceTxid))
-          .map(input => [
-            `${input.sourceTxid}.${input.sourceVout}`,
-            {
-              txid: input.sourceTxid,
-              vout: input.sourceVout
-            }
-          ])
-      ).values()
-    ]
-    const storedByOutpoint = await storage.findOutputsByOutpointsForUpdate(userId, inputOutpoints, trx)
-    const allBasketNames = validated.actions.flatMap(({ action }) =>
-      action.plan.outputs.flatMap(output => (output.basket == null ? [] : [output.basket]))
-    )
-    if (validated.actions.some(({ action }) => action.plan.outputs.some(output => output.purpose === 'change')))
-      allBasketNames.push('default')
-    const baskets = await storage.findOrInsertOutputBasketsBulk(userId, [...new Set(allBasketNames)], trx)
-    const tags = await storage.findOrInsertOutputTagsBulk(
-      userId,
-      [...new Set(validated.actions.flatMap(({ action }) => action.plan.outputs.flatMap(output => output.tags)))],
-      trx
-    )
-    const labelNames = [...new Set(validated.actions.flatMap(({ action }) => action.metadata.labels))]
-    const labelsByName = new Map(Object.entries(await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)))
-    const stagedByOutpoint = new Map<string, TableOutput>()
-    const reqsByTxid = new Map<string, EntityProvenTxReq>()
-    for (const action of validated.actions) {
-      const req = await persistAction(
-        storage,
+      const needsReacquire = current.status === 'expired' || activeExpiry(current)
+      if (needsReacquire) {
+        if (current.hardExpiresAt.getTime() <= Date.now()) {
+          throw new WERR_ACTION_BATCH_STATE('hard-expired', batch.batchId)
+        }
+        await reacquireManifestInputs(storage, userId, current, validated, trx)
+      } else {
+        requireLiveBatch(current, batch.batchId)
+      }
+      const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
+      const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
+      const inputOutpoints = [
+        ...new Map(
+          validated.actions
+            .flatMap(({ action }) => action.plan.inputs)
+            .filter(input => !stagedTxids.has(input.sourceTxid))
+            .map(input => [
+              `${input.sourceTxid}.${input.sourceVout}`,
+              {
+                txid: input.sourceTxid,
+                vout: input.sourceVout
+              }
+            ])
+        ).values()
+      ]
+      const storedByOutpoint = await storage.findOutputsByOutpointsForUpdate(userId, inputOutpoints, trx)
+      const allBasketNames = validated.actions.flatMap(({ action }) =>
+        action.plan.outputs.flatMap(output => (output.basket == null ? [] : [output.basket]))
+      )
+      if (validated.actions.some(({ action }) => action.plan.outputs.some(output => output.purpose === 'change')))
+        allBasketNames.push('default')
+      const baskets = await storage.findOrInsertOutputBasketsBulk(userId, [...new Set(allBasketNames)], trx)
+      const tags = await storage.findOrInsertOutputTagsBulk(
         userId,
-        action,
-        reservedOutputIds,
-        storedByOutpoint,
-        stagedByOutpoint,
-        labelsByName,
-        baskets,
-        tags,
+        [...new Set(validated.actions.flatMap(({ action }) => action.plan.outputs.flatMap(output => output.tags)))],
         trx
       )
-      reqsByTxid.set(action.action.txid, req)
-    }
-    await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
-    await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)
-    await storage.updateActionBatch(
-      current.actionBatchId,
-      {
-        status: 'committed',
-        manifestDigest: manifest.digest
-      },
-      trx
-    )
-    current.status = 'committed'
-    current.manifestDigest = manifest.digest
-    const details = manifest.sendWith.map(txid => {
-      const req = reqsByTxid.get(txid)
-      if (req == null) return undefined
-      const reqApi = req.toApi()
-      const detail: GetReqsAndBeefResult['details'][number] = {
-        txid,
-        req: reqApi,
-        status: 'unknown'
+      const labelNames = [...new Set(validated.actions.flatMap(({ action }) => action.metadata.labels))]
+      const labelsByName = new Map(Object.entries(await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)))
+      const stagedByOutpoint = new Map<string, TableOutput>()
+      const reqsByTxid = new Map<string, EntityProvenTxReq>()
+      for (const action of validated.actions) {
+        const req = await persistAction(
+          storage,
+          userId,
+          action,
+          reservedOutputIds,
+          storedByOutpoint,
+          stagedByOutpoint,
+          labelsByName,
+          baskets,
+          tags,
+          trx
+        )
+        reqsByTxid.set(action.action.txid, req)
       }
-      classifyReqStatus(detail, reqApi)
-      return detail
+      await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
+      await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)
+      await storage.updateActionBatch(
+        current.actionBatchId,
+        {
+          status: 'committed',
+          manifestDigest: manifest.digest
+        },
+        trx
+      )
+      current.status = 'committed'
+      current.manifestDigest = manifest.digest
+      const details = manifest.sendWith.map(txid => {
+        const req = reqsByTxid.get(txid)
+        if (req == null) return undefined
+        const reqApi = req.toApi()
+        const detail: GetReqsAndBeefResult['details'][number] = {
+          txid,
+          req: reqApi,
+          status: 'unknown'
+        }
+        classifyReqStatus(detail, reqApi)
+        return detail
+      })
+      return {
+        batch: current,
+        alreadyCommitted: false,
+        share: details.every(detail => detail != null)
+          ? {
+              beef: validated.beef,
+              details: details.filter((detail): detail is NonNullable<typeof detail> => detail != null),
+              verified: true
+            }
+          : undefined
+      }
     })
-    return {
-      batch: current,
-      alreadyCommitted: false,
-      share: details.every(detail => detail != null)
-        ? {
-            beef: validated.beef,
-            details: details.filter((detail): detail is NonNullable<typeof detail> => detail != null),
-            verified: true
-          }
-        : undefined
-    }
   })
 }
 
@@ -1141,6 +1189,7 @@ async function completeCommittedBatch(
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
   alreadyCommitted: boolean,
+  write: StorageActiveWrite,
   share?: GetReqsAndBeefResult
 ): Promise<CommitActionBatchResult> {
   if (batch.result != null) {
@@ -1155,7 +1204,16 @@ async function completeCommittedBatch(
       log: saved.log
     }
   }
-  const { swr, ndr } = await shareReqsWithWorld(storage, userId, manifest.sendWith, manifest.isDelayed, share)
+  await write.assertCurrent()
+  const { swr, ndr } = await shareReqsWithWorld(
+    storage,
+    userId,
+    manifest.sendWith,
+    manifest.isDelayed,
+    share,
+    undefined,
+    write
+  )
   const result: CommitActionBatchResult = {
     batchId: manifest.batchId,
     manifestDigest: manifest.digest,
@@ -1164,21 +1222,24 @@ async function completeCommittedBatch(
     sendWithResults: swr,
     notDelayedResults: ndr
   }
-  await storage.updateActionBatch(batch.actionBatchId, { result: JSON.stringify(result) })
+  await write.transaction(trx =>
+    awaitFromSync(() => storage.updateActionBatch(batch.actionBatchId, { result: JSON.stringify(result) }, trx))
+  )
   return result
 }
 
 async function commitActionBatchOnce(
   storage: StorageProvider,
   userId: number,
-  manifest: ActionBatchManifest
+  manifest: ActionBatchManifest,
+  write: StorageActiveWrite
 ): Promise<CommitActionBatchResult> {
   const batch = await storage.findActionBatch(userId, manifest.batchId)
   if (batch == null) throw new WERR_ACTION_BATCH_STATE('missing', manifest.batchId)
   if (batch.status === 'committed') {
     if (batch.manifestDigest !== manifest.digest)
       throw new WERR_INVALID_OPERATION('batch committed with another manifest')
-    return await completeCommittedBatch(storage, userId, batch, manifest, true)
+    return await completeCommittedBatch(storage, userId, batch, manifest, true, write)
   }
   if (batch.status === 'aborted') throw new WERR_ACTION_BATCH_STATE('aborted', manifest.batchId)
   const needsReacquire = batch.status === 'expired' || activeExpiry(batch)
@@ -1190,13 +1251,14 @@ async function commitActionBatchOnce(
     throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
   }
   const validated = await validateManifestActions(storage, batch, manifest)
-  const persisted = await persistManifestAtomically(storage, userId, batch, manifest, validated)
+  const persisted = await persistManifestAtomically(storage, userId, batch, manifest, validated, write)
   return await completeCommittedBatch(
     storage,
     userId,
     persisted.batch,
     manifest,
     persisted.alreadyCommitted,
+    write,
     persisted.share
   )
 }
@@ -1211,8 +1273,10 @@ const activeBatchCommits = new WeakMap<StorageProvider, Map<string, ActiveBatchC
 export async function commitActionBatch(
   storage: StorageProvider,
   auth: AuthId,
-  manifest: ActionBatchManifest
+  manifest: ActionBatchManifest,
+  capturedWrite?: StorageActiveWrite
 ): Promise<CommitActionBatchResult> {
+  const write = capturedWrite ?? (await storage.activeWriteTransaction(auth))
   validateActionBatchInlinePayload(manifest)
   if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
   validateCompactManifest(manifest)
@@ -1228,9 +1292,13 @@ export async function commitActionBatch(
     if (active.digest !== manifest.digest) {
       throw new WERR_INVALID_OPERATION('action batch commit is active with another manifest')
     }
-    return await active.promise
+    const result = await active.promise
+    // The owner performs the work once. A joining caller receives a replay
+    // result only while its own original actual writer remains current.
+    await write.assertCurrent()
+    return { ...result, alreadyCommitted: true }
   }
-  const promise = commitActionBatchOnce(storage, userId, manifest).finally(() => {
+  const promise = commitActionBatchOnce(storage, userId, manifest, write).finally(() => {
     commits?.delete(key)
   })
   commits.set(key, { digest: manifest.digest, promise })
@@ -1242,6 +1310,7 @@ export async function commitActionBatchByDigest(
   auth: AuthId,
   args: CommitActionBatchByDigestArgs
 ): Promise<CommitActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   const batch = await storage.findActionBatch(userId, args.batchId)
   if (batch?.manifestDigest !== args.digest || batch?.manifest == null) {
@@ -1256,7 +1325,7 @@ export async function commitActionBatchByDigest(
   ) {
     throw new WERR_INVALID_OPERATION('prepared action batch manifest is invalid')
   }
-  return await commitActionBatch(storage, auth, manifest)
+  return await commitActionBatch(storage, auth, manifest, write)
 }
 
 export async function abortActionBatch(
@@ -1264,8 +1333,9 @@ export async function abortActionBatch(
   auth: AuthId,
   batchId: string
 ): Promise<AbortActionBatchResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
-  return await storage.transaction(async trx => {
+  return await write.transaction(async trx => {
     const batch = await storage.findActionBatchForUpdate(userId, batchId, trx)
     if (batch == null || batch.status === 'aborted') return { aborted: true }
     if (batch.status === 'committed') return { aborted: false }
