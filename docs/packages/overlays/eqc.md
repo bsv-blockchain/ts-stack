@@ -4,9 +4,9 @@ title: '@bsv/eqc'
 kind: package
 domain: overlays
 npm: '@bsv/eqc'
-version: '0.1.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '0.1.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc'
 status: experimental

@@ -1,6 +1,6 @@
 # @bsv/message-box-client
 
-Patch candidate `2.6.1` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `2.7.1`. Accepts bounded canonical base64 PeerPay transactions and tightens payment and synchronization boundaries. Canonical PeerPay base64 transactions are accepted; noncanonical or oversized inputs remain rejected.
 
 Authenticated, optionally encrypted store-and-forward messaging for BSV
 applications. The package supports browser and Node.js consumers, HTTP polling,

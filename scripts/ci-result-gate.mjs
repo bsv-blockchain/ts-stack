@@ -93,8 +93,11 @@ export function validateCiResults(needs, event) {
   expectResult('infra', output('infra-scope', 'has-infra', 'boolean'))
   expectResult('docs-validate', output('scope', 'docs', 'boolean'))
   expectResult('conformance', output('scope', 'conformance', 'boolean'))
-  expectResult('sonar-zero-findings', event === 'pull_request')
-  expectResult('dependency-review', event === 'pull_request')
+  // A PR result cannot attest to the queue's different, combined commit.
+  // Keep queue admission closed until both analyses run on that commit.
+  const requiresAnalysis = event === 'pull_request' || event === 'merge_group'
+  expectResult('sonar-zero-findings', requiresAnalysis)
+  expectResult('dependency-review', requiresAnalysis)
   return errors
 }
 
