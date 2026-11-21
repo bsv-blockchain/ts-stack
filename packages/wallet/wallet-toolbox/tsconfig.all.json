@@ -20,9 +20,19 @@
     "composite": true,
     "noImplicitOverride": true,
     "paths": {
-      "@bsv/sdk": ["../../sdk/dist/types/mod.d.ts"]
+      "@bsv/sdk": ["../../sdk/dist/cjs/mod.d.ts"]
     }
   },
+  "files": [
+    "test/storage/portableAdmissionChild.ts",
+    "test/storage/portableAuthenticatedChild.ts",
+    "test/storage/portableOwnershipChild.ts",
+    "test/storage/portableResumeChild.ts",
+    "test/utils/browserSnapshotRestoreFixture.ts",
+    "test/utils/Brc38ImportEntityRestoreFixture.ts",
+    "test/utils/snapshotJournalHistoricalFixture.ts",
+    "benchmarks/snapshot-measurement-cases.ts"
+  ],
   "include": ["src/**/*", "test/**/*"],
   "exclude": [
     "node_modules",

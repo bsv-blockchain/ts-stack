@@ -5,25 +5,25 @@ import {
   cleanupExpiredActionBatches,
   getActionBatchCapabilities
 } from '../methods/actionBatch'
-import {
-  ACTION_BATCH_MAX_INLINE_BYTES
-} from '../methods/actionBatchBlobs'
+import { ACTION_BATCH_MAX_INLINE_BYTES } from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import { WERR_ACTION_BATCH_STATE } from '../../sdk/WERR_errors'
 
-function firstAction () {
+function firstAction() {
   return Validation.validateCreateActionArgs({
     description: 'reserve action batch funding',
-    outputs: [{
-      satoshis: 1,
-      lockingScript: '51',
-      outputDescription: 'reservation test output'
-    }],
+    outputs: [
+      {
+        satoshis: 1,
+        lockingScript: '51',
+        outputDescription: 'reservation test output'
+      }
+    ],
     options: { noSend: true, randomizeOutputs: false }
   })
 }
 
-function emptyManifest (batchId: string) {
+function emptyManifest(batchId: string) {
   const withoutDigest = {
     batchId,
     actions: [],
@@ -34,17 +34,17 @@ function emptyManifest (batchId: string) {
   return { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
 }
 
-function setReservationLimit (ctx: TestWalletNoSetup, value: number): void {
+function setReservationLimit(ctx: TestWalletNoSetup, value: number): void {
   Object.defineProperty(ctx.activeStorage, 'actionBatchMaxReservedOutputs', {
     configurable: true,
     value
   })
 }
 
-async function preparePackedItems (
+async function preparePackedItems(
   ctx: TestWalletNoSetup,
   batchId: string,
-  items: Array<{ digest: string, bytes: number[] | Uint8Array }>
+  items: Array<{ digest: string; bytes: number[] | Uint8Array }>
 ): Promise<void> {
   const logicalBytes = items.flatMap(item => Array.from(item.bytes))
   const dependencyBeefDigest = actionBatchBlobDigest(logicalBytes)
@@ -98,7 +98,7 @@ describe('action batch reservations', () => {
     expect(getActionBatchCapabilities(32).actionBatch?.maxReservedOutputs).toBe(32)
     expect(getActionBatchCapabilities(-1).actionBatch?.maxReservedOutputs).toBe(-1)
     expect(getActionBatchCapabilities(32).actionBatch?.resume).toBeUndefined()
-    expect(getActionBatchCapabilities(32, { resume: true }).actionBatch?.resume).toBe(true)
+    expect(getActionBatchCapabilities(32, true).actionBatch?.resume).toBe(true)
   })
 
   test('begin advertises the effective managed-change shaping policy to the workspace planner', async () => {
@@ -119,11 +119,14 @@ describe('action batch reservations', () => {
   })
 
   test('reservations prefer completed ancestry but retain sending liquidity as a last resort', async () => {
-    const basket = (await ctx.activeStorage.findOutputBaskets({
-      partial: { userId: ctx.userId, name: 'default' }
-    }))[0]
-    const available = (await ctx.activeStorage.findAvailableManagedChangeInputs(ctx.userId, basket.basketId, false))
-      .sort((a, b) => b.satoshis - a.satoshis)
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0]
+    const available = (
+      await ctx.activeStorage.findAvailableManagedChangeInputs(ctx.userId, basket.basketId, false)
+    ).sort((a, b) => b.satoshis - a.satoshis)
     const completed = available[0]
     const sending = available.find(output => output.transactionId !== completed.transactionId)
     expect(completed).toBeDefined()
@@ -192,15 +195,20 @@ describe('action batch reservations', () => {
   })
 
   test('compact begin validates its output length summary', async () => {
-    await expect(ctx.storage.beginActionBatch({
-      batchId: 'invalid-compact-bootstrap',
-      firstAction: firstAction(),
-      firstActionOutputScriptLengths: [2]
-    })).rejects.toThrow('firstActionOutputScriptLengths')
+    await expect(
+      ctx.storage.beginActionBatch({
+        batchId: 'invalid-compact-bootstrap',
+        firstAction: firstAction(),
+        firstActionOutputScriptLengths: [2]
+      })
+    ).rejects.toThrow('firstActionOutputScriptLengths')
   })
 
   test('legacy noSendChange cannot consume an output reserved by another workspace', async () => {
-    const begun = await ctx.storage.beginActionBatch({ batchId: 'legacy-reservation-guard', firstAction: firstAction() })
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'legacy-reservation-guard',
+      firstAction: firstAction()
+    })
     const reserved = begun.reservedOutputs[0]
     expect(reserved).toBeDefined()
     const args = firstAction()
@@ -221,20 +229,20 @@ describe('action batch reservations', () => {
     const begun = await ctx.storage.beginActionBatch({ batchId: 'bounded-extension', firstAction: firstAction() })
     const findIds = ctx.activeStorage.findActionBatchOutputIds.bind(ctx.activeStorage)
     const existing = await findIds((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))!.actionBatchId)
-    jest.spyOn(ctx.activeStorage, 'findActionBatchOutputIds')
+    jest
+      .spyOn(ctx.activeStorage, 'findActionBatchOutputIds')
       .mockResolvedValueOnce(existing)
-      .mockResolvedValueOnce(Array.from(
-        { length: ACTION_BATCH_MAX_RESERVED_OUTPUTS },
-        (_, index) => 100_000 + index
-      ))
+      .mockResolvedValueOnce(Array.from({ length: ACTION_BATCH_MAX_RESERVED_OUTPUTS }, (_, index) => 100_000 + index))
 
-    await expect(ctx.storage.extendActionBatch({
-      batchId: begun.batchId,
-      targetSatoshis: 1,
-      requestedOutputs: 1,
-      explicitOutpoints: [],
-      includeSourceTransactions: false
-    })).rejects.toThrow(`cannot reserve more than ${ACTION_BATCH_MAX_RESERVED_OUTPUTS}`)
+    await expect(
+      ctx.storage.extendActionBatch({
+        batchId: begun.batchId,
+        targetSatoshis: 1,
+        requestedOutputs: 1,
+        explicitOutpoints: [],
+        includeSourceTransactions: false
+      })
+    ).rejects.toThrow(`cannot reserve more than ${ACTION_BATCH_MAX_RESERVED_OUTPUTS}`)
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
@@ -253,7 +261,9 @@ describe('action batch reservations', () => {
     const resumed = await ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })
 
     expect(Date.parse(resumed.expiresAt)).toBeLessThanOrEqual(Date.parse(begun.hardExpiresAt))
-    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(expect.arrayContaining(before))
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(
+      expect.arrayContaining(before)
+    )
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
     await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints })).resolves.toBeDefined()
     await ctx.storage.abortActionBatch(begun.batchId)
@@ -267,12 +277,13 @@ describe('action batch reservations', () => {
       hardExpiresAt: new Date(Date.now() - 1)
     })
 
-    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] }))
-      .rejects.toMatchObject<Partial<WERR_ACTION_BATCH_STATE>>({
-        name: 'WERR_ACTION_BATCH_STATE',
-        state: 'hard-expired',
-        batchId: begun.batchId
-      })
+    await expect(ctx.storage.resumeActionBatch({ batchId: begun.batchId, outpoints: [] })).rejects.toMatchObject<
+      Partial<WERR_ACTION_BATCH_STATE>
+    >({
+      name: 'WERR_ACTION_BATCH_STATE',
+      state: 'hard-expired',
+      batchId: begun.batchId
+    })
   })
 
   test('lifecycle state errors distinguish missing, aborted, committed, and inactive batches', async () => {
@@ -493,12 +504,15 @@ describe('action batch reservations', () => {
   test('first-action persisted noSendChange is reserved and returned explicitly', async () => {
     const legacy = await _tu.createLegacyWalletSQLiteCopy('actionBatchPersistedNoSendChange', 'legacy')
     try {
+      const tracker = await _tu.installOfflineLegacyChainTracker(legacy)
+      await expect(tracker.isValidRootForHeight('00'.repeat(32), 1)).resolves.toBe(false)
       legacy.wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
       const seed = await legacy.wallet.createAction({
         description: 'seed persisted noSend change',
         outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'seed output' }],
         options: { noSend: true, randomizeOutputs: false }
       })
+      expect(legacy.services.getChainTracker).toHaveBeenCalled()
       expect(seed.noSendChange).toBeDefined()
       const noSendChange = seed.noSendChange ?? []
       expect(noSendChange).not.toHaveLength(0)
@@ -533,13 +547,14 @@ describe('action batch reservations', () => {
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
     expect(batch).toBeDefined()
     await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 60_000) })
-    const findExpired = ctx.activeStorage.findExpiredActionBatches.bind(ctx.activeStorage)
-    jest.spyOn(ctx.activeStorage, 'findExpiredActionBatches').mockImplementationOnce(async now => {
-      const candidates = await findExpired(now)
-      await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
-        expiresAt: new Date(Date.now() + 60_000)
-      })
-      return candidates
+    const findExpired = ctx.activeStorage.expiredActionBatchCandidates.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'expiredActionBatchCandidates').mockImplementationOnce(async function* (now) {
+      for await (const candidate of findExpired(now)) {
+        await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+          expiresAt: new Date(Date.now() + 60_000)
+        })
+        yield candidate
+      }
     })
 
     expect(await cleanupExpiredActionBatches(ctx.activeStorage)).toBe(0)
@@ -549,11 +564,15 @@ describe('action batch reservations', () => {
   })
 
   test('begin failure releases reservations created before dependency hydration', async () => {
-    jest.spyOn(ctx.activeStorage, 'getBeefForTransaction').mockRejectedValueOnce(new Error('dependency hydration failed'))
-    await expect(ctx.storage.beginActionBatch({
-      batchId: 'begin-hydration-failure',
-      firstAction: firstAction()
-    })).rejects.toThrow('dependency hydration failed')
+    jest
+      .spyOn(ctx.activeStorage, 'getBeefForTransaction')
+      .mockRejectedValueOnce(new Error('dependency hydration failed'))
+    await expect(
+      ctx.storage.beginActionBatch({
+        batchId: 'begin-hydration-failure',
+        firstAction: firstAction()
+      })
+    ).rejects.toThrow('dependency hydration failed')
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, 'begin-hydration-failure')
     expect(batch?.status).toBe('aborted')
     expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
@@ -566,16 +585,19 @@ describe('action batch reservations', () => {
     })
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
     const before = await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)
-    const hydrate = jest.spyOn(ctx.activeStorage, 'getBeefForTransaction')
+    const hydrate = jest
+      .spyOn(ctx.activeStorage, 'getBeefForTransaction')
       .mockRejectedValueOnce(new Error('dependency hydration failed'))
 
-    await expect(ctx.storage.extendActionBatch({
-      batchId: begun.batchId,
-      targetSatoshis: 1,
-      requestedOutputs: 1,
-      explicitOutpoints: [],
-      includeSourceTransactions: false
-    })).rejects.toThrow('dependency hydration failed')
+    await expect(
+      ctx.storage.extendActionBatch({
+        batchId: begun.batchId,
+        targetSatoshis: 1,
+        requestedOutputs: 1,
+        explicitOutpoints: [],
+        includeSourceTransactions: false
+      })
+    ).rejects.toThrow('dependency hydration failed')
 
     expect(hydrate).toHaveBeenCalled()
     expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(before)
@@ -586,30 +608,34 @@ describe('action batch reservations', () => {
     const findForUpdate = ctx.activeStorage.findOutputsByOutpointsForUpdate.bind(ctx.activeStorage)
     jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate').mockImplementationOnce(async (...args) => {
       const outputs = await findForUpdate(...args)
-      return Object.fromEntries(Object.entries(outputs).map(([outpoint, output]) => [
-        outpoint,
-        { ...output, spendable: false, spentBy: 1 }
-      ]))
+      return Object.fromEntries(
+        Object.entries(outputs).map(([outpoint, output]) => [outpoint, { ...output, spendable: false, spentBy: 1 }])
+      )
     })
 
-    await expect(ctx.storage.beginActionBatch({
-      batchId: 'concurrently-spent-funding',
-      firstAction: firstAction()
-    })).rejects.toThrow('no longer spendable')
+    await expect(
+      ctx.storage.beginActionBatch({
+        batchId: 'concurrently-spent-funding',
+        firstAction: firstAction()
+      })
+    ).rejects.toThrow('no longer spendable')
     expect(await ctx.activeStorage.findActionBatch(ctx.userId, 'concurrently-spent-funding')).toBeUndefined()
   })
 
   test('blob staging accepts only prepared manifest digests and idempotent duplicates', async () => {
     const begun = await ctx.storage.beginActionBatch({ batchId: 'blob-batch', firstAction: firstAction() })
     const bytes = [1, 2, 3, 4]
-    await expect(ctx.storage.putActionBatchBlob({
-      batchId: begun.batchId,
-      digest: '00'.repeat(32),
-      bytes
-    })).rejects.toBeDefined()
+    await expect(
+      ctx.storage.putActionBatchBlob({
+        batchId: begun.batchId,
+        digest: '00'.repeat(32),
+        bytes
+      })
+    ).rejects.toBeDefined()
     const digest = actionBatchBlobDigest(bytes)
-    await expect(ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes }))
-      .rejects.toThrow('prepared action batch manifest')
+    await expect(ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })).rejects.toThrow(
+      'prepared action batch manifest'
+    )
     const withoutDigest = {
       batchId: begun.batchId,
       actions: [],
@@ -620,11 +646,13 @@ describe('action batch reservations', () => {
     const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
     await ctx.storage.prepareActionBatchCommit(manifest)
     const unrequestedBytes = [5, 6, 7]
-    await expect(ctx.storage.putActionBatchBlob({
-      batchId: begun.batchId,
-      digest: actionBatchBlobDigest(unrequestedBytes),
-      bytes: unrequestedBytes
-    })).rejects.toThrow('prepared action batch manifest')
+    await expect(
+      ctx.storage.putActionBatchBlob({
+        batchId: begun.batchId,
+        digest: actionBatchBlobDigest(unrequestedBytes),
+        bytes: unrequestedBytes
+      })
+    ).rejects.toThrow('prepared action batch manifest')
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
@@ -653,8 +681,7 @@ describe('action batch reservations', () => {
       maxItems: 4096,
       preferredEncodings: ['identity'] as ['identity']
     }
-    await expect(ctx.storage.putActionBatchPack(pack))
-      .rejects.toThrow('prepared action batch manifest')
+    await expect(ctx.storage.putActionBatchPack(pack)).rejects.toThrow('prepared action batch manifest')
     await preparePackedItems(ctx, begun.batchId, items)
     await ctx.storage.putActionBatchPack(pack)
     await ctx.storage.putActionBatchPack(pack)
@@ -668,14 +695,18 @@ describe('action batch reservations', () => {
     expect(blobs.map(blob => blob.digest).sort()).toEqual(items.map(item => item.digest).sort())
 
     const unrequested = Uint8Array.of(4, 5, 6)
-    await expect(ctx.storage.putActionBatchPack({
-      ...pack,
-      items: [{ digest: actionBatchBlobDigest(unrequested), bytes: unrequested }]
-    })).rejects.toThrow('prepared action batch manifest')
-    await expect(ctx.storage.putActionBatchPack({
-      ...pack,
-      items: [{ digest: '00'.repeat(32), bytes: first }],
-    })).rejects.toThrow('match bytes')
+    await expect(
+      ctx.storage.putActionBatchPack({
+        ...pack,
+        items: [{ digest: actionBatchBlobDigest(unrequested), bytes: unrequested }]
+      })
+    ).rejects.toThrow('prepared action batch manifest')
+    await expect(
+      ctx.storage.putActionBatchPack({
+        ...pack,
+        items: [{ digest: '00'.repeat(32), bytes: first }]
+      })
+    ).rejects.toThrow('match bytes')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
@@ -726,8 +757,7 @@ describe('action batch reservations', () => {
 
     await ctx.storage.prepareActionBatchCommit(manifest)
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest: chunkDigest, bytes: chunk })
-    await expect(ctx.storage.commitActionBatch(manifest))
-      .rejects.toThrow('at least one signed action')
+    await expect(ctx.storage.commitActionBatch(manifest)).rejects.toThrow('at least one signed action')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
@@ -745,7 +775,9 @@ describe('action batch reservations', () => {
     await expect(ctx.storage.prepareActionBatchCommit(manifest)).resolves.toMatchObject({
       missingDigests: [dependencyBeefDigest]
     })
-    await expect(ctx.storage.commitActionBatch(manifest)).rejects.toThrow(`missing action batch blob ${dependencyBeefDigest}`)
+    await expect(ctx.storage.commitActionBatch(manifest)).rejects.toThrow(
+      `missing action batch blob ${dependencyBeefDigest}`
+    )
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
@@ -796,8 +828,7 @@ describe('action batch reservations', () => {
       isDelayed: true
     }
     const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
-    await expect(ctx.storage.prepareActionBatchCommit(manifest))
-      .rejects.toThrow('digest-only bytes')
+    await expect(ctx.storage.prepareActionBatchCommit(manifest)).rejects.toThrow('digest-only bytes')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 })

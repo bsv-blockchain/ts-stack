@@ -1,4 +1,5 @@
-import { PublicKey, SignActionSpend, Transaction } from '@bsv/sdk'
+import { mapAwaitFromSync } from '../../utility/promiseFromSync'
+import { PublicKey, SignActionSpend, Transaction, type PrivateKey } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
@@ -66,9 +67,7 @@ export async function completeSignedTransaction(
   /// //////////////////
   // Insert SABPPP unlock templates for wallet signed inputs
   /// //////////////////
-  const prepareUnlockingTemplates = (
-    keys: ReturnType<Wallet['getClientChangeKeyPair']>
-  ): void => {
+  const prepareUnlockingTemplates = async (keys: ReturnType<Wallet['getClientChangeKeyPair']>): Promise<void> => {
     guard?.()
     const counterparties = new Map<string, PublicKey>()
     const counterparty = (publicKey: string): PublicKey => {
@@ -93,12 +92,15 @@ export async function completeSignedTransaction(
       keyID: template.getKeyID(),
       counterparty: unlockerPubKey
     }))
-    const derivedPrivateKeys = wallet.keyDeriver.derivePrivateKeys?.(derivations) ??
-      derivations.map(derivation => wallet.keyDeriver.derivePrivateKey(
-        derivation.protocolID,
-        derivation.keyID,
-        derivation.counterparty
-      ))
+    // derivePrivateKeys may be asynchronous (a native or off-thread batch
+    // deriver): its result is awaited, and the signing guard runs again after.
+    const derivedPrivateKeys =
+      (await (wallet.keyDeriver.derivePrivateKeys?.(derivations) as
+        PrivateKey[] | Promise<PrivateKey[]> | undefined)) ??
+      derivations.map(derivation =>
+        wallet.keyDeriver.derivePrivateKey(derivation.protocolID, derivation.keyID, derivation.counterparty)
+      )
+    guard?.()
     for (let index = 0; index < prepared.length; index++) {
       const { pdi, template } = prepared[index]
       const unlockTemplate = template.unlockWithDerivedPrivateKey(
@@ -128,7 +130,10 @@ export async function completeSignedTransaction(
         const keys = await wallet.telemetry.withSpan(
           'wallet.crypto.client_change_key',
           { component: 'wallet-toolbox', parent: span.context },
-          () => { guard?.(); return wallet.getClientChangeKeyPair() }
+          () => {
+            guard?.()
+            return wallet.getClientChangeKeyPair()
+          }
         )
         await wallet.telemetry.withSpan(
           'wallet.crypto.derive_unlocking_templates',
@@ -143,7 +148,7 @@ export async function completeSignedTransaction(
     )
   } else if (prior.pdi.length > 0) {
     guard?.()
-    prepareUnlockingTemplates(wallet.getClientChangeKeyPair())
+    await prepareUnlockingTemplates(wallet.getClientChangeKeyPair())
   }
 
   /// //////////////////
@@ -159,7 +164,15 @@ export async function completeSignedTransaction(
           'crypto.input_count': prior.tx.inputs.length
         }
       },
-      async () => { guard?.(); await prior.tx.sign(); guard?.() }
+      () => {
+        guard?.()
+        return mapAwaitFromSync(
+          () => prior.tx.sign(),
+          () => {
+            guard?.()
+          }
+        )
+      }
     )
   } else {
     guard?.()

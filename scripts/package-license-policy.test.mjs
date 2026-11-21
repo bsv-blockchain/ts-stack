@@ -7,10 +7,13 @@ import path from 'node:path'
 import {
   discoverPackageManifests,
   EXPECTED_LICENSE_SHA256,
+  EXPECTED_PATENTS_SHA256,
   LICENSE_DECLARATION,
   LICENSE_FILE,
-  LICENSE_VERSION,
+  LICENSE_NAME,
+  NOTICE_FILE,
   OCI_LICENSE_REFERENCE,
+  PATENTS_FILE,
   REPOSITORY_ROOT,
   synchronizePackageLicenses,
   validatePackageLicenses
@@ -32,15 +35,21 @@ test('license discovery excludes generated mutation copies but retains authored 
   )
 })
 
-test('all package projects use the exact current Open BSV license', () => {
-  assert.equal(LICENSE_VERSION, 6)
+test('all package projects use the exact Apache License 2.0, the root NOTICE and PATENTS', () => {
+  assert.equal(LICENSE_NAME, 'Apache License, Version 2.0')
   assert.equal(
     EXPECTED_LICENSE_SHA256,
-    'bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0'
+    'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
   )
-  assert.equal(LICENSE_FILE, 'LICENSE.txt')
-  assert.equal(LICENSE_DECLARATION, 'SEE LICENSE IN LICENSE.txt')
-  assert.equal(OCI_LICENSE_REFERENCE, 'LicenseRef-Open-BSV-License-6')
+  assert.equal(LICENSE_FILE, 'LICENSE')
+  assert.equal(NOTICE_FILE, 'NOTICE')
+  assert.equal(PATENTS_FILE, 'PATENTS')
+  assert.equal(
+    EXPECTED_PATENTS_SHA256,
+    '02988c67da2b43a9c2a566df2f3ff1376e7fa3eaed3562fa983d12f78a8cd8e0'
+  )
+  assert.equal(LICENSE_DECLARATION, 'Apache-2.0')
+  assert.equal(OCI_LICENSE_REFERENCE, 'Apache-2.0')
   assert.equal(discoverPackageManifests().length, 57)
   assert.deepEqual(validatePackageLicenses(), [])
 })
@@ -49,6 +58,8 @@ test('license synchronization repairs manifest, lockfile, copy, and filename dri
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-stack-license-'))
   t.after(() => fs.rmSync(fixture, { recursive: true, force: true }))
   fs.copyFileSync(path.join(REPOSITORY_ROOT, LICENSE_FILE), path.join(fixture, LICENSE_FILE))
+  fs.copyFileSync(path.join(REPOSITORY_ROOT, NOTICE_FILE), path.join(fixture, NOTICE_FILE))
+  fs.copyFileSync(path.join(REPOSITORY_ROOT, PATENTS_FILE), path.join(fixture, PATENTS_FILE))
   fs.writeFileSync(
     path.join(fixture, 'package.json'),
     `${JSON.stringify({ name: 'fixture-root', private: true, license: LICENSE_DECLARATION }, null, 2)}\n`
@@ -63,7 +74,7 @@ test('license synchronization repairs manifest, lockfile, copy, and filename dri
         name: 'fixture-child',
         version: '1.0.0',
         license: 'MIT',
-        files: ['dist', 'license.md']
+        files: ['dist', 'license.md', 'LICENSE.txt']
       },
       null,
       2
@@ -84,10 +95,26 @@ test('license synchronization repairs manifest, lockfile, copy, and filename dri
     )}\n`
   )
   fs.writeFileSync(path.join(child, LICENSE_FILE), 'stale text\n')
-  fs.writeFileSync(path.join(child, 'license.md'), 'legacy text\n')
+  fs.writeFileSync(path.join(child, 'LICENSE.txt'), 'legacy text\n')
 
-  assert.ok(validatePackageLicenses(fixture).length >= 4)
+  assert.ok(validatePackageLicenses(fixture).length >= 5)
   synchronizePackageLicenses(fixture)
   assert.deepEqual(validatePackageLicenses(fixture), [])
-  assert.equal(fs.existsSync(path.join(child, 'license.md')), false)
+  assert.equal(fs.existsSync(path.join(child, 'LICENSE.txt')), false)
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(child, 'package.json'), 'utf8')).files, [
+    'dist',
+    LICENSE_FILE,
+    NOTICE_FILE,
+    PATENTS_FILE
+  ])
+  assert.ok(
+    fs
+      .readFileSync(path.join(child, NOTICE_FILE))
+      .equals(fs.readFileSync(path.join(fixture, NOTICE_FILE)))
+  )
+  assert.ok(
+    fs
+      .readFileSync(path.join(child, PATENTS_FILE))
+      .equals(fs.readFileSync(path.join(fixture, PATENTS_FILE)))
+  )
 })

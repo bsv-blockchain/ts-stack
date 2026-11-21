@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { PrivateKey, OutputProtocolError } from '@bsv/sdk'
@@ -184,51 +185,55 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('retains exactly the configured physical slots over generated cancellation schedules', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.array(fc.boolean(), { minLength: 1, maxLength: 4 }),
-      async cancellations => {
-        const work = new LookupProviderWork(cancellations.length, cancellations.length)
-        const physical = cancellations.map(() => deferred<number>())
-        const started = cancellations.map(() => deferred<void>())
-        const controllers = cancellations.map(() => new AbortController())
-        const settled = cancellations.map((_, i) =>
-          work
-            .run(null, controllers[i].signal, async () => {
-              started[i].resolve()
-              return await physical[i].promise
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'retains exactly the configured physical slots over generated cancellation schedules (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 4 }),
+        async cancellations => {
+          const work = new LookupProviderWork(cancellations.length, cancellations.length)
+          const physical = cancellations.map(() => deferred<number>())
+          const started = cancellations.map(() => deferred<void>())
+          const controllers = cancellations.map(() => new AbortController())
+          const settled = cancellations.map((_, i) =>
+            work
+              .run(null, controllers[i].signal, async () => {
+                started[i].resolve()
+                return await physical[i].promise
+              })
+              .then(
+                value => ({ ok: true, value }),
+                (error: unknown) => ({ ok: false, error })
+              )
+          )
+          try {
+            await Promise.race([
+              Promise.all(started.map(x => x.promise)),
+              Promise.race(settled).then(() => {
+                throw new Error('Physical work completed before entry')
+              })
+            ])
+            for (let i = 0; i < cancellations.length; i++)
+              if (cancellations[i]) controllers[i].abort()
+            await expect(work.run(null, undefined, async () => 0)).rejects.toMatchObject({
+              code: 'limited'
             })
-            .then(
-              value => ({ ok: true, value }),
-              (error: unknown) => ({ ok: false, error })
-            )
-        )
-        try {
-          await Promise.race([
-            Promise.all(started.map(x => x.promise)),
-            Promise.race(settled).then(() => {
-              throw new Error('Physical work completed before entry')
-            })
-          ])
-          for (let i = 0; i < cancellations.length; i++)
-            if (cancellations[i]) controllers[i].abort()
-          await expect(work.run(null, undefined, async () => 0)).rejects.toMatchObject({
-            code: 'limited'
-          })
-          for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
-          const results = await Promise.all(settled)
-          for (let i = 0; i < results.length; i++) expect(results[i].ok).toBe(!cancellations[i])
-          for (let i = 0; i < 8; i++) await Promise.resolve()
-          expect(await work.run(null, undefined, async () => 'recovered')).toBe('recovered')
-        } finally {
-          for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
-          await Promise.all(settled)
+            for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
+            const results = await Promise.all(settled)
+            for (let i = 0; i < results.length; i++) expect(results[i].ok).toBe(!cancellations[i])
+            for (let i = 0; i < 8; i++) await Promise.resolve()
+            expect(await work.run(null, undefined, async () => 'recovered')).toBe('recovered')
+          } finally {
+            for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
+            await Promise.all(settled)
+          }
         }
-      }
+      ),
+      propertyBatch
     )
-  )
-})
+  }
+)
 
 describe('notification capacity, zero-wait and cleanup boundaries', () => {
   it('enforces bounded waiter configuration and classifies capacity exhaustion as retryable', () => {
