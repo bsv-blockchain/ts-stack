@@ -42,19 +42,48 @@ test('applyConfig new-mode scaffolds via runCommand and reports skipped=[]', () 
   expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
 })
 
-test('applyConfig add-mode places only wallet-login files (no auth.ts, expandRequires:false)', () => {
-  // add-mode does NOT expand requires, so only wallet-login's own files are placed
+test('applyConfig add-mode places wallet-login and the wallet-connect it requires', () => {
+  // add mode expands requires like new mode: wallet-connect's files, deps and manifest entry come along
   const addConfig: ProjectConfig = { ...newConfig, mode: 'add' }
   const boom: RunCommand = () => {
     throw new Error('must not run a command in add mode')
   }
   const res = applyConfig(addConfig, dir, { runCommand: boom, force: false })
-  // wallet-login has no shared/auth.ts — that lives in wallet-connect
-  expect(res.written).not.toContain('src/bsv/auth.ts')
-  // wallet-login client file is placed
+  expect(res.written).toContain('src/bsv/auth.ts') // wallet-connect's shared file
   expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
+  expect(res.deps.client['@bsv/sdk']).toBeDefined()
   const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-  expect(manifest.capabilities).toEqual(['wallet-login'])
+  expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+})
+
+test('applyConfig add-mode keeps an installed wallet-connect file unless forced', () => {
+  const addConfig: ProjectConfig = {
+    ...newConfig,
+    mode: 'add',
+    capabilities: ['wallet-connect', 'tx-core']
+  }
+  mkdirSync(join(dir, 'src', 'bsv'), { recursive: true })
+  writeFileSync(join(dir, 'src', 'bsv', 'auth.ts'), '// SENTINEL', 'utf8')
+  const kept = applyConfig(addConfig, dir, { runCommand: () => {}, force: false })
+  expect(kept.skipped).toContain('src/bsv/auth.ts')
+  expect(readFileSync(join(dir, 'src', 'bsv', 'auth.ts'), 'utf8')).toBe('// SENTINEL')
+  const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+  expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core']) // not duplicated
+  const forced = applyConfig(addConfig, dir, { runCommand: () => {}, force: true })
+  expect(forced.written).toContain('src/bsv/auth.ts')
+  expect(readFileSync(join(dir, 'src', 'bsv', 'auth.ts'), 'utf8')).not.toBe('// SENTINEL')
+})
+
+test('applyConfig carries the resolved pulled list on the result', () => {
+  const pulled = [{ id: 'wallet-connect', requiredBy: ['wallet-login'] }]
+  const res = applyConfig({ ...newConfig, mode: 'add', pulled }, dir, {
+    runCommand: () => {},
+    force: false
+  })
+  expect(res.pulled).toEqual(pulled)
+  expect(applyConfig({ ...newConfig, mode: 'add' }, dir, { runCommand: () => {} }).pulled).toEqual(
+    []
+  )
 })
 
 test('applyConfig add-mode with force:false preserves an existing util file', () => {
@@ -88,4 +117,37 @@ test('applyConfig add-mode written includes AGENTS.md and manifest', () => {
   const res = applyConfig(addConfig, dir, { runCommand: noop, force: false })
   expect(res.written).toContain('AGENTS.md')
   expect(res.written).toContain('bsv-scaffold.json')
+})
+
+test('raises an old sdk floor in add mode', () => {
+  for (const t of ['client', 'server']) {
+    mkdirSync(join(dir, t), { recursive: true })
+    writeFileSync(
+      join(dir, t, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^2.4.1' } }),
+      'utf8'
+    )
+  }
+  const addConfig: ProjectConfig = {
+    ...newConfig,
+    mode: 'add',
+    stack: {
+      frontend: { framework: 'react', variant: 'react-ts' },
+      backend: { framework: 'express' }
+    },
+    targets: { client: 'client', server: 'server' },
+    capabilities: ['tx-core'] // wallet-connect comes along as a requirement
+  }
+  const res = applyConfig(addConfig, dir, { runCommand: () => {}, force: false })
+  expect(res.written).toContain('server/src/bsv/auth.ts')
+  const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+  expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
+  for (const t of ['client', 'server']) {
+    const pkg = JSON.parse(readFileSync(join(dir, t, 'package.json'), 'utf8'))
+    expect(pkg.dependencies['@bsv/sdk']).toBe('^4.0.1')
+  }
+  expect(res.dependencyChanges).toEqual([
+    { target: 'client', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' },
+    { target: 'server', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' }
+  ])
 })

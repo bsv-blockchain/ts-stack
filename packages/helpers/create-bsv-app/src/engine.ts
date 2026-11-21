@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { FileSpec, Capability, CapabilityContext, Role } from './types.js'
 import type { ProjectConfig, Layout } from './config/model.js'
-import { layoutOf } from './config/model.js'
+import { layoutOf, targetFolder } from './config/model.js'
 import { writeUtf8FileAtomic, writeUtf8FileExclusive } from './file-system.js'
 
 export type TargetKey = 'root' | 'client' | 'server'
@@ -16,10 +16,11 @@ export interface PlacementResult {
 const ROLES: Role[] = ['shared', 'client', 'server']
 const targetRoot = (config: ProjectConfig, t: TargetKey): string => {
   if (t === 'root') return ''
-  return config.targets[t] ?? t
+  return targetFolder(config, t)
 }
 
-function roleTargetsFor(layout: Layout): Record<Role, TargetKey[]> {
+/** Which targets each role's files and dependencies go to in `layout`. */
+export function roleTargetsFor(layout: Layout): Record<Role, TargetKey[]> {
   switch (layout) {
     case 'frontend-only':
       return { shared: ['client'], client: ['client'], server: [] }
@@ -32,7 +33,23 @@ function roleTargetsFor(layout: Layout): Record<Role, TargetKey[]> {
   }
 }
 
+/** True when `layout` places `role` files anywhere (e.g. no `client` role in backend-only). */
+export function layoutHasRole(layout: Layout, role: Role): boolean {
+  return roleTargetsFor(layout)[role].length > 0
+}
+
+/** True when at least one of the capability's roles has a target in `layout`. */
+export function fitsLayout(cap: Capability, layout: Layout): boolean {
+  const roleTargets = roleTargetsFor(layout)
+  return cap.roles.some(role => roleTargets[role].length > 0)
+}
+
 const joinRel = (...parts: string[]): string => parts.filter(p => p.length > 0).join('/')
+
+/** Project-relative path of `path` inside target `t` (e.g. `server/src/index.ts`, or `src/index.ts` at the root). */
+export function targetPath(config: ProjectConfig, t: TargetKey, path: string): string {
+  return joinRel(targetRoot(config, t), path)
+}
 
 type AddFile = (map: Map<string, FileSpec>, path: string, content: string) => void
 
