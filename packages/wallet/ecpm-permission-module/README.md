@@ -1,6 +1,6 @@
 # ECPM Permission Module
 
-Patch candidate `0.1.4` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Security release `0.2.0` changes ECPM scalar derivation to address GHSA-m3c6-3mv8-j86f. A point masked with 0.1.x cannot be unmasked with 0.2.0; finish or restart an in-progress protocol on one version.
 
 `@bsv/ecpm-permission-module` implements the BRC-229 `p ecpm` semantic module
 for BRC-100 wallets. It applies or removes a BRC-42/43-derived scalar to an
@@ -38,10 +38,14 @@ const removed = await wallet.getPublicKey({
 })
 ```
 
-For both calls, the module derives the scalar under the canonical namespace
-`p ecpm mental poker deal`. The operation and point are deliberately excluded
-from the BRC-42 invoice so every point uses the same scalar and `remove`
-selects the inverse of the scalar used by `apply`.
+For both calls, the module derives a BRC-42/43 child key under the canonical
+namespace `p ecpm mental poker deal`, then maps it to the multiplication scalar
+by HKDF-SHA256 as `1 + (OKM mod (n - 1))`. The child key is used only as HKDF input
+and is never returned, and the scalar is not linear in it: this prevents a
+counterparty who can compute the BRC-42 offset from stripping it off `d·Q` to
+recover the wallet's root ECDH secret. The operation and point are deliberately
+excluded from the derivation identity so every point uses the same scalar and
+`remove` selects the inverse of the scalar used by `apply`.
 
 ## Installation
 
@@ -72,8 +76,8 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 })
 ```
 
-Call `ecpm.dispose()` when the host tears down the wallet. The method clears
-cached and pending authorization state.
+Call `ecpm.dispose()` when the host tears down the wallet. The method clears cached and pending authorization state. In-flight requests
+are invalidated, including a late authorization or privileged key-provider result.
 
 Successful grants are capped at 1,024 entries with oldest-grant eviction, and
 at most 64 distinct authorization prompts may remain in flight. Requests that
@@ -83,6 +87,9 @@ permanently pending authorization UI into unbounded wallet memory.
 
 Security level 0 primary-key requests do not prompt. Levels 1 and 2 require
 the authorization callback, with level 2 grants scoped to the counterparty.
+Any origin can also call `remove` at level 0 on a mask whose derivation identity
+it knows. A protocol that needs origin-scoped permission for masking or removal
+must use security level 1 or 2.
 Every privileged request requires authorization regardless of security level,
 and cached or in-flight privileged grants are scoped to the exact approved
 `privilegedReason`. Changing the reason requires a separate authorization.
@@ -123,7 +130,7 @@ pnpm --filter @bsv/ecpm-permission-module pack:check
 
 ## License
 
-Open BSV License version 6. See `LICENSE.txt`.
+Apache License 2.0. See `LICENSE`.
 
 ## SDK4 hotfix peer requirement
 

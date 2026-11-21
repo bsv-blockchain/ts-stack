@@ -2,6 +2,7 @@
 
 The documentation is split into various pages, each covering a set of related functionality. The pages are as follows:
 
+- [#544 implementation map](./implementation-544.md) — Candidate source components, consumer lifecycle and qualification requirements.
 - [Backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/) — Both key material and wallet records are required.
 - [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) — Current portable data APIs and import/export limits.
 - [Recovery drill](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/) — Acceptance checklist and evidence template.

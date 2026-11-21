@@ -47,6 +47,8 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Rebuild audited build tool
         run: pnpm rebuild esbuild
+      - name: Test background mutation planning and installed engine controls
+        run: node --test scripts/background-tests/*.test.mjs scripts/mutation-partitions-engine.integration.mjs
       - name: Build required property graph
         run: pnpm build:property
       - name: Collect background mutation evidence

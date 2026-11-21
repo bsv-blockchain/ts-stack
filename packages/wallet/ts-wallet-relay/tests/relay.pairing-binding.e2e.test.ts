@@ -1,7 +1,7 @@
 /**
  * E2E tests for the two pairing bindings:
- *  - the origin's session lookup reports the backend key and the phone requires
- *    it to equal the QR key, and
+ *  - the origin's session lookup reports the QR pairing tuple and the phone requires
+ *    the backend key to equal the QR key, and
  *  - the relay delivers desktop-role traffic to a mobile socket only after the
  *    backend accepted that socket's pairing.
  *
@@ -206,8 +206,14 @@ describe('pairing key binding and desktop traffic hold', () => {
       const created = await service.createSession()
       const { params } = parsePairingUri(created.pairingUri)
       const res = await nativeFetch(`${baseUrl}/api/session/${created.sessionId}`)
-      const body = (await res.json()) as { backendIdentityKey?: string }
+      const body = (await res.json()) as {
+        topic?: string
+        backendIdentityKey?: string
+        protocolID?: string
+      }
+      expect(body.topic).toBe(params!.topic)
       expect(body.backendIdentityKey).toBe(params!.backendIdentityKey)
+      expect(body.protocolID).toBe(params!.protocolID)
       expect(service.getSession(created.sessionId)?.backendIdentityKey).toBe(
         params!.backendIdentityKey
       )
