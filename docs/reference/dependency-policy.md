@@ -222,24 +222,22 @@ provenance-verified adapter before adding BiDi tests. This removal makes no
 claim to qualify BiDi. Retire it once the compatible official dependency graph
 passes provenance, the full audit and the unchanged browser contract.
 
-## Temporary Metro watcher dependency repair
+## Retired Metro watcher dependency repair
 
-Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
-Picomatch 2.3.2. The exact-version paired source/distribution patch calls that
-same loop directly, declares the same exact Picomatch dependency and removes
-only the scoped micromatch dependency and its now-unused braces closure.
-The reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
-lists no patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
-is still unreleased. No advisory exclusion or audit threshold change is added.
+Metro-file-map 0.87.1 reached the braces package through micromatch, affected by
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). A
+temporary exact-version patch, package extension and scoped removal replaced
+that path. Metro-file-map 0.87.2 and later match watched files without
+micromatch, so Metro 0.87.3 removes the path upstream and the repair is retired.
+The mobile platform gate now fails if metro-file-map declares micromatch or
+braces again, before its packed Metro/Hermes compilation, source-map and
+bundle budget checks.
 
-The existing mobile platform gate checks 1,120 watcher results frozen from the
-unmodified published implementation, event/stat/path contracts, and absence of
-the removed matcher packages before its packed Metro/Hermes compilation,
-source-map/composition and unchanged bundle budgets. The dated override registry
-owns the patch, exact package extension and scoped removal as one repair. Remove
-all three together when an official compatible release removes the affected
-path and the full compatibility, frozen graph, audit and platform checks pass.
-This build-tool repair does not change published wallet APIs or package versions.
+The exact `metro-file-map@0.87.1` patch key also stopped every Dependabot
+update of Metro with `ERR_PNPM_UNUSED_PATCH`, because pnpm rejects a patch key
+that no longer matches an installed version. Key a patch by package name in
+`patchedDependencies`, and keep `ignorePatchFailures: false`, so that a version
+update keeps the patch and a patch that no longer applies fails the install.
 
 ## Temporary standalone service watcher repair
 
@@ -395,17 +393,15 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-10-01 review rechecked all 25 selectors against the frozen graph.
-Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
-`engine.io` ranges, so those two substitutions stay. The earlier findings still
-hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
-`uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
-current frontmatter plugin still requests TOML 3.x. New upstream majors can
-remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. Metro 0.87.1 replaced its `image-size` dependency with an in-tree
-parser, so the former Metro-scoped substitution was retired; the mobile
-platform contract verifies that boundary. The method, result, count, and next
-rehearsal are enforced in
+The 2026-10-02 reconciliation retains 26 selectors from the reviewed main
+updates, including the Mermaid/chevrotain `lodash-es` remediation and the
+Yamux-scoped stream-interface compatibility substitution. It preserves the
+qualified `brace-expansion` 5.0.12 workspace and standalone floor for
+GHSA-q2hr-2g5m-vwhr; Jest and Stryker still admit vulnerable earlier ranges.
+The `engine.io` substitution remains. Metro 0.87.1 replaced its `image-size`
+dependency with an in-tree parser, so the former Metro-scoped substitution
+was retired; the mobile platform contract verifies that boundary. The method,
+result, count and next rehearsal are enforced in
 `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly

@@ -2,14 +2,55 @@
   "profile": "mobile",
   "maximumBytes": {
     "metro": {
+      "raw": 3013000,
+      "gzip": 776250,
+      "brotli": 586500
+    },
+    "hermes": {
+      "raw": 6368750,
+      "gzip": 2675000,
+      "brotli": 2093750
+    }
+  },
+  "branchAllowance": {
+    "owner": "ty-everett",
+    "scope": "Held PR569 Metro15percent and Hermes25percent artifact ceilings only",
+    "increasePercent": 15,
+    "basis": "Operator direction to use judicious limits, with complete retained-feature current514 measurements5.6-9.5percent above baseline; no namespace, compiler, map, license, runtime or negative oracle is removed.",
+    "evidence": "https://github.com/bsv-blockchain/ts-stack/actions/runs/38903243299/job/116981751349",
+    "measuredSourceHead": "a21b028df90f5c4a7a5789c874326ce092c3acef",
+    "baselineMetroBytes": {
       "raw": 2620000,
       "gzip": 675000,
       "brotli": 510000
     },
+    "observedMetroBytes": {
+      "raw": 2765570,
+      "gzip": 729495,
+      "brotli": 558373
+    },
+    "earliestReviewDate": "2026-10-23",
+    "reviewNotBefore": "Full implementation, validation, feature completion and goal achievement",
+    "removalCondition": "At post-goal measured review, compare qualified full-feature artifacts to the original baseline, record necessary reductions or retained ceilings, and replace this provisional branch allowance.",
+    "compatibility": "No export/runtime/protocol/map/minifier/dependency/consumer migration. Native/production/security/runtime-memory limits unchanged; artifact-only allowances are not platform or physical-device proof.",
+    "wholeMobileQualificationEstablished": false,
     "hermes": {
-      "raw": 5095000,
-      "gzip": 2140000,
-      "brotli": 1665000
+      "increasePercent": 25,
+      "baselineBytes": {
+        "raw": 5095000,
+        "gzip": 2140000,
+        "brotli": 1675000
+      },
+      "observedBytes": {
+        "raw": 6116798,
+        "gzip": 2575349,
+        "brotli": 1985367
+      },
+      "measuredSourceHead": "ea6db40d66c28e43f29488d786af07e13ec95866",
+      "evidence": "https://github.com/bsv-blockchain/ts-stack/actions/runs/38988632617/job/117266565764",
+      "reproducibleCompilationPassedBeforeBudgetRefusal": true,
+      "basis": "Full retained-feature bytecode18.5-20.3percent above original limits; finite25percent allowance leaves about4-5.5percent headroom, with post-goal review/removal condition inherited.",
+      "wholeMobileQualified": false
     }
   }
 }

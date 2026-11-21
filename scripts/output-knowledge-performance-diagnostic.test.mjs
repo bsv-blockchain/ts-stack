@@ -470,9 +470,11 @@ test('the additive coordinator diagnostic binds the other original property with
   )
   assert.match(source, /MIN_PROPERTY_RUNS = 300/)
   assert.match(source, /seed : 3242026/)
-  assert.match(source, /interruptAfterTimeLimit: 300000/)
-  assert.match(source, /markInterruptAsFailure: true/)
-  assert.match(source, /}, 360000\)/)
+  assert.match(
+    source,
+    /OUTPUT_KNOWLEDGE_MONOTONIC_FILE\s*\? measuredPropertyCampaign\(cases, 300000\)\s*:\s*propertyTestBatches\(cases\)/
+  )
+  assert.match(source, /},\s*360000\s*\)/)
 })
 
 test('hosted timing is explicitly opt-in and preserves the ordinary artifact and coverage gates', () => {
