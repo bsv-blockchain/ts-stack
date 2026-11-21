@@ -1,4 +1,27 @@
-# 4.1.2 unpublished patch candidate
+# 4.1.3 unpublished patch candidate
+
+### Fixed: zero-field initial certificate proofs
+
+- A `Peer` that initiates a handshake may now accept an initial response that
+  proves a certificate with zero revealed fields, when the locally retained
+  session request asked for that certifier and type with an empty field list.
+  The keyring must be empty, null or omitted, and nothing is decrypted. Only
+  an initial response on a session the `Peer` initiated qualifies: one that
+  arrives on a responder's session, or after the handshake completed, keeps the
+  nonempty path, and zero-field standalone (mid-session) responses stay refused.
+- A zero-field proof carries no keyring encrypted for the verifier, and the
+  initial-response signature covers only the nonces, not the certificates. So
+  it shows that a valid certificate names the authenticated identity as its
+  subject, not that the holder's wallet presented it.
+- `validateCertificates` takes an optional fifth argument, `allowZeroFields`,
+  default `false`. Existing callers keep the nonempty path; `Peer` opts in only
+  for the request its session retained.
+- A session store that loses the request snapshot keeps the nonempty path; the
+  snapshot is no longer backfilled from the mutable `certificatesToRequest`.
+  On such a session, a later standalone response's handshake policy falls back
+  to the current `certificatesToRequest`. No wire-format change.
+
+# 4.1.2
 
 - `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
   instructions in the usual ASM. If that notation would change any suffix bytes,

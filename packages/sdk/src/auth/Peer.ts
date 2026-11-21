@@ -883,9 +883,12 @@ export class Peer {
    *
    * @private
    * @param {AuthMessage} message - The incoming initial response message.
+   * @returns The session, and whether this Peer initiated it.
    * @throws Will throw an error if nonce or signature verification fails.
    */
-  private async authenticateInitialResponse(message: AuthMessage): Promise<PeerSession> {
+  private async authenticateInitialResponse(
+    message: AuthMessage
+  ): Promise<[peerSession: PeerSession, locallyInitiated: boolean]> {
     const validNonce = await verifyNonce(
       message.yourNonce as string,
       this.#wallet,
@@ -941,24 +944,32 @@ export class Peer {
     )
 
     // --- Transport authentication complete ---
+    // Only a session this Peer initiated and has not yet authenticated has no
+    // peer nonce: a responder session holds the initiator's nonce from
+    // creation, and authentication below sets it.
+    const locallyInitiated = peerSession.peerNonce == null
     peerSession.peerNonce = message.initialNonce
     peerSession.peerIdentityKey = message.identityKey
     peerSession.isAuthenticated = true
 
-    peerSession.certificatePolicy ??= this.#snapshotCertificatePolicy(this.certificatesToRequest)
-    peerSession.certificatesRequired = peerSession.certificatePolicy.certifiers.length > 0
+    // Do not backfill a lost snapshot: its absence is what keeps zero-field
+    // validation from being authorized by the mutable default below.
+    const certificatePolicy =
+      peerSession.certificatePolicy ?? this.#snapshotCertificatePolicy(this.certificatesToRequest)
+    peerSession.certificatesRequired = certificatePolicy.certifiers.length > 0
 
     // IMPORTANT: validation defaults to false if certs are required
     peerSession.certificatesValidated = !peerSession.certificatesRequired
 
     peerSession.lastUpdate = Date.now()
     await this.sessionManager.updateSession(peerSession)
-    return peerSession
+    return [peerSession, locallyInitiated]
   }
 
   private async validateInitialResponseCertificates(
     message: AuthMessage,
-    peerSession: PeerSession
+    peerSession: PeerSession,
+    locallyInitiated = false
   ): Promise<void> {
     if (
       !peerSession.certificatesRequired ||
@@ -969,11 +980,15 @@ export class Peer {
     }
     const sessionNonce = peerSession.sessionNonce as string
     await this.updateCertificateSession(sessionNonce, async session => {
+      // Zero fields answer only the request this Peer sent as initiator, from
+      // the snapshot its session retained; a store that drops the snapshot
+      // keeps the nonempty path rather than using the mutable default.
       await validateCertificates(
         this.#wallet,
         message,
         session.certificatePolicy ?? this.certificatesToRequest,
-        this.#originator
+        this.#originator,
+        locallyInitiated && session.certificatePolicy != null
       )
       session.certificatesValidated = true
       session.lastUpdate = Date.now()
@@ -1029,8 +1044,8 @@ export class Peer {
   }
 
   async #processInitialResponse(message: AuthMessage): Promise<void> {
-    const peerSession = await this.authenticateInitialResponse(message)
-    await this.validateInitialResponseCertificates(message, peerSession)
+    const [peerSession, locallyInitiated] = await this.authenticateInitialResponse(message)
+    await this.validateInitialResponseCertificates(message, peerSession, locallyInitiated)
     this.lastInteractedWithPeer = message.identityKey
     this.#releaseInitialResponseWaiters(peerSession)
     await this.#answerInitialCertificateRequest(message)
@@ -1241,7 +1256,10 @@ export class Peer {
         if (policy == null) {
           throw new Error('Certificates do not match a locally requested set for this session.')
         }
-        await validateCertificates(this.#wallet, message, policy, this.#originator)
+        // Zero fields are an initial-response proof only. The matcher above
+        // already refuses an empty keyring; false keeps this call on the
+        // nonempty path if that ever changes.
+        await validateCertificates(this.#wallet, message, policy, this.#originator, false)
         if (requested != null) delete session.pendingCertificateRequests?.[requested[0]]
         // A separate dynamic request cannot satisfy a different handshake requirement.
         if (matchesHandshake) session.certificatesValidated = true

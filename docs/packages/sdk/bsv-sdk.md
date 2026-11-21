@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.2'
+version: '4.1.3'
 npm: '@bsv/sdk'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,17 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## Zero-field initial certificate proofs
+
+The 4.1.3 source candidate lets a `Peer` that initiates a handshake accept an
+initial response proving a certificate with zero revealed fields, when its
+retained request lists that certifier and type with an empty field list. The
+signed core is checked, the keyring must be empty, null or omitted, and nothing
+is decrypted. `validateCertificates` takes an optional `allowZeroFields`
+argument, default `false`, so existing callers keep the nonempty path. Responder
+sessions and standalone responses keep the nonempty path. No wire or stored-data
+change. Source is not publication.
 
 ## Script ASM for data outputs
 
