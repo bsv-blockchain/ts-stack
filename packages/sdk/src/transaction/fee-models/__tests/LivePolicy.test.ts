@@ -141,4 +141,61 @@ describe('LivePolicy', () => {
     expect(fee).toBe(1)
     expectDefaultFallback(consoleSpy)
   })
+
+  describe('configured policy endpoint and HTTP client', () => {
+    const policyClient = (satoshis: number, bytes = 1000) => {
+      const request = jest.fn(async (_url: string, _options: unknown) => ({
+        ok: true as const,
+        status: 200,
+        statusText: 'OK',
+        data: { policy: { miningFee: { satoshis, bytes } } }
+      }))
+      return { request }
+    }
+
+    it('reads the rate from the configured URL through the configured client', async () => {
+      global.fetch = jest.fn(async () => {
+        throw new Error('the global fetch must not be used')
+      }) as any
+      const httpClient = policyClient(50)
+      const policy = new LivePolicy(60_000, {
+        policyUrl: 'https://arc.example.test/v1/policy',
+        httpClient
+      })
+
+      const fee = await policy.computeFee(createMockTransaction())
+
+      expect(httpClient.request).toHaveBeenCalledTimes(1)
+      expect(httpClient.request).toHaveBeenCalledWith('https://arc.example.test/v1/policy', {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      })
+      expect(policy.value).toBe(50)
+      expect(fee).toBe(1)
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it('keeps the GorillaPool endpoint when only a client is configured', async () => {
+      const httpClient = policyClient(10)
+      await new LivePolicy(0, { httpClient }).computeFee(createMockTransaction())
+      expect(httpClient.request.mock.calls[0][0]).toBe('https://arc.gorillapool.io/v1/policy')
+    })
+
+    it('falls back as before when the configured client fails', async () => {
+      const httpClient = { request: jest.fn(async () => await Promise.reject(new Error('down'))) }
+      const fee = await new LivePolicy(0, { httpClient }).computeFee(createMockTransaction())
+      expect(fee).toBe(1)
+      expect(httpClient.request).toHaveBeenCalledTimes(1)
+      expectDefaultFallback(consoleSpy)
+    })
+
+    it.each([
+      ['a relative URL', { policyUrl: '/v1/policy' }],
+      ['a non-HTTP URL', { policyUrl: 'ftp://arc.example.test/v1/policy' }],
+      ['a non-string URL', { policyUrl: 42 }],
+      ['a client without request()', { httpClient: {} }]
+    ])('refuses %s at construction', (_case, options) => {
+      expect(() => new LivePolicy(60_000, options as any)).toThrow(TypeError)
+    })
+  })
 })
