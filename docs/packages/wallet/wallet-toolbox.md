@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.18.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
