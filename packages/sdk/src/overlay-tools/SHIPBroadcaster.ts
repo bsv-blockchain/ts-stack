@@ -9,7 +9,7 @@ import LookupResolver, { type LookupNetworkPreset } from './LookupResolver.js'
 import { decodeAndVerifyOverlayAdvertisement } from './OverlayAdminTokenTemplate.js'
 import { isOverlayTopicName } from './OverlayNames.js'
 import { createPublicNetworkFetch } from '../storage/PublicHTTPSFetch.js'
-import { utf8ByteLength } from '../primitives/UTF8.js'
+import { utf8Bytes, utf8ByteLength } from '../primitives/UTF8.js'
 
 /**
  * Tagged BEEF
@@ -100,6 +100,8 @@ const MAX_SHIP_ADVERTISEMENTS = 256
 const MAX_SHIP_ADVERTISEMENT_BEEF_BYTES = 16 * 1024 * 1024
 const MAX_SHIP_TOTAL_ADVERTISEMENT_BEEF_BYTES = 64 * 1024 * 1024
 const SHIP_REQUEST_TIMEOUT_MS = 30_000
+const MAX_SHIP_ERROR_BODY_BYTES = 8192
+const SHIP_ERROR_BODY_TIMEOUT_MS = 2_000
 
 function shipEndpoint(base: string, allowHTTP: boolean): URL {
   const httpEnabled = allowHTTP === true
@@ -234,7 +236,18 @@ function validateInstructionIndexes(value: unknown, label: string): number[] {
   return result
 }
 
-function validateSTEAK(value: unknown, topics: string[]): STEAK {
+/**
+ * Validates an overlay's STEAK answer for a submission to `topics`, as
+ * TopicBroadcaster does with every facilitator answer. It refuses anything but
+ * a plain object whose keys are among `topics` and whose instructions hold only
+ * bounded, unique output indexes, and returns a validated null-prototype copy.
+ * Callers that use a facilitator directly can apply the same check to `send()`.
+ *
+ * @param value - The parsed JSON answer from an overlay's submit route.
+ * @param topics - The topics the transaction was submitted to.
+ * @throws {Error} When the answer is not a valid STEAK for those topics.
+ */
+export function validateSTEAK(value: unknown, topics: string[]): STEAK {
   if (!isPlainRecord(value)) throw new Error('SHIP response is not a valid STEAK object.')
   const entries = Object.entries(value)
   if (entries.length > MAX_SHIP_TOPICS) throw new Error('SHIP response contains too many topics.')
@@ -318,6 +331,70 @@ async function readSHIPJSON(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * A non-2xx answer from an overlay's submit route. The message is unchanged
+ * from earlier releases; `status` and the first 8 KiB of the response `body`
+ * (untrusted text, empty when unreadable) let callers tell a refusal from an
+ * outage and report what the overlay said.
+ */
+export class OverlayBroadcastHTTPError extends Error {
+  readonly status: number
+  readonly body: string
+
+  constructor(status: number, body: string) {
+    super('Failed to facilitate broadcast')
+    this.name = 'OverlayBroadcastHTTPError'
+    this.status = status
+    this.body = body
+  }
+}
+
+/**
+ * Reads at most 8 KiB of an error body for diagnostics, for at most `timeoutMs`.
+ * A body that stalls or fails keeps what arrived, so the known HTTP status is
+ * never lost to a slow diagnostic.
+ */
+async function readSHIPErrorBody(response: Response, timeoutMs: number): Promise<string> {
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    reader = response.body?.getReader()
+    const read = async (): Promise<void> => {
+      if (reader == null) {
+        if (typeof response.text === 'function') chunks.push(utf8Bytes(await response.text()))
+        return
+      }
+      while (total < MAX_SHIP_ERROR_BODY_BYTES) {
+        const next = await reader.read()
+        if (next.done) return
+        chunks.push(next.value)
+        total += next.value.byteLength
+      }
+    }
+    await Promise.race([
+      read(),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, timeoutMs)
+      })
+    ])
+  } catch {
+    // An unreadable body keeps what arrived before the failure.
+  } finally {
+    clearTimeout(timer)
+    // Release the rest without waiting on a transport that may never answer.
+    void reader?.cancel().catch(() => {})
+  }
+  const bytes = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder('utf-8').decode(bytes.subarray(0, MAX_SHIP_ERROR_BODY_BYTES))
+}
+
 export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilitator {
   httpClient: typeof fetch
   allowHTTP: boolean
@@ -359,6 +436,7 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
     }
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = Date.now() + SHIP_REQUEST_TIMEOUT_MS
     const request = (async () => {
       const response = await this.httpClient(endpoint.toString(), {
         method: 'POST',
@@ -367,7 +445,15 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
         signal: controller.signal,
         redirect: 'error'
       })
-      if (!response.ok) throw new Error('Failed to facilitate broadcast')
+      if (!response.ok) {
+        // The diagnostic read ends before the request deadline, so the status always wins.
+        const body = await readSHIPErrorBody(
+          response,
+          Math.min(SHIP_ERROR_BODY_TIMEOUT_MS, deadline - Date.now() - 1)
+        )
+        const status = Number.isSafeInteger(response.status) ? response.status : 0
+        throw new OverlayBroadcastHTTPError(status, body)
+      }
       return await readSHIPJSON(response)
     })()
     request.catch(() => {})
