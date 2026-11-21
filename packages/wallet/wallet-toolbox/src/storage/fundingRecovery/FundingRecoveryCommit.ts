@@ -1,3 +1,4 @@
+import type { StorageActiveWrite } from '../StorageActiveWrite'
 import type { StorageInternalizeActionResult, TrxToken } from '../../sdk/WalletStorage.interfaces'
 
 /**
@@ -10,5 +11,8 @@ import type { StorageInternalizeActionResult, TrxToken } from '../../sdk/WalletS
 export interface FundingRecoveryCommit {
   readonly protocol: 'wallet-funding-recovery-v1'
   reject(): Promise<void>
-  commit(run: (trx: TrxToken, retryNewReceipt?: boolean) => Promise<StorageInternalizeActionResult>): Promise<StorageInternalizeActionResult>
+  commit(
+    run: (trx: TrxToken, retryNewReceipt?: boolean) => Promise<StorageInternalizeActionResult>,
+    capturedWrite?: StorageActiveWrite
+  ): Promise<StorageInternalizeActionResult>
 }
