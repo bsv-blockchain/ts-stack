@@ -19,6 +19,10 @@ import {
   REVENUE_LISTING_ACTIVE_PROGRAM_SHA256
 } from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { fixture as currentProfileFixture } from './revenue-profile.fixture.js'
+// Cold SQLite setup, Script verification and reopening run with instrumentation
+// in hosted coverage. Give these real native operations their own hang budget.
+jest.setTimeout(30000)
+
 const signal = () => new AbortController().signal
 it.each(['historical', 'current'] as const)(
   'rechecks returned funded bytes on every finalized recovery (%s)',
@@ -103,6 +107,17 @@ it('passes owned native bytes while retaining the original base64 plan and recov
   expect(f.counts.finalize).toBe(1)
   expect(f.native.broadcast).not.toHaveBeenCalled()
 })
+it('drains an in-flight SQLite reopen and refuses new opens after fixture teardown starts', async () => {
+  const f = await nativePurchaseWalletFixture()
+  const opening = f.native.open()
+  const closing = f.native.close()
+  await expect(f.native.open()).rejects.toThrow('fixture is closing or closed')
+  expect((await opening).identities).toEqual(f.native.native.identities)
+  await closing
+  expect(f.native.close()).toBe(closing)
+  await expect(f.native.open()).rejects.toThrow('fixture is closing or closed')
+})
+
 it('constructs, funds, signs and recovers an actual native purchase with full selected-chain Script/genesis verification', async () => {
   const f = await nativePurchaseWalletFixture(),
     active = signal(),
@@ -287,7 +302,6 @@ it('refuses a verified expired current listing before native allocation', async 
 })
 describe('selected chain during native allocation', () => {
   let f: Awaited<ReturnType<typeof nativeProfilePurchaseWalletFixture>>
-  // Fixture setup and the full operation each keep Jest's original 5s bound.
   // Every case owns a fresh wallet; no signed intent or verification is reused.
   beforeEach(async () => {
     f = await nativeProfilePurchaseWalletFixture()

@@ -3,6 +3,8 @@ import OP from './OP.js'
 import { encode, hexToUint8Array, toHex, toArray } from '../primitives/utils.js'
 import BigNumber from '../primitives/BigNumber.js'
 
+const RAW_RETURN_SUFFIX_PREFIX = '0x'
+
 /**
  * The Script class represents a script in a Bitcoin SV transaction,
  * encapsulating the functionality to construct, parse, and serialize
@@ -75,6 +77,8 @@ export default class Script {
    * non-minimal `OP_PUSHDATA*` of length 0, so a blank is never required to
    * round-trip.
    *
+   * A final `0x<hex>` token immediately after a top-level OP_RETURN supplies
+   * the entire suffix as raw bytes. A plain hex token represents a data push.
    * @param asm - The script in ASM string format.
    * @returns A new Script instance.
    * @example
@@ -88,11 +92,36 @@ export default class Script {
     const tokens = asm.split(' ')
     let i = 0
     while (i < tokens.length) {
+      const token = tokens[i]
+      if (i === tokens.length - 1 && token.startsWith(RAW_RETURN_SUFFIX_PREFIX)) {
+        const returnChunk = Script.#finalTopLevelReturn(chunks)
+        if (returnChunk !== undefined) {
+          const hex = token.slice(RAW_RETURN_SUFFIX_PREFIX.length)
+          if (hex.length === 0 || hex.length % 2 !== 0) {
+            throw new Error('invalid raw OP_RETURN suffix in script')
+          }
+          returnChunk.data = toArray(hex, 'hex')
+          break
+        }
+      }
       const { chunk, advance } = Script.#parseASMToken(tokens, i)
       chunks.push(chunk)
       i += advance
     }
     return new Script(chunks)
+  }
+
+  static #finalTopLevelReturn(chunks: ScriptChunk[]): ScriptChunk | undefined {
+    const last = chunks.at(-1)
+    if (last?.op !== OP.OP_RETURN) return undefined
+    let depth = 0
+    for (const chunk of chunks) {
+      if (chunk.op === OP.OP_RETURN && depth === 0) {
+        return chunk === last ? chunk : undefined
+      }
+      depth += Script.#conditionalDepthDelta(chunk.op)
+    }
+    return undefined
   }
 
   static #pushdataOpCodeNum(len: number): number {
@@ -609,6 +638,13 @@ export default class Script {
     return { len, newPos: Math.min(pos + 4, length), hasLength }
   }
 
+  static #conditionalDepthDelta(op: number): number {
+    if (op === OP.OP_ENDIF) return -1
+    return op === OP.OP_IF || op === OP.OP_NOTIF || op === OP.OP_VERIF || op === OP.OP_VERNOTIF
+      ? 1
+      : 0
+  }
+
   static #parseChunks(bytes: ArrayLike<number>): ScriptChunk[] {
     const chunks: ScriptChunk[] = []
     const length = bytes.length
@@ -623,11 +659,7 @@ export default class Script {
         break
       }
 
-      if (op === OP.OP_IF || op === OP.OP_NOTIF || op === OP.OP_VERIF || op === OP.OP_VERNOTIF) {
-        inConditionalBlock++
-      } else if (op === OP.OP_ENDIF) {
-        inConditionalBlock--
-      }
+      inConditionalBlock += Script.#conditionalDepthDelta(op)
 
       if (op > 0 && op <= OP.OP_PUSHDATA4) {
         const { len, newPos, hasLength } = Script.#readPushdataLength(op, bytes, pos, length)
@@ -679,6 +711,11 @@ export default class Script {
   }
 
   #_chunkToString(chunk: ScriptChunk): string {
+    // The binary parser folds the entire top-level OP_RETURN suffix into data.
+    if (chunk.op === OP.OP_RETURN && chunk.data !== undefined) {
+      return ` OP_RETURN${Script.#disassembleReturnSuffix(chunk.data)}`
+    }
+
     let op = chunk.op
     let data = chunk.data
     // A zero-length push is OP_0. A blank token would be read back as another push.
@@ -688,5 +725,35 @@ export default class Script {
     }
     if (data === undefined) return ` ${OP[op] as string}`
     return ` ${toHex(data)}`
+  }
+
+  /**
+   * Print ordinary instructions while they represent the suffix exactly. If
+   * any instruction would change bytes, render the whole suffix as one token.
+   */
+  static #disassembleReturnSuffix(bytes: number[]): string {
+    let str = ''
+    const length = bytes.length
+    let pos = 0
+    while (pos < length) {
+      const op = bytes[pos++] ?? 0
+      if (op > 0 && op <= OP.OP_PUSHDATA4) {
+        const { len, newPos, hasLength } = Script.#readPushdataLength(op, bytes, pos, length)
+        pos = newPos
+        const end = Math.min(pos + len, length)
+        if (!hasLength || end - pos !== len || op !== Script.#pushdataOpCodeNum(len)) {
+          return ` ${RAW_RETURN_SUFFIX_PREFIX}${toHex(bytes)}`
+        }
+        str += ` ${toHex(Script.#copyRange(bytes, pos, end))}`
+        pos = end
+      } else {
+        const name = OP[op]
+        if (typeof name !== 'string' || OP[name] !== op) {
+          return ` ${RAW_RETURN_SUFFIX_PREFIX}${toHex(bytes)}`
+        }
+        str += ` ${name}`
+      }
+    }
+    return str
   }
 }

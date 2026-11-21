@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../../../utility/promiseFromSync'
 import { HeightRange } from './HeightRange'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
@@ -116,22 +117,28 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
     return new HeightRange(this.firstHeight, this.firstHeight + this.count - 1)
   }
 
-  async ensureData(): Promise<Uint8Array> {
-    if (this.data == null) throw new WERR_INVALID_OPERATION('data is undefined and no ensureData() override')
-    return this.data
+  ensureData(): Promise<Uint8Array> {
+    return promiseFromSync(() => {
+      if (this.data == null) throw new WERR_INVALID_OPERATION('data is undefined and no ensureData() override')
+      return this.data
+    })
   }
 
   /**
    * Whenever reloading data from a backing store, validated fileHash must be re-verified
    * @returns the sha256 hash of the file's data as base64 string.
    */
-  async computeFileHash(): Promise<string> {
-    if (this.data == null) throw new WERR_INVALID_OPERATION('requires defined data')
-    return asString(sha256(asArray(this.data)), 'base64')
+  computeFileHash(): Promise<string> {
+    return promiseFromSync(() => {
+      if (this.data == null) throw new WERR_INVALID_OPERATION('requires defined data')
+      return asString(sha256(asArray(this.data)), 'base64')
+    })
   }
 
-  async releaseData(): Promise<void> {
-    this.data = undefined
+  releaseData(): Promise<void> {
+    return promiseFromSync(() => {
+      this.data = undefined
+    })
   }
 
   toCdnInfo(): BulkHeaderFileInfo {

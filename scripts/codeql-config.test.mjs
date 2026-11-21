@@ -63,17 +63,23 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
     .filter(Boolean)
     .filter(path => !generatedBoundaries.some(boundary => matchesGeneratedBoundary(path, boundary)))
 
-  assert.deepEqual(readIndentedList(workflow, 'language', 8), ['actions', 'javascript-typescript'])
-  assert.deepEqual(
-    authoredPythonFiles,
-    [],
-    'authored Python requires restoring the Python CodeQL lane'
+  assert.deepEqual(readIndentedList(workflow, 'language', 8), [
+    'actions',
+    'javascript-typescript',
+    ...(authoredPythonFiles.length > 0 ? ['python'] : [])
+  ])
+  assert.ok(
+    authoredPythonFiles.includes('conformance/runner/scripts/brc118-vectors.py'),
+    'the independent BRC-118 oracle must remain inside the authored CodeQL boundary'
   )
   assert.match(workflow, /^  push:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)
   assert.match(workflow, /^  workflow_dispatch:$/m)
-  assert.match(workflow, /^    name: Analyze \(\$\{\{ matrix\.language \}\}\)$/m)
+  assert.match(
+    workflow,
+    /^    name: .+ \|\| format\('Analyze \(\{0\}\)', matrix\.language\) \}\}$/m
+  )
   assert.doesNotMatch(
     workflow,
     /CODEQL_ADVANCED_ENABLED/,

@@ -1,6 +1,6 @@
 # BSV Paymail
 
-Patch candidate `2.4.12` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `2.5.1`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 `@bsv/paymail` provides a typed Paymail client and an Express router for
 capability discovery, public profiles, PKI, P2P transaction delivery,
@@ -282,8 +282,8 @@ Please report defects through the
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[`LICENSE.txt`](./LICENSE.txt). This package also retains pre-uniformization
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[`LICENSE`](./LICENSE). This package also retains pre-uniformization
 code under its package-specific Open BSV License Version 4 grant.
 Redistributors must preserve
 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the applicable text in

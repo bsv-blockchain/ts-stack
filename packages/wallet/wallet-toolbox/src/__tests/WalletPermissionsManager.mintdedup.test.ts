@@ -20,7 +20,15 @@ jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
 import { mockUnderlyingWallet } from './WalletPermissionsManager.fixtures'
 
-const PROTO = { originator: 'app.example.com', protocolID: [1, 'testproto'] as [number, string], counterparty: 'self' }
+const PROTO: Pick<
+  Parameters<WalletPermissionsManager['ensureProtocolPermission']>[0],
+  'privileged' | 'originator' | 'protocolID' | 'counterparty'
+> = {
+  privileged: false,
+  originator: 'app.example.com',
+  protocolID: [1, 'testproto'],
+  counterparty: 'self'
+}
 
 const validToken = {
   tx: [1, 2, 3],
@@ -75,8 +83,12 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   })
 
   it('an ensure arriving during an in-flight mint waits instead of re-prompting', async () => {
-    let releaseMint: () => void = () => { throw new Error('mint gate was not initialized') }
-    const gate = new Promise<void>(resolve => { releaseMint = resolve })
+    let releaseMint: () => void = () => {
+      throw new Error('mint gate was not initialized')
+    }
+    const gate = new Promise<void>(resolve => {
+      releaseMint = resolve
+    })
     const originalCreateAction = underlying.createAction.getMockImplementation()
     if (originalCreateAction === undefined) throw new Error('createAction mock implementation is required')
     underlying.createAction.mockImplementation(async (args: any) => {
@@ -137,8 +149,12 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   })
 
   it('a grant deduped against a mint that then FAILS falls through and mints its own token', async () => {
-    let rejectMint: (e: Error) => void = () => { throw new Error('mint rejection gate was not initialized') }
-    const gate = new Promise<never>((_resolve, reject) => { rejectMint = reject })
+    let rejectMint: (e: Error) => void = () => {
+      throw new Error('mint rejection gate was not initialized')
+    }
+    const gate = new Promise<never>((_resolve, reject) => {
+      rejectMint = reject
+    })
     const originalCreateAction = underlying.createAction.getMockImplementation()
     if (originalCreateAction === undefined) throw new Error('createAction mock implementation is required')
     underlying.createAction
@@ -182,7 +198,14 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
     expect(mints()).toBe(2) // every spending grant is honored as-is
 
     // Contrast: identical protocol grants dedupe.
-    const protoRequest = { type: 'protocol', originator: 'app.example.com', privileged: false, protocolID: [1, 'p'], counterparty: 'self', renewal: false }
+    const protoRequest = {
+      type: 'protocol',
+      originator: 'app.example.com',
+      privileged: false,
+      protocolID: [1, 'p'],
+      counterparty: 'self',
+      renewal: false
+    }
     ;(manager as any).activeRequests.set('proto-1', { request: protoRequest, pending: [] })
     ;(manager as any).activeRequests.set('proto-2', { request: protoRequest, pending: [] })
     await manager.grantPermission({ requestID: 'proto-1' })
