@@ -1,10 +1,12 @@
-import { sign, verify } from '../../messages/SignedMessage'
+import { jest } from '@jest/globals'
+import { sign, signWithWallet, verify } from '../../messages/SignedMessage'
 import {
   MAX_MESSAGE_PAYLOAD_BYTES,
   MAX_SIGNED_MESSAGE_BYTES
 } from '../../messages/MessageValidation'
 import PrivateKey from '../../primitives/PrivateKey'
 import PublicKey from '../../primitives/PublicKey'
+import ProtoWallet from '../../wallet/ProtoWallet'
 
 describe('SignedMessage', () => {
   it('Signs a message for a recipient', () => {
@@ -96,5 +98,93 @@ describe('SignedMessage', () => {
 
     expect(() => verify([1, 2, 3], signature, {} as PrivateKey)).toThrow(TypeError)
     expect(() => verify([1, 2, 3], signature, new PrivateKey(0))).toThrow(TypeError)
+  })
+})
+
+describe('SignedMessage through a wallet and with an expected signer', () => {
+  const senderKey = new PrivateKey(15)
+  const recipientKey = new PrivateKey(21)
+  const senderHex = senderKey.toPublicKey().toString()
+  const message = [1, 2, 4, 8, 16, 32]
+
+  it('signs through a wallet for anyone, verifiable like a key-signed message', async () => {
+    const signature = await signWithWallet(message, new ProtoWallet(senderKey))
+
+    expect(verify(message, signature)).toBe(true)
+    expect(signature.slice(0, 4)).toEqual([0x42, 0x42, 0x33, 0x01])
+    expect(signature.slice(4, 37)).toEqual(senderKey.toPublicKey().encode(true))
+    expect(signature[37]).toBe(0)
+    expect(verify([...message, 0], signature)).toBe(false)
+  })
+
+  it('signs through a wallet for a specific recipient', async () => {
+    const signature = await signWithWallet(
+      message,
+      new ProtoWallet(senderKey),
+      recipientKey.toPublicKey()
+    )
+
+    expect(verify(message, signature, recipientKey)).toBe(true)
+    expect(() => verify(message, signature)).toThrow(TypeError)
+    expect(() => verify(message, signature, new PrivateKey(22))).toThrow(
+      'but the signature requres the recipient'
+    )
+  })
+
+  it('passes the originator to every wallet call', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    const createSignature = jest.spyOn(wallet, 'createSignature')
+    const getPublicKey = jest.spyOn(wallet, 'getPublicKey')
+
+    await signWithWallet(message, wallet, undefined, 'app.example')
+
+    expect(createSignature).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolID: [2, 'message signing'], counterparty: 'anyone' }),
+      'app.example'
+    )
+    expect(getPublicKey).toHaveBeenCalledWith({ identityKey: true }, 'app.example')
+  })
+
+  it('refuses a malformed message or verifier before calling the wallet', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    const createSignature = jest.spyOn(wallet, 'createSignature')
+    const sparse = [1, 2, 3]
+    delete sparse[1]
+
+    await expect(signWithWallet(sparse, wallet)).rejects.toThrow(TypeError)
+    await expect(signWithWallet(message, wallet, {} as PublicKey)).rejects.toThrow(TypeError)
+    expect(createSignature).not.toHaveBeenCalled()
+  })
+
+  it('accepts the expected signer as a public key or its hex', () => {
+    const signature = sign(message, senderKey)
+
+    expect(verify(message, signature, undefined, { expectedSigner: senderKey.toPublicKey() })).toBe(
+      true
+    )
+    expect(verify(message, signature, undefined, { expectedSigner: senderHex })).toBe(true)
+    expect(verify(message, signature, undefined, { expectedSigner: senderHex.toUpperCase() })).toBe(
+      true
+    )
+  })
+
+  it('answers false for a valid signature by someone else', () => {
+    const other = new PrivateKey(16).toPublicKey()
+
+    expect(verify(message, sign(message, senderKey), undefined, { expectedSigner: other })).toBe(
+      false
+    )
+    const designated = sign(message, senderKey, recipientKey.toPublicKey())
+    expect(verify(message, designated, recipientKey, { expectedSigner: other })).toBe(false)
+    expect(verify(message, designated, recipientKey, { expectedSigner: senderHex })).toBe(true)
+  })
+
+  it('refuses a malformed expected signer', () => {
+    const signature = sign(message, senderKey)
+
+    expect(() => verify(message, signature, undefined, { expectedSigner: 'not a key' })).toThrow()
+    expect(() =>
+      verify(message, signature, undefined, { expectedSigner: {} as PublicKey })
+    ).toThrow(TypeError)
   })
 })
