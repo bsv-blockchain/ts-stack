@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { createPublicHTTPSFetch, defaultHttpClient, HttpClient } from '@bsv/sdk'
 import { ChaintracksDownloadOptions, ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { wait } from '../../../../utility/utilityHelpers'
@@ -137,37 +138,49 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     this.publicNetworkFetch = options.publicNetworkFetch ?? createPublicHTTPSFetch()
   }
 
-  async download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array> {
-    const responseLimit =
-      maxResponseBytes == null
-        ? this.maxResponseBytes
-        : Math.min(
-            this.maxResponseBytes,
-            boundedPositiveSafeInteger(maxResponseBytes, this.maxResponseBytes, MAX_RESPONSE_BYTES, 'maxResponseBytes')
-          )
-    return await this.requestBytes(
-      url,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/octet-stream' }
-      },
-      'download',
-      responseLimit,
-      options
-    )
+  download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array> {
+    return awaitFromSync(() => {
+      const responseLimit =
+        maxResponseBytes == null
+          ? this.maxResponseBytes
+          : Math.min(
+              this.maxResponseBytes,
+              boundedPositiveSafeInteger(
+                maxResponseBytes,
+                this.maxResponseBytes,
+                MAX_RESPONSE_BYTES,
+                'maxResponseBytes'
+              )
+            )
+      return this.requestBytes(
+        url,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/octet-stream' }
+        },
+        'download',
+        responseLimit,
+        options
+      )
+    })
   }
 
-  async fetchJson<R>(url: string): Promise<R> {
-    const bytes = await this.requestBytes(
-      url,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      },
-      'fetch JSON',
-      this.maxResponseBytes
+  fetchJson<R>(url: string): Promise<R> {
+    return mapAwaitFromSync(
+      () =>
+        this.requestBytes(
+          url,
+          {
+            method: 'GET',
+            headers: { Accept: 'application/json' }
+          },
+          'fetch JSON',
+          this.maxResponseBytes
+        ),
+      bytes => {
+        return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as R
+      }
     )
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as R
   }
 
   private async requestBytes(
@@ -284,31 +297,33 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     return bytes
   }
 
-  private async readStreamChunk(
+  private readStreamChunk(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     signal: AbortSignal
   ): Promise<ReadableStreamReadResult<Uint8Array>> {
-    if (signal.aborted) throw new DOMException('aborted', 'AbortError')
-    return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
-      let settled = false
-      const finish = (
-        callback: (value: never) => void,
-        value: ReadableStreamReadResult<Uint8Array> | unknown
-      ): void => {
-        if (settled) return
-        settled = true
-        signal.removeEventListener('abort', onAbort)
-        callback(value as never)
-      }
-      const onAbort = () => {
-        void reader.cancel().catch(() => undefined)
-        finish(reject, new DOMException('aborted', 'AbortError'))
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-      reader.read().then(
-        value => finish(resolve, value),
-        error => finish(reject, error)
-      )
+    return awaitFromSync(() => {
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError')
+      return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        let settled = false
+        const finish = (
+          callback: (value: never) => void,
+          value: ReadableStreamReadResult<Uint8Array> | unknown
+        ): void => {
+          if (settled) return
+          settled = true
+          signal.removeEventListener('abort', onAbort)
+          callback(value as never)
+        }
+        const onAbort = () => {
+          void reader.cancel().catch(() => undefined)
+          finish(reject, new DOMException('aborted', 'AbortError'))
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        reader.read().then(
+          value => finish(resolve, value),
+          error => finish(reject, error)
+        )
+      })
     })
   }
 

@@ -1,3 +1,51 @@
+# 4.1.3 unpublished patch candidate
+
+### Fixed: zero-field initial certificate proofs
+
+- A `Peer` that initiates a handshake may now accept an initial response that
+  proves a certificate with zero revealed fields, when the locally retained
+  session request asked for that certifier and type with an empty field list.
+  The keyring must be empty, null or omitted, and nothing is decrypted. Only
+  an initial response on a session the `Peer` initiated qualifies: one that
+  arrives on a responder's session, or after the handshake completed, keeps the
+  nonempty path, and zero-field standalone (mid-session) responses stay refused.
+- A zero-field proof carries no keyring encrypted for the verifier, and the
+  initial-response signature covers only the nonces, not the certificates. So
+  it shows that a valid certificate names the authenticated identity as its
+  subject, not that the holder's wallet presented it.
+- `validateCertificates` takes an optional fifth argument, `allowZeroFields`,
+  default `false`. Existing callers keep the nonempty path; `Peer` opts in only
+  for the request its session retained.
+- A session store that loses the request snapshot keeps the nonempty path; the
+  snapshot is no longer backfilled from the mutable `certificatesToRequest`.
+  On such a session, a later standalone response's handshake policy falls back
+  to the current `certificatesToRequest`. No wire-format change.
+
+# 4.1.2
+
+- `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
+  instructions in the usual ASM. If that notation would change any suffix bytes,
+  the entire suffix prints as one final `0x<hex>` token immediately after
+  `OP_RETURN`. `Script.fromASM` restores that suffix byte for byte. Existing
+  ASM input, including explicit `OP_PUSHDATA*` operands, retains its encoding.
+
+# 4.1.1
+
+- A non-array tag container raises TypeError (an Error subclass) with the existing
+  diagnostic; valid tag arrays and other validation errors are unchanged.
+- Remove the fixed GlobalKVStore tag-count cap from creation, tag-filter queries
+  and signed-token decoding. Larger tag arrays retain every entry.
+- Validate the freshly signed token before requesting a funded wallet action,
+  retaining token-byte-bound refusal before any spend.
+- Retain unique, non-empty strings, the 256-byte UTF-8 per-tag bound, signed-token
+  field/payload bounds and signature/controller checks. Wallet tags/labels are unchanged.
+- Pair client/overlay SDK4.1.1 with Overlay Topics2.0.4; existing stored token bytes
+  and records need no migration. Older validators may still reject larger tag sets.
+
+# 4.1.0 unpublished integration candidate
+
+Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
+
 # CHANGELOG for `@bsv/sdk`
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
@@ -277,26 +325,13 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
-### Fixed: zero-field initial certificate proofs (4.0.2 patch candidate)
+### LocalKVStore removal stops on an inconsistent empty page
 
-- A `Peer` that initiates a handshake may now accept an initial response that
-  proves a certificate with zero revealed fields, when the locally retained
-  session request asked for that certifier and type with an empty field list.
-  The keyring must be empty, null or omitted, and nothing is decrypted. Only
-  an initial response on a session the `Peer` initiated qualifies: one that
-  arrives on a responder's session, or after the handshake completed, keeps the
-  nonempty path, and zero-field standalone (mid-session) responses stay refused.
-- A zero-field proof carries no keyring encrypted for the verifier, and the
-  initial-response signature covers only the nonces, not the certificates. So
-  it shows that a valid certificate names the authenticated identity as its
-  subject, not that the holder's wallet presented it.
-- `validateCertificates` takes an optional fifth argument, `allowZeroFields`,
-  default `false`. Existing callers keep the nonempty path; `Peer` opts in only
-  for the request its session retained.
-- A session store that loses the request snapshot keeps the nonempty path; the
-  snapshot is no longer backfilled from the mutable `certificatesToRequest`.
-  On such a session, a later standalone response's handshake policy falls back
-  to the current `certificatesToRequest`. No wire-format change.
+- `LocalKVStore.remove` throws when `listOutputs` returns an empty page while
+  reporting a positive `totalOutputs`, naming that total, the page (offset 0),
+  and the key. It no longer repeats the same request. `set` and lookup keep
+  their existing behavior. No migration is required for a wallet that returns
+  a consistent page.
 
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
@@ -415,6 +450,32 @@ replay, payment authorization, wire change or consumer migration is introduced.
   non-spendable records too. New module balance queries carry only decimal text.
 - Migration: TypeScript that compares or adds `totalOutputs` must first check
   `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
+- Version the new exported payment transport/error/payload APIs as part of the
+  4.0.0 source candidate after immutable published 3.2.1. No publication occurs
+  through this source change.
+
+- Reduce authenticated large-payload preparation overhead with one-pass byte validation/copy and value-only array snapshots; preserve byte checks, wire formats, limits and deadlines. No migration is required.
+
+### 4.0.0 candidate — prepared BRC-118 payments and recipient interoperability
+
+- Preserve native body serialization and inferred Content-Type on ordinary HTTP
+  fallback, including cached unauthenticated peers; retain owned payment bytes.
+
+- Negotiate bounded multipart payments, preserving original payload bytes and exact
+  signed boundary parameters while retaining nonempty non-multipart signature preimages.
+- Prepare the real payment and request before broadcast; submit once, reuse the
+  transaction across retries, abort refused reservations where supported, and
+  retain typed context for cancellation, size refusal and uncertain outcomes.
+- Pair zero-length byte request normalization with auth middleware 2.3.0: both
+  use the BRC-104 `-1` sentinel, including the existing Express raw-parser path.
+  Empty-byte clients/receivers that used length `0` need a coordinated upgrade;
+  nonempty request preimages are unchanged.
+- Derive the recipient's own BRC-29 child key on settlement receipt.
+- Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
+  adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
+### Fixed (3.2.1)
 
 - Add `canonicalOutputJSONWithDirectRecords`, an opt-in canonical text emitter
   that freshly checks records and arrays with the existing canonical bytes,

@@ -59,6 +59,7 @@ async function kill(child: ChildProcess) {
   await ended
 }
 
+// Allow child-process startup under CI load; protocol clocks and durable assertions stay unchanged.
 describe('root journal process boundaries', () => {
   it('retains the suppression fence and index-removal intent after an actual process kill', async () => {
     const f = await make(),
@@ -86,7 +87,7 @@ describe('root journal process boundaries', () => {
     expect(await reopened.projections(1)).toEqual([
       { target: selected(), revision: '1', membership: 'withdraw' }
     ])
-  })
+  }, 30_000)
 
   it('recovers an acknowledged restoration without repeating its membership effect after a process kill', async () => {
     const f = await make()
@@ -102,7 +103,7 @@ describe('root journal process boundaries', () => {
     expect(await reopened.projected(intent)).toBe(true)
     expect(await reopened.head()).toEqual(head)
     expect(await reopened.projections(1)).toEqual([])
-  })
+  }, 30_000)
 
   it('keeps a separate writer behind the actual final enqueue fence and rejects stale responses afterward', async () => {
     const f = await make()

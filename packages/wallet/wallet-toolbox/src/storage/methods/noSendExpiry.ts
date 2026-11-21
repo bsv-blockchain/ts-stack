@@ -154,6 +154,7 @@ export async function prepareNoSendExpiry(
   auth: AuthId,
   target: ValidCreateActionArgs
 ): Promise<StoragePrepareNoSendExpiryResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const expiry = validateNoSendExpiryRequest(target)
   if (expiry == null) {
     throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 noSend expiry label')
@@ -175,7 +176,7 @@ export async function prepareNoSendExpiry(
     : { reclaimFee: 0, reclaimSatoshis: 0 }
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
-  const funding = await createAction(storage, auth, fundingArgs)
+  const funding = await createAction(storage, auth, fundingArgs, undefined, undefined, write)
   const anchor = selectNoSendExpiryFundingAnchor(funding.outputs, anchorSatoshis)
   return {
     funding,
@@ -217,6 +218,7 @@ export async function activateNoSendExpiry(
   auth: AuthId,
   args: StorageActivateNoSendExpiryArgs
 ): Promise<StorageActivateNoSendExpiryResult> {
+  const write = await storage.activeWriteTransaction(auth)
   const expiry = validateNoSendExpiryRequest(args.target)
   if (expiry == null) throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 noSend expiry label')
   const userId = verifyId(auth.userId)
@@ -264,7 +266,7 @@ export async function activateNoSendExpiry(
     anchorTxid: args.fundingTxid,
     anchorVout: args.anchorVout
   }
-  const action = await createAction(storage, auth, target)
+  const action = await createAction(storage, auth, target, undefined, undefined, write)
   return {
     action,
     expiry,
@@ -446,6 +448,7 @@ export async function armNoSendExpiry(
   auth: AuthId,
   args: StorageArmNoSendExpiryArgs
 ): Promise<void> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   validateDerivation(args.reclaimDerivationPrefix, 'reclaimDerivationPrefix')
   validateDerivation(args.reclaimDerivationSuffix, 'reclaimDerivationSuffix')
@@ -462,7 +465,7 @@ export async function armNoSendExpiry(
   const observedBlockheight =
     snapshot.noSendExpiryMode === 'blockheight' ? await storage.getServices().getHeight() : undefined
 
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     const target = await validateArmSnapshot(storage, userId, args.reference, args, reclaim, {
       trx,
       observedBlockheight,
