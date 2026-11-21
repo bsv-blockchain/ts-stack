@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,9 +42,7 @@ const MIN_PROPERTY_RUNS = 300
 fc.configureGlobal({
   numRuns: Math.max(MIN_PROPERTY_RUNS, Number(process.env.FAST_CHECK_NUM_RUNS ?? MIN_PROPERTY_RUNS)),
   seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
 })
 
 const identity = '02' + '11'.repeat(32)
@@ -461,24 +460,29 @@ test.each([
   expect(open).not.toHaveBeenCalled()
 })
 
-test('generated bounded keyset sizes preserve the complete original thirteen-table archive', async () => {
-  const { source, userId, otherId } = await fixture()
-  await seedClosure(source, userId, otherId)
-  const original = await exportBRC38(source, identity, { requireSnapshot: true })
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 1, max: 16 }), async maximumPageRows => {
-      const captured = await archive(source, original.exportedAt, { ...options, maximumPageRows })
-      expect(captured).toEqual(original)
-    }),
-    {
-      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
-      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
-      ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
-      interruptAfterTimeLimit: 150000,
-      markInterruptAsFailure: true
-    }
-  )
-}, 180000)
+test.each(
+  propertyTestBatches({
+    ...fc.readConfigureGlobal(),
+    numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
+    seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+    ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {})
+  })
+)(
+  'generated bounded keyset sizes preserve the complete original thirteen-table archive (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const { source, userId, otherId } = await fixture()
+    await seedClosure(source, userId, otherId)
+    const original = await exportBRC38(source, identity, { requireSnapshot: true })
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 1, max: 16 }), async maximumPageRows => {
+        const captured = await archive(source, original.exportedAt, { ...options, maximumPageRows })
+        expect(captured).toEqual(original)
+      }),
+      propertyBatch
+    )
+  },
+  180000
+)
 
 test.each([
   ['é', 'e\u0301'],

@@ -1,6 +1,6 @@
 # `@bsv/chirp`
 
-Patch candidate `0.1.6` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.1.7`. Optimizes hashing of bounded typed views without expanding them to arrays. No API or protocol migration is required.
 
 Reference implementation of BRC-167, the Chunked, Hashed, Interleaved
 Resolution Protocol. CHIRP is an additive Merkle-object layer over UHRP: roots

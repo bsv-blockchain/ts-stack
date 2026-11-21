@@ -6,6 +6,7 @@ import { WalletStorageManager } from '../storage/WalletStorageManager'
 
 import { TaskPurge, TaskPurgeParams } from './tasks/TaskPurge'
 import { TaskReviewStatus } from './tasks/TaskReviewStatus'
+import { TaskReviewConfirmedSpends } from './tasks/TaskReviewConfirmedSpends'
 import { TaskFailAbandoned } from './tasks/TaskFailAbandoned'
 import { TaskCheckForProofs } from './tasks/TaskCheckForProofs'
 import { TaskClock } from './tasks/TaskClock'
@@ -62,6 +63,12 @@ export interface MonitorOptions {
   msecsWaitPerMerkleProofServiceReq: number
 
   taskRunWaitMsecs: number
+
+  /** Maximum physical rows per paged SQL status review. Default 1024, range 1–2048. */
+  statusReviewPageSize?: number
+
+  /** Maximum proof rows per confirmed-spend page. Default 32, range 1–128. */
+  confirmedSpendReviewPageSize?: number
 
   abandonedMsecs: number
 
@@ -369,6 +376,7 @@ export class Monitor {
       new TaskFailAbandoned(this, 8 * Monitor.oneMinute),
       new TaskUnFail(this),
       new TaskReviewStatus(this),
+      new TaskReviewConfirmedSpends(this),
       new TaskReorg(this),
       new TaskReviewDoubleSpends(this),
       new TaskReconcilePendingTransactions(this),

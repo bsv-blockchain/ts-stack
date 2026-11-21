@@ -9,7 +9,6 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
-import { assertMetroWatcherContract } from './lib/metro-watcher-contract.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
@@ -476,10 +475,30 @@ function hermesCompilerPath() {
   )
 }
 
+/** metro-file-map 0.87.2 and later match watched files without micromatch, so
+ * the GHSA-vfj7-8cjw-p6xm braces closure is not in the Metro graph. Fail if a
+ * Metro update declares the matcher packages again. Read the manifest, not
+ * module resolution: a hoisted or parent-directory copy resolves without
+ * being a Metro dependency. */
+function assertMetroFileMapExcludesBraces(metroPackagePath) {
+  const fileMapPackagePath = createRequire(metroPackagePath).resolve('metro-file-map/package.json')
+  const manifest = createRequire(fileMapPackagePath)(fileMapPackagePath)
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of ['micromatch', 'braces']) {
+      if (Object.hasOwn(manifest[field] ?? {}, name)) {
+        throw new Error(
+          `metro-file-map ${manifest.version} declares ${name} in ${field}; the braces advisory closure is back`
+        )
+      }
+    }
+  }
+  return { metroFileMap: manifest.version, removedDependencyClosure: true }
+}
+
 async function checkMobile(consumerDirectory, budget) {
   console.log(
-    'Verified Metro watcher contract:',
-    assertMetroWatcherContract(toolResolver('metro/package.json'))
+    'Verified Metro file map excludes the braces advisory closure:',
+    assertMetroFileMapExcludesBraces(toolResolver('metro/package.json'))
   )
   const entryPath = path.join(consumerDirectory, 'index.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))

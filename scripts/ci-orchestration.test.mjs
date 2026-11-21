@@ -77,6 +77,39 @@ function workflowJobBlocks(workflow) {
   }))
 }
 
+test('property campaigns cover each heavy suite shard and continue collecting evidence after failures', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/property-tests.yml', import.meta.url),
+    'utf8'
+  )
+  const matrix = viewPropertyMatrix(workflow)
+  assert.deepEqual(matrix, [
+    'other-packages/all',
+    ...Array.from({ length: 8 }, (_, index) => 'output-knowledge/' + (index + 1)),
+    ...Array.from({ length: 4 }, (_, index) => 'wallet-toolbox/' + (index + 1)),
+    'lch/1',
+    'lch/2'
+  ])
+  assert.match(workflow, /fail-fast: false/)
+  assert.match(workflow, /run: pnpm test:governance/)
+  const provision = workflow.indexOf('bash scripts/provision-wallet-native-tests.sh')
+  const execute = workflow.indexOf('Build and run the assigned property campaign')
+  assert.ok(provision > 0 && provision < execute)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/\$shard_count"/)
+  assert.match(workflow, /--shard="\$PROPERTY_SHARD\/2"/)
+  assert.match(
+    workflow,
+    /--filter '!@bsv\/output-knowledge' --filter '!@bsv\/wallet-toolbox' --filter '!@bsv\/lch'/
+  )
+  assert.match(workflow, /name: property-fuzzing-failure-.*matrix.suite.*matrix.shard/)
+})
+
+function viewPropertyMatrix(workflow) {
+  return Array.from(workflow.matchAll(/- suite: ([\w-]+)\n +shard: '(\w+)'/g), match =>
+    match.slice(1).join('/')
+  )
+}
+
 test('mutation planning and engine controls stay in the explicit background audit', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const background = readFileSync(
@@ -153,15 +186,15 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
 
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
-    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.local-ci-certified != 'true' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
   )
   assert.match(
     workflow,
@@ -358,10 +391,39 @@ test('specialized workflows are bounded and required conformance checks always r
   const runtime = readFileSync(RUNTIME_PATH, 'utf8')
 
   assert.equal(conformance.match(/- 'conformance\/\*\*'/g)?.length, 1)
-  assert.match(conformance, /^  pull_request:\n    branches: \[main\]\n\nconcurrency:/m)
+  assert.match(
+    conformance,
+    /^  pull_request:\n    branches: \[main\]\n  merge_group:\n    types: \[checks_requested\]\n\nconcurrency:/m
+  )
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)
+})
+
+test('merge queue workflows select the combined diff and preserve security admission', () => {
+  for (const file of ['ci.yml', 'codeql.yml', 'conformance.yml']) {
+    const source = readFileSync(join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    assert.match(source, /^  merge_group:\n    types: \[checks_requested\]$/m)
+    assert.match(source, /group: .+github\.ref/)
+  }
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
+  assert.match(
+    jobs.scope,
+    /PR_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}/
+  )
+  assert.match(
+    jobs.scope,
+    /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.event\.merge_group\.head_sha \|\| github\.sha \}\}/
+  )
+  assert.match(
+    jobs['dependency-review'],
+    /if: github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group'/
+  )
+  assert.match(jobs['dependency-review'], /fail-on-severity: high/)
+  // Until genuine queue analysis is qualified, never scan a queue as main.
+  assert.match(jobs['coverage-upload'], /github\.event_name != 'merge_group'/)
+  assert.match(jobs['merge-gate'], /CI_EVENT: \$\{\{ github\.event_name \}\}/)
 })
 
 test('all selected execution jobs survive skipped ancestors and expose a strict final gate', () => {
@@ -719,5 +781,56 @@ test('native browser jobs always release only their delivered exact-path sandbox
       source,
       /--no-sandbox|apparmor_restrict_unprivileged_userns=0|service apparmor/
     )
+  }
+})
+
+test('queue Sonar writes use protected workflow code while admission stays read-only', () => {
+  const controller = readFileSync(
+    join(REPOSITORY_ROOT, '.github/workflows/sonar-queue-analysis.yml'),
+    'utf8'
+  )
+  assert.match(
+    controller,
+    /workflow_run:\n    workflows: \[CI\]\n    types: \[in_progress, completed\]/
+  )
+  assert.match(controller, /repository: bsv-blockchain\/ts-stack/)
+  assert.doesNotMatch(controller, /^\s+ref:/m)
+  assert.match(controller, /EXPECTED_CONTROLLER_SHA: \$\{\{ github\.sha \}\}/)
+  assert.ok(controller.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROLLER_SHA"'))
+  assert.match(controller, /persist-credentials: false/)
+  assert.match(controller, /contents: write\n      pull-requests: write/)
+  assert.match(controller, /run: node scripts\/sonar-queue-analysis\.mjs/)
+  assert.match(controller, /QUEUE_RUN_ID: \$\{\{ github\.event\.workflow_run\.id \}\}/)
+  assert.doesNotMatch(controller, /SONAR_TOKEN|npm |pnpm |download-artifact/)
+  const controllerScript = readFileSync(
+    join(REPOSITORY_ROOT, 'scripts/sonar-queue-analysis.mjs'),
+    'utf8'
+  )
+  assert.doesNotMatch(controllerScript, /node:fs|GITHUB_EVENT_PATH/)
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  assert.match(jobs['sonar-zero-findings'], /github\.event_name == 'merge_group'/)
+  assert.match(jobs['sonar-zero-findings'], /node scripts\/sonar-queue-gate\.mjs/)
+  assert.doesNotMatch(jobs['sonar-zero-findings'], /: write/)
+})
+
+test('auxiliary PR workflows cannot replace required combined-result contexts', () => {
+  for (const [file, name] of [
+    ['ci.yml', "'Auxiliary analysis PR gate' || 'merge-gate'"],
+    [
+      'codeql.yml',
+      "format('Auxiliary Analyze ({0})', matrix.language) || format('Analyze ({0})', matrix.language)"
+    ],
+    ['conformance.yml', "'Auxiliary conformance' || 'ts-runner'"]
+  ]) {
+    const source = readFileSync(join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    const job = workflowJobBlocks(source).find(candidate => candidate.source.includes(name))
+    assert.ok(job, `${file} must distinguish required context names`)
+    const names = job.source.match(/^    name: .*$/gm)
+    assert.equal(names.length, 1, 'duplicate YAML keys must not undo the identity guard')
+    assert.ok(names[0].includes("github.event_name == 'pull_request'"))
+    assert.ok(names[0].includes('github.event.pull_request.user.id == 41898282'))
+    assert.ok(names[0].includes("startsWith(github.head_ref, 'codex/merge-queue-analysis/')"))
   }
 })

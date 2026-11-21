@@ -1,6 +1,6 @@
 # BSV Wallet Helper
 
-Patch candidate `0.1.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.1.12`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 Wallet-compatible utilities and script templates for Bitcoin SV (BSV) that support BRC-100 wallet interfaces instead of requiring direct private key access.
 

@@ -222,24 +222,22 @@ provenance-verified adapter before adding BiDi tests. This removal makes no
 claim to qualify BiDi. Retire it once the compatible official dependency graph
 passes provenance, the full audit and the unchanged browser contract.
 
-## Temporary Metro watcher dependency repair
+## Retired Metro watcher dependency repair
 
-Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
-Picomatch 2.3.2. The exact-version paired source/distribution patch calls that
-same loop directly, declares the same exact Picomatch dependency and removes
-only the scoped micromatch dependency and its now-unused braces closure.
-The reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
-lists no patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
-is still unreleased. No advisory exclusion or audit threshold change is added.
+Metro-file-map 0.87.1 reached the braces package through micromatch, affected by
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). A
+temporary exact-version patch, package extension and scoped removal replaced
+that path. Metro-file-map 0.87.2 and later match watched files without
+micromatch, so Metro 0.87.3 removes the path upstream and the repair is retired.
+The mobile platform gate now fails if metro-file-map declares micromatch or
+braces again, before its packed Metro/Hermes compilation, source-map and
+bundle budget checks.
 
-The existing mobile platform gate checks 1,120 watcher results frozen from the
-unmodified published implementation, event/stat/path contracts, and absence of
-the removed matcher packages before its packed Metro/Hermes compilation,
-source-map/composition and unchanged bundle budgets. The dated override registry
-owns the patch, exact package extension and scoped removal as one repair. Remove
-all three together when an official compatible release removes the affected
-path and the full compatibility, frozen graph, audit and platform checks pass.
-This build-tool repair does not change published wallet APIs or package versions.
+The exact `metro-file-map@0.87.1` patch key also stopped every Dependabot
+update of Metro with `ERR_PNPM_UNUSED_PATCH`, because pnpm rejects a patch key
+that no longer matches an installed version. Key a patch by package name in
+`patchedDependencies`, and keep `ignorePatchFailures: false`, so that a version
+update keeps the patch and a patch that no longer applies fails the install.
 
 ## Temporary standalone service watcher repair
 

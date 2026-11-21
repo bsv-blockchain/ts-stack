@@ -1,5 +1,7 @@
 # @bsv/overlay
 
+Release candidate `2.8.0`. Adds an optional script verifier backend for transaction and GASP SPV checks while keeping the JavaScript verifier as the default. Existing constructors keep the default verifier. Operators may pass a preloaded BdkVerifier as the final optional Engine argument.
+
 The core engine and storage contracts for BSV Overlay Services. The engine admits
 transactions through topic managers, maintains UTXO state, serves lookup
 services, and supports SHIP, SLAP, GASP, and BASM synchronization.
