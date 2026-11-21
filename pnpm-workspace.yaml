@@ -54,9 +54,6 @@ overrides:
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.
   lodash-es@<4.18.0: 4.18.1
-  # Metro-file-map only uses micromatch.some, which delegates to Picomatch.
-  # The paired patch retains that matcher and removes the affected unused closure.
-  'metro-file-map@0.87.1>micromatch': '-'
   # VeriFast's private browser harness uses CDP exclusively. Remove the unused
   # BiDi adapter and its vulnerable Zod 3 closure; retain provenance checks.
   'puppeteer-core@25.11.0>chromium-bidi': '-'
@@ -70,11 +67,11 @@ trustPolicy: no-downgrade
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
 
-# Temporary exact-version build-tool repair; ownership/removal criteria live in
-# governance/dependency-release-policy.json and the override exception registry.
-packageExtensions:
-  'metro-file-map@0.87.1':
-    dependencies:
-      picomatch: 2.3.2
+# Key patches by package name, not by exact version. An exact key stops every
+# `pnpm update` that moves the package with ERR_PNPM_UNUSED_PATCH, and that
+# blocks the grouped Dependabot update. pnpm skips a failed name-keyed patch
+# without a message unless ignorePatchFailures is false, so keep it false: a
+# patch that no longer applies must fail the install.
+ignorePatchFailures: false
 patchedDependencies:
-  'metro-file-map@0.87.1': patches/metro-file-map@0.87.1.patch
+  fake-indexeddb: packages/wallet/wallet-toolbox/test/utils/fake-indexeddb-readonly-name.patch

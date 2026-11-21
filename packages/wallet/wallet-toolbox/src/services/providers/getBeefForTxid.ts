@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, ListActionsResult, ListOutputsResult } from '@bsv/sdk'
 import {
@@ -73,9 +74,13 @@ class ServicesOnlyStorageProvider extends StorageProvider {
     }
   }
 
-  async getBeefForTxid(txid: string): Promise<Beef> {
-    const beef = await this.getBeefForTransaction(txid, this.gbo)
-    return beef
+  getBeefForTxid(txid: string): Promise<Beef> {
+    return mapAwaitFromSync(
+      () => this.getBeefForTransaction(txid, this.gbo),
+      beef => {
+        return beef
+      }
+    )
   }
 
   nip = new Error('Method not implemented.')

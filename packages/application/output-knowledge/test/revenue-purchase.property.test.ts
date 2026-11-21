@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { outputPacketDigest, PrivateKey, signOutputPacket, Utils } from '@bsv/sdk'
@@ -17,38 +18,45 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('refuses 300 different valid preparations whose receipt does not belong to the original funded purchase', async () => {
-  const f = await purchaseFixture()
-  let calls = 0
-  const verifier = new RevenueListingPurchaseVerifier(family, {
-    async resolve() {
-      calls++
-      throw new Error('Association failure must precede chain I/O')
-    }
-  })
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 0, max: 2 }),
-      fc.uint8Array({ minLength: 1, maxLength: 32 }),
-      async (kind, bytes) => {
-        const original = structuredClone(f.original)
-        if (kind === 0) original.request.requestId = 'generated-' + Utils.toHex(bytes)
-        if (kind === 1) original.request.request = Utils.toBase64([255, ...bytes])
-        if (kind === 2)
-          original.request.recipient = new PrivateKey(45 + (bytes[0] % 16)).toPublicKey().toString()
-        const body = { ...original.terms.body, recipient: original.request.recipient }
-        body.acquisitionId = outputPacketDigest('purchase', {
-          chain: original.request.listing.chain,
-          seller: original.seller,
-          recipient: original.request.recipient,
-          topic: original.request.topic,
-          requestId: original.request.requestId
-        })
-        body.requestDigest = outputPacketDigest('purchase-request', original.request)
-        original.terms = signOutputPacket('purchase-terms', body, new PrivateKey(41))
-        expect((await verifier.verify(f.purchase, original, context())).status).toBe('invalid')
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'refuses 300 different valid preparations whose receipt does not belong to the original funded purchase (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const f = await purchaseFixture()
+    let calls = 0
+    const verifier = new RevenueListingPurchaseVerifier(family, {
+      async resolve() {
+        calls++
+        throw new Error('Association failure must precede chain I/O')
       }
+    })
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 2 }),
+        fc.uint8Array({ minLength: 1, maxLength: 32 }),
+        async (kind, bytes) => {
+          const original = structuredClone(f.original)
+          if (kind === 0) original.request.requestId = 'generated-' + Utils.toHex(bytes)
+          if (kind === 1) original.request.request = Utils.toBase64([255, ...bytes])
+          if (kind === 2)
+            original.request.recipient = new PrivateKey(45 + (bytes[0] % 16))
+              .toPublicKey()
+              .toString()
+          const body = { ...original.terms.body, recipient: original.request.recipient }
+          body.acquisitionId = outputPacketDigest('purchase', {
+            chain: original.request.listing.chain,
+            seller: original.seller,
+            recipient: original.request.recipient,
+            topic: original.request.topic,
+            requestId: original.request.requestId
+          })
+          body.requestDigest = outputPacketDigest('purchase-request', original.request)
+          original.terms = signOutputPacket('purchase-terms', body, new PrivateKey(41))
+          expect((await verifier.verify(f.purchase, original, context())).status).toBe('invalid')
+        }
+      ),
+      propertyBatch
     )
-  )
-  expect(calls).toBe(0)
-}, 60000)
+    expect(calls).toBe(0)
+  },
+  60000
+)

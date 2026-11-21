@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import { WABTransport } from '../WABTransport'
 import { validateWABCompleteAuthResponse, validateWABStartAuthResponse } from '../WABResponseValidation'
 
@@ -45,7 +46,7 @@ export abstract class AuthMethodInteractor {
   /**
    * Shared POST helper for auth endpoints.
    */
-  private async postAuth(
+  private postAuth(
     serverUrl: string,
     endpoint: string,
     presentationKey: string,
@@ -53,15 +54,17 @@ export abstract class AuthMethodInteractor {
     transport?: WABTransport,
     correlationId?: string
   ): Promise<unknown> {
-    const client = transport ?? new WABTransport(serverUrl)
-    return await client.request<unknown>(`/auth/${endpoint}`, {
-      operation: `auth-${endpoint}`,
-      correlationId,
-      body: {
-        methodType: this.methodType,
-        presentationKey,
-        payload: this.preparePayload(payload)
-      }
+    return awaitFromSync(() => {
+      const client = transport ?? new WABTransport(serverUrl)
+      return client.request<unknown>(`/auth/${endpoint}`, {
+        operation: `auth-${endpoint}`,
+        correlationId,
+        body: {
+          methodType: this.methodType,
+          presentationKey,
+          payload: this.preparePayload(payload)
+        }
+      })
     })
   }
 

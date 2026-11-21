@@ -47,7 +47,9 @@ describe('BulkFileDataCacheFs', () => {
   test('requires a canonical SHA-256 digest before filesystem access', async () => {
     const cache = new BulkFileDataCacheFs(root)
 
-    await expect(cache.get({ ...file, fileHash: undefined })).rejects.toThrow('Missing bulk-header digest')
+    await expect(cache.get({ ...file, fileHash: undefined } as unknown as BulkHeaderFileInfo)).rejects.toThrow(
+      'Missing bulk-header digest'
+    )
     await expect(cache.get({ ...file, fileHash: Buffer.alloc(31).toString('base64') })).rejects.toThrow(
       'Invalid bulk-header digest'
     )
