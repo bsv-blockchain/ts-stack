@@ -9,13 +9,18 @@ describe('WalletClient automatic HTTP discovery', () => {
 
   afterEach(() => jest.restoreAllMocks())
 
+  const brc205Version =
+    'wallet-brc100-1.0.0; brc207-color=4; brc207-color-attested=1; brc177-nosend=2;'
+
   it.each([
-    ['wire', 'http://localhost:3301'],
-    ['json', 'http://localhost:3321'],
-    ['secure-json', 'https://localhost:2121']
+    ['wire', 'http://localhost:3301', '1.0.0.0'],
+    ['json', 'http://localhost:3321', '1.0.0.0'],
+    ['secure-json', 'https://localhost:2121', '1.0.0.0'],
+    ['wire', 'http://localhost:3301', brc205Version],
+    ['json', 'http://localhost:3321', brc205Version]
   ])(
-    'preserves an explicit caller through %s discovery and later calls',
-    async (kind, endpoint) => {
+    'preserves an explicit caller through %s discovery at %s and later calls (version %s)',
+    async (kind, endpoint, version) => {
       const requests: Array<{ path: string; origin: string | undefined }> = []
       const server = createServer((request, response) => {
         requests.push({ path: request.url!, origin: request.headers.origin })
@@ -26,8 +31,8 @@ describe('WalletClient automatic HTTP discovery', () => {
         )
         response.end(
           kind === 'wire'
-            ? Buffer.concat([Buffer.from([0]), Buffer.from('1.0.0.0')])
-            : JSON.stringify({ version: '1.0.0.0' })
+            ? Buffer.concat([Buffer.from([0]), Buffer.from(version)])
+            : JSON.stringify({ version })
         )
       })
       await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -46,11 +51,11 @@ describe('WalletClient automatic HTTP discovery', () => {
       })
       try {
         const client = new WalletClient('auto', 'app.example')
-        await expect(client.getVersion()).resolves.toEqual({ version: '1.0.0.0' })
+        await expect(client.getVersion()).resolves.toEqual({ version })
         expect(client.substrate).toBeInstanceOf(
           kind === 'wire' ? WalletWireTransceiver : HTTPWalletJSON
         )
-        await expect(client.getVersion()).resolves.toEqual({ version: '1.0.0.0' })
+        await expect(client.getVersion()).resolves.toEqual({ version })
         expect(requests).toEqual(
           Array.from({ length: 3 }, () => ({
             path: '/getVersion',

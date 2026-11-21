@@ -11,6 +11,13 @@ import Transaction from '../../transaction/Transaction.js'
 import Beef from '../../transaction/Beef.js'
 import Script from '../../script/Script.js'
 
+const TOOLBOX_VERSION =
+  'wallet-brc100-1.0.0; brc207-color=4; brc207-color-attested=1; brc177-nosend=2;'
+/** A BRC-205 string of exactly `bytes` ASCII bytes, from a valid base and one attribute. */
+function brc205Version(bytes: number): string {
+  const prefix = 'wallet-1.0.0; brc999-pad='
+  return `${prefix}${'v'.repeat(bytes - prefix.length - 1)};`
+}
 const PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const OTHER_PUBLIC_KEY = '0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const TYPE = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
@@ -1895,6 +1902,24 @@ describe('wallet result trust boundary', () => {
       () => validateWalletResult('getVersion', { version: 'é'.repeat(16) }),
       '7–30 UTF-8 bytes'
     ],
+    [
+      'oversized BRC-205 base',
+      () =>
+        validateWalletResult('getVersion', {
+          version: `${'w'.repeat(25)}-1.0.0; brc177-nosend=2;`
+        }),
+      '7–30 UTF-8 bytes'
+    ],
+    [
+      'short BRC-205 base',
+      () => validateWalletResult('getVersion', { version: 'w-1.0; brc177-nosend=2;' }),
+      '7–30 UTF-8 bytes'
+    ],
+    [
+      'BRC-205 version over 2048 bytes',
+      () => validateWalletResult('getVersion', { version: brc205Version(2049) }),
+      '7–2048 UTF-8 bytes'
+    ],
     ['zero height', () => validateWalletResult('getHeight', { height: 0 }), 'integer from 1'],
     [
       'height above uint32',
@@ -1942,6 +1967,18 @@ describe('wallet result trust boundary', () => {
     ]
   ])('rejects a %s boundary value', (_name, run, message) => {
     expect(run).toThrow(message)
+  })
+
+  // BRC-205 keeps BRC-100's 7–30 bytes for the base and allows 2048 for the whole
+  // string; wallet-toolbox appends capability attributes after the base.
+  it.each([
+    ['toolbox capability attributes', TOOLBOX_VERSION],
+    ['an account label', 'example-1.2.3; account-label=Pocket%20Photos%20Account;'],
+    ['an empty attribute section', 'example-1.2.3;'],
+    ['a 30-byte base', `${'w'.repeat(24)}-1.0.0; brc177-nosend=2;`],
+    ['2048 bytes', brc205Version(2048)]
+  ])('accepts a BRC-205 version string with %s', (_name, version) => {
+    expect(validateWalletResult('getVersion', { version })).toEqual({ version })
   })
 
   it('rejects invalid source evidence while snapshotting an asynchronous request', () => {
