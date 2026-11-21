@@ -1,3 +1,14 @@
+# 2.18.1 source candidate
+
+- `WalletPermissionsManager` honors the caller's BRC-100 `seekPermission: false` on
+  `listActions`, `internalizeAction`, `listOutputs`, `encrypt`, `decrypt`, `createHmac`,
+  `verifyHmac`, `createSignature`, `verifySignature`, `discoverByIdentityKey` and
+  `discoverByAttributes`, and on the built-in BRC-177 module's label check for
+  `listActions`, as `getPublicKey` already did. A call that passes `false` and would
+  otherwise prompt now fails with the existing `seekPermission=false` errors. Calls that
+  need no prompt (an admin originator, an existing grant, an exempt protocol), and calls
+  that omit the flag or pass `true`, are unaffected. No migration.
+
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
