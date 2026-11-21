@@ -39,6 +39,7 @@ import {
 import { WalletServices } from './WalletServices.interfaces'
 import { Chain, Paged, ProvenTxReqStatus, TransactionStatus } from './types'
 import { WalletError } from './WalletError'
+import type { SnapshotSyncStorage } from '../storage/snapshot/SnapshotSync'
 import {
   AbortActionBatchResult,
   ActionBatchManifest,
@@ -149,7 +150,7 @@ export interface WalletStorageProvider extends WalletStorageSync {
   setServices: (v: WalletServices) => void
 }
 
-export interface WalletStorageSync extends WalletStorageWriter {
+export interface WalletStorageSync extends WalletStorageWriter, WalletStorageSyncReader {
   /** Compact writer checkpoint. Undefined means a legacy remote provider. */
   getSyncCheckpoint?: (
     auth: AuthId,
@@ -185,6 +186,8 @@ export interface WalletStorageSync extends WalletStorageWriter {
 export interface WalletStorageSyncReader {
   makeAvailable: () => Promise<TableSettings>
   getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
+  /** Optional local adapter; immutable remote sources negotiate their capability when opened. */
+  getSnapshotSync?: () => SnapshotSyncStorage | undefined
 }
 
 export interface WalletStorageWriter extends WalletStorageReader {
@@ -723,10 +726,11 @@ export interface ProcessSyncChunkResult {
   updates: number
   inserts: number
   /**
-   * Optional non-throwing failure from a custom writer. First-party
-   * `StorageProvider` implementations throw instead of setting this field.
-   * `WalletStorageManager.syncToWriter` and `syncFromReader` throw `error`
-   * immediately and do not request another chunk.
+   * Optional failure channel for custom providers; local providers normally throw.
+   * A failure takes precedence over done, counters and nextCheckpoint. Callers stop
+   * and resume from the destination's durable checkpoint instead of retrying a write.
+   * First-party implementations throw. Live syncToWriter and syncFromReader
+   * stop immediately when a custom writer returns this field.
    */
   error?: WalletError
 }

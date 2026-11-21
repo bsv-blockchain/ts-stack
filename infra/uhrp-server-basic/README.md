@@ -85,6 +85,10 @@ retain their existing behavior. Use SDK 2.8.9 or later for full-size authenticat
 CHIRP chunks; its HTTP transport keeps its existing framing and response limits.
 No object, session, advertisement or persistence migration is required.
 
+CHIRP hashing passes bounded 64 KiB typed byte views directly to the SDK, avoiding
+redundant array conversion. Content identifiers, signed bytes, upload limits and
+existing stored objects are unchanged; no migration is required.
+
 The server also implements the BRC-167 baseline upload-session and complete-
 host routes under `/chirp/v1`. Objects are stream-hashed into a deduplicated
 filesystem store, a root is advertised through ordinary `tm_uhrp` only after
@@ -124,3 +128,14 @@ and keeps any existing inspector configuration. Production startup, database
 migrations, public routes and data formats are unchanged. Install the committed
 lock with `npm ci` before using the updated development command. This removes
 the unpatched `braces` path without an advisory exclusion or dependency override.
+
+## Test runner
+
+Run `npm test` for the complete service suite. Jest binds the stable `Math`, `String`,
+`Number`, `Object`, `Array` and `Reflect` intrinsics from the same test realm
+to avoid VM global-lookup overhead in per-byte authentication validation and
+byte-equality assertions. Realm prototypes and spies remain intact; replaceable
+clocks, fetch, WebAssembly, typed arrays and Buffer retain dynamic lookup. The suite retains its original test
+selection, assertions, request bytes and case deadlines, including the 30-second
+authenticated 4 MiB upload case. Service runtime behavior and production limits
+are unchanged.

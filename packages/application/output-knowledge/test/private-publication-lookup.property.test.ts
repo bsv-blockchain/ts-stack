@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { publicationLookupFixture } from './private-publication-lookup.fixture.js'
@@ -31,45 +32,50 @@ function applyGeneratedCut(
   }
 }
 
-it('retains native private context across reopen and never enqueues after generated authority, readiness or byte-binding cuts', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 0, max: 5 }),
-      fc.boolean(),
-      fc.uint8Array({ minLength: 0, maxLength: 8 }),
-      async (cut, reopen, altered) => {
-        const f = publicationLookupFixture()
-        try {
-          const reader = reopen ? f.reopenReader() : f.reader,
-            prepared = reader.prepare(f.initial.publicationId, f.caller),
-            answer = f.answer()
-          const original = f.store.loadVerified(f.initial.publicationId, () => '20', allow)!
-          let sends = 0
-          if (cut === 5) {
-            answer.outputs[0].context = [9, ...altered]
-            expect(() => prepared.bind(answer)).toThrow('context or output differs')
-          } else {
-            const bound = prepared.bind(answer)
-            applyGeneratedCut(f, prepared, cut, original.record.revision)
-            const send = () => {
-              sends++
-              return undefined
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'retains native private context across reopen and never enqueues after generated authority, readiness or byte-binding cuts (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 5 }),
+        fc.boolean(),
+        fc.uint8Array({ minLength: 0, maxLength: 8 }),
+        async (cut, reopen, altered) => {
+          const f = publicationLookupFixture()
+          try {
+            const reader = reopen ? f.reopenReader() : f.reader,
+              prepared = reader.prepare(f.initial.publicationId, f.caller),
+              answer = f.answer()
+            const original = f.store.loadVerified(f.initial.publicationId, () => '20', allow)!
+            let sends = 0
+            if (cut === 5) {
+              answer.outputs[0].context = [9, ...altered]
+              expect(() => prepared.bind(answer)).toThrow('context or output differs')
+            } else {
+              const bound = prepared.bind(answer)
+              applyGeneratedCut(f, prepared, cut, original.record.revision)
+              const send = () => {
+                sends++
+                return undefined
+              }
+              if (cut === 0) {
+                bound.enqueue(send)
+                expect(sends).toBe(1)
+              } else expect(() => bound.enqueue(send)).toThrow()
+              expect(() => bound.enqueue(send)).toThrow()
             }
-            if (cut === 0) {
-              bound.enqueue(send)
-              expect(sends).toBe(1)
-            } else expect(() => bound.enqueue(send)).toThrow()
-            expect(() => bound.enqueue(send)).toThrow()
+            expect(sends).toBe(cut === 0 ? 1 : 0)
+            if (cut !== 4)
+              expect(
+                f.store.loadVerified(f.initial.publicationId, () => '20', allow)!.original
+              ).toEqual(original.original)
+          } finally {
+            f.cleanup()
           }
-          expect(sends).toBe(cut === 0 ? 1 : 0)
-          if (cut !== 4)
-            expect(
-              f.store.loadVerified(f.initial.publicationId, () => '20', allow)!.original
-            ).toEqual(original.original)
-        } finally {
-          f.cleanup()
         }
-      }
+      ),
+      propertyBatch
     )
-  )
-}, 150000)
+  },
+  150000
+)

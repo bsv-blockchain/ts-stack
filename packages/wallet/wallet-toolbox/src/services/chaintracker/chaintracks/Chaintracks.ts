@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync, promiseFromSync, mapAwaitFromSync } from '../../../utility/promiseFromSync'
 import { ChaintracksStorageApi, InsertHeaderResult } from './Api/ChaintracksStorageApi'
 import { BulkIngestorApi } from './Api/BulkIngestorApi'
 import { LiveIngestorApi } from './Api/LiveIngestorApi'
@@ -155,8 +156,10 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
   }
 
-  async getChain(): Promise<Chain> {
-    return this.chain
+  getChain(): Promise<Chain> {
+    return promiseFromSync(() => {
+      return this.chain
+    })
   }
 
   /**
@@ -230,8 +233,8 @@ export class Chaintracks implements ChaintracksManagementApi {
     throw new Error('No present-height source or locally validated headers are available.')
   }
 
-  async currentHeight(): Promise<number> {
-    return await this.getPresentHeight()
+  currentHeight(): Promise<number> {
+    return awaitFromSync(() => this.getPresentHeight())
   }
 
   /** Returns local process state without locks, storage reads, or network I/O. */
@@ -250,33 +253,39 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
   }
 
-  async subscribeHeaders(listener: HeaderListener): Promise<string> {
-    this.validateListener(listener, 'header listener')
-    this.requireSubscriberCapacity(this.callbacks.header, 'header')
-    const ID = randomBytesBase64(8)
-    this.callbacks.header[ID] = listener
-    return ID
+  subscribeHeaders(listener: HeaderListener): Promise<string> {
+    return promiseFromSync(() => {
+      this.validateListener(listener, 'header listener')
+      this.requireSubscriberCapacity(this.callbacks.header, 'header')
+      const ID = randomBytesBase64(8)
+      this.callbacks.header[ID] = listener
+      return ID
+    })
   }
 
-  async subscribeReorgs(listener: ReorgListener): Promise<string> {
-    this.validateListener(listener, 'reorg listener')
-    this.requireSubscriberCapacity(this.callbacks.reorg, 'reorg')
-    const ID = randomBytesBase64(8)
-    this.callbacks.reorg[ID] = listener
-    return ID
+  subscribeReorgs(listener: ReorgListener): Promise<string> {
+    return promiseFromSync(() => {
+      this.validateListener(listener, 'reorg listener')
+      this.requireSubscriberCapacity(this.callbacks.reorg, 'reorg')
+      const ID = randomBytesBase64(8)
+      this.callbacks.reorg[ID] = listener
+      return ID
+    })
   }
 
-  async unsubscribe(subscriptionId: string): Promise<boolean> {
-    if (typeof subscriptionId !== 'string' || subscriptionId.length === 0 || subscriptionId.length > 128) return false
-    if (Object.prototype.hasOwnProperty.call(this.callbacks.header, subscriptionId)) {
-      delete this.callbacks.header[subscriptionId]
-      return true
-    }
-    if (Object.prototype.hasOwnProperty.call(this.callbacks.reorg, subscriptionId)) {
-      delete this.callbacks.reorg[subscriptionId]
-      return true
-    }
-    return false
+  unsubscribe(subscriptionId: string): Promise<boolean> {
+    return promiseFromSync(() => {
+      if (typeof subscriptionId !== 'string' || subscriptionId.length === 0 || subscriptionId.length > 128) return false
+      if (Object.prototype.hasOwnProperty.call(this.callbacks.header, subscriptionId)) {
+        delete this.callbacks.header[subscriptionId]
+        return true
+      }
+      if (Object.prototype.hasOwnProperty.call(this.callbacks.reorg, subscriptionId)) {
+        delete this.callbacks.reorg[subscriptionId]
+        return true
+      }
+      return false
+    })
   }
 
   private validateListener(listener: unknown, name: string): asserts listener is (...args: unknown[]) => void {
@@ -298,23 +307,25 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * @param header
    */
-  async addHeader(header: BaseBlockHeader): Promise<void> {
-    validateBaseBlockHeaderFormat(header)
-    const pendingHeader: BaseBlockHeader = {
-      version: header.version,
-      previousHash: header.previousHash,
-      merkleRoot: header.merkleRoot,
-      time: header.time,
-      bits: header.bits,
-      nonce: header.nonce
-    }
-    const hash = blockHash(pendingHeader)
-    if (this.queuedBaseHeaderHashes.has(hash)) return
-    if (this.baseHeaders.length >= this.maxQueuedBaseHeaders) {
-      throw new ChaintracksQueueCapacityError()
-    }
-    this.queuedBaseHeaderHashes.add(hash)
-    this.baseHeaders.push(pendingHeader)
+  addHeader(header: BaseBlockHeader): Promise<void> {
+    return promiseFromSync(() => {
+      validateBaseBlockHeaderFormat(header)
+      const pendingHeader: BaseBlockHeader = {
+        version: header.version,
+        previousHash: header.previousHash,
+        merkleRoot: header.merkleRoot,
+        time: header.time,
+        bits: header.bits,
+        nonce: header.nonce
+      }
+      const hash = blockHash(pendingHeader)
+      if (this.queuedBaseHeaderHashes.has(hash)) return
+      if (this.baseHeaders.length >= this.maxQueuedBaseHeaders) {
+        throw new ChaintracksQueueCapacityError()
+      }
+      this.queuedBaseHeaderHashes.add(hash)
+      this.baseHeaders.push(pendingHeader)
+    })
   }
 
   /**
@@ -362,8 +373,8 @@ export class Chaintracks implements ChaintracksManagementApi {
     })
   }
 
-  async startPromises(): Promise<void> {
-    await this.makeAvailable()
+  startPromises(): Promise<void> {
+    return awaitVoidFromSync(() => this.makeAvailable())
   }
 
   async destroy(): Promise<void> {
@@ -375,8 +386,8 @@ export class Chaintracks implements ChaintracksManagementApi {
       for (const liveIn of this.liveIngestors) this.stopLiveIngestor(liveIn)
       const cleanup = [
         ...this.promises,
-        ...this.liveIngestors.map(async liveIn => await liveIn.shutdown()),
-        ...this.bulkIngestors.map(async bulkIn => await bulkIn.shutdown())
+        ...this.liveIngestors.map(liveIn => awaitFromSync(() => liveIn.shutdown())),
+        ...this.bulkIngestors.map(bulkIn => awaitFromSync(() => bulkIn.shutdown()))
       ]
       const results = await Promise.allSettled(cleanup)
       results.push(...(await Promise.allSettled([this.storage.bulkManager.destroy()])))
@@ -408,8 +419,8 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
   }
 
-  async listening(): Promise<void> {
-    return await this.makeAvailable()
+  listening(): Promise<void> {
+    return awaitFromSync(() => this.makeAvailable())
   }
 
   private async runLiveIngestor(liveIngestor: LiveIngestorApi, index: number): Promise<void> {
@@ -453,29 +464,35 @@ export class Chaintracks implements ChaintracksManagementApi {
     return Math.min(1000 * Math.min(2 ** Math.max(restartCount - 1, 0), 60), 60000)
   }
 
-  async isListening(): Promise<boolean> {
-    return this.available
+  isListening(): Promise<boolean> {
+    return promiseFromSync(() => {
+      return this.available
+    })
   }
 
-  async isSynchronized(): Promise<boolean> {
-    await this.makeAvailable()
-    return true
+  isSynchronized(): Promise<boolean> {
+    return mapAwaitFromSync(
+      () => this.makeAvailable(),
+      () => {
+        return true
+      }
+    )
   }
 
   async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
     this.validatePublicHeight(height)
     await this.makeAvailable()
-    return await this.lock.withReadLock(async () => await this.findHeaderForHeightNoLock(height))
+    return await this.lock.withReadLock(() => awaitFromSync(() => this.findHeaderForHeightNoLock(height)))
   }
 
-  private async findHeaderForHeightNoLock(height: number): Promise<BlockHeader | undefined> {
-    return await this.storage.findHeaderForHeightOrUndefined(height)
+  private findHeaderForHeightNoLock(height: number): Promise<BlockHeader | undefined> {
+    return awaitFromSync(() => this.storage.findHeaderForHeightOrUndefined(height))
   }
 
   async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
     this.validatePublicHash(hash)
     await this.makeAvailable()
-    return await this.lock.withReadLock(async () => await this.findHeaderForBlockHashNoLock(hash))
+    return await this.lock.withReadLock(() => awaitFromSync(() => this.findHeaderForBlockHashNoLock(hash)))
   }
 
   private async findHeaderForBlockHashNoLock(hash: string): Promise<BlockHeader | undefined> {
@@ -492,23 +509,27 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async getInfo(): Promise<ChaintracksInfoApi> {
     await this.makeAvailable()
-    return await this.lock.withReadLock(async () => await this.getInfoNoLock())
+    return await this.lock.withReadLock(() => awaitFromSync(() => this.getInfoNoLock()))
   }
 
-  private async getInfoNoLock(): Promise<ChaintracksInfoApi> {
-    const liveRange = await this.storage.findLiveHeightRange()
-    const info: ChaintracksInfoApi = {
-      chain: this.chain,
-      heightBulk: liveRange.minHeight - 1,
-      heightLive: liveRange.maxHeight,
-      storage: this.storage.constructor.name,
-      bulkIngestors: this.bulkIngestors.map(bulkIngestor => bulkIngestor.constructor.name),
-      liveIngestors: this.liveIngestors.map(liveIngestor => liveIngestor.constructor.name),
-      packages: [],
-      sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status })),
-      bulkData: this.storage.bulkManager.getStats()
-    }
-    return info
+  private getInfoNoLock(): Promise<ChaintracksInfoApi> {
+    return mapAwaitFromSync(
+      () => this.storage.findLiveHeightRange(),
+      liveRange => {
+        const info: ChaintracksInfoApi = {
+          chain: this.chain,
+          heightBulk: liveRange.minHeight - 1,
+          heightLive: liveRange.maxHeight,
+          storage: this.storage.constructor.name,
+          bulkIngestors: this.bulkIngestors.map(bulkIngestor => bulkIngestor.constructor.name),
+          liveIngestors: this.liveIngestors.map(liveIngestor => liveIngestor.constructor.name),
+          packages: [],
+          sources: Array.from(this.sourceStatus.values()).map(status => ({ ...status })),
+          bulkData: this.storage.bulkManager.getStats()
+        }
+        return info
+      }
+    )
   }
 
   async getHeaders(height: number, count: number): Promise<string> {
@@ -522,24 +543,30 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async findChainTipHeader(): Promise<BlockHeader> {
     await this.makeAvailable()
-    return await this.lock.withReadLock(async () => await this.storage.findChainTipHeader())
+    return await this.lock.withReadLock(() => awaitFromSync(() => this.storage.findChainTipHeader()))
   }
 
   async findChainTipHash(): Promise<string> {
     await this.makeAvailable()
-    return await this.lock.withReadLock(async () => await this.storage.findChainTipHash())
+    return await this.lock.withReadLock(() => awaitFromSync(() => this.storage.findChainTipHash()))
   }
 
   async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined> {
     this.validatePublicHash(hash)
     await this.makeAvailable()
-    const header = await this.lock.withReadLock(async () => await this.storage.findLiveHeaderForBlockHash(hash))
+    const header = await this.lock.withReadLock(() =>
+      awaitFromSync(() => this.storage.findLiveHeaderForBlockHash(hash))
+    )
     return header || undefined
   }
 
-  async findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
-    const header = await this.findLiveHeaderForBlockHash(hash)
-    return header?.chainWork
+  findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
+    return mapAwaitFromSync(
+      () => this.findLiveHeaderForBlockHash(hash),
+      header => {
+        return header?.chainWork
+      }
+    )
   }
 
   private validatePublicHeight(height: number): void {
@@ -581,12 +608,14 @@ export class Chaintracks implements ChaintracksManagementApi {
     await bulk.exportHeadersToFs(toFs, toHeadersPerFile, toFolder, sourceUrl, maxHeight)
   }
 
-  async startListening(): Promise<void> {
-    await this.makeAvailable()
+  startListening(): Promise<void> {
+    return awaitVoidFromSync(() => this.makeAvailable())
   }
 
-  private async syncBulkStorage(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
-    await this.lock.withWriteLock(async () => await this.syncBulkStorageNoLock(presentHeight, initialRanges))
+  private syncBulkStorage(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
+    return awaitVoidFromSync(() =>
+      this.lock.withWriteLock(() => awaitFromSync(() => this.syncBulkStorageNoLock(presentHeight, initialRanges)))
+    )
   }
 
   private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
@@ -761,7 +790,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     validateAgainstDirtyHashes(header.hash)
 
     const ihr = this.available
-      ? await this.lock.withWriteLock(async () => await this.storage.insertHeader(header))
+      ? await this.lock.withWriteLock(() => awaitFromSync(() => this.storage.insertHeader(header)))
       : await this.storage.insertHeader(header)
 
     if (this.invalidInsertHeaderResult(ihr)) return ihr

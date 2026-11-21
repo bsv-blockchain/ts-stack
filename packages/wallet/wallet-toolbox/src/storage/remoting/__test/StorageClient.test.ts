@@ -233,7 +233,7 @@ describe('StorageClient tests', () => {
       items.map(item => item.digest)
     )
     expect(stored).toHaveLength(items.length)
-    expect(stored.map(blob => Array.from(blob.bytes.subarray(0, 64)))).toEqual(
+    expect(stored.map(blob => Array.from(blob.bytes.slice(0, 64)))).toEqual(
       values.map(bytes => Array.from(bytes.subarray(0, 64)))
     )
     await client.storage.abortActionBatch(batchId)

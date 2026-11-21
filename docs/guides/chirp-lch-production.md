@@ -431,7 +431,7 @@ transaction for an already claimed Demand or Authorization must fail atomically.
 - Scope wallet and service credentials to one role. Keep wallet modules and
   secret material outside public images. Encrypt CEKs and sensitive durable
   state at rest, back them up, rotate access, and test restoration.
-- Keep `LICENSE.txt`, `THIRD_PARTY_NOTICES.md`, and the applicable `LICENSES/`
+- Keep `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and the applicable `LICENSES/`
   archive with redistributed package and reference-app artifacts.
 
 ## Operations And Observability
