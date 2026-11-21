@@ -74,6 +74,40 @@ describe('action batch reservations', () => {
     await ctx.wallet.destroy()
   })
 
+  test('explicit inputs stay off the batch while a resolved-input hook is configured', async () => {
+    let hookCalls = 0
+    ctx.activeStorage.validateResolvedActionInput = async () => {
+      hookCalls += 1
+    }
+    const explicit = Validation.validateCreateActionArgs({
+      description: 'explicit input must not enter the batch',
+      inputs: [
+        {
+          outpoint: `${'11'.repeat(32)}.0`,
+          unlockingScriptLength: 107,
+          inputDescription: 'explicit'
+        }
+      ],
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'reservation test output' }],
+      options: { noSend: true, randomizeOutputs: false }
+    })
+    await expect(
+      ctx.storage.beginActionBatch({ batchId: 'hook-explicit', firstAction: explicit })
+    ).rejects.toMatchObject({ name: 'WERR_INVALID_PARAMETER', parameter: 'resolvedInputHook' })
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'hook-outputs-only', firstAction: firstAction() })
+    await expect(
+      ctx.storage.extendActionBatch({
+        batchId: begun.batchId,
+        targetSatoshis: 1,
+        requestedOutputs: 1,
+        explicitOutpoints: [{ txid: '11'.repeat(32), vout: 0 }],
+        includeSourceTransactions: false
+      })
+    ).rejects.toMatchObject({ name: 'WERR_INVALID_PARAMETER', parameter: 'resolvedInputHook' })
+    expect(hookCalls).toBe(0)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
   test('capability is advertised and concurrent batches reserve disjoint outputs', async () => {
     expect((await ctx.storage.getCapabilities()).actionBatch).toMatchObject({
       version: 1,

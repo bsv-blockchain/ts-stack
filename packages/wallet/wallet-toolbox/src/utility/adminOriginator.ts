@@ -5,9 +5,10 @@ import type { XValidCreateActionInput } from '../storage/methods/createAction'
  * Validated `createAction` arguments as the Wallet hands them to storage.
  *
  * `isAdminOriginator` is set by `Wallet.createAction` and only there: it is
- * true when the call's originator equals the originator the host gave
- * `Wallet.setAdminOriginator`. It is never read from caller-supplied action
- * fields, so an application cannot claim it.
+ * true when the call's originator normalizes to the same hostname the host
+ * gave `Wallet.setAdminOriginator`. Scheme, port and letter case do not
+ * matter. It is never read from caller-supplied action fields, so an
+ * application cannot claim it. A missing or different hostname is not admin.
  */
 export type AdminValidCreateActionArgs = ValidCreateActionArgs & {
   isAdminOriginator?: boolean
@@ -24,8 +25,11 @@ export function isAdminOriginatorAction(vargs: ValidCreateActionArgs): boolean {
  * Storage calls it after the input's source output is resolved, from
  * authenticated local storage (`input.output` is then set) or from verified
  * BEEF, so a caller cannot misstate the source locking script to pass a rule.
- * Throw to refuse the action. A host uses it, for example, to let only its
- * admin originator spend outputs that hold its own admin state.
+ * The default action-batch path does not accept explicit inputs while this
+ * hook is set: those actions use legacy `createAction`, which verifies BEEF
+ * before calling the hook. Throw to refuse the action. A host uses it, for
+ * example, to let only its admin originator spend outputs that hold its own
+ * admin state.
  */
 export type ValidateResolvedActionInput = (
   vargs: AdminValidCreateActionArgs,

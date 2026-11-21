@@ -431,11 +431,20 @@ function newBatch(userId: number, batchId: string): TableActionBatch {
   }
 }
 
+function refuseBatchExplicitInputs(storage: StorageProvider, inputCount: number): void {
+  // The host hook runs inside legacy createAction only after BEEF verification.
+  // Accepting the same inputs here would skip that hook. Callers fall back.
+  if (storage.validateResolvedActionInput != null && inputCount > 0) {
+    throw new WERR_INVALID_PARAMETER('resolvedInputHook', 'accepted by legacy createAction after BEEF verification')
+  }
+}
+
 export async function beginActionBatch(
   storage: StorageProvider,
   auth: AuthId,
   args: BeginActionBatchArgs
 ): Promise<BeginActionBatchResult> {
+  refuseBatchExplicitInputs(storage, args.firstAction.inputs.length)
   const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   if (
@@ -551,6 +560,7 @@ export async function extendActionBatch(
   auth: AuthId,
   args: ExtendActionBatchArgs
 ): Promise<ExtendActionBatchResult> {
+  refuseBatchExplicitInputs(storage, args.explicitOutpoints.length)
   const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   if (
