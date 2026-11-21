@@ -685,11 +685,11 @@ export async function privatePurchaseProfileAliasNativeFixture(
         wallet: authWallet,
         allowUnauthenticated: true,
         transportLimits: { requestTimeoutMs: 5000 }
-      }),
-      // The purchase client waits 30s, which is also this route's maximum.
-      // Destroying the response at 20s becomes "other side closed" when
-      // admission is slow under parallel CI load. Match the client deadline.
-      requestTimeoutMs: 30000
+      })
+      // The router's default and maximum request time (30 s), as in the
+      // PrivatePurchaseNative fixture. Native proving makes a purchase submit
+      // take several seconds locally and longer on shared CI runners, and a
+      // request past the limit is destroyed ("other side closed").
     })
   )
   await new Promise<void>((resolve, reject) => {

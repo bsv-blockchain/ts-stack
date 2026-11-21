@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { fixture, successor } from './proposal-current-fixture.js'
@@ -12,43 +13,45 @@ fc.configureGlobal({
     ? Math.max(MIN_PROPERTY_RUNS, requestedRuns)
     : MIN_PROPERTY_RUNS,
   seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   ...(replayPath ? { path: replayPath } : {})
 })
 
-it('preserves exact channel order and exclusive local expiry for generated valid histories', () => {
-  fc.assert(
-    fc.property(
-      fc.integer({ min: 0, max: 6 }),
-      fc.integer({ min: 10, max: 150 }),
-      fc.boolean(),
-      (revisions, clock, reversePresentation) => {
-        const f = fixture()
-        let proposal = signed()
-        f.append('snapshot', f.pair(proposal))
-        for (let index = 0; index < revisions; index++) {
-          const next = successor(proposal)
-          f.append('live', [f.removal(proposal), ...f.pair(next)])
-          proposal = next
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'preserves exact channel order and exclusive local expiry for generated valid histories (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 6 }),
+        fc.integer({ min: 10, max: 150 }),
+        fc.boolean(),
+        (revisions, clock, reversePresentation) => {
+          const f = fixture()
+          let proposal = signed()
+          f.append('snapshot', f.pair(proposal))
+          for (let index = 0; index < revisions; index++) {
+            const next = successor(proposal)
+            f.append('live', [f.removal(proposal), ...f.pair(next)])
+            proposal = next
+          }
+          if (reversePresentation) {
+            f.view.heads.reverse()
+            f.view.states.reverse()
+            f.view.removals.reverse()
+          }
+          f.view.evaluatedAt = String(clock)
+          const result = f.result()
+          expect(result.consistent).toBe(true)
+          expect(result.channels).toHaveLength(1)
+          expect(result.channels[0]).toMatchObject({
+            proposal,
+            history: 'genesis-linked',
+            membership: 'present',
+            activeIntent: clock < 100,
+            intent: clock < 100 ? 'unexpired' : 'expired'
+          })
         }
-        if (reversePresentation) {
-          f.view.heads.reverse()
-          f.view.states.reverse()
-          f.view.removals.reverse()
-        }
-        f.view.evaluatedAt = String(clock)
-        const result = f.result()
-        expect(result.consistent).toBe(true)
-        expect(result.channels).toHaveLength(1)
-        expect(result.channels[0]).toMatchObject({
-          proposal,
-          history: 'genesis-linked',
-          membership: 'present',
-          activeIntent: clock < 100,
-          intent: clock < 100 ? 'unexpired' : 'expired'
-        })
-      }
+      ),
+      propertyBatch
     )
-  )
-})
+  }
+)

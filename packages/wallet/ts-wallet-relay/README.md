@@ -324,7 +324,7 @@ export async function GET() {
 import { relay } from '@/lib/relay'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  // Return the object unchanged: the phone checks its backendIdentityKey against the QR.
+  // Return the object unchanged: the phone checks topic, backendIdentityKey, and protocolID against the QR.
   const info = relay.getSession(params.id)
   if (!info) return Response.json({ error: 'Session not found' }, { status: 404 })
   return Response.json(info)
@@ -557,7 +557,7 @@ sessions.onSessionExpired(id => relay.removeTopic(id))
 
 A standalone `WebSocketRelay` forwards desktop and mobile messages as soon as both sides are connected. Pass `holdDesktopTrafficUntilAccepted: true` to deliver `role=desktop` messages to a mobile socket only after you call `relay.acceptMobile(topic, connectionId)` for it (the `connectionId` is the fourth `onIncoming` argument); `WalletRelayService` does this once the phone's `pairing_approved` decrypts. Accept only after your own pairing check passes, and use `relay.isCurrentMobile(topic, connectionId)` after any asynchronous step so a result for a socket that has since left never acts on its replacement.
 
-A custom `GET /api/session/:id` route must also return `backendIdentityKey`, the key embedded in the session's QR: record it with `sessions.setBackendIdentityKey(id, key)` when you build the pairing URI. The phone rejects a reported key that differs from the QR's.
+A custom `GET /api/session/:id` route must also return the pairing tuple from the session's QR: `topic` (the session id), `backendIdentityKey`, and `protocolID` (the exact canonical JSON string you passed to `buildPairingUri`). Record the key with `sessions.setBackendIdentityKey(id, key)` when you build the pairing URI. BSV Wallet rejects a response that leaves out any of the three fields, or that reports a value different from the QR's.
 
 `WebSocketRelay` accepts the same `path` and `noServer` options as the facade (see [Sharing the server with other WebSocket services](#sharing-the-server-with-other-websocket-services)); in `noServer` mode, dispatch upgrades to `relay.handleUpgrade(req, socket, head)`.
 
@@ -621,7 +621,7 @@ See [API.md](./API.md) for full parameter and method documentation.
 
 ## License
 
-Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## Heartbeat tolerance and close diagnostics
 

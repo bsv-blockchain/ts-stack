@@ -3,8 +3,8 @@ id: about-versioning
 title: 'Versioning Policy'
 kind: meta
 version: '2.0.0'
-last_updated: '2026-10-23'
-last_verified: '2026-10-23'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: [about, versioning, semver, releases]
@@ -123,6 +123,67 @@ and explicit publication authorization.
 
 Do not promise a GitHub Release, npm dist-tag, changelog format, cadence, or
 support window that the workflow does not actually enforce.
+
+### Pull request release note
+
+Every PR targeting `main` contains exactly one visible fenced block with the
+language `release-note` and a JSON object with these four fields:
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": { "@bsv/sdk": "patch", "@bsv/paymail": "minor" },
+  "summary": "Preserve upload headers and add optional address lookup.",
+  "migration": "none"
+}
+```
+
+`packages` maps names from `governance/repository-health/projects.json` with the
+`npm-oidc` release route to `patch`, `minor`, `major` or `initial`. Each package
+can have its own impact. Use `initial` for a first publication; a major impact
+does not waive the compatibility contract. `summary` is plain-language text
+describing the consumer-visible change. `migration` contains steps, identifying
+the relevant packages when necessary, or the exact string `none` when no
+consumer action is needed. Both text fields must be nonempty; template
+placeholders and unknown fields are rejected.
+
+For a PR with no npm release impact, use this explicit form:
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": "none",
+  "summary": "Validate release-note structure in pull request descriptions.",
+  "migration": "none"
+}
+```
+
+This form also covers service-only changes whose deployment evidence remains in
+the PR's operations section. Do not use it to omit a package whose published
+bytes or manifest change. `node scripts/ci-local-feedback.mjs --base origin/main`
+helps identify affected packages and dependents; reviewers determine the actual
+release impact. To validate a saved description locally, run:
+
+```sh
+node scripts/pr-release-note.mjs --body-file /tmp/pr-description.md
+```
+
+The required repository health job checks structure, known package names and
+impact values. It does not infer whether a summary is useful or whether SemVer
+and migration decisions are correct; those remain review responsibilities.
+Automated PRs follow the same contract; a maintainer supplies the note if the
+bot cannot. Description edits trigger CI, and reruns fetch the current body
+from GitHub instead of trusting a stale event payload. A run for an obsolete
+head fails and must be replaced by CI for the current head. Push, manual and
+merge-group runs have no single PR description and do not apply this check.
+
+The PR block is the editorial record for the change. The existing release
+ledger, package changelogs, generated documentation and protected publication
+workflow remain authoritative under the rules above. Reuse summary/migration
+text where appropriate; do not invent separate prose for the same change.
+Making PR descriptions the sole changelog, archiving existing files, importing
+notes into a version PR, or adding per-release PR links to generated GitHub
+Release notes requires a separately approved release-policy migration.
 
 ## Publication
 

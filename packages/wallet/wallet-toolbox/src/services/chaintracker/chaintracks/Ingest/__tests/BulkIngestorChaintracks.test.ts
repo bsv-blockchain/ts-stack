@@ -182,12 +182,12 @@ describe('BulkIngestorChaintracks', () => {
       maxHeadersPerRequest: 2
     })
     await ingestor.setStorage(storage, () => {})
-    const args = [
+    const args: Parameters<BulkIngestorChaintracks['fetchHeaders']> = [
       { bulk: HeightRange.empty, live: HeightRange.empty },
       new HeightRange(0, 1),
       new HeightRange(0, 1),
       []
-    ] as const
+    ]
 
     await expect(ingestor.fetchHeaders(...args)).rejects.toThrow('returned 1 bytes for 2 headers')
     await expect(ingestor.fetchHeaders(...args)).rejects.toThrow('returned 1 of 2 headers at height 0')

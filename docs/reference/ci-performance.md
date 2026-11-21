@@ -245,11 +245,11 @@ pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
 
-The application output-knowledge coverage suite uses six duration-balanced serial Jest shards
+The application output-knowledge coverage suite uses ten duration-balanced serial Jest shards
 within the existing coverage matrix. Each retains the original complete discovery,
 serial native worker, property cases and per-test deadlines. Its ordinary local
 `test:coverage` command remains a single complete run with the original global
-thresholds. CI requires all six shards, then independently discovers the complete
+thresholds. CI requires all ten shards, then independently discovers the complete
 suite again and checks a disjoint, exact execution union. Failed, missing, pending,
 todo or skipped tests and mismatched source, run, attempt or configuration fail
 qualification. The aggregate merges the complete Istanbul maps and applies all four
@@ -260,9 +260,12 @@ The alias coordinator, disclosure and buyer-alias native history properties each
 run in a fresh serial process before their shard's remaining suites. This prevents
 earlier suites' retained worker state from sharing these properties' execution
 context. The buyer-alias property retains its 300-case minimum, seed, replay
-setting, assertions and 150-second interruption limit. Every batch instruments the
+setting, assertions and a 180-second timeout per group of up to 50 histories. Every coverage batch instruments the
 complete source inventory, and all same-attempt batch receipts must reconcile
-before the original global and patch coverage gates can pass.
+before the original global and patch coverage gates can pass. The instrumented
+native wallet purchase suite has a 30-second operation watchdog. Its fixture
+drains SQLite opens already in progress before deleting the database directory
+and rejects new opens once teardown starts.
 Aggregation compares recomputed Istanbul maps in their complete serialized JSON
 form with the uploaded reports, retaining every file, counter, location and source
 map. Library class instances and their persisted JSON are equivalent at this
@@ -271,6 +274,28 @@ entire test or coverage maps. Test-union, identity and coverage requirements rem
 unchanged.
 The three reporting libraries are direct, exact-version development dependencies
 already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
+
+## Generated property campaigns
+
+Independent generated histories run in groups of up to 50 cases. Shared-state
+fixtures that verify retention across a 300-case history reuse that fixture
+for the full history. Each group gets its suite's Jest or Vitest timeout. The fixed seed, generated
+case count and absolute fast-check replay offsets are preserved. A shrink
+path that names a counterexample within its shrink tree is replayed intact.
+CI rejects fast-check wall-clock shortcuts that can truncate a case-count
+campaign. The opt-in coordinator and disclosure diagnostics retain their
+whole-campaign time limit for comparable performance measurements.
+
+The scheduled campaign runs Output Knowledge, Wallet Toolbox, LCH and the
+remaining governed packages in separate jobs. Output Knowledge uses eight
+shards and Wallet Toolbox uses four with measured Jest file placement. LCH
+uses two shards. Wallet jobs qualify and deliver the pinned native test
+executable before running any properties. Each job records the same seed and
+case count, plus its own shard and failure log.
+
+Edit the shared helper in `config/testing`, then run
+`node scripts/sync-property-test-batches.mjs` to update the copies used by
+package-local test runners. `pnpm test:governance` checks the policy and copies.
 
 ## Application coverage placement
 
@@ -284,7 +309,10 @@ two-second default. The existing SDK/wallet duration planner assigns the full
 current discovery longest-first to six least-loaded shards. All 256 current
 files remain selected exactly once. The estimates are 507–509 seconds per
 shard, not a new elapsed-time result; the owning PR's ordinary coverage jobs
-and complete aggregate supply the measured result.
+and complete aggregate supply the measured result. On hosted PR runs from
+2026-11-05 the six shards took 8.7–9.9 minutes each, so the lane now uses ten
+shards: the same data and planner estimate 304–306 seconds per shard, with 20–27
+of the 256 files each.
 
 Collection and aggregation independently recompute the canonical placement.
 The source/run/attempt/configuration identity now also binds the planner and
@@ -325,6 +353,14 @@ values come from a hosted full-scope run on 2026-10-21. Against round-robin on
 the same runners, the slowest shard fell from 410 to 161 seconds while total
 shard time rose from 608 to 774 seconds.
 
+The `coverage-other` and `dependent-tests` durations were refreshed on
+2026-11-06 from the median per-package duration lines of successful org CI jobs
+between 2026-10-31 and 2026-11-06. Two packages were far above their
+October values: `@bsv/overlay-express` (10 to 312 seconds of tests, 13 to 526
+of coverage) and `@bsv/lch` (12 to 311, 16 to 364). The stale values let the
+planner place both in one dependents shard, which ran for 9–14 minutes. With
+the refreshed values and up to six dependents shards, the planned slowest dependents shard carries 401 seconds (`@bsv/wallet-toolbox`, 393 seconds, when it is a dependent) and the slowest coverage-other shard 544 seconds. Each of those is now set by one package, since a package runs whole within its shard.
+
 ## Duration-balanced test-file shards
 
 The wallet-toolbox and SDK coverage lanes shard by test file with
@@ -337,7 +373,7 @@ their Istanbul maps with the library Jest uses and enforces the SDK's configured
 global thresholds, so the result matches one unsharded run. The packed SDK
 browser and UMD contract checks run beside the coverage shards.
 
-The affected-application regression lane runs the output-knowledge suite as six
+The affected-application regression lane runs the output-knowledge suite as ten
 Jest shards with the same sequencer and the `output-knowledge-tests` lane, so a
 library pull request that only depends on the application no longer waits on
 whichever path-hash shard drew the slowest property files. On PR runs from
@@ -350,9 +386,13 @@ exactly once across six shards of 42–44 files. The historical medians estimate
 Earlier hosted proof [run 41072431187](https://github.com/bsv-blockchain/ts-stack/actions/runs/41072431187)
 executed all 254 then-current suites once, with 411–490 seconds of Jest per shard
 and 10.3-minute overall CI compared with 21.2–23.9-minute earlier library PRs.
+After that change merged, hosted library PR shards took 4.7–9.3 minutes each, so
+the lane now uses ten shards; the same medians estimate 284–286 seconds per
+shard, with 12–29 of the 256 files each and the slowest single file at 263
+seconds.
 Every current file still runs serially within its shard, with property cases,
 seeds and deadlines unchanged. Direct application coverage keeps its independent
-separate execution/aggregation contract. Its six-shard coverage plan is described
+separate execution/aggregation contract. Its ten-shard coverage plan is described
 below; the earlier regression result is separate evidence.
 
 The shared build restores each package's outputs from a cache keyed on the git

@@ -362,8 +362,9 @@ describe('explicit local BRC-197 fixed-child ownership', () => {
     await expect(ctx.wallet.internalizeBrc197Action(args)).rejects.toThrow('fixed-child P2PKH')
     const auth = await ctx.storage.getAuth(true)
     await expect(ctx.activeStorage.internalizeBrc197Action(auth, args)).rejects.toThrow('fixed-child P2PKH')
-    await expect(StorageProvider.prototype.internalizeBrc197Action.call(ctx.activeStorage, auth, args))
-      .rejects.toThrow('fixed-child P2PKH')
+    await expect(StorageProvider.prototype.internalizeBrc197Action.call(ctx.activeStorage, auth, args)).rejects.toThrow(
+      'fixed-child P2PKH'
+    )
     await expect(
       ctx.wallet.internalizeBrc197Action({ ...args, recipientIdentityKey: new PrivateKey(81).toPublicKey().toString() })
     ).rejects.toThrow('authenticated wallet identity')
@@ -1222,9 +1223,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
     const f = fundingFixture(ctx)
     f.tx.lockTime = nonce++
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(f.tracker)
-    jest
-      .spyOn(ctx.services, 'postBeef')
-      .mockRejectedValue(new Error('Synthetic dependency tests never publish'))
+    jest.spyOn(ctx.services, 'postBeef').mockRejectedValue(new Error('Synthetic dependency tests never publish'))
     const args: InternalizeActionArgs = {
       tx: f.tx.toAtomicBEEF(),
       description: 'Synthetic ordinary ownership boundary',
@@ -1243,12 +1242,8 @@ describe('shared internalization refuses inconsistent dependencies without owner
     return { f, args }
   }
   async function untouched(txid: string) {
-    expect(
-      await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })
-    ).toHaveLength(0)
-    expect(
-      await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
-    ).toHaveLength(0)
+    expect(await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
     expect(await ctx.activeStorage.findProvenTxReqs({ partial: { txid } })).toHaveLength(0)
     expect(ctx.services.postBeef).not.toHaveBeenCalled()
   }
@@ -1339,8 +1334,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
       valid.outputs = [output]
       jest.spyOn(internalizationValidation, 'validateInternalizeActionArgs').mockReturnValue(valid)
       let expected: { name: string; parameter?: string; message: string }
-      if (protocol === 'unknown')
-        expected = { name: 'WERR_INTERNAL', message: 'unexpected protocol unknown' }
+      if (protocol === 'unknown') expected = { name: 'WERR_INTERNAL', message: 'unexpected protocol unknown' }
       else if (protocol === 'basket insertion' && insertion?.basket === 'default')
         expected = {
           name: 'WERR_INVALID_PARAMETER',
@@ -1377,8 +1371,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
           ? { name: 'WERR_INTERNAL', message: 'unexpected protocol unknown' }
           : {
               name: 'WERR_INVALID_PARAMETER',
-              parameter:
-                protocol === 'wallet payment' ? 'paymentRemittance' : 'insertionRemittance',
+              parameter: protocol === 'wallet payment' ? 'paymentRemittance' : 'insertionRemittance',
               message: `The ${protocol === 'wallet payment' ? 'paymentRemittance' : 'insertionRemittance'} parameter must be valid for protocol ${protocol}`
             }
       await expect(invoke('signer', args)).rejects.toMatchObject(expected)
@@ -1406,14 +1399,10 @@ describe('shared internalization refuses inconsistent dependencies without owner
         parsed = PublicKey.fromString(ctx.identityKey)
       if (defect === 'infinity') jest.spyOn(parsed, 'isInfinity').mockReturnValue(true)
       else if (defect === 'bad point') jest.spyOn(parsed, 'validate').mockReturnValue(false)
-      else
-        jest.spyOn(parsed, 'toString').mockReturnValue(new PrivateKey(93).toPublicKey().toString())
+      else jest.spyOn(parsed, 'toString').mockReturnValue(new PrivateKey(93).toPublicKey().toString())
       jest.spyOn(PublicKey, 'fromString').mockReturnValue(parsed)
       expect(() => brc197ChildPublicKey(ctx.identityKey)).toThrow(
-        new WERR_INVALID_PARAMETER(
-          'recipientIdentityKey',
-          'a canonical compressed secp256k1 public key'
-        )
+        new WERR_INVALID_PARAMETER('recipientIdentityKey', 'a canonical compressed secp256k1 public key')
       )
       await untouched(f.tx.id('hex'))
     }
@@ -1431,8 +1420,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
     await expect(invoke('storage', args)).rejects.toMatchObject({
       name: 'WERR_INVALID_PARAMETER',
       parameter: 'tx',
-      message:
-        'The tx parameter must be target transaction of internalizeAction is undergoing active changes.'
+      message: 'The tx parameter must be target transaction of internalizeAction is undergoing active changes.'
     })
     expect(insertion).toHaveBeenCalledTimes(1)
     await untouched(f.tx.id('hex'))
@@ -1450,9 +1438,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
       })
       // Deliberately broken service-port result: the runtime defense must survive
       // a provider that violates its non-null static return contract.
-      jest
-        .spyOn(ctx.services, 'getHeaderForHeight')
-        .mockResolvedValue(undefined as unknown as number[])
+      jest.spyOn(ctx.services, 'getHeaderForHeight').mockResolvedValue(undefined as unknown as number[])
       if (lifecycle === 'nosend') {
         const now = new Date()
         await ctx.activeStorage.insertTransaction({
@@ -1472,9 +1458,7 @@ describe('shared internalization refuses inconsistent dependencies without owner
         name: 'WERR_INTERNAL',
         message: 'Block header not found for height 1500'
       })
-      expect(
-        await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
-      ).toHaveLength(0)
+      expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
       const transactions = await ctx.activeStorage.findTransactions({
         partial: { userId: ctx.userId, txid }
       })
@@ -1503,10 +1487,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
     const txid = f.tx.id('hex'),
       sourceTxid = f.source.id('hex')
     const user = (await ctx.activeStorage.findUsers({ partial: { userId: ctx.userId } }))[0]
-    const foreign = await _tu.insertTestUser(
-      ctx.activeStorage,
-      new PrivateKey(94).toPublicKey().toString()
-    )
+    const foreign = await _tu.insertTestUser(ctx.activeStorage, new PrivateKey(94).toPublicKey().toString())
     const basket = (
       await ctx.activeStorage.findOutputBaskets({
         partial: { userId: ctx.userId, name: 'default' }
@@ -1516,66 +1497,46 @@ describe('internalization preserves inputs and metadata across failed publicatio
     const { tx: owner } = await _tu.insertTestTransaction(ctx.activeStorage, user, false, {
       txid: sourceTxid
     })
-    const { tx: foreignOwner } = await _tu.insertTestTransaction(
-      ctx.activeStorage,
-      foreign,
-      false,
-      { txid: sourceTxid }
-    )
+    const { tx: foreignOwner } = await _tu.insertTestTransaction(ctx.activeStorage, foreign, false, {
+      txid: sourceTxid
+    })
     const own = await _tu.insertTestOutput(ctx.activeStorage, owner, 0, 1000, basket, false, {
       txid: sourceTxid,
       spendable: true,
       spentBy: undefined
     })
-    const other = await _tu.insertTestOutput(
-      ctx.activeStorage,
-      foreignOwner,
-      0,
-      1000,
-      foreignBasket,
-      false,
-      { txid: sourceTxid, spendable: true, spentBy: undefined }
-    )
+    const other = await _tu.insertTestOutput(ctx.activeStorage, foreignOwner, 0, 1000, foreignBasket, false, {
+      txid: sourceTxid,
+      spendable: true,
+      spentBy: undefined
+    })
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(f.tracker)
     // This synthetic provider advertises a newly inserted request. The concrete
     // provider omits optional isNew; that ordinary path does not publish here.
     const getProvenOrReq = ctx.activeStorage.getProvenOrReq.bind(ctx.activeStorage)
-    const requests = jest
-      .spyOn(ctx.activeStorage, 'getProvenOrReq')
-      .mockImplementation(async (id, req, trx) => {
-        const retained = await getProvenOrReq(id, req, trx)
-        return req === undefined ? retained : { ...retained, isNew: true }
-      })
+    const requests = jest.spyOn(ctx.activeStorage, 'getProvenOrReq').mockImplementation(async (id, req, trx) => {
+      const retained = await getProvenOrReq(id, req, trx)
+      return req === undefined ? retained : { ...retained, isNew: true }
+    })
     const originalInputs = await Promise.all(
       [own, other].map(
-        async output =>
-          (await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } }))[0]
+        async output => (await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } }))[0]
       )
     )
-    const publish = jest
-      .spyOn(internalizationPublication, 'shareReqsWithWorld')
-      .mockImplementation(async () => {
-        const target = (
-          await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })
-        )[0]
-        expect(target).toBeDefined()
-        const spentOwn = (
-          await ctx.activeStorage.findOutputs({ partial: { outputId: own.outputId } })
-        )[0]
-        const spentForeign = (
-          await ctx.activeStorage.findOutputs({ partial: { outputId: other.outputId } })
-        )[0]
-        expect(spentOwn).toMatchObject({ spendable: false, spentBy: target.transactionId })
-        expect(spentForeign.spendable).toBe(false)
-        expect(spentForeign.spentBy).toBeUndefined()
-        return {
-          swr: [{ txid, status: 'failed' }],
-          ndr: [{ txid, status: 'serviceError' }]
-        }
-      })
-    const network = jest
-      .spyOn(ctx.services, 'postBeef')
-      .mockRejectedValue(new Error('Synthetic publication port only'))
+    const publish = jest.spyOn(internalizationPublication, 'shareReqsWithWorld').mockImplementation(async () => {
+      const target = (await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } }))[0]
+      expect(target).toBeDefined()
+      const spentOwn = (await ctx.activeStorage.findOutputs({ partial: { outputId: own.outputId } }))[0]
+      const spentForeign = (await ctx.activeStorage.findOutputs({ partial: { outputId: other.outputId } }))[0]
+      expect(spentOwn).toMatchObject({ spendable: false, spentBy: target.transactionId })
+      expect(spentForeign.spendable).toBe(false)
+      expect(spentForeign.spentBy).toBeUndefined()
+      return {
+        swr: [{ txid, status: 'failed' }],
+        ndr: [{ txid, status: 'serviceError' }]
+      }
+    })
+    const network = jest.spyOn(ctx.services, 'postBeef').mockRejectedValue(new Error('Synthetic publication port only'))
     const auth = await ctx.storage.getAuth(true)
     const result = await storageInternalizationCore(
       ctx.activeStorage,
@@ -1611,9 +1572,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
     expect(call[4]?.details).toMatchObject([{ txid, status: 'readyToSend' }])
     expect(call[4]?.beef.atomicTxid).toBe(txid)
     for (const [index, output] of [own, other].entries()) {
-      const retained = (
-        await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } })
-      )[0]
+      const retained = (await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } }))[0]
       expect(retained).toMatchObject({
         userId: output.userId,
         transactionId: output.transactionId,
@@ -1622,13 +1581,9 @@ describe('internalization preserves inputs and metadata across failed publicatio
         spendable: true
       })
       expect(retained.spentBy).toBeUndefined()
-      expect({ ...retained, updated_at: originalInputs[index].updated_at }).toEqual(
-        originalInputs[index]
-      )
+      expect({ ...retained, updated_at: originalInputs[index].updated_at }).toEqual(originalInputs[index])
     }
-    expect(
-      await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
-    ).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
     expect(
       await ctx.activeStorage.findTxLabels({
         partial: { userId: ctx.userId, label: 'pending public receipt' }
@@ -1644,9 +1599,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
         partial: { userId: ctx.userId, tag: 'pending tag' }
       })
     ).toHaveLength(0)
-    expect(
-      await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })
-    ).toHaveLength(1)
+    expect(await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })).toHaveLength(1)
     expect(network).not.toHaveBeenCalled()
   })
 })
@@ -1672,12 +1625,8 @@ describe('shared internalization checks late evidence and inclusion lookup ports
     })
     const header = jest
       .spyOn(ctx.services, 'getHeaderForHeight')
-      .mockResolvedValue(
-        serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid })
-      )
-    const network = jest
-      .spyOn(ctx.services, 'postBeef')
-      .mockRejectedValue(new Error('Synthetic inclusion port only'))
+      .mockResolvedValue(serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid }))
+    const network = jest.spyOn(ctx.services, 'postBeef').mockRejectedValue(new Error('Synthetic inclusion port only'))
     if (lifecycle === 'nosend') {
       const now = new Date()
       await ctx.activeStorage.insertTransaction({
@@ -1713,9 +1662,7 @@ describe('shared internalization checks late evidence and inclusion lookup ports
     })
     expect(transactions).toHaveLength(lifecycle === 'nosend' ? 1 : 0)
     if (lifecycle === 'nosend') expect(transactions[0].status).toBe('nosend')
-    expect(
-      await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
-    ).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
     expect(await ctx.activeStorage.findProvenTxs({ partial: { txid } })).toHaveLength(0)
     expect(
       await ctx.activeStorage.findTxLabels({
@@ -1733,9 +1680,7 @@ describe('shared internalization checks late evidence and inclusion lookup ports
       jest.spyOn(Beef.prototype, 'findBump').mockImplementation(function (this: Beef, requested) {
         return requested === txid ? malformed : original.call(this, requested)
       })
-      await expect(
-        storageInternalizationCore(ctx.activeStorage, auth, args, null)
-      ).rejects.toMatchObject({
+      await expect(storageInternalizationCore(ctx.activeStorage, auth, args, null)).rejects.toMatchObject({
         name: 'WERR_INTERNAL',
         message: `Could not determine transaction index for txid ${txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(malformed.path[0])}`
       })
@@ -1749,11 +1694,7 @@ describe('shared internalization checks late evidence and inclusion lookup ports
     async lifecycle => {
       const { txid, args, auth, network } = await fixture(lifecycle)
       const original = Beef.prototype.verify
-      jest.spyOn(Beef.prototype, 'verify').mockImplementation(async function (
-        this: Beef,
-        tracker,
-        allowTxidOnly
-      ) {
+      jest.spyOn(Beef.prototype, 'verify').mockImplementation(async function (this: Beef, tracker, allowTxidOnly) {
         const valid = await original.call(this, tracker, allowTxidOnly)
         const find = this.findTxid.bind(this)
         let reads = 0
@@ -1763,9 +1704,7 @@ describe('shared internalization checks late evidence and inclusion lookup ports
         }
         return valid
       })
-      await expect(
-        storageInternalizationCore(ctx.activeStorage, auth, args, null)
-      ).rejects.toMatchObject({
+      await expect(storageInternalizationCore(ctx.activeStorage, auth, args, null)).rejects.toMatchObject({
         name: 'WERR_INTERNAL',
         message: `Could not find transaction ${txid} in AtomicBEEF`
       })
@@ -1796,9 +1735,7 @@ describe('mined recovery and optional basket metadata retain ownership facts', (
         (root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
     })
     jest.spyOn(ctx.services, 'getHeaderForHeight').mockResolvedValue(header)
-    const network = jest
-      .spyOn(ctx.services, 'postBeef')
-      .mockRejectedValue(new Error('Synthetic mined receipt only'))
+    const network = jest.spyOn(ctx.services, 'postBeef').mockRejectedValue(new Error('Synthetic mined receipt only'))
     return { f, txid, network }
   }
   test('merges a mined ordinary payment into an existing recovery transaction with its exact proof and balance', async () => {
@@ -1822,7 +1759,7 @@ describe('mined recovery and optional basket metadata retain ownership facts', (
     const hook: FundingRecoveryCommit = {
       protocol: 'wallet-funding-recovery-v1',
       reject: jest.fn(),
-      commit: jest.fn(async run => await ctx.activeStorage.transaction(run))
+      commit: jest.fn(async (run, write) => await write!.transaction(run))
     }
     const auth = await ctx.storage.getAuth(true)
     const result = await storageInternalizationCore(
@@ -1901,9 +1838,7 @@ describe('mined recovery and optional basket metadata retain ownership facts', (
     }
     const valid = internalizationValidation.validateInternalizeActionArgs(args)
     delete valid.outputs[0].insertionRemittance!.tags
-    const validation = jest
-      .spyOn(internalizationValidation, 'validateInternalizeActionArgs')
-      .mockReturnValue(valid)
+    const validation = jest.spyOn(internalizationValidation, 'validateInternalizeActionArgs').mockReturnValue(valid)
     expect(await storageInternalizationCore(ctx.activeStorage, auth, args, null)).toMatchObject({
       accepted: true,
       isMerge: false,
@@ -1926,12 +1861,8 @@ describe('mined recovery and optional basket metadata retain ownership facts', (
       spendable: true,
       providedBy: 'you'
     })
-    expect(
-      await ctx.activeStorage.findOutputTagMaps({ partial: { outputId: outputs[0].outputId } })
-    ).toHaveLength(0)
-    expect(await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId } })).toEqual(
-      tagsBefore
-    )
+    expect(await ctx.activeStorage.findOutputTagMaps({ partial: { outputId: outputs[0].outputId } })).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId } })).toEqual(tagsBefore)
     expect(network).not.toHaveBeenCalled()
   })
 })

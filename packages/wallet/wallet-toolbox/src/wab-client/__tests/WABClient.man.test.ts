@@ -41,7 +41,7 @@ describeWithWabEnvironment('WABClient', () => {
     const faucetRes = await client.requestFaucet(testPresentationKey)
     expect(faucetRes.success).toBe(true)
     expect(faucetRes.paymentData).toBeDefined()
-    expect(faucetRes.paymentData.amount).toBe(1000)
+    expect(faucetRes.paymentData!.amount).toBe(1000)
   })
 
   it('should list linked methods', async () => {
