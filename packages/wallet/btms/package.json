@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -16,7 +16,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "exports": {
     ".": {
@@ -52,7 +54,7 @@
     "pushdrop"
   ],
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

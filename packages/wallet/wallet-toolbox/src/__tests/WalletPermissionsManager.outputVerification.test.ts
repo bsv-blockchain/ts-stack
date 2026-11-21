@@ -23,7 +23,7 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
   const CHANGE_SCRIPT = '76a914aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa88ac'
 
   // Minimal manager instance; the underlying wallet is never called by the method under test.
-  const underlyingWallet: never = Object.create(null)
+  const underlyingWallet = Object.create(null) as ConstructorParameters<typeof WalletPermissionsManager>[0]
   const wpm: {
     verifyRequestedOutputsPresent: (
       tx: Transaction,
@@ -167,8 +167,8 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
         computeNetSpend: (
           tx: Transaction,
           args: unknown,
-          inputDescriptions: Record<number, string>,
-          outputDescriptions: Record<number, string>,
+          inputDescriptions: Record<string, string>,
+          outputDescriptions: Map<string, string>,
           resolved: Map<number, number>
         ) => { netSpent: number; lineItems: Array<{ type: string; description: string; satoshis: number }> }
       }
@@ -178,10 +178,10 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     tx.addInput({ sourceTransaction: source, sourceOutputIndex: 0, unlockingScript: new UnlockingScript([]) })
     const args = requested([{ hex: SCRIPT_A, satoshis: maxPossibleSatoshis }])
 
-    const { lineItems } = netSpend(tx, args, {}, {}, new Map([[0, 4321]]))
+    const { lineItems } = netSpend(tx, args, {}, new Map(), new Map([[0, 4321]]))
     expect(lineItems[0]).toEqual({ type: 'output', satoshis: 4321, description: 'No output description provided' })
 
-    expect(() => netSpend(tx, args, {}, {}, new Map())).toThrow(/output 0 was not resolved/)
+    expect(() => netSpend(tx, args, {}, new Map(), new Map())).toThrow(/output 0 was not resolved/)
   })
 
   test('6 rejects a final wallet result that substitutes the authorized recipient', async () => {

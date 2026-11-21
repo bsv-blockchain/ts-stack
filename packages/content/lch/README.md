@@ -213,7 +213,7 @@ See [BRC-170](https://bsv.brc.dev/apps/0170) for the normative protocol. If this
 
 ## License
 
-This package is licensed under the [Open BSV License Version 6](./LICENSE.txt).
+This package is licensed under the [Apache License 2.0](./LICENSE).
 The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICES.md). The package incorporates no third-party source; its SDK and optional CHIRP peers retain their own license payloads.
 
 ## Optional private-overlay representations

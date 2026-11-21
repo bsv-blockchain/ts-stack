@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -333,57 +334,62 @@ fc.configureGlobal({
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
 })
 
-it('preserves ordered membership and a final snapshot boundary across generated page capacities', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 0, max: 6 }),
-      fc.integer({ min: 1, max: 3 }),
-      async (count, pageSize) => {
-        const { index, builder, boundary, query } = await fixture(128, count)
-        try {
-          let cursor: string | null = null
-          const keys: number[] = []
-          let complete = false
-          for (let page = 0; page < 10; page++) {
-            const result = await builder.build(
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'preserves ordered membership and a final snapshot boundary across generated page capacities (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 6 }),
+        fc.integer({ min: 1, max: 3 }),
+        async (count, pageSize) => {
+          const { index, builder, boundary, query } = await fixture(128, count)
+          try {
+            let cursor: string | null = null
+            const keys: number[] = []
+            let complete = false
+            for (let page = 0; page < 10; page++) {
+              const result = await builder.build(
+                boundary,
+                query,
+                cursor,
+                { ...limits, maxObservations: pageSize },
+                maximums,
+                boundary.watermark
+              )
+              expect(result.batch.phase).toBe('snapshot')
+              expect(result.batch.through).toBe(boundary.watermark)
+              for (const group of result.batch.groups)
+                for (const observation of group.observations)
+                  if (observation.kind === 'output')
+                    keys.push(observation.payload.evidence.outputIndex)
+              cursor = result.batch.cursor
+              if (result.batch.snapshotComplete) {
+                complete = true
+                break
+              }
+            }
+            expect(complete).toBe(true)
+            expect(keys).toEqual(Array.from({ length: Math.min(count, 2) }, (_, i) => i))
+            const live = await builder.build(
               boundary,
               query,
               cursor,
-              { ...limits, maxObservations: pageSize },
+              limits,
               maximums,
               boundary.watermark
             )
-            expect(result.batch.phase).toBe('snapshot')
-            expect(result.batch.through).toBe(boundary.watermark)
-            for (const group of result.batch.groups)
-              for (const observation of group.observations)
-                if (observation.kind === 'output')
-                  keys.push(observation.payload.evidence.outputIndex)
-            cursor = result.batch.cursor
-            if (result.batch.snapshotComplete) {
-              complete = true
-              break
-            }
+            expect(live.batch.phase).toBe('live')
+            expect(live.batch.groups).toEqual([])
+          } finally {
+            await index.close()
           }
-          expect(complete).toBe(true)
-          expect(keys).toEqual(Array.from({ length: Math.min(count, 2) }, (_, i) => i))
-          const live = await builder.build(
-            boundary,
-            query,
-            cursor,
-            limits,
-            maximums,
-            boundary.watermark
-          )
-          expect(live.batch.phase).toBe('live')
-          expect(live.batch.groups).toEqual([])
-        } finally {
-          await index.close()
         }
-      }
+      ),
+      propertyBatch
     )
-  )
-}, 120000)
+  },
+  120000
+)
 
 function changedIndex(
   index: LookupIndexStorage,

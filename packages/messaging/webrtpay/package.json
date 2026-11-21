@@ -1,9 +1,9 @@
 {
   "name": "@bsv/webrtpay",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Direct wallet-to-wallet BSV payments over WebRTC data channels, authenticated with BRC-100 identity keys",
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -42,7 +42,9 @@
     "docs/protocol.md",
     "examples",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

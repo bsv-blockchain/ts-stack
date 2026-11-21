@@ -3,10 +3,10 @@ id: pkg-webrtpay
 title: '@bsv/webrtpay'
 kind: package
 domain: messaging
-version: '0.2.3'
+version: '0.2.4'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-22'
-last_verified: '2026-10-22'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/webrtpay'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay'

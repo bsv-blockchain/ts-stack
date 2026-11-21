@@ -297,7 +297,7 @@ Storage binary limit: 8 MiB. Storage concurrency: 200. Admin JSON limit:
 | Admin liveness/UI assets | `GET /healthz`, `/admin`, `/admin/assets/bsv-sdk.js`. If admin identity configuration is absent, the server fails closed with 503 for later routes.                           |
 | Admin API                | Authenticated and allowlisted identity required for stats, events, tasks, users, call history, UTXO review, transaction review/decode/rebroadcast, and manual task execution. |
 
-Storage pre-auth limits default to 300/minute per IP and authenticated limits
+Storage pre-auth limits default to 3,000/minute per IP and authenticated limits
 to 1,000/minute per identity; callers can provide shared stores. Short-request
 and RPC logging records metadata only. Nginx caps requests at 30 MiB and does
 not replay state-changing RPC requests to another upstream.

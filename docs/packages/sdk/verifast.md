@@ -3,9 +3,9 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.9'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+version: '0.3.10'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/verifast'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast'
@@ -60,8 +60,8 @@ for routing, network, batch, resource, and UMD details.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/verifast/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/verifast/LICENSE).
 
 The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
 result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/group-messaging",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -29,7 +29,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE",
+    "NOTICE",
+    "PATENTS"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -61,7 +63,7 @@
     "directory": "packages/messaging/group-messaging"
   },
   "author": "BSV Association",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "dependencies": {
     "@noble/ciphers": "2.1.1",
     "@noble/curves": "2.0.1",
@@ -81,7 +83,7 @@
     "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "4.1.11",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.8",
     "fast-check": "^4.9.0",
     "oxlint": "^1.83.0",
     "ts2md": "^0.2.8",

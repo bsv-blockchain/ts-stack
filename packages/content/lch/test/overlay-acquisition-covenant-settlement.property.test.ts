@@ -1,3 +1,4 @@
+import { propertyTestBatches } from './utils/property-test-batches.cjs'
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { bindLCHOverlayCovenantProfileSettlement } from '../src/overlayAcquisitionCovenantProfileSettlement.js'
@@ -15,86 +16,94 @@ fc.configureGlobal({
     ? Math.max(MIN_PROPERTY_RUNS, requestedRuns)
     : MIN_PROPERTY_RUNS,
   seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
-  ...(replayPath ? { path: replayPath } : {}),
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true
+  ...(replayPath ? { path: replayPath } : {})
 })
 
-it('refuses independently signed wrong economic and request commitments under genuine POTATOES', async () => {
-  const f = await lchCovenantSettlementFixture()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom(
-        'requestId',
-        'offerId',
-        'assetId',
-        'acquisitionId',
-        'listingId',
-        'txid',
-        'purchaseCommitment',
-        'releaseEvidenceDigest'
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'refuses independently signed wrong economic and request commitments under genuine POTATOES (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const f = await lchCovenantSettlementFixture()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom(
+          'requestId',
+          'offerId',
+          'assetId',
+          'acquisitionId',
+          'listingId',
+          'txid',
+          'purchaseCommitment',
+          'releaseEvidenceDigest'
+        ),
+        fc.uint8Array({ minLength: 32, maxLength: 32 }),
+        fc.integer({ min: 1, max: 10000 }),
+        async (field, bytes, extra) => {
+          const incorrect = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''),
+            packet = signOutputPacket(
+              'lch-covenant-settlement',
+              { ...f.body, [field]: incorrect, satoshis: String(100 + extra) },
+              f.sellerKey
+            ),
+            context = { ...f.context, settlement: f.json(packet) },
+            delivered = await f.deliver(context)
+          expect(() =>
+            bindLCHOverlayCovenantSettlement(context, f.terms, f.prepared, delivered, f.txid)
+          ).toThrow('exact prepared purchase')
+          expect(
+            bindLCHOverlayCovenantSettlement(f.context, f.terms, f.prepared, f.delivered, f.txid)
+              .packet
+          ).toEqual(f.packet)
+        }
       ),
-      fc.uint8Array({ minLength: 32, maxLength: 32 }),
-      fc.integer({ min: 1, max: 10000 }),
-      async (field, bytes, extra) => {
-        const incorrect = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''),
-          packet = signOutputPacket(
-            'lch-covenant-settlement',
-            { ...f.body, [field]: incorrect, satoshis: String(100 + extra) },
-            f.sellerKey
-          ),
-          context = { ...f.context, settlement: f.json(packet) },
-          delivered = await f.deliver(context)
-        expect(() =>
-          bindLCHOverlayCovenantSettlement(context, f.terms, f.prepared, delivered, f.txid)
-        ).toThrow('exact prepared purchase')
-        expect(
-          bindLCHOverlayCovenantSettlement(f.context, f.terms, f.prepared, f.delivered, f.txid)
-            .packet
-        ).toEqual(f.packet)
-      }
+      propertyBatch
     )
-  )
-}, 180000)
+  },
+  180000
+)
 
-it('binds generated current immutable settlements to the original full commitment and release', async () => {
-  const f = await lchCovenantProfileSettlementFixture()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom(
-        'requestId',
-        'offerId',
-        'assetId',
-        'acquisitionId',
-        'listingId',
-        'txid',
-        'purchaseCommitment',
-        'releaseEvidenceDigest'
+it.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'binds generated current immutable settlements to the original full commitment and release (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const f = await lchCovenantProfileSettlementFixture()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom(
+          'requestId',
+          'offerId',
+          'assetId',
+          'acquisitionId',
+          'listingId',
+          'txid',
+          'purchaseCommitment',
+          'releaseEvidenceDigest'
+        ),
+        fc.uint8Array({ minLength: 32, maxLength: 32 }),
+        fc.integer({ min: 1, max: 10000 }),
+        async (field, bytes, extra) => {
+          const incorrect = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''),
+            packet = signOutputPacket(
+              'lch-covenant-settlement',
+              { ...f.body, [field]: incorrect, satoshis: String(100 + extra) },
+              f.sellerKey
+            ),
+            context = { ...f.context, settlement: f.json(packet) },
+            delivered = await f.deliver(context)
+          expect(() =>
+            bindLCHOverlayCovenantProfileSettlement(context, f.terms, f.prepared, delivered, f.txid)
+          ).toThrow('exact prepared purchase')
+          expect(
+            bindLCHOverlayCovenantProfileSettlement(
+              f.context,
+              f.terms,
+              f.prepared,
+              f.delivered,
+              f.txid
+            ).packet
+          ).toEqual(f.packet)
+        }
       ),
-      fc.uint8Array({ minLength: 32, maxLength: 32 }),
-      fc.integer({ min: 1, max: 10000 }),
-      async (field, bytes, extra) => {
-        const incorrect = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''),
-          packet = signOutputPacket(
-            'lch-covenant-settlement',
-            { ...f.body, [field]: incorrect, satoshis: String(100 + extra) },
-            f.sellerKey
-          ),
-          context = { ...f.context, settlement: f.json(packet) },
-          delivered = await f.deliver(context)
-        expect(() =>
-          bindLCHOverlayCovenantProfileSettlement(context, f.terms, f.prepared, delivered, f.txid)
-        ).toThrow('exact prepared purchase')
-        expect(
-          bindLCHOverlayCovenantProfileSettlement(
-            f.context,
-            f.terms,
-            f.prepared,
-            f.delivered,
-            f.txid
-          ).packet
-        ).toEqual(f.packet)
-      }
+      propertyBatch
     )
-  )
-}, 180000)
+  },
+  180000
+)
