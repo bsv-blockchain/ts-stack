@@ -31,7 +31,7 @@ import { OneColor, readOneColorAttributes, reqMatchesDeploy } from '@bsv/templat
 import {
   encryptMetadata,
   maybeDecryptMetadata,
-  sdk as toolbox,
+  specOpBasketPrefixOutputs,
   type PermissionsModule,
   type PermissionsModuleAction,
   type PermissionsModuleNext,
@@ -222,17 +222,11 @@ function mergeSource(into: Beef, from: Beef, outpoint: string): void {
   into.mergeBeef(from.toBinaryAtomic(txid))
 }
 
-/** The tag every output the module files carries: the module finds an output's transaction by it. */
-function suffixTagOf(custody: { derivationSuffix: string }): string {
-  return derivationSuffixTag(custody.derivationSuffix)
-}
-
-/** `tags` with the custody's suffix tag added. */
-function withSuffixTag(
-  tags: readonly string[] | undefined,
-  custody: { derivationSuffix: string }
-): string[] {
-  return [...new Set([...(tags ?? []), suffixTagOf(custody)])]
+/** The caller's `tags` without any tag of the suffix tag form, plus a new suffix tag. */
+function withSuffixTag(tags: readonly string[] | undefined): string[] {
+  return [
+    ...new Set([...(tags ?? []).filter(tag => !isDerivationSuffixTag(tag)), derivationSuffixTag()])
+  ]
 }
 
 /** The suffix tag among a listed output's tags, by which its transaction is listed. */
@@ -340,7 +334,7 @@ interface LocatedReceipt extends ParsedReceipt {
 
 /**
  * The internalize arguments the wallet gets: each checked receipt's insertion carries the
- * 5-member custody JSON, the caller's tags without `color_*` and its derivation suffix tag, plus
+ * 5-member custody JSON, the caller's tags without `color_*` and a new suffix tag, plus
  * `color_offline` when its output was admitted as `pending`; other outputs pass unchanged.
  */
 function forwardedReceipts(
@@ -359,8 +353,7 @@ function forwardedReceipts(
       if (receipt === undefined) return output
       const { tags: callerTags, ...insertion } = receipt.remittance
       const tags = withSuffixTag(
-        (callerTags ?? []).filter(tag => !tag.startsWith(COLOR_TAG_PREFIX)),
-        receipt.custody
+        (callerTags ?? []).filter(tag => !tag.startsWith(COLOR_TAG_PREFIX))
       )
       if (pending.has(receipt.outputIndex)) tags.push(COLOR_OFFLINE_TAG)
       return {
@@ -1353,7 +1346,7 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /**
    * Verifies every `p color` receipt and returns the arguments to forward to the wallet, each
-   * receipt tagged with its derivation suffix. Without profiles the caller must already have
+   * receipt tagged with a new suffix tag. Without profiles the caller must already have
    * submitted the transaction, and only the suffix tags are added. With profiles, see
    * `internalizeProfiled`.
    */
@@ -1372,8 +1365,8 @@ export class ColorPermissionModule implements PermissionsModule {
     await this.assertCompletedTransaction(tx)
     const tags = new Map<number, string[]>()
     await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
-      const custody = await this.verifyReceipt(tx, outputIndex, remittance, originator)
-      tags.set(outputIndex, withSuffixTag(remittance.tags, custody))
+      await this.verifyReceipt(tx, outputIndex, remittance, originator)
+      tags.set(outputIndex, withSuffixTag(remittance.tags))
     })
     return {
       ...args,
@@ -2020,11 +2013,12 @@ export class ColorPermissionModule implements PermissionsModule {
     if (outpoints.size !== inputs.length) throw new Error('BRC-207: duplicate explicit input')
     const listed = await this.wallet.listOutputs(
       {
-        basket: toolbox.specOpBasketPrefixOutputs,
+        basket: specOpBasketPrefixOutputs,
         tags: [COLOR_BASKET_NAMESPACE],
         include: 'locking scripts',
         includeCustomInstructions: true,
-        includeTags: true
+        includeTags: true,
+        limit: LIST_PAGE_LIMIT
       },
       originator
     )
@@ -2269,7 +2263,7 @@ export class ColorPermissionModule implements PermissionsModule {
         custodyInstructions(custodyOf(remittance)),
         originator
       ),
-      tags: withSuffixTag(output.tags, remittance)
+      tags: withSuffixTag(output.tags)
     }
   }
 
@@ -2291,7 +2285,7 @@ export class ColorPermissionModule implements PermissionsModule {
       ...output,
       basket,
       customInstructions: custodyInstructions(custodyOf(remittance)),
-      tags: withSuffixTag(output.tags, remittance)
+      tags: withSuffixTag(output.tags)
     }
   }
 
@@ -2606,9 +2600,10 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * The selected inputs' source transactions, listed by suffix tag. Distinct payments may reuse a
-   * suffix, so matching rows are paged within the first result's count and only selected sources
-   * are retained. Counts must be stable and rows unique throughout this bounded traversal.
+   * The selected inputs' source transactions, listed by the suffix tag each input's row carries.
+   * Several rows may carry the same tag, so matching rows are paged within the first result's
+   * count and only selected sources are retained. Counts must be stable and rows unique
+   * throughout this bounded traversal.
    */
   protected async sourceTransactions(
     basket: string,
@@ -2832,7 +2827,7 @@ export class ColorPermissionModule implements PermissionsModule {
       role: 'value',
       amount,
       custody: exact.custody,
-      suffixTag: suffixTagOf(exact.custody),
+      suffixTag: suffixTagIn(exact.output.tags)!,
       sourceBEEF: signed.tx
     }
   }
@@ -2859,7 +2854,7 @@ export class ColorPermissionModule implements PermissionsModule {
         satoshis: TOKEN_CARRIER_SATOSHIS,
         basket: assetBasket(assetId, 'value'),
         customInstructions: custodyInstructions(custody),
-        tags: [suffixTagOf(custody)],
+        tags: [derivationSuffixTag()],
         outputDescription: 'BRC-207 token change'
       }
     }
@@ -3433,12 +3428,13 @@ export class ColorPermissionModule implements PermissionsModule {
     const entireTransactions = args.include === 'entire transactions'
     const listed = await this.wallet.listOutputs(
       {
-        basket: toolbox.specOpBasketPrefixOutputs,
+        basket: specOpBasketPrefixOutputs,
         tags: [COLOR_BASKET_NAMESPACE],
         include: entireTransactions ? 'entire transactions' : 'locking scripts',
         includeCustomInstructions: args.includeCustomInstructions,
         includeTags: true,
-        includeLabels: args.includeLabels
+        includeLabels: args.includeLabels,
+        limit: LIST_PAGE_LIMIT
       },
       originator
     )

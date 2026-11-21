@@ -4,9 +4,9 @@ title: '@bsv/btms'
 kind: package
 domain: wallet
 npm: '@bsv/btms'
-version: '1.2.6'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.2.7'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'protocol']

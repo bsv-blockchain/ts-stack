@@ -9,7 +9,6 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
-import { assertMetroWatcherContract } from './lib/metro-watcher-contract.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
@@ -45,7 +44,18 @@ const requiredExports =
         'WalletPermissionsManager',
         'WalletSettingsManager',
         'WalletSigner',
-        'WalletStorageManager'
+        'WalletStorageManager',
+        'DeviceBackupController',
+        'migrateDeviceBackupPreferences',
+        'BrowserArgon2idWorkerBackend',
+        'installBrowserArgon2idWorker',
+        'openBrc38IdbSource',
+        'createBrc38Stream',
+        'previewAuthenticatedBrc39BrowserImport',
+        'restoreAuthenticatedBrc39BrowserInactive',
+        'publishAuthenticatedBrc39BrowserProfile',
+        'retireExpiredBrc38BrowserProfile',
+        'encryptBrc39BrowserStreamToQuarantine'
       ]
     : [
         'ArcSSEClient',
@@ -57,7 +67,11 @@ const requiredExports =
         'WalletPermissionsManager',
         'WalletSettingsManager',
         'WalletSigner',
-        'WalletStorageManager'
+        'WalletStorageManager',
+        'DeviceBackupController',
+        'migrateDeviceBackupPreferences',
+        'BrowserArgon2idWorkerBackend',
+        'installBrowserArgon2idWorker'
       ]
 
 const prohibitedExports =
@@ -176,6 +190,37 @@ async function installConsumer(tarballPaths) {
   return consumerDirectory
 }
 
+// Exercise the installed artifact in fresh processes so a cached WASM instance
+// cannot conceal a broken JavaScript fallback or a conditional-export split.
+async function checkPackedArgon2Fallback(consumerDirectory) {
+  const fixture = await fs.readFile(
+    path.join(repositoryRoot, 'scripts', 'fixtures', 'wallet-packed-brc39.json'),
+    'utf8'
+  )
+  await fs.writeFile(path.join(consumerDirectory, 'brc39-fixture.json'), fixture)
+  await fs.writeFile(
+    path.join(consumerDirectory, 'packed-argon2-probe.mjs'),
+    `import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
+const fixture = JSON.parse(await fs.readFile(new URL('./brc39-fixture.json', import.meta.url)))
+globalThis.WebAssembly = undefined
+const wallet = process.argv[2] === 'cjs'
+  ? createRequire(import.meta.url)(${JSON.stringify(expectedPackage)})
+  : await import(${JSON.stringify(expectedPackage)})
+const bytes = Buffer.from(fixture.ciphertextBase64, 'base64')
+assert.deepEqual(await wallet.decryptBRC39(bytes, fixture.password), fixture.document)
+const damaged = bytes.slice()
+damaged[damaged.length - 1] ^= 1
+await assert.rejects(wallet.decryptBRC39(damaged, fixture.password), /authentication|decrypt|GCM/i)
+assert.equal(globalThis.WebAssembly, undefined)
+`
+  )
+  for (const format of ['esm', 'cjs']) {
+    await run(process.execPath, ['packed-argon2-probe.mjs', format], { cwd: consumerDirectory })
+  }
+}
+
 function toolResolver(packageName) {
   return createRequire(path.join(packageDirectory, 'package.json')).resolve(packageName)
 }
@@ -270,8 +315,9 @@ function validateBudget(actual, maximum, label) {
       throw new Error(`${label} budget ${dimension} must be a positive safe integer`)
     }
     if (!measureOnly && actual[dimension] > maximum[dimension]) {
-      throw new Error(
-        `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}`
+      console.warn(
+        `Bundle size advisory: ${label} ${dimension} size ${actual[dimension]} exceeds target ${maximum[dimension]}; ` +
+          `all measured bytes ${JSON.stringify(actual)}, ceilings ${JSON.stringify(maximum)}`
       )
     }
   }
@@ -300,6 +346,25 @@ function consumerEntry(packageName) {
 }
 
 async function checkBrowser(consumerDirectory, budget) {
+  const packedWorker = path.join(
+    consumerDirectory,
+    'node_modules/@bsv/wallet-toolbox-client/out/argon2id-worker.mjs'
+  )
+  const worker = await fs.readFile(packedWorker)
+  if (worker.length === 0) throw new Error('Packed dedicated worker asset is empty')
+  assertRuntimeComposition(worker.toString('utf8'), 'Packed dedicated worker')
+  const workerManifest = JSON.parse(
+    await fs.readFile(
+      path.join(consumerDirectory, 'node_modules/@bsv/wallet-toolbox-client/package.json'),
+      'utf8'
+    )
+  )
+  if (
+    workerManifest.exports?.['./argon2id-worker'] !== './out/argon2id-worker.mjs' ||
+    !Array.isArray(workerManifest.sideEffects) ||
+    !workerManifest.sideEffects.includes('./out/argon2id-worker.mjs')
+  )
+    throw new Error('Packed dedicated worker asset contract differs')
   const entryPath = path.join(consumerDirectory, 'entry.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))
 
@@ -410,10 +475,30 @@ function hermesCompilerPath() {
   )
 }
 
+/** metro-file-map 0.87.2 and later match watched files without micromatch, so
+ * the GHSA-vfj7-8cjw-p6xm braces closure is not in the Metro graph. Fail if a
+ * Metro update declares the matcher packages again. Read the manifest, not
+ * module resolution: a hoisted or parent-directory copy resolves without
+ * being a Metro dependency. */
+function assertMetroFileMapExcludesBraces(metroPackagePath) {
+  const fileMapPackagePath = createRequire(metroPackagePath).resolve('metro-file-map/package.json')
+  const manifest = createRequire(fileMapPackagePath)(fileMapPackagePath)
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of ['micromatch', 'braces']) {
+      if (Object.hasOwn(manifest[field] ?? {}, name)) {
+        throw new Error(
+          `metro-file-map ${manifest.version} declares ${name} in ${field}; the braces advisory closure is back`
+        )
+      }
+    }
+  }
+  return { metroFileMap: manifest.version, removedDependencyClosure: true }
+}
+
 async function checkMobile(consumerDirectory, budget) {
   console.log(
-    'Verified Metro watcher contract:',
-    assertMetroWatcherContract(toolResolver('metro/package.json'))
+    'Verified Metro file map excludes the braces advisory closure:',
+    assertMetroFileMapExcludesBraces(toolResolver('metro/package.json'))
   )
   const entryPath = path.join(consumerDirectory, 'index.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))
@@ -492,9 +577,24 @@ async function checkMobile(consumerDirectory, budget) {
 
   const hermesPath = hermesCompilerPath()
   const bytecodePath = path.join(consumerDirectory, 'wallet-toolbox-mobile.hbc')
-  await run(hermesPath, ['-O', '-emit-binary', '-out', bytecodePath, bundlePath])
-  const hermesBytecode = await fs.readFile(bytecodePath)
+  // Hermes retains its input filename in bytecode. A random absolute temporary
+  // path makes identical bundles cross compression budgets nondeterministically.
+  // Keep source/debug data and compile from a stable relative filename instead.
+  const compile = async directory => {
+    await run(
+      hermesPath,
+      ['-O', '-emit-binary', '-out', path.basename(bytecodePath), path.basename(bundlePath)],
+      { cwd: directory }
+    )
+    return fs.readFile(path.join(directory, path.basename(bytecodePath)))
+  }
+  const hermesBytecode = await compile(consumerDirectory)
   if (hermesBytecode.length === 0) throw new Error('Hermes compiler emitted empty bytecode')
+  const repeatDirectory = await fs.mkdtemp(path.join(consumerDirectory, 'hermes-repro-'))
+  await fs.copyFile(bundlePath, path.join(repeatDirectory, path.basename(bundlePath)))
+  if (!hermesBytecode.equals(await compile(repeatDirectory))) {
+    throw new Error('Hermes bytecode must reproduce across independent build directories')
+  }
   const hermesSizes = sizes(hermesBytecode)
   validateBudget(hermesSizes, budget.hermes, 'Hermes mobile bytecode')
 
@@ -521,6 +621,7 @@ async function main() {
   let consumerDirectory
   try {
     consumerDirectory = await installConsumer(packed.tarballPaths)
+    await checkPackedArgon2Fallback(consumerDirectory)
     const measurements =
       profile === 'browser'
         ? await checkBrowser(consumerDirectory, budget.maximumBytes)

@@ -1,6 +1,6 @@
 # @bsv/teranode-listener
 
-Patch candidate `1.1.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `1.1.10`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 BSV BLOCKCHAIN | A TypeScript library for subscribing to Teranode P2P topics over libp2p
 
@@ -529,7 +529,7 @@ For questions, bug reports, or feature requests:
 
 ## License
 
-TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party changes are under the [Apache License 2.0](./LICENSE).
 The recovered pre-monorepo MIT notice is retained in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 

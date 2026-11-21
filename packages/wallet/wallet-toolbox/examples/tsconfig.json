@@ -13,5 +13,5 @@
     "target": "es2022",
     "types": ["node"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "**/*.mts", "../src/types/hash-wasm-subpaths.d.ts"]
 }

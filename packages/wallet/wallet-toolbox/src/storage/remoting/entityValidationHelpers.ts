@@ -16,22 +16,13 @@ export function validateDate(date: Date | string | number): Date {
   return new Date(date)
 }
 
-function defineOwnValues(target: object, values: ReadonlyMap<string, unknown>): void {
-  Object.defineProperties(
-    target,
-    Object.fromEntries(
-      Array.from(values, ([key, value]) => [
-        key,
-        {
-          value,
-          writable: true,
-          enumerable: true,
-          configurable: true
-        }
-      ])
-    )
-  )
+function ownValue(value: unknown): PropertyDescriptor {
+  return { value, writable: true, enumerable: true, configurable: true }
 }
+
+// Property definition copies descriptor fields; null normalization can share
+// this immutable descriptor instead of allocating one for every nullable field.
+const undefinedValue = Object.freeze(ownValue(undefined))
 
 /**
  * Force uniform behaviour across database engines.
@@ -41,24 +32,25 @@ export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?
   const indexedEntity = entity as T & Record<string, unknown>
   entity.created_at = validateDate(entity.created_at)
   entity.updated_at = validateDate(entity.updated_at)
-  const replacements = new Map<string, unknown>()
+  const replacements = new Map<string, PropertyDescriptor>()
   if (dateFields != null) {
     for (const df of dateFields) {
       const value = indexedEntity[df]
       if (Object.hasOwn(entity, df) && value) {
-        replacements.set(df, validateDate(value as Date | string | number))
+        replacements.set(df, ownValue(validateDate(value as Date | string | number)))
       }
     }
   }
   for (const key of Object.keys(entity)) {
-    const val = replacements.has(key) ? replacements.get(key) : indexedEntity[key]
+    const replacement = replacements.get(key)
+    const val = replacement == null ? indexedEntity[key] : replacement.value
     if (val === null) {
-      replacements.set(key, undefined)
+      replacements.set(key, undefinedValue)
     } else if (val instanceof Uint8Array) {
-      replacements.set(key, Array.from(val))
+      replacements.set(key, ownValue(Array.from(val)))
     }
   }
-  if (replacements.size > 0) defineOwnValues(entity, replacements)
+  Object.defineProperties(entity, Object.fromEntries(replacements))
   return entity
 }
 
@@ -116,18 +108,10 @@ function validateSyncChunkTotals(totals: SyncChunkTotals): void {
  */
 export function validateSyncChunkEntities(r: SyncChunk): SyncChunk {
   if (r.totals != null) validateSyncChunkTotals(r.totals)
-  if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
-  if (r.certificates != null) r.certificates = validateEntities(r.certificates)
-  if (r.commissions != null) r.commissions = validateEntities(r.commissions)
-  if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
-  if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
-  if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
-  if (r.outputs != null) r.outputs = validateEntities(r.outputs)
-  if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
-  if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
-  if (r.transactions != null) r.transactions = validateEntities(r.transactions)
-  if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
-  if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
+  for (const name of syncChunkTotalRecordNames) {
+    const entities = r[name]
+    if (entities != null) validateEntities<EntityTimeStamp>(entities)
+  }
   if (r.user != null) r.user = validateEntity(r.user)
   return r
 }
