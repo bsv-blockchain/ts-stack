@@ -1431,6 +1431,99 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * A screen that mounts after the socket settled would otherwise show nothing
+   * until the next transition, which on a healthy connection never comes. The
+   * `@bsv/message-box-client` keeps a last status and replays it for the same
+   * reason; this is that contract carried one layer out.
+   */
+  it('replays the current status to a handler that subscribes late', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual(['subscribed'])
+
+    await transport.close()
+  })
+
+  /**
+   * `delivered` is a transient report about one batch, not a state the socket
+   * stays in. Replaying it tells a late subscriber nothing about the
+   * connection, and a host switching on the connection phases has no case for
+   * it — which is the "stuck on connecting forever" this replay exists to
+   * prevent, wearing a different hat.
+   */
+  it('replays the connection phase, not a delivery, to a late subscriber', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
+    await vi.advanceTimersByTimeAsync(1)
+
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual(['subscribed'])
+
+    await transport.close()
+  })
+
+  /**
+   * `delivered` reports an event, not a state. Two batches that each carry one
+   * new message produce byte-identical reports, so the transition dedup
+   * swallowed the second and a host counting deliveries undercounted.
+   */
+  it('reports two identical deliveries rather than deduping the second', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const delivered: Array<string | undefined> = []
+    transport.onLiveStatus(status => {
+      if (status.phase === 'delivered') delivered.push(status.detail)
+    })
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
+    await vi.advanceTimersByTimeAsync(1)
+    client.push({ messageId: 'm2', sender: '02aa', payload: Uint8Array.from([2]) })
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(delivered).toEqual(['1 message(s), 1 new', '1 message(s), 1 new'])
+
+    await transport.close()
+  })
+
+  // Live, and unstarted. Built without `live` it could not have a status at
+  // all, so it passed for a reason that had nothing to do with the replay.
+  it('has nothing to replay before the socket has said anything', () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    const phases: Array<LiveStatus['phase']> = []
+
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual([])
+  })
+
   it('passes on the reason the client gave, when it gave one', async () => {
     const client = fakeLiveClient()
     const transport = live(client)
