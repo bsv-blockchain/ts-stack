@@ -37,8 +37,9 @@ function trackerFor(canonicalRoot: string): ChainTracker {
   return {
     isValidRootForHeight: jest.fn(
       async (root: string, candidateHeight: number) => root === canonicalRoot && candidateHeight === height
-    )
-  } as ChainTracker
+    ),
+    currentHeight: async () => 1_000_000
+  } satisfies ChainTracker
 }
 
 describe('canonical Merkle path acquisition', () => {

@@ -1,6 +1,6 @@
 # BSV Wallet Helper
 
-Patch candidate `0.1.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.1.12`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 Wallet-compatible utilities and script templates for Bitcoin SV (BSV) that support BRC-100 wallet interfaces instead of requiring direct private key access.
 
@@ -354,7 +354,7 @@ const updated = await ordP2pkh.lock({
 ## License
 
 Current TS Stack changes are licensed under the
-[Open BSV License Version 6](./LICENSE.txt). This package also retains code
+[Apache License 2.0](./LICENSE). This package also retains code
 under its distinct pre-uniformization Open BSV License Version 6 grant.
 Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in

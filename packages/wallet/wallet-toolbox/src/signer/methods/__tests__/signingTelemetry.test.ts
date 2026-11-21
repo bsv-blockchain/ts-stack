@@ -1,4 +1,4 @@
-import { Telemetry, TelemetryEvent } from '@bsv/sdk'
+import { Telemetry, TelemetryEvent, type SignActionArgs } from '@bsv/sdk'
 import { completeSignedTransaction } from '../completeSignedTransaction'
 import { signAction } from '../signAction'
 
@@ -8,15 +8,15 @@ describe('signing telemetry', () => {
     const wallet = {
       pendingSignActions: {},
       telemetry: new Telemetry({
-        sink: { capture: event => events.push(event) },
+        sink: { capture: event => void events.push(event) },
         traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
       })
     } as any
 
-    await expect(signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })).rejects.toThrow(
-      'recovery of out-of-session signAction'
-    )
+    await expect(
+      signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' } as SignActionArgs)
+    ).rejects.toThrow('recovery of out-of-session signAction')
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
       name: 'wallet.sign_action',
@@ -24,9 +24,9 @@ describe('signing telemetry', () => {
     })
 
     wallet.telemetry = new Telemetry()
-    await expect(signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })).rejects.toThrow(
-      'recovery of out-of-session signAction'
-    )
+    await expect(
+      signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' } as SignActionArgs)
+    ).rejects.toThrow('recovery of out-of-session signAction')
   })
 
   it('times transaction signing while retaining the disabled fast path', async () => {
@@ -39,7 +39,7 @@ describe('signing telemetry', () => {
     } as any
     const wallet = {
       telemetry: new Telemetry({
-        sink: { capture: event => events.push(event) }
+        sink: { capture: event => void events.push(event) }
       })
     } as any
 
@@ -63,7 +63,7 @@ describe('signing telemetry', () => {
     const derivePrivateKey = jest.fn(() => ({
       toHex: () => '02'.padStart(64, '0')
     }))
-    const inputs = [{}, {}, {}]
+    const inputs: Array<{ unlockingScriptTemplate?: unknown }> = [{}, {}, {}]
     const prior = {
       args: { inputs: [] },
       pdi: inputs.map((_, vin) => ({
@@ -82,7 +82,7 @@ describe('signing telemetry', () => {
         rootKey: { toHex: () => '01'.padStart(64, '0') },
         derivePrivateKey
       },
-      telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
+      telemetry: new Telemetry({ sink: { capture: event => void events.push(event) } })
     } as any
 
     await expect(completeSignedTransaction(prior, {}, wallet)).resolves.toBe(prior.tx)
@@ -90,12 +90,14 @@ describe('signing telemetry', () => {
     expect(getClientChangeKeyPair).toHaveBeenCalledTimes(1)
     expect(derivePrivateKey).toHaveBeenCalledTimes(3)
     expect(inputs.every(input => input.unlockingScriptTemplate != null)).toBe(true)
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        name: 'wallet.crypto.prepare_unlocking_templates',
-        spanStatus: 'ok',
-        attributes: { 'crypto.managed_input_count': 3 }
-      })
-    ]))
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'wallet.crypto.prepare_unlocking_templates',
+          spanStatus: 'ok',
+          attributes: { 'crypto.managed_input_count': 3 }
+        })
+      ])
+    )
   })
 })

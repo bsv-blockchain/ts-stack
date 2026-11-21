@@ -20,7 +20,7 @@ import {
   type STEAK,
   type WalletInterface
 } from '@bsv/sdk'
-import { hash160 } from '@bsv/sdk/primitives/Hash'
+import { hash160, sha256 } from '@bsv/sdk/primitives/Hash'
 import Random from '@bsv/sdk/primitives/Random'
 import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
@@ -448,7 +448,7 @@ export async function deployAsset(
     0,
     assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
     JSON.stringify({ version: 1, assetId: ISSUE, ...custody }),
-    [derivationSuffixTag(custody.derivationSuffix)]
+    [derivationSuffixTag()]
   )
   return { assetId, tx }
 }
@@ -526,15 +526,21 @@ export async function tokenPayment(
   return { tx, customInstructions: JSON.stringify(custody) }
 }
 
-/** The suffix tag of an output filed with the custody JSON `customInstructions`. */
-export function suffixTagOf(customInstructions: string): string {
-  const { derivationSuffix } = JSON.parse(customInstructions) as { derivationSuffix: string }
-  return derivationSuffixTag(derivationSuffix)
+/** The form of the suffix tag the module files on each output. */
+export const SUFFIX_TAG_FORM = /^p color [0-9a-f]{64}$/
+
+/**
+ * The suffix tag value of a row filed while it was the SHA-256 of the UTF-8 bytes of the
+ * derivation suffix. The module no longer files it, and reads such rows by their stored tag.
+ */
+export function suffixHashTag(derivationSuffix: string): string {
+  return `p color ${toHex(sha256(toArray(derivationSuffix, 'utf8')))}`
 }
 
 /**
  * Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts, each
- * carrying `payload`, filed with their suffix tag, or untagged as filed before suffix tags.
+ * carrying `payload`, filed with a new suffix tag, with the hash of its derivation suffix as an
+ * earlier version filed it (`'hash'`), or untagged as filed before suffix tags (`false`).
  */
 export async function holdTokens(
   holder: FakeWallet,
@@ -542,7 +548,7 @@ export async function holdTokens(
   assetId: string,
   amounts: bigint[],
   payload?: number[],
-  tagged = true
+  tagged: boolean | 'hash' = true
 ): Promise<Transaction[]> {
   const sender = new FakeWallet()
   const txs: Transaction[] = []
@@ -555,7 +561,11 @@ export async function holdTokens(
       0,
       assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
       customInstructions,
-      tagged ? [derivationSuffixTag(derivationSuffix)] : undefined
+      tagged === 'hash'
+        ? [suffixHashTag(derivationSuffix)]
+        : tagged
+          ? [derivationSuffixTag()]
+          : undefined
     )
     txs.push(tx)
   }

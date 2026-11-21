@@ -42,3 +42,28 @@ is re-read under the write lock; an ownership, spendability, or allocation race
 aborts that page. `InvalidChangeRelease`, `InvalidChangeConclusiveRelease`, and
 `InvalidChangeReleaseBlocked` events retain bounded counts, values, and provider
 evidence.
+
+## Resumable ownership admission (unpublished #544 candidate)
+
+The manager bounds `withAccess` requests to 1,032 even while availability I/O
+precedes queue selection, with at most 1,024 queued operations and eight concurrent reads
+for a provider that explicitly supports them. Foreground operations can pass a
+background page at most eight grants or one second of queue age. Saturation
+rejects the new request without replacing admitted work or choosing a legacy
+fallback. The waiter bound is a count limit, not a claim about arbitrary caller
+payload allocation.
+
+Paged sync removes a cancelled waiter before writer admission. Once the
+operation starts, cancellation waits for its durable acknowledgement and actual
+cleanup. Durable journal status observation stays available after cancellation
+so a lost reply cannot erase committed progress. Selection and current manager
+generation are checked again under actual ownership.
+
+Ownership callbacks use the supplied provider. They must not recursively acquire
+the same manager queue. `runAsSync(callback, activeSync)` is the explicit legacy
+borrowed-provider path for an already held exclusive operation; it grants no
+new ownership. Paged progress callbacks run outside page ownership.
+
+The [implementation map](../../docs/implementation-544.md) distinguishes authored
+components from required qualification. No source-only case or documentation
+entry establishes production readiness.

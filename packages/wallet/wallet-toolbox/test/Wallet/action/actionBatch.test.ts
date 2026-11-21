@@ -1,5 +1,16 @@
-import { Beef, CreateActionArgs, Telemetry, TelemetryEvent, Transaction, Validation } from '@bsv/sdk'
+import {
+  AtomicBEEF,
+  Beef,
+  CreateActionArgs,
+  TransactionOutput,
+  Telemetry,
+  TelemetryEvent,
+  Transaction,
+  Validation
+} from '@bsv/sdk'
 import { Wallet } from '../../../src/Wallet'
+import { OverlayUMPTokenInteractor, PendingUMPUpdate, UMPToken } from '../../../src/CWIStyleWalletManager'
+import { WalletPermissionsManager } from '../../../src/WalletPermissionsManager'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../src/utility/actionBatchDigest'
 import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
@@ -28,21 +39,28 @@ function actionArgs(noSendChange: string[] = []): CreateActionArgs {
   }
 }
 
-function rawTransaction(atomicBeef: number[], txid: string): number[] {
+function rawTransaction(atomicBeef: AtomicBEEF, txid: string): number[] {
   const transaction = Beef.fromBinary(atomicBeef).findTxid(txid)?.tx
   expect(transaction).toBeDefined()
-  return Array.from(transaction!.toUint8Array())
+  if (transaction === undefined) throw new Error('Expected the action transaction in its BEEF')
+  return Array.from(transaction.toUint8Array())
 }
 
-function feePaid(atomicBeef: number[], txid: string): number {
+function feePaid(atomicBeef: AtomicBEEF, txid: string): number {
   const transaction = Beef.fromBinary(atomicBeef).findAtomicTransaction(txid)
   expect(transaction).toBeDefined()
+  if (transaction === undefined) throw new Error('Expected the atomic action transaction')
   const inputs = transaction.inputs.reduce(
     (sum, input) => sum + (input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis ?? 0),
     0
   )
-  const outputs = transaction.outputs.reduce((sum, output) => sum + output.satoshis, 0)
+  const outputs = transaction.outputs.reduce((sum, output) => sum + outputSatoshis(output), 0)
   return inputs - outputs
+}
+
+function outputSatoshis(output: TransactionOutput): number {
+  if (output.satoshis === undefined) throw new Error('Expected the action output satoshis')
+  return output.satoshis
 }
 
 async function captureCommitManifest(
@@ -124,6 +142,105 @@ describe('in-memory action batch workspace', () => {
     expect(storedAfterCommit).toHaveLength(1)
     const begun = await begin.mock.results[0].value
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
+  })
+
+  test('recovers the original signed UMP update from the wallet after a lost receipt and restart', async () => {
+    const interactor = new OverlayUMPTokenInteractor({} as never, {} as never)
+    const field = Array<number>(32).fill(1)
+    const token: UMPToken = {
+      passwordSalt: field,
+      passwordPresentationPrimary: field,
+      passwordRecoveryPrimary: field,
+      presentationRecoveryPrimary: field,
+      passwordPrimaryPrivileged: field,
+      presentationRecoveryPrivileged: field,
+      presentationHash: field,
+      recoveryHash: field,
+      presentationKeyEncrypted: field,
+      passwordKeyEncrypted: field,
+      recoveryKeyEncrypted: field
+    }
+    const overlayBroadcast = jest.fn(async (transaction: Transaction) => ({
+      status: 'success' as const,
+      txid: transaction.id('hex'),
+      message: 'published'
+    }))
+    Object.assign(interactor, { broadcaster: { broadcast: overlayBroadcast } })
+    const walletBroadcast = jest.mocked(ctx.services.postBeef)
+    const oldOutpoint = await interactor.buildAndSend(ctx.wallet, 'admin.invalid', token)
+    const oldProof = overlayBroadcast.mock.calls[0][0].toBEEF()
+    const previous = { ...token, currentOutpoint: oldOutpoint }
+    const intended = { ...token, passwordSalt: Array<number>(32).fill(2) }
+    Object.assign(interactor, {
+      findByOutpoint: async () => ({ beef: oldProof, outputIndex: Number(oldOutpoint.split('.')[1]) })
+    })
+    walletBroadcast.mockClear()
+    overlayBroadcast.mockClear()
+    const operationId = 'ab'.repeat(16)
+    let receipt: number[] | undefined
+    let outpoint: string | undefined
+    await expect(
+      interactor.buildAndSend(ctx.wallet, 'admin.invalid', intended, previous, {
+        operationId,
+        onCompleted: async (transaction, originalOutpoint) => {
+          receipt = transaction
+          outpoint = originalOutpoint
+          throw new Error('receipt write interrupted')
+        }
+      })
+    ).rejects.toThrow('receipt write interrupted')
+    expect(walletBroadcast).not.toHaveBeenCalled()
+    expect(overlayBroadcast).not.toHaveBeenCalled()
+    const original = Transaction.fromAtomicBEEF(receipt!)
+    const txid = original.id('hex')
+    expect(ctx.wallet.actionBatch.hasWorkspace).toBe(false)
+
+    ctx.wallet = new Wallet({
+      chain: ctx.chain,
+      keyDeriver: ctx.keyDeriver,
+      storage: ctx.storage,
+      services: ctx.services,
+      monitor: ctx.monitor
+    })
+    const wallet = new WalletPermissionsManager(ctx.wallet, 'admin.invalid')
+    const pending: PendingUMPUpdate = {
+      version: 1,
+      operationId,
+      rootIdentityKey: ctx.wallet.identityKey,
+      previousSnapshot: [1],
+      proposedToken: [1],
+      activeProfileId: Array<number>(16).fill(0),
+      stage: 'submitting'
+    }
+    await expect(interactor.recoverCheckpoint(wallet, 'app.invalid', intended, previous, pending)).rejects.toThrow(
+      'Only the wallet administrator'
+    )
+    await expect(
+      interactor.recoverCheckpoint(wallet, 'admin.invalid', intended, previous, {
+        ...pending,
+        operationId: 'cd'.repeat(16)
+      })
+    ).resolves.toBeUndefined()
+    await expect(interactor.recoverCheckpoint(wallet, 'admin.invalid', token, previous, pending)).rejects.toThrow(
+      'no unique intended UMP output'
+    )
+    const recovered = await interactor.recoverCheckpoint(wallet, 'admin.invalid', intended, previous, pending)
+    expect(recovered?.outpoint).toBe(outpoint)
+    expect(Transaction.fromAtomicBEEF(recovered!.transaction).toHex()).toBe(original.toHex())
+    expect(walletBroadcast).not.toHaveBeenCalled()
+
+    const send = jest.spyOn(ctx.wallet, 'createAction')
+    await expect(
+      interactor.publishCheckpoint(wallet, 'admin.invalid', intended, previous, {
+        ...pending,
+        ...recovered,
+        stage: 'signed'
+      })
+    ).resolves.toBe(outpoint)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toMatchObject({ options: { sendWith: [txid] } })
+    expect(walletBroadcast).toHaveBeenCalledTimes(1)
+    expect(overlayBroadcast.mock.calls[0][0].toHex()).toBe(original.toHex())
   })
 
   test('staged noSend actions listed by txid can be aborted without exposing an internal reference', async () => {
@@ -352,6 +469,9 @@ describe('in-memory action batch workspace', () => {
       services: legacyCtx.services,
       actionBatchMode: 'legacy'
     })
+    const tracker = await legacyCtx.services.getChainTracker()
+    const root = jest.spyOn(tracker, 'isValidRootForHeight').mockResolvedValue(true)
+    const storageServices = jest.spyOn(legacyCtx.activeStorage, 'getServices').mockReturnValue(legacyCtx.services)
     ctx.wallet.randomVals = randomVals
     legacy.randomVals = randomVals
     try {
@@ -369,6 +489,8 @@ describe('in-memory action batch workspace', () => {
       expect(batchRaw).toEqual(legacyRaw)
       expect(feePaid(batchResult.tx!, batchResult.txid!)).toBe(feePaid(legacyResult.tx!, legacyResult.txid!))
     } finally {
+      storageServices.mockRestore()
+      root.mockRestore()
       await legacy.destroy()
       await legacyCtx.wallet.destroy()
     }
@@ -380,7 +502,7 @@ describe('in-memory action batch workspace', () => {
       ctx.wallet,
       'telemetry',
       new Telemetry({
-        sink: { capture: event => events.push(event) }
+        sink: { capture: event => void events.push(event) }
       })
     )
     const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
@@ -1369,7 +1491,10 @@ describe('in-memory action batch workspace', () => {
 
     const zeroFeeTransaction = Transaction.fromBinary(capturedRaw)
     const plannedInputSatoshis = action.plan.inputs.reduce((sum, input) => sum + input.sourceSatoshis, 0)
-    const transactionOutputSatoshis = zeroFeeTransaction.outputs.reduce((sum, output) => sum + output.satoshis, 0)
+    const transactionOutputSatoshis = zeroFeeTransaction.outputs.reduce(
+      (sum, output) => sum + outputSatoshis(output),
+      0
+    )
     const currentFee = plannedInputSatoshis - transactionOutputSatoshis
     expect(currentFee).toBeGreaterThan(0)
     zeroFeeTransaction.outputs[0].satoshis! += currentFee

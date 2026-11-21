@@ -5,8 +5,8 @@ kind: package
 domain: helpers
 version: '0.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-11-05'
-last_verified: '2026-11-05'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-helper'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper'

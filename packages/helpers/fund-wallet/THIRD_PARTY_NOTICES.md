@@ -2,7 +2,7 @@
 
 # Third-Party Notices
 
-The Open BSV License Version 6 in `LICENSE.txt` applies to current TS Stack
+The Apache License, Version 2.0 in `LICENSE` applies to current TS Stack
 first-party contributions. It does not replace, narrow, or relicense historical
 or third-party material identified below. Each identified portion remains available
 under its stated terms.

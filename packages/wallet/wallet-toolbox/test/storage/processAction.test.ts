@@ -40,12 +40,12 @@ describe('processAction shareReqsWithWorld', () => {
     const events: TelemetryEvent[] = []
     const storage = {
       ...makeStorageFake(),
-      telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
+      telemetry: new Telemetry({ sink: { capture: event => void events.push(event) } })
     }
 
     const result = await processAction(
       storage as any,
-      { userId: 1 },
+      { userId: 1, identityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' },
       {
         isNewTx: false,
         isSendWith: false,
@@ -77,7 +77,7 @@ describe('processAction shareReqsWithWorld', () => {
     await expect(
       processAction(
         storage as any,
-        { userId: 1 },
+        { userId: 1, identityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' },
         {
           isNewTx: false,
           isSendWith: false,
@@ -203,6 +203,7 @@ describe('processAction shareReqsWithWorld', () => {
   test('immediate sends still validate the aggregate BEEF before broadcasting', async () => {
     const req = makeReadyReq()
     const beef = {
+      bumps: [],
       verify: jest.fn(async () => false),
       toLogString: () => 'invalid beef'
     } as unknown as Beef
@@ -258,10 +259,11 @@ describe('processAction shareReqsWithWorld', () => {
     beef.mergeBump(path)
     const req = { ...makeReadyReq(), txid: tx.id('hex') }
     const storage = makeStorageFake()
+    const rootCheck = jest.fn(async () => false).mockResolvedValueOnce(true)
     storage.getServices.mockReturnValue({
       getChainTracker: jest.fn(async () => ({
         currentHeight: async () => 101,
-        isValidRootForHeight: async () => false
+        isValidRootForHeight: rootCheck
       }))
     })
     const logger = new WalletLogger()
@@ -280,6 +282,7 @@ describe('processAction shareReqsWithWorld', () => {
     ).rejects.toThrow('merged Beef failed validation')
     expect(logger.toLogString()).toContain('"height":100')
     expect(logger.toLogString()).toContain(path.computeRoot(tx.id('hex')))
+    expect(rootCheck).toHaveBeenCalledTimes(2)
     expect(logger.toLogString()).toContain('"result":"declined"')
     expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
   })
@@ -294,6 +297,7 @@ describe('processAction shareReqsWithWorld', () => {
       isValidRootForHeight: jest.fn(async () => true)
     }
     const beef = {
+      bumps: [],
       verify: async (provider: { currentHeight: () => Promise<number> }) => {
         await provider.currentHeight()
         return true
@@ -322,6 +326,7 @@ describe('processAction shareReqsWithWorld', () => {
     const error = new Error('Chain provider unavailable')
     const req = makeReadyReq()
     const beef = {
+      bumps: [],
       verify: async (tracker: { isValidRootForHeight: (root: string, height: number) => Promise<boolean> }) =>
         await tracker.isValidRootForHeight('ab'.repeat(32), 100)
     } as unknown as Beef

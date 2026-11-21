@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { ObjectId } from 'mongodb'
+import { ObjectId, type Document } from 'mongodb'
 import {
   bootstrapMongoOverlay,
   encodeMongoUint64,
@@ -36,7 +36,7 @@ describe('MongoPayloadStore.read() and readBytes()', () => {
   }, 120000)
 
   afterAll(async () => {
-    await fixture.close()
+    await fixture?.close()
   }, 30000)
 
   test('read() throws when no ready payload exists for the requested content', async () => {
@@ -80,23 +80,25 @@ describe('MongoPayloadStore.read() and readBytes()', () => {
     const hugeLength = '18446744073709551615'
     const id = mongoRecordKey(mongoChainKey(fixture.scope), 'locking-script', 'bb'.repeat(32))
     const now = new Date()
-    await fixture.db.collection(MongoCollectionNames.payloads).insertOne({
-      _id: id,
-      schemaVersion: 1,
-      network: fixture.scope.network,
-      genesisHash: fixture.scope.genesisHash,
-      kind: 'locking-script',
-      digest: 'bb'.repeat(32),
-      byteLength: encodeMongoUint64(hugeLength),
-      state: 'ready',
-      guard: randomUUID(),
-      ownerNodeId: fixture.scope.nodeId,
-      ownerId: randomUUID(),
-      fencingToken: encodeMongoUint64('1'),
-      leaseUntil: now,
-      createdAt: now,
-      updatedAt: now
-    })
+    await fixture.db
+      .collection<Document & { _id: string }>(MongoCollectionNames.payloads)
+      .insertOne({
+        _id: id,
+        schemaVersion: 1,
+        network: fixture.scope.network,
+        genesisHash: fixture.scope.genesisHash,
+        kind: 'locking-script',
+        digest: 'bb'.repeat(32),
+        byteLength: encodeMongoUint64(hugeLength),
+        state: 'ready',
+        guard: randomUUID(),
+        ownerNodeId: fixture.scope.nodeId,
+        ownerId: randomUUID(),
+        fencingToken: encodeMongoUint64('1'),
+        leaseUntil: now,
+        createdAt: now,
+        updatedAt: now
+      })
     await expect(
       store.read(
         { kind: 'locking-script', digest: 'bb'.repeat(32) },
@@ -138,26 +140,28 @@ describe('MongoPayloadStore.read() and readBytes()', () => {
     const now = new Date()
     const missingFileId = new ObjectId()
     const id = mongoRecordKey(mongoChainKey(fixture.scope), 'outbox-data', 'cc'.repeat(32))
-    await fixture.db.collection(MongoCollectionNames.payloads).insertOne({
-      _id: id,
-      schemaVersion: 1,
-      network: fixture.scope.network,
-      genesisHash: fixture.scope.genesisHash,
-      kind: 'outbox-data',
-      digest: 'cc'.repeat(32),
-      byteLength: encodeMongoUint64('4'),
-      state: 'ready',
-      guard: randomUUID(),
-      ownerNodeId: fixture.scope.nodeId,
-      ownerId: randomUUID(),
-      fencingToken: encodeMongoUint64('1'),
-      leaseUntil: now,
-      createdAt: now,
-      updatedAt: now,
-      // Points at a GridFS file that was never uploaded (deleted/evicted),
-      // simulating a ready record left behind after its content was reclaimed.
-      fileId: missingFileId
-    })
+    await fixture.db
+      .collection<Document & { _id: string }>(MongoCollectionNames.payloads)
+      .insertOne({
+        _id: id,
+        schemaVersion: 1,
+        network: fixture.scope.network,
+        genesisHash: fixture.scope.genesisHash,
+        kind: 'outbox-data',
+        digest: 'cc'.repeat(32),
+        byteLength: encodeMongoUint64('4'),
+        state: 'ready',
+        guard: randomUUID(),
+        ownerNodeId: fixture.scope.nodeId,
+        ownerId: randomUUID(),
+        fencingToken: encodeMongoUint64('1'),
+        leaseUntil: now,
+        createdAt: now,
+        updatedAt: now,
+        // Points at a GridFS file that was never uploaded (deleted/evicted),
+        // simulating a ready record left behind after its content was reclaimed.
+        fileId: missingFileId
+      })
     await expect(store.read({ kind: 'outbox-data', digest: 'cc'.repeat(32) })).rejects.toThrow(
       /FileNotFound/
     )
@@ -169,23 +173,25 @@ describe('MongoPayloadStore.read() and readBytes()', () => {
     // A record can only reach `ready` through completeUpload(), which always
     // sets exactly one of inlineData/fileId -- this simulates a corrupted or
     // hand-edited row that skipped that invariant.
-    await fixture.db.collection(MongoCollectionNames.payloads).insertOne({
-      _id: id,
-      schemaVersion: 1,
-      network: fixture.scope.network,
-      genesisHash: fixture.scope.genesisHash,
-      kind: 'outbox-data',
-      digest: 'dd'.repeat(32),
-      byteLength: encodeMongoUint64('4'),
-      state: 'ready',
-      guard: randomUUID(),
-      ownerNodeId: fixture.scope.nodeId,
-      ownerId: randomUUID(),
-      fencingToken: encodeMongoUint64('1'),
-      leaseUntil: now,
-      createdAt: now,
-      updatedAt: now
-    })
+    await fixture.db
+      .collection<Document & { _id: string }>(MongoCollectionNames.payloads)
+      .insertOne({
+        _id: id,
+        schemaVersion: 1,
+        network: fixture.scope.network,
+        genesisHash: fixture.scope.genesisHash,
+        kind: 'outbox-data',
+        digest: 'dd'.repeat(32),
+        byteLength: encodeMongoUint64('4'),
+        state: 'ready',
+        guard: randomUUID(),
+        ownerNodeId: fixture.scope.nodeId,
+        ownerId: randomUUID(),
+        fencingToken: encodeMongoUint64('1'),
+        leaseUntil: now,
+        createdAt: now,
+        updatedAt: now
+      })
     await expect(store.read({ kind: 'outbox-data', digest: 'dd'.repeat(32) })).rejects.toThrow(
       'Mongo ready payload has no bytes'
     )

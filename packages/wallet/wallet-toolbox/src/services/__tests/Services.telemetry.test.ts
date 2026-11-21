@@ -22,7 +22,7 @@ describe('Services telemetry', () => {
       findHeaderForBlockHash: jest.fn(async () => header)
     } as any
     options.telemetry = {
-      sink: { capture: event => events.push(event) },
+      sink: { capture: event => void events.push(event) },
       traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     }
     const services = new Services(options)
