@@ -3,8 +3,36 @@ import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageProvider } from '../StorageProvider'
 import { StorageReaderWriter } from '../StorageReaderWriter'
+import { TableProvenTx } from '../schema/tables'
+import { toBinaryBaseBlockHeader } from '../../services/Services'
+import { doubleSha256BE } from '../../utility/utilityHelpers'
+import { asString } from '../../utility/utilityHelpers.noBuffer'
 
 import * as dotenv from 'dotenv'
+
+function canonicalReproof(ctx: TestWalletNoSetup, ptx: TableProvenTx) {
+  const merklePath = new bsv.MerklePath(ptx.height + 1, [[{ offset: 0, hash: ptx.txid, txid: true }]])
+  const header = toBinaryBaseBlockHeader({
+    version: 1,
+    previousHash: '0'.repeat(64),
+    merkleRoot: merklePath.computeRoot(ptx.txid),
+    time: 0,
+    bits: 0,
+    nonce: 0
+  })
+  const services = ctx.storage.getServices()
+  const isValidRootForHeight = jest.fn(async () => true)
+  jest
+    .spyOn(services, 'getChainTracker')
+    .mockResolvedValue({ isValidRootForHeight, currentHeight: async () => 1_000_000 } satisfies bsv.ChainTracker)
+  jest.spyOn(services, 'getHeaderForHeight').mockResolvedValue(header)
+  const lookup = jest.spyOn(services, 'getValidatedMerklePath').mockImplementation(async (_txid, validate) => {
+    const result = { name: 'canonical reproof fixture', merklePath }
+    await validate(result)
+    return result
+  })
+  return { lookup, isValidRootForHeight, height: merklePath.blockHeight, blockHash: asString(doubleSha256BE(header)) }
+}
 
 dotenv.config()
 describe('WalletStorageManager tests', () => {
@@ -31,8 +59,8 @@ describe('WalletStorageManager tests', () => {
 
   test('BRC-177 storage entry points fail closed when authority or persistence support is absent', async () => {
     const { activeStorage: provider, storage: manager } = ctxs[0]
-    const inactive = { userId: 1, isActive: false }
-    const active = { userId: 1, isActive: true }
+    const inactive = { userId: 1, identityKey: ctxs[0].identityKey, isActive: false }
+    const active = { userId: 1, identityKey: ctxs[0].identityKey, isActive: true }
 
     await expect(provider.prepareNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
     await expect(provider.activateNoSendExpiry(inactive, {} as any)).rejects.toThrow('active storage provider')
@@ -61,6 +89,195 @@ describe('WalletStorageManager tests', () => {
     } finally {
       writer.mockRestore()
     }
+  })
+
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s returns a rejection for synchronous callback errors and releases ownership',
+    async method => {
+      for (const { storage } of ctxs) {
+        const failure = new Error('synchronous callback failure')
+        const operation = storage[method](() => {
+          throw failure
+        })
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      }
+    }
+  )
+
+  test.each(['runAsReader', 'runAsWriter', 'runAsStorageProvider'] as const)(
+    '%s holds ownership through asynchronous rejection, then releases the waiting writer',
+    async method => {
+      for (const { storage } of ctxs) {
+        let reject!: (error: Error) => void
+        let entered!: () => void
+        const started = new Promise<void>(resolve => {
+          entered = resolve
+        })
+        const pending = new Promise<void>((_resolve, fail) => {
+          reject = fail
+        })
+        const operation = storage[method](() => {
+          entered()
+          return pending
+        })
+        await started
+        const next = jest.fn(async () => 'next writer')
+        const waiting = storage.runAsWriter(next)
+        await Promise.resolve()
+        expect(next).not.toHaveBeenCalled()
+        const failure = new Error('asynchronous callback failure')
+        const rejected = expect(operation).rejects.toBe(failure)
+        reject(failure)
+        await rejected
+        await expect(waiting).resolves.toBe('next writer')
+        expect(next).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  test.each(['migrate', 'getCapabilities', 'findProvenTxReqs'] as const)(
+    '%s preserves synchronous provider failures as rejected promises and releases ownership',
+    async method => {
+      const { storage } = ctxs[0]
+      const failure = new Error('provider failed synchronously')
+      const dispatch = jest.spyOn(storage.getActive(), method).mockImplementation(() => {
+        throw failure
+      })
+      try {
+        const args = method === 'migrate' ? ['name', 'identity'] : method === 'getCapabilities' ? [] : [{}]
+        const operation = (Reflect.get(storage, method) as (...values: unknown[]) => unknown).apply(storage, args)
+        expect(operation).toBeInstanceOf(Promise)
+        await expect(operation).rejects.toBe(failure)
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        dispatch.mockRestore()
+      }
+    }
+  )
+
+  test('writer authorization failure never dispatches and releases the next writer', async () => {
+    for (const { storage } of ctxs) {
+      const failure = new Error('authorization unavailable')
+      const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+      const dispatch = jest.spyOn(storage.getActive(), 'createAction')
+      try {
+        await expect(storage.createAction({} as any)).rejects.toBe(failure)
+        expect(auth).toHaveBeenCalledWith(true)
+        expect(dispatch).not.toHaveBeenCalled()
+        await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+      } finally {
+        auth.mockRestore()
+        dispatch.mockRestore()
+      }
+    }
+  })
+
+  test('writer authorization is evaluated only after the preceding writer releases ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('provider refused action')
+    const dispatch = jest.spyOn(storage.getActive(), 'createAction').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const action = storage.createAction({} as any)
+      const rejected = expect(action).rejects.toBe(failure)
+      await Promise.resolve()
+      expect(auth).not.toHaveBeenCalled()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(auth).toHaveBeenCalledWith(true)
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization still precedes queue admission while provider work waits for ownership', async () => {
+    const { storage } = ctxs[0]
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const held = storage.runAsWriter(async () => {
+      entered()
+      await new Promise<void>(resolve => {
+        release = resolve
+      })
+    })
+    await started
+    const auth = jest.spyOn(storage, 'getAuth')
+    const failure = new Error('reader provider refused request')
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth').mockImplementation(() => {
+      throw failure
+    })
+    try {
+      const result = storage.findOutputs({} as any)
+      const rejected = expect(result).rejects.toBe(failure)
+      expect(auth).toHaveBeenCalledWith()
+      await Promise.resolve()
+      expect(dispatch).not.toHaveBeenCalled()
+      release()
+      await held
+      await rejected
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      release()
+      await held
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('reader authorization rejection never dispatches provider work', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('reader authorization unavailable')
+    const auth = jest.spyOn(storage, 'getAuth').mockRejectedValueOnce(failure)
+    const dispatch = jest.spyOn(storage.getActive(), 'findOutputsAuth')
+    try {
+      const result = storage.findOutputs({} as any)
+      expect(result).toBeInstanceOf(Promise)
+      await expect(result).rejects.toBe(failure)
+      expect(dispatch).not.toHaveBeenCalled()
+      await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
+    } finally {
+      auth.mockRestore()
+      dispatch.mockRestore()
+    }
+  })
+
+  test('borrowed sync callback throws remain asynchronous rejections', async () => {
+    const { storage } = ctxs[0]
+    const failure = new Error('borrowed callback failed')
+    const operation = storage.runAsSync(() => {
+      throw failure
+    }, storage.getActive())
+    expect(operation).toBeInstanceOf(Promise)
+    await expect(operation).rejects.toBe(failure)
+    await expect(storage.runAsWriter(async () => 'next writer')).resolves.toBe('next writer')
   })
 
   test('1_runAsReader runAsWriter runAsSync interlock correctly', async () => {
@@ -238,7 +455,7 @@ describe('WalletStorageManager tests', () => {
   })
 
   test('2_internalizes concurrent AtomicBEEF payments within the supported batch', async () => {
-    for (const { wallet } of ctxs) {
+    for (const { wallet, services } of ctxs) {
       const fred = await _tu.createSQLiteTestWallet({
         chain: 'test',
         databaseName: 'syncTest2Fred',
@@ -248,12 +465,16 @@ describe('WalletStorageManager tests', () => {
       // Keep this concurrency test independent of public chaintracks availability.
       // AtomicBEEF proof validity is covered separately; this case verifies that
       // parallel internalization stays within the supported writer batch.
-      const getChainTracker = jest.fn(async () => ({
-        isValidRootForHeight: async (_root: string, _height: number) => true
-      }))
-      fred.services.getChainTracker = getChainTracker
-      // Receiving an unproven no-send payment now broadcasts it. Keep this
-      // writer-batch fixture independent of public transaction processors too.
+      const sourceChainTracker = jest.spyOn(services, 'getChainTracker').mockResolvedValue({
+        isValidRootForHeight: async (_root: string, _height: number) => true,
+        currentHeight: async () => 1_000_000
+      })
+      const getChainTracker = jest.spyOn(fred.services, 'getChainTracker').mockResolvedValue({
+        isValidRootForHeight: async (_root: string, _height: number) => true,
+        currentHeight: async () => 1_000_000
+      })
+      // Unproven recipient payments now broadcast; keep this writer-batch
+      // fixture independent of public processors and assert every submitted txid.
       const postBeef = jest.spyOn(fred.services, 'postBeef').mockImplementation(async (_beef, txids) => [
         {
           name: 'writer-batch-fixture',
@@ -261,47 +482,100 @@ describe('WalletStorageManager tests', () => {
           txidResults: txids.map(txid => ({ txid, status: 'success' as const }))
         }
       ])
-      const promises: Array<Promise<number>> = []
-      const result: Array<{ i: number; r: any }> = []
-      const crs1: bsv.CreateActionResult[] = []
-      const maxI = 6
+      try {
+        const promises: Array<Promise<number>> = []
+        const result: Array<{ i: number; r: any }> = []
+        const crs1: bsv.CreateActionResult[] = []
+        const maxI = 6
 
-      const makeWriter2 = async (
-        fred: TestWalletNoSetup,
-        cr: bsv.CreateActionResult,
-        i: number,
-        result: Array<{ i: number; r: any }>
-      ): Promise<number> => {
-        logger(`writer${i}`)
-        const internalizeArgs: bsv.InternalizeActionArgs = {
-          tx: cr.tx!,
-          outputs: [
-            {
-              outputIndex: 0,
-              protocol: 'basket insertion',
-              insertionRemittance: {
-                basket: 'payments',
-                customInstructions: JSON.stringify({ root, repeat: 8 }),
-                tags: ['test', 'again']
+        const makeWriter2 = async (
+          fred: TestWalletNoSetup,
+          cr: bsv.CreateActionResult,
+          i: number,
+          result: Array<{ i: number; r: any }>
+        ): Promise<number> => {
+          logger(`writer${i}`)
+          const internalizeArgs: bsv.InternalizeActionArgs = {
+            tx: cr.tx!,
+            outputs: [
+              {
+                outputIndex: 0,
+                protocol: 'basket insertion',
+                insertionRemittance: {
+                  basket: 'payments',
+                  customInstructions: JSON.stringify({ root, repeat: 8 }),
+                  tags: ['test', 'again']
+                }
               }
-            }
-          ],
-          description: `paid ${i}`
+            ],
+            description: `paid ${i}`
+          }
+          const r = await fred.wallet.internalizeAction(internalizeArgs)
+          expect(r.accepted).toBe(true)
+          result.push({ r, i })
+          return i
         }
-        const r = await fred.wallet.internalizeAction(internalizeArgs)
-        expect(r.accepted).toBe(true)
-        result.push({ r, i })
-        return i
-      }
 
-      for (let i = 0; i < maxI; i++) {
-        const createArgs: bsv.CreateActionArgs = {
-          description: `${kp.address} of ${root}`,
+        for (let i = 0; i < maxI; i++) {
+          const createArgs: bsv.CreateActionArgs = {
+            description: `${kp.address} of ${root}`,
+            outputs: [
+              {
+                satoshis: 1,
+                lockingScript: _tu.getLockP2PKH(fredsAddress).toHex(),
+                outputDescription: 'pay fred'
+              }
+            ],
+            options: {
+              returnTXIDOnly: false,
+              randomizeOutputs: false,
+              signAndProcess: true,
+              noSend: true
+            }
+          }
+          const cr = await wallet.createAction(createArgs)
+          expect(cr.tx).toBeTruthy()
+          crs1.push(cr)
+        }
+        let j = 0
+        for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
+        await Promise.all(promises)
+        expect(result).toHaveLength(maxI)
+        expect(new Set(postBeef.mock.calls.flatMap(call => call[1]))).toEqual(new Set(crs1.map(cr => cr.txid)))
+        expect(getChainTracker).toHaveBeenCalled()
+      } finally {
+        postBeef.mockRestore()
+        sourceChainTracker.mockRestore()
+        getChainTracker.mockRestore()
+        await fred.wallet.destroy()
+      }
+    }
+  })
+
+  test('3_internalize same-wallet payment while transaction is sending', async () => {
+    for (const { wallet, activeStorage, identityKey, userId, services } of ctxs) {
+      const getChainTracker = jest.spyOn(services, 'getChainTracker').mockResolvedValue({
+        isValidRootForHeight: async (_root: string, _height: number) => true,
+        currentHeight: async () => 1_000_000
+      })
+      try {
+        const outputSatoshis = 5
+        const derivationPrefix = Buffer.from('same-wallet-invoice').toString('base64')
+        const derivationSuffix = Buffer.from('utxo-0').toString('base64')
+        const brc29ProtocolID: bsv.WalletProtocol = [2, '3241645161d8']
+        const derivedPublicKey = wallet.keyDeriver.derivePublicKey(
+          brc29ProtocolID,
+          `${derivationPrefix} ${derivationSuffix}`,
+          identityKey
+        )
+
+        const cr = await wallet.createAction({
+          description: 'same-wallet payment pending send',
           outputs: [
             {
-              satoshis: 1,
-              lockingScript: _tu.getLockP2PKH(fredsAddress).toHex(),
-              outputDescription: 'pay fred'
+              satoshis: outputSatoshis,
+              lockingScript: new bsv.P2PKH().lock(derivedPublicKey.toAddress()).toHex(),
+              outputDescription: 'pay same wallet'
             }
           ],
           options: {
@@ -310,100 +584,50 @@ describe('WalletStorageManager tests', () => {
             signAndProcess: true,
             noSend: true
           }
-        }
-        const cr = await wallet.createAction(createArgs)
+        })
         expect(cr.tx).toBeTruthy()
-        crs1.push(cr)
-      }
-      let j = 0
-      for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
-      await Promise.all(promises)
-      expect(result).toHaveLength(maxI)
-      expect(new Set(postBeef.mock.calls.flatMap(call => call[1]))).toEqual(new Set(crs1.map(cr => cr.txid)))
-      postBeef.mockRestore()
-      expect(getChainTracker).toHaveBeenCalled()
-      await fred.wallet.destroy()
-    }
-  })
+        expect(cr.txid).toBeTruthy()
+        if (cr.tx == null || cr.txid == null) throw new Error('createAction did not return a signed transaction')
 
-  test('3_internalize same-wallet payment while transaction is sending', async () => {
-    for (const { wallet, activeStorage, identityKey, userId } of ctxs) {
-      const outputSatoshis = 5
-      const derivationPrefix = Buffer.from('same-wallet-invoice').toString('base64')
-      const derivationSuffix = Buffer.from('utxo-0').toString('base64')
-      const brc29ProtocolID: bsv.WalletProtocol = [2, '3241645161d8']
-      const derivedPublicKey = wallet.keyDeriver.derivePublicKey(
-        brc29ProtocolID,
-        `${derivationPrefix} ${derivationSuffix}`,
-        identityKey
-      )
+        const existingTx = (
+          await activeStorage.findTransactions({
+            partial: { userId, txid: cr.txid }
+          })
+        )[0]
+        expect(existingTx).toBeTruthy()
+        await activeStorage.updateTransaction(existingTx.transactionId, { status: 'sending' })
 
-      const cr = await wallet.createAction({
-        description: 'same-wallet payment pending send',
-        outputs: [
+        const ir = await activeStorage.internalizeAction(
+          { userId, identityKey },
           {
-            satoshis: outputSatoshis,
-            lockingScript: new bsv.P2PKH().lock(derivedPublicKey.toAddress()).toHex(),
-            outputDescription: 'pay same wallet'
-          }
-        ],
-        options: {
-          returnTXIDOnly: false,
-          randomizeOutputs: false,
-          signAndProcess: true,
-          noSend: true
-        }
-      })
-      expect(cr.tx).toBeTruthy()
-      expect(cr.txid).toBeTruthy()
-      if (cr.tx == null || cr.txid == null) throw new Error('createAction did not return a signed transaction')
-
-      const existingTx = (
-        await activeStorage.findTransactions({
-          partial: { userId, txid: cr.txid }
-        })
-      )[0]
-      expect(existingTx).toBeTruthy()
-      await activeStorage.updateTransaction(existingTx.transactionId, { status: 'sending' })
-
-      // Mock chaintracker responses for AtomicBEEF validation to avoid flakiness from
-      // live chaintracks endpoints. This test exercises the 'sending' merge path for a
-      // same-wallet internalize before monitor completion; it is not testing proof validity
-      // (createAction + other tests cover BEEF construction/validation).
-      activeStorage.setServices({
-        getChainTracker: async () => ({
-          isValidRootForHeight: async (_root: string, _height: number) => true
-        })
-      } as any)
-
-      const ir = await activeStorage.internalizeAction(
-        { userId, identityKey },
-        {
-          tx: cr.tx,
-          outputs: [
-            {
-              outputIndex: 0,
-              protocol: 'wallet payment',
-              paymentRemittance: {
-                derivationPrefix,
-                derivationSuffix,
-                senderIdentityKey: identityKey
+            tx: cr.tx,
+            outputs: [
+              {
+                outputIndex: 0,
+                protocol: 'wallet payment',
+                paymentRemittance: {
+                  derivationPrefix,
+                  derivationSuffix,
+                  senderIdentityKey: identityKey
+                }
               }
-            }
-          ],
-          description: 'received same-wallet payment before monitor completion'
-        }
-      )
+            ],
+            description: 'received same-wallet payment before monitor completion'
+          }
+        )
 
-      expect(ir.accepted).toBe(true)
-      expect(ir.isMerge).toBe(true)
+        expect(ir.accepted).toBe(true)
+        expect(ir.isMerge).toBe(true)
 
-      const updatedTx = (
-        await activeStorage.findTransactions({
-          partial: { transactionId: existingTx.transactionId }
-        })
-      )[0]
-      expect(updatedTx.status).toBe('sending')
+        const updatedTx = (
+          await activeStorage.findTransactions({
+            partial: { transactionId: existingTx.transactionId }
+          })
+        )[0]
+        expect(updatedTx.status).toBe('sending')
+      } finally {
+        getChainTracker.mockRestore()
+      }
     }
   })
 
@@ -414,8 +638,9 @@ describe('WalletStorageManager tests', () => {
       writeEnabled: true
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as bsv.ChainTracker)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies bsv.ChainTracker)
     const persist = jest.spyOn(ctx.activeStorage, 'upsertPreparedBeef')
     try {
       const result = await ctx.wallet.createAction({
@@ -489,16 +714,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: '' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
-      expect(reprove).toHaveBeenCalled()
+      expect(lookup).toHaveBeenCalled()
       expect(result.updated.length).toBeGreaterThan(0)
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
     } finally {
@@ -550,12 +770,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: undefined,
-        unchanged: false,
-        unavailable: true
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
+      lookup.mockRejectedValue(new Error('proof unavailable'))
 
       const result = await ctx.storage.reproveHeader(ptx.blockHash)
 
@@ -573,16 +789,11 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const reprove = jest.spyOn(ctx.storage, 'reproveProven').mockResolvedValue({
-        log: '',
-        updated: { update: { height: ptx.height }, logUpdate: 'height reproof\n' },
-        unchanged: false,
-        unavailable: false
-      })
+      const { lookup } = canonicalReproof(ctx, ptx)
 
       const result = await ctx.storage.reproveHeightMerkleRoot(ptx.height, ptx.merkleRoot)
 
-      expect(reprove).toHaveBeenCalledWith(ptx, true)
+      expect(lookup).toHaveBeenCalledWith(ptx.txid, expect.any(Function))
       expect(result.updated).toHaveLength(1)
       expect(result.log).toContain('proof data updated')
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
@@ -603,36 +814,8 @@ describe('WalletStorageManager tests', () => {
       const [ptx] = await ctx.activeStorage.findProvenTxs({ partial: {} })
       expect(ptx).toBeTruthy()
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
-      const replacementHash = ptx.blockHash === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
-      const replacementHeight = ptx.height + 1
-      const merklePath = new bsv.MerklePath(replacementHeight, [
-        [
-          {
-            offset: 0,
-            hash: ptx.txid,
-            txid: true
-          }
-        ]
-      ])
-      const services = ctx.storage.getServices()
-      const isValidRootForHeight = jest.fn(async () => 'true' as unknown as boolean)
-      jest.spyOn(services, 'getChainTracker').mockResolvedValue({
-        isValidRootForHeight
-      } as bsv.ChainTracker)
-      jest.spyOn(services, 'getMerklePath').mockResolvedValue({
-        name: 'prepared BEEF reproof test',
-        merklePath,
-        header: {
-          version: 1,
-          previousHash: '0'.repeat(64),
-          merkleRoot: merklePath.computeRoot(ptx.txid),
-          time: 0,
-          bits: 0,
-          nonce: 0,
-          height: replacementHeight,
-          hash: replacementHash
-        }
-      })
+      const { height: replacementHeight, blockHash: replacementHash, isValidRootForHeight } = canonicalReproof(ctx, ptx)
+      isValidRootForHeight.mockResolvedValue('true' as unknown as boolean)
 
       const rejected = await ctx.storage.reproveProven(ptx)
       expect(rejected).toMatchObject({ unavailable: true, updated: undefined })

@@ -13,8 +13,8 @@
   },
   "publicPackageReadme": {
     "requiredSections": ["installation", "usage", "license"],
-    "requiredLicenseFile": "LICENSE.txt",
-    "licenseName": "Open BSV License Version 6",
+    "requiredLicenseFile": "LICENSE",
+    "licenseName": "Apache License 2.0",
     "rationale": "Every published package must let a registry consumer identify, install, exercise, and license the exact tarball without relying on monorepo-only context."
   },
   "packageDocumentation": {

@@ -31,7 +31,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 28)
+  assert.equal(overrides.length, 27)
   assert.deepEqual(
     overrides.filter(entry => entry.selector === 'nodemon'),
     []
@@ -58,10 +58,7 @@ test('dependency and release governance is internally complete', () => {
     overrides.filter(entry => entry.source.includes('nodemon')),
     []
   )
-  assert.equal(
-    overrides.find(entry => entry.selector === 'metro-file-map@0.87.1>micromatch')?.value,
-    "'-'"
-  )
+  assert.equal(overrides.filter(entry => entry.selector.startsWith('metro-file-map')).length, 0)
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {

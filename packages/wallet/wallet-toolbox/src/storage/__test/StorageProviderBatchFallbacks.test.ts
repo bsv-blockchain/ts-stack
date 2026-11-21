@@ -18,14 +18,16 @@ describe('StorageProvider batch fallbacks', () => {
   })
 
   test('projects only the fields required by the funding planner', async () => {
-    const rows = [{
-      outputId: 11,
-      transactionId: 22,
-      satoshis: 33,
-      txid: '44'.repeat(32),
-      vout: 5,
-      lockingScript: [0x51]
-    }] as TableOutput[]
+    const rows = [
+      {
+        outputId: 11,
+        transactionId: 22,
+        satoshis: 33,
+        txid: '44'.repeat(32),
+        vout: 5,
+        lockingScript: [0x51]
+      }
+    ] as TableOutput[]
     const findAvailableManagedChangeInputs = jest.fn(async () => rows)
 
     const result = await StorageProvider.prototype.findAvailableManagedChangeInputCandidates.call(
@@ -36,24 +38,28 @@ describe('StorageProvider batch fallbacks', () => {
       trx
     )
 
-    expect(result).toEqual([{
-      outputId: 11,
-      transactionId: 22,
-      satoshis: 33,
-      txid: '44'.repeat(32),
-      vout: 5
-    }])
+    expect(result).toEqual([
+      {
+        outputId: 11,
+        transactionId: 22,
+        satoshis: 33,
+        txid: '44'.repeat(32),
+        vout: 5
+      }
+    ])
     expect(findAvailableManagedChangeInputs).toHaveBeenCalledWith(1, 2, true, trx)
   })
 
   test('enriches projected funding candidates when a custom provider exposes status lookup', async () => {
-    const rows = [{
-      outputId: 11,
-      transactionId: 22,
-      satoshis: 33,
-      txid: '44'.repeat(32),
-      vout: 5
-    }] as TableOutput[]
+    const rows = [
+      {
+        outputId: 11,
+        transactionId: 22,
+        satoshis: 33,
+        txid: '44'.repeat(32),
+        vout: 5
+      }
+    ] as TableOutput[]
     const provider = {
       findAvailableManagedChangeInputs: jest.fn(async () => rows),
       findTransactionStatusesByIds: jest.fn(async () => new Map([[22, 'sending']]))
@@ -72,20 +78,39 @@ describe('StorageProvider batch fallbacks', () => {
   })
 
   test('filters locked funding rows by owner, reservation, and source status', async () => {
-    const eligible = { outputId: 1, userId: 7, transactionId: 11 }
-    const reserved = { outputId: 2, userId: 7, transactionId: 12 }
-    const wrongUser = { outputId: 3, userId: 8, transactionId: 13 }
-    const wrongStatus = { outputId: 4, userId: 7, transactionId: 14 }
-    const rows = { 1: eligible, 2: reserved, 3: wrongUser, 4: wrongStatus } as Record<number, TableOutput>
+    const now = new Date('2026-08-17T00:00:00.000Z')
+    const output = (outputId: number, userId: number, transactionId: number): TableOutput => ({
+      outputId,
+      userId,
+      transactionId,
+      created_at: now,
+      updated_at: now,
+      spendable: true,
+      change: true,
+      outputDescription: 'synthetic funding output',
+      vout: 0,
+      satoshis: 1,
+      providedBy: 'storage',
+      purpose: 'change',
+      type: 'P2PKH'
+    })
+    const eligible = output(1, 7, 11)
+    const reserved = output(2, 7, 12)
+    const wrongUser = output(3, 8, 13)
+    const wrongStatus = output(4, 7, 14)
+    const rows: Record<number, TableOutput> = { 1: eligible, 2: reserved, 3: wrongUser, 4: wrongStatus }
     const provider = {
       findOutputsByIds: jest.fn(async () => rows),
       findReservedActionBatchOutputIds: jest.fn(async () => [2]),
-      findTransactionStatusesByIds: jest.fn(async () => new Map([
-        [11, 'completed'],
-        [12, 'completed'],
-        [13, 'completed'],
-        [14, 'failed']
-      ]))
+      findTransactionStatusesByIds: jest.fn(
+        async () =>
+          new Map([
+            [11, 'completed'],
+            [12, 'completed'],
+            [13, 'completed'],
+            [14, 'failed']
+          ])
+      )
     }
 
     const result = await StorageProvider.prototype.findFundingOutputsForUpdate.call(
@@ -97,11 +122,7 @@ describe('StorageProvider batch fallbacks', () => {
     )
 
     expect(result).toEqual({ 1: eligible })
-    expect(provider.findTransactionStatusesByIds).toHaveBeenCalledWith(
-      7,
-      [11, 12, 13, 14],
-      trx
-    )
+    expect(provider.findTransactionStatusesByIds).toHaveBeenCalledWith(7, [11, 12, 13, 14], trx)
   })
 
   test('deduplicates and concurrently resolves proof records for custom providers', async () => {
@@ -110,8 +131,7 @@ describe('StorageProvider batch fallbacks', () => {
     }))
     const provider = { getProvenOrRawTx }
 
-    await expect(StorageProvider.prototype.getProvenOrRawTxs.call(provider, [], trx))
-      .resolves.toEqual(new Map())
+    await expect(StorageProvider.prototype.getProvenOrRawTxs.call(provider, [], trx)).resolves.toEqual(new Map())
     const result = await StorageProvider.prototype.getProvenOrRawTxs.call(
       provider,
       ['11'.repeat(32), '22'.repeat(32), '11'.repeat(32)],

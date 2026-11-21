@@ -242,7 +242,7 @@
         "test/private-purchase-alias-disclosure.property.test.ts": 167,
         "test/private-purchase-alias-disclosure.test.ts": 6,
         "test/private-purchase-alias-owner.property.test.ts": 141,
-        "test/private-purchase-buyer-alias.property.test.ts": 84,
+        "test/private-purchase-buyer-alias.property.test.ts": 100,
         "test/private-purchase-buyer.property.test.ts": 165,
         "test/private-purchase-buyer.test.ts": 13,
         "test/private-purchase-contract.property.test.ts": 5,

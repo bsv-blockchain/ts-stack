@@ -8,7 +8,8 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "noEmit": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }
