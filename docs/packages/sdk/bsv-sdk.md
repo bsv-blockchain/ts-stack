@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.2'
+version: '4.1.3'
 npm: '@bsv/sdk'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -17,7 +17,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 ## Script ASM for data outputs
 
-The 4.1.2 source candidate prints the top-level `OP_RETURN` when a script read
+Version 4.1.2 prints the top-level `OP_RETURN` when a script read
 from bytes is converted to ASM. Plain hex tokens still encode data pushes.
 If ordinary instruction tokens would change suffix bytes, the printer places
 one final `0x<hex>` token immediately after the top-level `OP_RETURN`.
