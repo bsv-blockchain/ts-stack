@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
-import { PrivateKey, ProtoWallet, SimplifiedFetchTransport } from '@bsv/sdk'
+import { PrivateKey, SimplifiedFetchTransport } from '@bsv/sdk'
 import { _tu } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageServer } from '../remoting/StorageServer'
 import { StorageClient } from '../remoting/StorageClient'
@@ -27,12 +27,13 @@ test.each([0, 1000])(
   'copies an oversized binary record through authenticated HTTP with %i ms request latency and restores it into IndexedDB',
   async requestLatencyMs => {
     const originalSend = SimplifiedFetchTransport.prototype.send
-    const delayedTransport = jest
-      .spyOn(SimplifiedFetchTransport.prototype, 'send')
-      .mockImplementation(async function (message) {
-        if (requestLatencyMs > 0) await new Promise(resolve => setTimeout(resolve, requestLatencyMs))
-        return await originalSend.call(this, message)
-      })
+    const delayedTransport = jest.spyOn(SimplifiedFetchTransport.prototype, 'send').mockImplementation(async function (
+      this: SimplifiedFetchTransport,
+      message
+    ) {
+      if (requestLatencyMs > 0) await new Promise(resolve => setTimeout(resolve, requestLatencyMs))
+      return await originalSend.call(this, message)
+    })
     const remote = await _tu.createSQLiteTestWallet({ databaseName: 'largeRecordHttp', dropAll: true })
     const source = await local()
     const restored = await local()
@@ -101,10 +102,12 @@ test.each([0, 1000])(
 
       const staged = await remote.activeStorage.knex('sync_transfers').whereNotNull('transferId').first()
       const strangerKey = PrivateKey.fromRandom()
-      const stranger = new StorageClient(new ProtoWallet(strangerKey), `http://localhost:${address.port}`, {
-        binaryRequests: true
-      })
+      const strangerWallet = await _tu.createWalletOnly({ rootKeyHex: strangerKey.toHex() })
+      let stranger: StorageClient | undefined
       try {
+        stranger = new StorageClient(strangerWallet.wallet, `http://localhost:${address.port}`, {
+          binaryRequests: true
+        })
         const strangerRpc = Reflect.get(stranger, 'rpcCall').bind(stranger)
         for (const syncTransferVersion of [0, 1]) {
           await expect(
@@ -138,7 +141,11 @@ test.each([0, 1000])(
           ])
         ).rejects.toThrow('expired')
       } finally {
-        await stranger.destroy()
+        try {
+          await stranger?.destroy()
+        } finally {
+          await strangerWallet.wallet.destroy()
+        }
       }
 
       // Restart both HTTP server and client while preserving the database and the record checkpoint.
@@ -235,5 +242,5 @@ test.each([0, 1000])(
     // transport calls after the authenticated framing/retry gates; keep the production
     // deadlines under test without letting Jest's harness deadline pre-empt it.
   },
-  360000
+  600000
 )

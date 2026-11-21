@@ -257,7 +257,7 @@ Keep unrelated package history and generated artifacts out of the same change wh
 ## License
 
 Current TS Stack first-party contributions are licensed under the
-[Open BSV License Version 6](./LICENSE.txt). Historical grants and incorporated
+[Apache License 2.0](./LICENSE). Historical grants and incorporated
 material remain under the scoped terms in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/). The repository copies those payloads into each

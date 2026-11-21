@@ -1,6 +1,6 @@
 # @bsv/amountinator
 
-Patch candidate `2.1.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `2.1.10`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 [![npm version](https://img.shields.io/npm/v/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
@@ -80,7 +80,7 @@ Supported currencies: `BSV`, `SATS`, `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `INR`, `
 
 ## License
 
-This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+This package is released under the [Apache License 2.0](./LICENSE).
 
 ## SDK4 hotfix peer requirement
 

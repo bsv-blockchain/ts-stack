@@ -3,11 +3,18 @@ import {
   WalletPermissionsManager,
   PermissionsManagerConfig,
   PermissionsModule,
-  PermissionsModuleRequest
+  type PermissionsModuleRequest
 } from '../WalletPermissionsManager'
 import { Utils, type CreateActionArgs } from '@bsv/sdk'
+import { setExactActionSpend } from '../utility/exactActionSpend'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
+
+/** Module args are object-valued at this boundary; inspect fixture fields as
+ * unknown instead of pretending every method has the same argument schema. */
+function moduleArgument(request: PermissionsModuleRequest, name: string): unknown {
+  return Reflect.get(request.args, name)
+}
 
 /**
  * Test suite for Permission Modules
@@ -31,7 +38,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const module1: PermissionsModule = {
         onRequest: jest.fn(async req => {
           callOrder.push('req1')
-          expect(req.args.req1Processed).toBeUndefined()
+          expect(moduleArgument(req, 'req1Processed')).toBeUndefined()
           return { ...req, args: { ...req.args, req1Processed: true } }
         }),
         onResponse: jest.fn(async res => {
@@ -44,7 +51,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const module2: PermissionsModule = {
         onRequest: jest.fn(async req => {
           callOrder.push('req2')
-          expect(req.args.req1Processed).toBe(true)
+          expect(moduleArgument(req, 'req1Processed')).toBe(true)
           return { ...req, args: { ...req.args, req2Processed: true } }
         }),
         onResponse: jest.fn(async res => {
@@ -288,7 +295,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
           {
             ...base,
             ...override,
-            options: { ...base.options, ...override.options }
+            options: { ...base.options, ...('options' in override ? override.options : undefined) }
           } as any,
           'app.com'
         )
@@ -550,7 +557,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           // Module can inspect and transform the request
           expect(req.method).toBe('listOutputs')
-          expect(req.args.basket).toBe('p myscheme some-data')
+          expect(moduleArgument(req, 'basket')).toBe('p myscheme some-data')
           // Transform basket for underlying call
           return {
             ...req,
@@ -666,7 +673,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('relinquishOutput')
-          expect(req.args.basket).toBe('p token admin-basket-data')
+          expect(moduleArgument(req, 'basket')).toBe('p token admin-basket-data')
           return {
             ...req,
             args: { ...req.args, basket: 'admin-real-basket' }
@@ -745,6 +752,148 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(testModule.onResponse).toHaveBeenCalled()
     })
 
+    it.each(['appended', 'reordered', 'uppercase'] as const)(
+      'preserves spend and descriptions for %s',
+      async layout => {
+        // A real BEEF for the caller's input; the createAction arg validator parses it.
+        const sdk = jest.requireActual('@bsv/sdk')
+        const source = new sdk.Transaction()
+        source.addOutput({ lockingScript: sdk.LockingScript.fromHex('51'), satoshis: 1 })
+        const callerBEEF = source.toBEEF() as number[]
+        const rawCallerInput = `${source.id('hex') as string}.0`
+        const callerInput = layout === 'uppercase' ? rawCallerInput.toUpperCase() : rawCallerInput
+        const tokenInputs = [`${'cd'.repeat(32)}.0`, `${'ce'.repeat(32)}.0`]
+        // The module adds two 1-sat token inputs and one 1-sat token change output.
+        const testModule: PermissionsModule = {
+          onRequest: jest.fn(async req => {
+            const args = req.args as CreateActionArgs
+            const addedInputs = tokenInputs.map(outpoint => ({
+              outpoint,
+              unlockingScriptLength: 2,
+              inputDescription: 'Token'
+            }))
+            const inputs = [...(args.inputs ?? []), ...addedInputs]
+            // ColorPlan.inputPositions can pin the caller's input behind a module input.
+            if (layout !== 'appended') inputs.splice(0, 2, inputs[1], inputs[0])
+            return {
+              ...req,
+              args: {
+                ...args,
+                inputs,
+                outputs: [
+                  ...(args.outputs ?? []),
+                  { lockingScript: '52', satoshis: 1, outputDescription: 'Token change' }
+                ]
+              }
+            }
+          }),
+          onResponse: jest.fn(async res => res)
+        }
+        // The signer's exact spend: outputs 1000 + 1, less the caller's input and
+        // the two token inputs (1 sat each), none of them wallet funding.
+        const create = underlying.createAction.getMockImplementation()
+        underlying.createAction.mockImplementation(async (x: any, o: any) => {
+          const result = await create(x, o)
+          setExactActionSpend(result, 998)
+          return result
+        })
+        const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+          permissionModules: { tokens: testModule },
+          seekBasketInsertionPermissions: false,
+          seekPermissionWhenApplyingActionLabels: false
+        })
+        const authorize = jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+
+        await manager.createAction(
+          {
+            description: 'Token send',
+            labels: ['p tokens send'],
+            inputBEEF: callerBEEF,
+            inputs: [{ outpoint: callerInput, unlockingScriptLength: 2, inputDescription: 'Caller input' }],
+            outputs: [{ lockingScript: '51', satoshis: 1000, outputDescription: 'Recipient' }]
+          },
+          'app.com'
+        )
+
+        expect(authorize).toHaveBeenCalledTimes(1)
+        const request = authorize.mock.calls[0][0]
+        expect(request.satoshis).toBe(998)
+        expect(request.lineItems).toEqual([
+          {
+            type: 'input',
+            satoshis: 1,
+            description: layout === 'appended' ? 'Caller input' : 'No input description provided'
+          },
+          {
+            type: 'input',
+            satoshis: 1,
+            description: layout === 'appended' ? 'No input description provided' : 'Caller input'
+          },
+          { type: 'input', satoshis: 1, description: 'No input description provided' },
+          { type: 'output', satoshis: 1000, description: 'Recipient' },
+          { type: 'output', satoshis: 1, description: 'No output description provided' },
+          { type: 'fee', satoshis: 0, description: 'Network fee' }
+        ])
+      }
+    )
+
+    it.each([true, false])(
+      'preserves reordered output descriptions with encryption=%s',
+      async encryptWalletMetadata => {
+        // Distinct plaintext has distinct ciphertext, unlike the fixture's constant mock.
+        underlying.encrypt.mockImplementation(async ({ plaintext }: { plaintext: number[] }) => ({
+          ciphertext: plaintext
+        }))
+        const testModule: PermissionsModule = {
+          onRequest: jest.fn(async req => {
+            if (req.method !== 'createAction') return req
+            const args = req.args as CreateActionArgs
+            return {
+              ...req,
+              args: {
+                ...args,
+                outputs: [
+                  { ...args.outputs![1] },
+                  { lockingScript: '51', satoshis: 500, outputDescription: 'toString' },
+                  { ...args.outputs![0] }
+                ]
+              }
+            }
+          }),
+          onResponse: jest.fn(async res => res)
+        }
+        const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+          permissionModules: { tokens: testModule },
+          encryptWalletMetadata,
+          seekPermissionWhenApplyingActionLabels: false
+        })
+        const authorize = jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+
+        await manager.createAction(
+          {
+            description: 'Reordered outputs',
+            labels: ['p tokens send'],
+            outputs: [
+              { lockingScript: '51', satoshis: 500, outputDescription: '__proto__' },
+              { lockingScript: '51', satoshis: 500, outputDescription: 'constructor' }
+            ]
+          },
+          'app.com'
+        )
+
+        expect(authorize).toHaveBeenCalledTimes(1)
+        expect(authorize.mock.calls[0][0]).toMatchObject({
+          satoshis: 1500,
+          lineItems: [
+            { type: 'output', satoshis: 500, description: 'constructor' },
+            { type: 'output', satoshis: 500, description: 'No output description provided' },
+            { type: 'output', satoshis: 500, description: '__proto__' },
+            { type: 'fee', satoshis: 0, description: 'Network fee' }
+          ]
+        })
+      }
+    )
+
     it('encrypts P-basket custom instructions once, after the module chain', async () => {
       const seen: Array<string | undefined> = []
       const testModule: PermissionsModule = {
@@ -814,8 +963,8 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           callOrder.push('req1')
           // First module receives original args without any processing markers
-          expect(req.args.req1Processed).toBeUndefined()
-          expect(req.args.req2Processed).toBeUndefined()
+          expect(moduleArgument(req, 'req1Processed')).toBeUndefined()
+          expect(moduleArgument(req, 'req2Processed')).toBeUndefined()
           // Transform args - add marker to track this module processed them
           return {
             ...req,
@@ -835,8 +984,8 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
           callOrder.push('req2')
           // Second module receives args transformed by module1
           // (each module gets fresh request object, but args are chained)
-          expect(req.args.req1Processed).toBe(true)
-          expect(req.args.req2Processed).toBeUndefined()
+          expect(moduleArgument(req, 'req1Processed')).toBe(true)
+          expect(moduleArgument(req, 'req2Processed')).toBeUndefined()
           return {
             ...req,
             args: { ...req.args, req2Processed: true }
@@ -854,9 +1003,9 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           callOrder.push('req3')
           // Third module receives args with transformations from both module1 and module2
-          expect(req.args.req1Processed).toBe(true)
-          expect(req.args.req2Processed).toBe(true)
-          expect(req.args.req3Processed).toBeUndefined()
+          expect(moduleArgument(req, 'req1Processed')).toBe(true)
+          expect(moduleArgument(req, 'req2Processed')).toBe(true)
+          expect(moduleArgument(req, 'req3Processed')).toBeUndefined()
           return {
             ...req,
             args: { ...req.args, req3Processed: true }
@@ -962,7 +1111,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('getPublicKey')
-          expect(req.args.protocolID).toEqual([0, 'p bottle test'])
+          expect(moduleArgument(req, 'protocolID')).toEqual([0, 'p bottle test'])
           return req
         }),
         onResponse: jest.fn(async res => {
@@ -1000,7 +1149,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('createSignature')
-          expect(req.args.protocolID).toEqual([1, 'p token spend'])
+          expect(moduleArgument(req, 'protocolID')).toEqual([1, 'p token spend'])
           // Module can validate spend amounts, check limits, etc.
           return req
         }),
@@ -1067,7 +1216,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('encrypt')
-          expect(req.args.protocolID).toEqual([2, 'p secure encrypt'])
+          expect(moduleArgument(req, 'protocolID')).toEqual([2, 'p secure encrypt'])
           return req
         }),
         onResponse: jest.fn(async res => res)

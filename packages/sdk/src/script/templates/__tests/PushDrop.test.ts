@@ -1,5 +1,8 @@
 /* eslint-env jest */
 import PushDrop from '../../../script/templates/PushDrop'
+import ProtoWallet from '../../../wallet/ProtoWallet'
+import WalletClient from '../../../wallet/WalletClient'
+import type { WalletInterface } from '../../../wallet/Wallet.interfaces'
 import { CompletedProtoWallet } from '../../../auth/certificates/__tests/CompletedProtoWallet'
 import { PrivateKey, Utils } from '../../../primitives/index'
 import { Script, Spend } from '../../../script/index'
@@ -236,5 +239,33 @@ describe('PushDrop', () => {
         .publicKey
       expect(decoded.lockingPublicKey.toString()).toEqual(expectedPublicKey)
     })
+  })
+})
+
+describe('PushDrop wallet capability declarations', () => {
+  it('retains inferred ProtoWallet access and signs with the actual required capability', async () => {
+    const wallet = new ProtoWallet(new PrivateKey(1))
+    const pushDrop = new PushDrop(wallet)
+    const inferredWallet: ProtoWallet = pushDrop.wallet
+    expect(inferredWallet).toBe(wallet)
+
+    const fields = [[1, 2, 3]]
+    const protocolID: [0 | 1 | 2, string] = [2, 'pushdrop capability regression']
+    const lockingScript = await pushDrop.lock(fields, protocolID, '1', 'self')
+    expect(PushDrop.decode(lockingScript).fields).toEqual(fields)
+    expect(PushDrop.decode(lockingScript).lockingPublicKey.toString()).toEqual(
+      (await wallet.getPublicKey({ protocolID, keyID: '1', counterparty: 'self' })).publicKey
+    )
+  })
+
+  it('preserves the default full-wallet annotation and public wallet methods', () => {
+    const wallet: WalletInterface = new WalletClient('auto')
+    const pushDrop: PushDrop = new PushDrop(wallet)
+    const defaultWallet: WalletInterface = pushDrop.wallet
+    expect(defaultWallet).toBe(wallet)
+    expect(defaultWallet.createAction).toBe(wallet.createAction)
+    expect(defaultWallet.signAction).toBe(wallet.signAction)
+    expect(defaultWallet.abortAction).toBe(wallet.abortAction)
+    expect(defaultWallet.listActions).toBe(wallet.listActions)
   })
 })

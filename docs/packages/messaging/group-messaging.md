@@ -5,8 +5,8 @@ kind: package
 domain: messaging
 version: '0.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-11-04'
-last_verified: '2026-11-04'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/group-messaging'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/group-messaging'

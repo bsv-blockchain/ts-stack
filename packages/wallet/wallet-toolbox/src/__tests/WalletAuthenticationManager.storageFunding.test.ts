@@ -10,7 +10,9 @@ describe('faucet completion with empty wallet storage', () => {
     ctx = await _tu.createSQLiteTestWallet({ databaseName: 'faucet-storage-funding', dropAll: true })
     ctx.activeStorage.feeModel = { model: 'sat/kb', value: 100 }
     ctx.activeStorage.commissionPubKeyHex = new PrivateKey(7).toPublicKey().toString()
-    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true })
+    jest
+      .spyOn(ctx.services, 'getChainTracker')
+      .mockResolvedValue({ isValidRootForHeight: async () => true, currentHeight: async () => 1_000_000 })
     jest.spyOn(ctx.services, 'postBeef').mockImplementation(async (_beef, txids) => [
       {
         name: 'offline-test',

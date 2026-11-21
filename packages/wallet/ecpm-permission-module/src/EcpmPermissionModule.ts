@@ -2,6 +2,7 @@ import type { GetPublicKeyArgs, PubKeyHex } from '@bsv/sdk'
 import BigNumber from '@bsv/sdk/primitives/BigNumber'
 import Curve from '@bsv/sdk/primitives/Curve'
 import Point from '@bsv/sdk/primitives/Point'
+import { sha256hmac } from '@bsv/sdk/primitives/Hash'
 import type {
   PermissionsModule,
   PermissionsModuleNext,
@@ -26,6 +27,20 @@ const MAX_ORIGINATOR_BYTES = 1024
 const ASCII_CONTROL = /[\0-\x1f\x7f]/
 const CURVE = new Curve()
 const UTF8 = new TextEncoder()
+
+// Hash-to-scalar domain separation for the canonical ECPM scalar. The scalar is
+// HKDF-SHA256(child private key) reduced into [1, n), NOT the BRC-42 child
+// private key itself. Returning a scalar linear in the child key would let a
+// counterparty who can compute the BRC-42 offset `o` strip it from `d·Q` and
+// recover the wallet's root ECDH secret `root·Q`; hashing breaks that linearity
+// while preserving commutativity and apply/remove round-trips, because both
+// depend only on the derived scalar being a deterministic function of the same
+// derivation identity. Mirrors BRC-206's "seed is HKDF input, never returned"
+// construction.
+const ECPM_SCALAR_SALT = UTF8.encode('BRC-229 p ecpm scalar v1')
+const ECPM_SCALAR_INFO = UTF8.encode('BRC-229 p ecpm scalar')
+// 48 bytes (384 bits) of OKM keeps the modular-reduction bias below 2^-128.
+const ECPM_SCALAR_OKM_BYTES = 48
 
 function dataRecord(value: unknown, label: string): Record<string, unknown> {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
@@ -57,6 +72,7 @@ export class EcpmPermissionModule implements PermissionsModule {
   readonly #authorizationTTL: number
   readonly #grants = new Map<string, number>()
   readonly #pendingGrants = new Map<string, Promise<boolean>>()
+  #authorizationEpoch = 0
 
   constructor(options: EcpmPermissionModuleOptions) {
     const ownedOptions = dataRecord(options, 'ECPM options')
@@ -88,8 +104,9 @@ export class EcpmPermissionModule implements PermissionsModule {
     this.#authorizationTTL = authorizationTTL
   }
 
-  /** Clears cached and pending authorization state. */
+  /** Clears authorization state and invalidates in-flight requests. */
   dispose(): void {
+    this.#authorizationEpoch++
     this.#grants.clear()
     this.#pendingGrants.clear()
   }
@@ -113,16 +130,24 @@ export class EcpmPermissionModule implements PermissionsModule {
       throw new Error('ECPM: originator is invalid or too long')
     }
 
+    const authorizationEpoch = this.#authorizationEpoch
     const parsed = this.#parseRequest(ownedRequest.args as object)
     await this.#ensureAuthorized(parsed, ownedRequest.originator)
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
+    }
     const keyDeriver = await this.#selectKeyDeriver(parsed)
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
+    }
     const derivedKey = keyDeriver.derivePrivateKey(
       parsed.derivationProtocolID,
       parsed.keyID,
       parsed.counterparty
     )
+    const scalar = this.#deriveScalar(derivedKey)
     return {
-      publicKey: this.#multiply(parsed.decodedPoint, derivedKey, parsed.operation)
+      publicKey: this.#multiply(parsed.decodedPoint, scalar, parsed.operation)
     }
   }
 
@@ -239,6 +264,7 @@ export class EcpmPermissionModule implements PermissionsModule {
   }
 
   async #ensureAuthorized(parsed: ParsedEcpmRequest, originator: string): Promise<void> {
+    const authorizationEpoch = this.#authorizationEpoch
     const authorization: EcpmAuthorizationRequest = {
       originator,
       securityLevel: parsed.derivationProtocolID[0],
@@ -282,6 +308,12 @@ export class EcpmPermissionModule implements PermissionsModule {
         throw new Error('ECPM: authorization queue is full')
       }
       pending = Promise.resolve(this.#authorize(authorization))
+      // The host may synchronously tear down the wallet in its callback.
+      // Never restore a pending entry after dispose has cleared the maps.
+      if (authorizationEpoch !== this.#authorizationEpoch) {
+        void pending.catch(() => {})
+        throw new Error('ECPM: request invalidated by dispose')
+      }
       this.#pendingGrants.set(scope, pending)
     }
     let approved: boolean
@@ -289,6 +321,9 @@ export class EcpmPermissionModule implements PermissionsModule {
       approved = await pending
     } finally {
       if (this.#pendingGrants.get(scope) === pending) this.#pendingGrants.delete(scope)
+    }
+    if (authorizationEpoch !== this.#authorizationEpoch) {
+      throw new Error('ECPM: request invalidated by dispose')
     }
     if (approved !== true) throw new Error('ECPM: user denied permission')
     this.#grants.delete(scope)
@@ -310,14 +345,35 @@ export class EcpmPermissionModule implements PermissionsModule {
     return deriver
   }
 
-  #multiply(
-    point: Point,
-    derivedKey: ReturnType<EcpmKeyDeriver['derivePrivateKey']>,
-    operation: ParsedEcpmRequest['operation']
-  ): PubKeyHex {
-    const scalar =
-      operation === 'remove' ? derivedKey.invm(CURVE.n) : new BigNumber(derivedKey.toHex(), 16)
-    const result = point.mul(scalar)
+  /**
+   * Maps the BRC-42/43 child private key to the ECPM multiplication scalar by
+   * HKDF-SHA256, using 1 + (OKM mod (n - 1)). The child key is used only as input keying
+   * material and is never exposed; the returned scalar is not linear in it, so a
+   * counterparty who can compute the BRC-42 offset cannot strip it from `d·Q` to
+   * recover the wallet's root ECDH secret. The mapping is deterministic in the
+   * derivation identity alone, so apply/remove round-trips and multi-wallet
+   * commutativity are preserved.
+   */
+  #deriveScalar(derivedKey: ReturnType<EcpmKeyDeriver['derivePrivateKey']>): BigNumber {
+    // IKM is the 32-byte big-endian child key, fixed width so the same child key
+    // always yields the same scalar regardless of leading zeros.
+    const ikm = derivedKey.toArray('be', 32) as number[]
+    // HKDF-Extract then HKDF-Expand (RFC 5869) with SHA-256.
+    const prk = sha256hmac(ECPM_SCALAR_SALT, ikm)
+    const okm: number[] = []
+    let block: number[] = []
+    let counter = 1
+    while (okm.length < ECPM_SCALAR_OKM_BYTES) {
+      block = sha256hmac(prk, [...block, ...ECPM_SCALAR_INFO, counter & 0xff])
+      okm.push(...block)
+      counter++
+    }
+    return new BigNumber(okm.slice(0, ECPM_SCALAR_OKM_BYTES)).umod(CURVE.n.subn(1)).addn(1)
+  }
+
+  #multiply(point: Point, scalar: BigNumber, operation: ParsedEcpmRequest['operation']): PubKeyHex {
+    const effective = operation === 'remove' ? scalar.invm(CURVE.n) : scalar
+    const result = point.mul(effective)
     if (result.isInfinity()) {
       throw new Error('ECPM: result is the point at infinity')
     }
