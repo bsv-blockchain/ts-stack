@@ -3,7 +3,7 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.2.0'
+version: '1.2.1'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -48,5 +48,5 @@ for the starter catalogue, modes, flags, merge rules, and security boundaries.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE).

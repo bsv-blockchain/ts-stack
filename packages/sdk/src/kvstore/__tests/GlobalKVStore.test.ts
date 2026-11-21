@@ -449,6 +449,16 @@ describe('GlobalKVStore', () => {
         })
       })
 
+      it('forwards every tag in a query beyond the former 32-tag cap', async () => {
+        primeResolverEmpty(mockResolver)
+        const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+
+        await expect(kvStore.get({ tags })).resolves.toEqual([])
+        expect(mockResolver.query).toHaveBeenCalledWith(
+          expect.objectContaining({ query: expect.objectContaining({ tags }) })
+        )
+      })
+
       it('forwards tags-only queries to the resolver', async () => {
         primeResolverEmpty(mockResolver)
 
@@ -895,6 +905,15 @@ describe('GlobalKVStore', () => {
 
         // Restore original implementation
         ;(MockPushDrop as any).mockImplementation = originalImpl
+      })
+
+      it('creates a token with every tag beyond the former 32-tag cap', async () => {
+        primeResolverEmpty(mockResolver)
+        const tags = Array.from({ length: 60 }, (_, index) => `post:${index}`)
+
+        await expect(kvStore.set(TEST_KEY, TEST_VALUE, { tags })).resolves.toBe(`${TEST_TXID}.0`)
+        expect(MockUtils.toArray).toHaveBeenCalledWith(JSON.stringify(tags), 'utf8')
+        expect(mockWallet.createAction).toHaveBeenCalledTimes(1)
       })
 
       it('updates existing token when one exists', async () => {

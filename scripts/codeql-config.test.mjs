@@ -66,16 +66,26 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
   assert.deepEqual(readIndentedList(workflow, 'language', 8), [
     'actions',
     'javascript-typescript',
-    'python'
+    ...(authoredPythonFiles.length > 0 ? ['python'] : [])
   ])
-  assert.deepEqual(authoredPythonFiles, [
-    'packages/wallet/rabin-permission-module/conformance/rabin_check.py'
-  ])
+  assert.ok(
+    authoredPythonFiles.includes('conformance/runner/scripts/brc118-vectors.py'),
+    'the independent BRC-118 oracle must remain inside the authored CodeQL boundary'
+  )
+  assert.ok(
+    authoredPythonFiles.includes(
+      'packages/wallet/rabin-permission-module/conformance/rabin_check.py'
+    ),
+    'the BRC-206 checker must remain inside the authored CodeQL boundary'
+  )
   assert.match(workflow, /^  push:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)
   assert.match(workflow, /^  workflow_dispatch:$/m)
-  assert.match(workflow, /^    name: Analyze \(\$\{\{ matrix\.language \}\}\)$/m)
+  assert.match(
+    workflow,
+    /^    name: .+ \|\| format\('Analyze \(\{0\}\)', matrix\.language\) \}\}$/m
+  )
   assert.doesNotMatch(
     workflow,
     /CODEQL_ADVANCED_ENABLED/,

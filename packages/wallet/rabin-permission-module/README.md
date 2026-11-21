@@ -102,4 +102,4 @@ pnpm --filter @bsv/rabin-permission-module pack:check
 
 ## License
 
-Open BSV License version 6. See `LICENSE.txt`.
+Apache License 2.0. See `LICENSE`.

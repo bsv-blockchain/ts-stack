@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.7.1`: Accepts bounded canonical base64 PeerPay transactions and tightens payment and synchronization boundaries. Canonical PeerPay base64 transactions are accepted; noncanonical or oversized inputs remain rejected.
+
+
 - Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 ### 2.7.0 candidate — live socket reconnection, room restoration and reported status
@@ -96,6 +99,14 @@ All notable changes to this project will be documented in this file. The format 
   an encrypted message; now it always is, because the body is read before any
   subscriber is called. A consumer asserting synchronous delivery in a test
   needs to let the microtask run.
+
+### 2.6.0 candidate — bounded PeerPay receive interoperability
+
+- Accept canonical standard base64 transaction strings alongside existing byte
+  arrays and numeric-key JSON objects in list, live and indexed PeerPay receipt.
+- Bound encoded/decoded sizes before conversion and retain wallet validation and
+  acknowledgement order. Sender encoding and relay limits are unchanged.
+- Keep #548 relay/preflight and #503 durable refund/outcome milestones open.
 
 - Prepare `2.6.1` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
 

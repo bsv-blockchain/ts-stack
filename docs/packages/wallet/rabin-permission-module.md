@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/rabin-permission-module'
 version: '0.1.0'
-last_updated: '2026-10-20'
-last_verified: '2026-10-20'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc98', 'brc206', 'rabin']
@@ -55,4 +55,4 @@ request, happens before derivation. `dispose` and `lock` clear cached factors.
 
 ## License
 
-Open BSV License version 6. See the package `LICENSE.txt`.
+Apache License 2.0. See the package `LICENSE`.

@@ -1,27 +1,38 @@
 import assert from 'node:assert/strict'
+
 import { spawnSync } from 'node:child_process'
+
 import fs from 'node:fs'
+
 import os from 'node:os'
+
 import path from 'node:path'
+
 import test from 'node:test'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 import { resolveGovernedTest } from './run-governed-test.mjs'
+
 import {
   REPOSITORY_ROOT,
   classifyManualFile,
   evaluateTestGovernance,
   findDirectSkips,
   findEmptyTests,
+  findPropertyDeadlineControls,
   findUnboundedLoops
 } from './test-governance.mjs'
 
 const policyPath = path.join(REPOSITORY_ROOT, 'governance/test-quality/policy.json')
+
 const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+
 const walletManualSuiteInventoryPath = path.join(
   REPOSITORY_ROOT,
   'governance/test-quality/wallet-toolbox-manual-suites.json'
 )
+
 const walletManualSuiteInventory = JSON.parse(
   fs.readFileSync(walletManualSuiteInventoryPath, 'utf8')
 )
@@ -34,15 +45,38 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 157)
+  assert.equal(result.summary.propertySuites, 217)
   assert.equal(result.summary.propertyPackages, 37)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 42)
-  assert.equal(result.summary.mutationTargets, 157)
+  assert.equal(result.summary.mutationTargets, 217)
   assert.equal(result.summary.manualAndLiveFiles, 33)
   assert.equal(result.summary.walletManualSuites, 31)
   assert.equal(result.summary.conformanceSkipFiles, 20)
   assert.equal(result.summary.conformanceSkips, 213)
+})
+
+test('property governance rejects campaign-wide deadlines and permits per-case timeouts', () => {
+  const stop = 'interruptAfterTimeLimit'
+  const skip = 'skipAllAfterTimeLimit'
+  const failure = 'markInterruptAsFailure'
+  const diagnostic = 'measuredPropertyCampaign'
+  const source = [
+    `// ${stop}: 10`,
+    `const comment = "${skip}: 10"`,
+    'fc.configureGlobal({ timeout: 10, numRuns: 300 })',
+    `fc.configureGlobal({ ${stop}: 10 })`,
+    `fc.assert(property, { '${skip}': 10 })`,
+    `config['${failure}'] = true`,
+    `${diagnostic}(options, 100)`
+  ].join('\n')
+
+  assert.deepEqual(findPropertyDeadlineControls(source), [
+    { name: stop, line: 4 },
+    { name: skip, line: 5 },
+    { name: failure, line: 6 },
+    { name: diagnostic, line: 7 }
+  ])
 })
 
 test('mutation governance rejects admission campaigns and enforces bounded finding-only audits', () => {
@@ -780,6 +814,7 @@ const retainedBeefTestClosure = [
     'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
   )
 ]
+
 const retainedBeefSourceClosure = [
   'src/**',
   'jest-projects.config.mjs',
@@ -1085,7 +1120,7 @@ test('wallet property command keeps every registered suite after its runner opti
   const manifest = 'packages/wallet/wallet-toolbox/package.json'
   const packageDirectory = path.dirname(path.join(REPOSITORY_ROOT, manifest))
   const wallet = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, manifest), 'utf8'))
-  const prefix = 'node ../../../scripts/check-wallet-property-command.mjs && jest '
+  const prefix = 'pnpm build && node ../../../scripts/check-wallet-property-command.mjs && jest '
   assert.ok(wallet.scripts['test:property'].startsWith(prefix))
   const tokens = wallet.scripts['test:property'].slice(prefix.length).split(' ')
   const options = [

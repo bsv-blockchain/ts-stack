@@ -1,0 +1,57 @@
+/** Current local operational inventory. BRC-38 keeps its separate thirteen
+ * archive tables. Snapshot-sync and reconciliation recovery tables retain their actual local rows.
+ * Shared quota is reconstructed by real row/pointer effects and compared separately.
+ * Import recovery and packed-content internals remain
+ * independent physical families, not an implicit archive-format expansion. */
+export const brc38NativeLocalBaselineTables = Object.freeze([
+  'users',
+  'settings',
+  'proven_txs',
+  'proven_tx_reqs',
+  'output_baskets',
+  'output_tags',
+  'tx_labels',
+  'transactions',
+  'outputs',
+  'commissions',
+  'tx_labels_map',
+  'output_tags_map',
+  'certificates',
+  'certificate_fields',
+  'sync_states',
+  'monitor_events',
+  'prepared_beef_metadata',
+  'prepared_beefs',
+  'action_batches',
+  'action_batch_outputs',
+  'action_batch_blobs',
+  'sync_transfers',
+  'sync_transfer_parts',
+  'auth_sessions',
+  'auth_message_nonces',
+  'payment_replays',
+  'snapshot_sync_sessions',
+  'snapshot_sync_ids',
+  'snapshot_sync_primary_epochs',
+  'snapshot_reconciliation_windows',
+  'snapshot_reconciliation_stage_budgets',
+  'snapshot_reconciliation_stage_pages',
+  'snapshot_reconciliation_stage_chains',
+  'snapshot_reconciliation_promotion_cursors',
+  'snapshot_reconciliation_captured_identity_budgets',
+  'snapshot_reconciliation_captured_identities',
+  'snapshot_reconciliation_identity_frames',
+  'snapshot_reconciliation_identity_budgets',
+  'snapshot_reconciliation_identity_maps',
+  'snapshot_reconciliation_identity_retirement_budgets',
+  'snapshot_reconciliation_identity_retirements',
+  'snapshot_reconciliation_membership_budgets',
+  'snapshot_reconciliation_memberships',
+  'snapshot_reconciliation_membership_retirements',
+  'snapshot_reconciliation_provenance_budgets',
+  'snapshot_reconciliation_provenance',
+  'snapshot_reconciliation_window_progress',
+  'internalize_receipts'
+] as const)
+export const brc38NativeLocalBaselineTableCount = brc38NativeLocalBaselineTables.length
+export type Brc38NativeLocalBaselineTable = (typeof brc38NativeLocalBaselineTables)[number]

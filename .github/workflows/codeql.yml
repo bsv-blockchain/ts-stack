@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
   schedule:
     - cron: '17 8 * * 1'
   workflow_dispatch:
@@ -18,7 +20,10 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    # Even an accidentally approved auxiliary run must not publish a required queue context.
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && format('Auxiliary Analyze ({0})', matrix.language) || format('Analyze ({0})', matrix.language) }}
+    if: >-
+      !(github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -32,10 +37,9 @@ jobs:
         language:
           - actions
           - javascript-typescript
+          # Scan the independently authored BRC-118 conformance oracle.
+          # Generated OpenAPI clients remain excluded by the owned registry.
           - python
-          # Generated OpenAPI Python under conformance/generated/** stays on the
-          # paths-ignore boundary and is verified by codegen CI. The Python lane
-          # covers the authored BRC-206 checker.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
