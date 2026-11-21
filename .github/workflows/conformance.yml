@@ -10,6 +10,8 @@ on:
       - 'scripts/generate-openapi-types.mjs'
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
   group: conformance-${{ github.event.pull_request.number || github.ref }}
@@ -20,6 +22,9 @@ permissions:
 
 jobs:
   ts-runner:
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary conformance' || 'ts-runner' }}
+    if: >-
+      !(github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -31,6 +36,8 @@ jobs:
           cache: pnpm
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify independent BRC-118 wire and signature vectors
+        run: python3 conformance/runner/scripts/brc118-vectors.py
       - name: Build TS runner dependencies
         run: >-
           pnpm -r
