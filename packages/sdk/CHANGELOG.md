@@ -1,3 +1,9 @@
+# 4.2.0 unpublished minor candidate
+
+- Add optional `BroadcastResponse.txStatus` and `BroadcastResponse.arcStatus`, and make
+  `Teranode.broadcast` read ARC-style status bodies. See the Teranode entry under
+  Unreleased below. Publication is a separate release action.
+
 # 4.1.2 unpublished patch candidate
 
 - `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
