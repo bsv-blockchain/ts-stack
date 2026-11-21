@@ -1,3 +1,17 @@
+# 2.18.1 source candidate
+
+- `Services.nLockTimeIsFinal` and `MockServices.nLockTimeIsFinal` apply the node's
+  finality rule for the next block. Height acceptance widens by one block: a height
+  lock time is final when it is below tip + 1, so a lock time equal to the tip is no
+  longer refused. The time-lock cutoff changes from the wall clock to median time past:
+  a time lock time is final when it is below the median time past of the tip and its
+  ten predecessors (BIP113), so a transaction with a non-final input sequence and a lock
+  time set to "now" is usually refused for about an hour. Inputs with an omitted
+  sequence count as final, as they serialize as 0xffffffff. Judging a time lock reads up
+  to eleven block headers, and a header-service failure propagates instead of reporting
+  the transaction as not final. An `nLockTime` of 0 is final without a chain read. No
+  migration is required.
+
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet

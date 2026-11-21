@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.18.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -14,6 +14,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 ---
 
 # @bsv/wallet-toolbox
+
+## nLockTime finality
+
+The 2.18.1 source candidate makes `nLockTimeIsFinal` apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
 
 ## Certificate pagination
 
