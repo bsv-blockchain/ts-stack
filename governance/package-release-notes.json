@@ -67,6 +67,13 @@
       "migration": "No API, wire or data migration is required. Redistributors must retain the included license and notice files. Valid canonical BTMS flows remain compatible. Custom prompts must return literal true, authorization maps may contain at most 1,024 entries, and callers must provide dense signatures, safe exact totals, and canonical preimages; coercive or trailing-byte forms now fail closed. SDK consumers may retain ^2.1.6 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative. Consumers may keep their current SDK or install @bsv/sdk 4.0.1; no migration is required for this package. SDK4 consumers must use @bsv/sdk >=4.0.1 <5; SDK2/3 consumers retain their existing ranges. No application-wallet wire or data migration is required."
     },
     {
+      "name": "@bsv/sigma-permission-module",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "First release: the sigma semantic module, specified by the sigma BRC (draft, not yet numbered). Applications obtain a wallet-held statement point and deterministic Schnorr, DLEQ and OR zero-knowledge proofs through BRC-100 encrypt, with no new method or wire message; the proof scalar is derived from the BRC-42 child key and is never the child key itself. The module accepts only encrypt; it refuses every other method the wallet host routes to it, and every basket or label beginning p sigma that reaches it, and authorization precedes derivation. Exports the module, createSigmaModule, the pure verifiers and the point codecs. Requires the repaired SDK4.0.1 hotfix for the SDK4 peer alternative while retaining the SDK2/3 alternatives and lower bound.",
+      "migration": "No consumer migration required; first release."
+    },
+    {
       "name": "@bsv/chirp",
       "publishedVersion": "0.1.6",
       "releaseType": "patch",
