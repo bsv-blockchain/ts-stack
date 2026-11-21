@@ -302,6 +302,20 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Opt-in whole-BEEF overlay lookups
+
+- Add `LookupQueryOptions.wholeBeef`, forwarded to facilitators as
+  `LookupRequestOptions.wholeBeef`. When `true`, `HTTPSOverlayLookupFacilitator`
+  omits `X-Aggregation: yes` and reads the host's per-output JSON answer, so
+  each output's BEEF is returned as the lookup service produced it. The
+  aggregated binary answer keeps only each output's SPV closure, which ends at
+  its first proven transaction, so history a service returns beyond a proof
+  (for example an overlay Engine `history` selector) is dropped. A binary
+  answer to a `wholeBeef` request is counted as a rejection (`rejectedHosts`
+  in `queryDetailed`/`query$`), with no reputation penalty. SLAP discovery and
+  outpoint deduplication are unchanged. The default is unchanged (`false`); no
+  API, wire or data migration is required.
+
 ### LocalKVStore removal stops on an inconsistent empty page
 
 - `LocalKVStore.remove` throws when `listOutputs` returns an empty page while

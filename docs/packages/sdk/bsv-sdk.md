@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.2'
+version: '4.2.0'
 npm: '@bsv/sdk'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,19 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## Opt-in whole-BEEF overlay lookups
+
+The 4.2.0 source candidate adds `LookupQueryOptions.wholeBeef` (default
+`false`), forwarded to facilitators as `LookupRequestOptions.wholeBeef`. When
+`true`, `HTTPSOverlayLookupFacilitator` omits `X-Aggregation: yes` and reads the
+host's per-output JSON answer, so each output's BEEF is returned as the lookup
+service produced it, including history beyond the first proven transaction that
+the aggregated answer drops. A binary answer to such a request counts as a
+rejection (`rejectedHosts`) with no reputation penalty. Raise
+`limits.maxResponseBytes`, `limits.maxTotalBytes` and `evidenceLimits` for long
+histories. Default lookups, SLAP discovery and outpoint deduplication are
+unchanged; no API, wire or data migration is required.
 
 ## Script ASM for data outputs
 
