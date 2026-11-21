@@ -307,6 +307,44 @@ type StaleOutput = {
 
 type SubmissionMode = 'historical-tx' | 'current-tx' | 'historical-tx-no-spv'
 
+/** What one stored output's BEEF shows about a newly proven transaction. */
+type MerkleProofEvidence = {
+  output: Output
+  transaction: Transaction
+  /** The BEEF carries the proven transaction, whose proof is now set in it. */
+  found: boolean
+  /** Lowercase IDs of transactions that proven transactions reached in the BEEF spend. */
+  provenSpends: Set<string>
+  /** An unproven transaction in the BEEF names a source transaction it does not carry. */
+  incomplete: boolean
+}
+
+/** Adds the lowercase IDs of the transactions a proven transaction spends. */
+function addProvenSpends(proven: Transaction, spends: Set<string>): void {
+  for (const input of proven.inputs) {
+    const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+    if (source !== undefined) spends.add(source.toLowerCase())
+  }
+}
+
+/**
+ * Queues the linked source transactions of an unproven transaction for the
+ * proof walk and returns whether any input names a source it does not link.
+ */
+function queueLinkedSources(tx: Transaction, pending: Transaction[]): boolean {
+  let unlinked = false
+  for (const input of tx.inputs) {
+    if (input.sourceTransaction === undefined) unlinked = true
+    if (typeof input.sourceTransaction === 'object') {
+      if (pending.length >= MAX_PROOF_UPDATE_OUTPUTS) {
+        throw new RangeError('Merkle-proof source traversal exceeded its work budget')
+      }
+      pending.push(input.sourceTransaction)
+    }
+  }
+  return unlinked
+}
+
 /**
  * Receives each per-topic validation failure that `Engine.submit` records in
  * `failedTopics`. The Engine swallows those errors by design and reports the
@@ -4031,16 +4069,26 @@ export class Engine {
   /**
    * Given a new transaction proof (txid, proof),
    * update tx.merklePath if appropriate,
-   * and if not, recurse through all input sourceTransactions.
+   * and if not, recurse through the linked inputs of unproven transactions,
+   * stopping at proven ones.
    *
    * @param tx transaction which may benefit from new proof.
    * @param txid BE hex string double hash of transaction proven by proof.
    * @param proof for txid
+   * @returns whether txid was reached, the transactions spent by the proven
+   * transactions reached (a proven one is not walked further: its BEEF ends
+   * at its proof), and whether an unproven one names a source it does not link.
    */
-  private updateInputProofs(tx: Transaction, txid: string, proof: MerklePath): boolean {
+  private updateInputProofs(
+    tx: Transaction,
+    txid: string,
+    proof: MerklePath
+  ): Pick<MerkleProofEvidence, 'found' | 'provenSpends' | 'incomplete'> {
     const pending: Transaction[] = [tx]
     const visited = new WeakSet<object>()
     let found = false
+    const provenSpends = new Set<string>()
+    let incomplete = false
     for (let cursor = 0; cursor < pending.length; cursor++) {
       if (pending.length > MAX_PROOF_UPDATE_OUTPUTS) {
         throw new RangeError('Merkle-proof source traversal exceeded its work budget')
@@ -4055,20 +4103,20 @@ export class Engine {
       }
       // A mined transaction's source graph is no longer part of its BEEF. Do
       // not replace an unrelated transaction's proof with an ancestor proof.
-      if (current.merklePath !== undefined) continue
-      for (const input of current.inputs) {
-        if (typeof input.sourceTransaction === 'object') {
-          if (pending.length >= MAX_PROOF_UPDATE_OUTPUTS) {
-            throw new RangeError('Merkle-proof source traversal exceeded its work budget')
-          }
-          pending.push(input.sourceTransaction)
-        }
+      if (current.merklePath !== undefined) {
+        addProvenSpends(current, provenSpends)
+        continue
       }
+      if (queueLinkedSources(current, pending)) incomplete = true
     }
-    return found
+    return { found, provenSpends, incomplete }
   }
 
-  private prepareMerkleProofUpdate(output: Output, txid: string, proof: MerklePath): number[] {
+  private prepareMerkleProofUpdate(
+    output: Output,
+    txid: string,
+    proof: MerklePath
+  ): MerkleProofEvidence {
     this.assertStoredOutputRelations(output, 'Merkle-proof output')
     if (
       !Array.isArray(output.beef) ||
@@ -4085,10 +4133,45 @@ export class Engine {
     if (output.outputIndex >= tx.outputs.length) {
       throw new TypeError('Stored Merkle-proof output index is outside its transaction')
     }
-    if (!this.updateInputProofs(tx, txid, proof)) {
-      throw new TypeError('Stored descendant BEEF does not contain the proven transaction')
+    return { output, transaction: tx, ...this.updateInputProofs(tx, txid, proof) }
+  }
+
+  /**
+   * The lowercase IDs of txid and of every transaction whose own stored BEEF
+   * descends from it: the BEEF carries txid, or a proven transaction in it
+   * spends a transaction already bound. A descendant proven before txid's
+   * proof arrived ends its BEEF at that proof, so a chain such as A -> B ->
+   * C, with C proven first, is bound only through B's BEEF. Storage relation
+   * records bind nothing on their own. The least fixed point, so the result
+   * does not depend on the order in which storage returned the outputs.
+   */
+  private bindMerkleProofDescendants(txid: string, evidence: MerkleProofEvidence[]): Set<string> {
+    const bound = new Set<string>()
+    const queue: string[] = []
+    const bind = (id: string): void => {
+      if (bound.has(id)) return
+      bound.add(id)
+      queue.push(id)
     }
-    return tx.toBEEF()
+    const spenders = new Map<string, string[]>()
+    bind(txid.toLowerCase())
+    for (const item of evidence) {
+      const id = item.output.txid.toLowerCase()
+      if (item.found) {
+        bind(id)
+        continue
+      }
+      for (const spent of item.provenSpends) {
+        const waiting = spenders.get(spent)
+        if (waiting === undefined) spenders.set(spent, [id])
+        else waiting.push(id)
+      }
+    }
+    // `bind` appends to `queue`, and an array iterator visits appended items.
+    for (const spent of queue) {
+      for (const id of spenders.get(spent) ?? []) bind(id)
+    }
+    return bound
   }
 
   private async collectMerkleProofOutputs(initialOutputs: Output[]): Promise<Output[]> {
@@ -4190,10 +4273,22 @@ export class Engine {
     }
 
     const graphOutputs = await this.collectMerkleProofOutputs(outputs)
-    const preparedUpdates = graphOutputs.map(output => ({
-      output,
-      beef: this.prepareMerkleProofUpdate(output, txid, proof)
-    }))
+    const evidence = graphOutputs.map(output => this.prepareMerkleProofUpdate(output, txid, proof))
+    const bound = this.bindMerkleProofDescendants(txid, evidence)
+    const preparedUpdates: Array<{ output: Output; beef: number[] }> = []
+    for (const item of evidence) {
+      if (item.found) {
+        preparedUpdates.push({ output: item.output, beef: item.transaction.toBEEF() })
+        continue
+      }
+      // A BEEF that ends at a proven spender of a bound transaction needs no
+      // update, unless an unproven transaction in it lacks a source: that BEEF
+      // is incomplete, whatever a proven branch elsewhere in it shows.
+      const behindProof = [...item.provenSpends].some(id => bound.has(id))
+      if (!behindProof || item.incomplete) {
+        throw new TypeError('Stored descendant BEEF does not contain the proven transaction')
+      }
+    }
     for (const update of preparedUpdates) {
       await this.storage.updateTransactionBEEF(update.output.txid, update.beef)
       update.output.beef = update.beef
