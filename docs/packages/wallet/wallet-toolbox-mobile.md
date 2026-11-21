@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+version: '2.19.0'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,33 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+## Key-linkage permission
+
+The 2.19.0 source candidate stays in version lockstep with the core and browser
+packages and publishes the same `WalletPermissionsManager`.
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is
+omitted it follows `seekPermissionsForKeyLinkageRevelation`, still the legacy
+combined default (`true`).
+
+Counterparty linkage reveals the root ECDH shared secret with a counterparty.
+Specific linkage reveals one per-invoice HMAC. Protocol ID strings and the
+reserved-protocol guard are unchanged. Prompts use
+`counterpartyLinkageRevelation` and `specificLinkageRevelation`.
+`ensureProtocolPermission` still accepts the legacy `linkageRevelation` usage.
+
+```ts
+import { WalletPermissionsManager } from '@bsv/wallet-toolbox-mobile'
+
+declare const wallet: ConstructorParameters<typeof WalletPermissionsManager>[0]
+new WalletPermissionsManager(wallet, 'wallet.example', {
+  seekPermissionsForCounterpartyKeyLinkageRevelation: true,
+  seekPermissionsForSpecificKeyLinkageRevelation: false
+})
+```
+
+No BRC-100 wire or stored-permission migration is required.
 
 ## Certificate pagination
 
