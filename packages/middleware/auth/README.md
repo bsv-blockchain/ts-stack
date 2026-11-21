@@ -1,6 +1,6 @@
 # @bsv/auth
 
-Patch candidate `0.1.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.1.9`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 Simple, secure wallet login for BSV apps. A client wallet signs a short-lived
 proof that it controls an identity key; the server verifies the signature,
