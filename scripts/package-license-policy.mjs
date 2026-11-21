@@ -8,12 +8,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url))
 export const REPOSITORY_ROOT = path.resolve(SCRIPT_DIRECTORY, '..')
-export const LICENSE_DECLARATION = 'SEE LICENSE IN LICENSE.txt'
-export const LICENSE_FILE = 'LICENSE.txt'
-export const LICENSE_VERSION = 6
-export const OCI_LICENSE_REFERENCE = `LicenseRef-Open-BSV-License-${LICENSE_VERSION}`
+export const LICENSE_DECLARATION = 'Apache-2.0'
+export const LICENSE_FILE = 'LICENSE'
+export const NOTICE_FILE = 'NOTICE'
+export const PATENTS_FILE = 'PATENTS'
+export const LICENSE_NAME = 'Apache License, Version 2.0'
+export const OCI_LICENSE_REFERENCE = 'Apache-2.0'
 export const EXPECTED_LICENSE_SHA256 =
-  'bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0'
+  'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30'
+export const EXPECTED_PATENTS_SHA256 =
+  '02988c67da2b43a9c2a566df2f3ff1376e7fa3eaed3562fa983d12f78a8cd8e0'
 
 const IGNORED_DIRECTORIES = new Set([
   '.cache',
@@ -29,7 +33,7 @@ const IGNORED_DIRECTORIES = new Set([
   'out'
 ])
 const LEGACY_LICENSE_FILES = [
-  'LICENSE',
+  'LICENSE.txt',
   'LICENSE.md',
   'license.md',
   'LICENCE',
@@ -73,30 +77,51 @@ function sha256(value) {
 
 function validateCanonicalLicense(root) {
   const canonicalPath = path.join(root, LICENSE_FILE)
-  if (!fs.existsSync(canonicalPath)) {
+  const noticePath = path.join(root, NOTICE_FILE)
+  const patentsPath = path.join(root, PATENTS_FILE)
+  if ([canonicalPath, noticePath, patentsPath].some(file => !fs.existsSync(file))) {
     return {
-      errors: [`${LICENSE_FILE} is missing from the repository root`],
-      canonical: null
+      errors: [LICENSE_FILE, NOTICE_FILE, PATENTS_FILE]
+        .filter(file => !fs.existsSync(path.join(root, file)))
+        .map(file => `${file} is missing from the repository root`),
+      canonical: null,
+      notice: null,
+      patents: null
     }
   }
 
   const canonical = fs.readFileSync(canonicalPath)
+  const notice = fs.readFileSync(noticePath)
+  const patents = fs.readFileSync(patentsPath)
   const actualHash = sha256(canonical)
   const errors = []
   if (actualHash !== EXPECTED_LICENSE_SHA256) {
     errors.push(
-      `${LICENSE_FILE} must be the exact Open BSV License Version ${LICENSE_VERSION} ` +
+      `${LICENSE_FILE} must be the exact ${LICENSE_NAME} ` +
         `text (${EXPECTED_LICENSE_SHA256}); received ${actualHash}`
     )
   }
-  return { errors, canonical }
+  const patentsHash = sha256(patents)
+  if (patentsHash !== EXPECTED_PATENTS_SHA256) {
+    errors.push(
+      `${PATENTS_FILE} must be the approved patent statement ` +
+        `(${EXPECTED_PATENTS_SHA256}); received ${patentsHash}`
+    )
+  }
+  return { errors, canonical, notice, patents }
 }
 
 function normalizeFilesAllowlist(files) {
   if (!Array.isArray(files)) return files
   return [
-    ...files.filter(entry => typeof entry !== 'string' || !LICENSE_ENTRY_PATTERN.test(entry)),
-    LICENSE_FILE
+    ...files.filter(
+      entry =>
+        typeof entry !== 'string' ||
+        (!LICENSE_ENTRY_PATTERN.test(entry) && entry !== NOTICE_FILE && entry !== PATENTS_FILE)
+    ),
+    LICENSE_FILE,
+    NOTICE_FILE,
+    PATENTS_FILE
   ]
 }
 
@@ -114,10 +139,11 @@ function synchronizeManifest(manifestPath) {
   writeJson(manifestPath, manifest)
 }
 
-function synchronizeLicenseFiles(directory, root, canonical) {
-  const projectLicensePath = path.join(directory, LICENSE_FILE)
-  if (projectLicensePath !== path.join(root, LICENSE_FILE)) {
-    fs.writeFileSync(projectLicensePath, canonical)
+function synchronizeLicenseFiles(directory, root, canonical, notice, patents) {
+  if (directory !== root) {
+    fs.writeFileSync(path.join(directory, LICENSE_FILE), canonical)
+    fs.writeFileSync(path.join(directory, NOTICE_FILE), notice)
+    fs.writeFileSync(path.join(directory, PATENTS_FILE), patents)
   }
   for (const legacyFile of LEGACY_LICENSE_FILES) {
     const legacyPath = path.join(directory, legacyFile)
@@ -138,13 +164,13 @@ function synchronizePackageLock(directory, root) {
 }
 
 export function synchronizePackageLicenses(root = REPOSITORY_ROOT) {
-  const { errors, canonical } = validateCanonicalLicense(root)
+  const { errors, canonical, notice, patents } = validateCanonicalLicense(root)
   if (errors.length > 0) throw new Error(errors.join('\n'))
 
   for (const manifestPath of discoverPackageManifests(root)) {
     const directory = path.dirname(manifestPath)
     synchronizeManifest(manifestPath)
-    synchronizeLicenseFiles(directory, root, canonical)
+    synchronizeLicenseFiles(directory, root, canonical, notice, patents)
     synchronizePackageLock(directory, root)
   }
 }
@@ -160,21 +186,35 @@ function validateFilesAllowlist(project, manifest) {
   const licenseEntries = manifest.files.filter(
     entry => typeof entry === 'string' && LICENSE_ENTRY_PATTERN.test(entry)
   )
-  if (licenseEntries.length === 1 && licenseEntries[0] === LICENSE_FILE) return []
+  const noticeEntries = manifest.files.filter(entry => entry === NOTICE_FILE)
+  const patentsEntries = manifest.files.filter(entry => entry === PATENTS_FILE)
+  if (
+    licenseEntries.length === 1 &&
+    licenseEntries[0] === LICENSE_FILE &&
+    noticeEntries.length === 1 &&
+    patentsEntries.length === 1
+  ) {
+    return []
+  }
   return [
-    `${project} files allowlist must contain exactly ${LICENSE_FILE} ` +
+    `${project} files allowlist must contain exactly ${LICENSE_FILE}, ${NOTICE_FILE} ` +
+      `and ${PATENTS_FILE} ` +
       'and no legacy license filename'
   ]
 }
 
-function validateLicenseCopy(project, directory, canonical) {
-  const projectLicensePath = path.join(directory, LICENSE_FILE)
-  if (!fs.existsSync(projectLicensePath)) {
-    return [`${project} is missing ${LICENSE_FILE}`]
-  }
-  if (fs.readFileSync(projectLicensePath).equals(canonical)) return []
+function validateCopy(project, directory, file, expected) {
+  const copyPath = path.join(directory, file)
+  if (!fs.existsSync(copyPath)) return [`${project} is missing ${file}`]
+  if (fs.readFileSync(copyPath).equals(expected)) return []
+  return [`${project}/${file} does not match the repository root ${file}`]
+}
+
+function validateLicenseCopy(project, directory, canonical, notice, patents) {
   return [
-    `${project}/${LICENSE_FILE} does not match the canonical Version ` + `${LICENSE_VERSION} text`
+    ...validateCopy(project, directory, LICENSE_FILE, canonical),
+    ...validateCopy(project, directory, NOTICE_FILE, notice),
+    ...validateCopy(project, directory, PATENTS_FILE, patents)
   ]
 }
 
@@ -196,7 +236,7 @@ function validatePackageLock(directory, root) {
 }
 
 export function validatePackageLicenses(root = REPOSITORY_ROOT) {
-  const { errors, canonical } = validateCanonicalLicense(root)
+  const { errors, canonical, notice, patents } = validateCanonicalLicense(root)
   if (!canonical) return errors
 
   for (const manifestPath of discoverPackageManifests(root)) {
@@ -206,7 +246,7 @@ export function validatePackageLicenses(root = REPOSITORY_ROOT) {
     errors.push(
       ...validateManifestDeclaration(project, manifest),
       ...validateFilesAllowlist(project, manifest),
-      ...validateLicenseCopy(project, directory, canonical),
+      ...validateLicenseCopy(project, directory, canonical, notice, patents),
       ...validateLegacyFiles(project, directory),
       ...validatePackageLock(directory, root)
     )
@@ -226,7 +266,7 @@ function main() {
   }
   console.log(
     `Verified ${discoverPackageManifests().length} package manifests against ` +
-      `Open BSV License Version ${LICENSE_VERSION}.`
+      `the ${LICENSE_NAME}.`
   )
 }
 

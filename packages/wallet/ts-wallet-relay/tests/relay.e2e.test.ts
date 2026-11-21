@@ -127,14 +127,26 @@ describe('WalletRelayService E2E', () => {
       expect(body.status).toBe('pending')
     })
 
-    it('GET /api/session/:id returns the session status and relay URL', async () => {
+    it('GET /api/session/:id returns the session status, relay URL, and QR pairing tuple', async () => {
       const created = await service.createSession()
+      const parsed = parsePairingUri(created.pairingUri)
+      expect(parsed.error).toBeNull()
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`)
       expect(res.ok).toBe(true)
-      const body = (await res.json()) as { sessionId: string; status: string; relay: string }
+      const body = (await res.json()) as {
+        sessionId: string
+        status: string
+        relay: string
+        topic?: string
+        backendIdentityKey?: string
+        protocolID?: string
+      }
       expect(body.sessionId).toBe(created.sessionId)
       expect(body.status).toBe('pending')
       expect(body.relay).toMatch(/^ws:\/\//)
+      expect(body.topic).toBe(parsed.params!.topic)
+      expect(body.backendIdentityKey).toBe(parsed.params!.backendIdentityKey)
+      expect(body.protocolID).toBe(parsed.params!.protocolID)
     })
 
     it('GET /api/session/:id returns 404 for an unknown id', async () => {

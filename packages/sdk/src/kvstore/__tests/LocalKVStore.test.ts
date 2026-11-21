@@ -269,13 +269,6 @@ describe('localKVStore', () => {
 
   // --- Set Method Tests ---
   describe('set', () => {
-    let _pushDropInstance: PushDrop // To access the instance methods
-
-    beforeEach(() => {
-      // Get the mock instance that will be created by `new PushDrop()`
-      pushDropInstance = new (PushDrop as any)()
-    })
-
     it('should create a new encrypted output if none exists', async () => {
       const valueArray = Array.from(testRawValueBuffer)
       const encryptedArray = Array.from(testEncryptedValue)
@@ -689,13 +682,6 @@ describe('localKVStore', () => {
 
   // --- Remove Method Tests ---
   describe('remove', () => {
-    let _pushDropInstance: PushDrop // To access the instance methods
-
-    beforeEach(() => {
-      // Get the mock instance that will be created by `new PushDrop()`
-      pushDropInstance = new (PushDrop as any)()
-    })
-
     it('should do nothing and return void if key does not exist', async () => {
       mockWallet.listOutputs.mockResolvedValue({ outputs: [], totalOutputs: 0, BEEF: undefined })
 

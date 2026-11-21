@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { jest as jestRuntime } from '@jest/globals'
 
@@ -224,69 +225,73 @@ describe('reorg stream parser properties', () => {
     )
   })
 
-  test('delivers every valid event once across arbitrary network chunk boundaries', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(
-          fc.record({
-            ancestorHeight: fc.integer({ min: 0, max: 10_000_000 }),
-            tipDelta: fc.integer({ min: 0, max: 1_000 }),
-            hashes: fc.array(hashHex, { maxLength: 5 })
-          }),
-          { minLength: 1, maxLength: 8 }
-        ),
-        fc.array(fc.integer({ min: 1, max: 80 }), { minLength: 1, maxLength: 20 }),
-        async (events, chunkSizes) => {
-          const expected = events.map(({ ancestorHeight, tipDelta, hashes }) => ({
-            orphanedBlockHashes: hashes,
-            rebuildFromHeight: ancestorHeight + 1,
-            newTipHeight: ancestorHeight + tipDelta
-          }))
-          const wire = events
-            .map(({ ancestorHeight, tipDelta, hashes }) => {
-              const event = {
-                orphanedHashes: hashes,
-                commonAncestor: { height: ancestorHeight },
-                newTip: { height: ancestorHeight + tipDelta }
-              }
-              return `data: ${JSON.stringify(event)}\n\n`
+  test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+    'delivers every valid event once across arbitrary network chunk boundaries (property $path, $numRuns cases)',
+    async propertyBatch => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(
+            fc.record({
+              ancestorHeight: fc.integer({ min: 0, max: 10_000_000 }),
+              tipDelta: fc.integer({ min: 0, max: 1_000 }),
+              hashes: fc.array(hashHex, { maxLength: 5 })
+            }),
+            { minLength: 1, maxLength: 8 }
+          ),
+          fc.array(fc.integer({ min: 1, max: 80 }), { minLength: 1, maxLength: 20 }),
+          async (events, chunkSizes) => {
+            const expected = events.map(({ ancestorHeight, tipDelta, hashes }) => ({
+              orphanedBlockHashes: hashes,
+              rebuildFromHeight: ancestorHeight + 1,
+              newTipHeight: ancestorHeight + tipDelta
+            }))
+            const wire = events
+              .map(({ ancestorHeight, tipDelta, hashes }) => {
+                const event = {
+                  orphanedHashes: hashes,
+                  commonAncestor: { height: ancestorHeight },
+                  newTip: { height: ancestorHeight + tipDelta }
+                }
+                return `data: ${JSON.stringify(event)}\n\n`
+              })
+              .join('')
+            const response = streamResponse(chunkText(wire, chunkSizes))
+            const received: typeof expected = []
+            let connections = 0
+            let resolveComplete: () => void
+            const complete = new Promise<void>(resolve => {
+              resolveComplete = resolve
             })
-            .join('')
-          const response = streamResponse(chunkText(wire, chunkSizes))
-          const received: typeof expected = []
-          let connections = 0
-          let resolveComplete: () => void
-          const complete = new Promise<void>(resolve => {
-            resolveComplete = resolve
-          })
-          const fetchImpl = jestApi.fn(async () => response) as unknown as typeof fetch
-          const adapter = new ReorgSseAdapter({
-            url: 'https://arcade.example/reorg',
-            fetchImpl,
-            reconnectDelayMs: 0,
-            onConnect: async () => {
-              connections += 1
-            },
-            onReorg: async input => {
-              received.push(input)
-              if (received.length === expected.length) {
-                adapter.stop()
-                resolveComplete()
+            const fetchImpl = jestApi.fn(async () => response) as unknown as typeof fetch
+            const adapter = new ReorgSseAdapter({
+              url: 'https://arcade.example/reorg',
+              fetchImpl,
+              reconnectDelayMs: 0,
+              onConnect: async () => {
+                connections += 1
+              },
+              onReorg: async input => {
+                received.push(input)
+                if (received.length === expected.length) {
+                  adapter.stop()
+                  resolveComplete()
+                }
               }
-            }
-          })
+            })
 
-          adapter.start()
-          await complete
-          adapter.start()
+            adapter.start()
+            await complete
+            adapter.start()
 
-          expect(received).toEqual(expected)
-          expect(connections).toBe(1)
-          expect(fetchImpl).toHaveBeenCalledTimes(1)
-        }
+            expect(received).toEqual(expected)
+            expect(connections).toBe(1)
+            expect(fetchImpl).toHaveBeenCalledTimes(1)
+          }
+        ),
+        propertyBatch
       )
-    )
-  })
+    }
+  )
 
   test('reconnects and catches up after HTTP, malformed-frame, and handler failures', async () => {
     const warn = jestApi.fn()

@@ -15,7 +15,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 function binaryResponse(data: Uint8Array): Response {
-  return new Response(data, {
+  return new Response(data.slice().buffer, {
     status: 200,
     headers: { 'Content-Type': 'application/octet-stream' }
   })
@@ -340,7 +340,7 @@ describe('GoChaintracksServiceClient', () => {
       requests++
       const event = requests === 1 ? first : second
       return sseResponse([`data: ${JSON.stringify(event)}\r\n\r\n`])
-    }) as unknown as typeof fetch
+    })
     const client = new GoChaintracksServiceClient('main', 'https://arcade.example/v2', {
       fetch: fetchMock,
       reconnectWaitMsecs: 1,
@@ -365,7 +365,7 @@ describe('GoChaintracksServiceClient', () => {
       requests++
       if (requests === 1) throw new Error('temporary stream failure')
       return sseResponse([`data: ${JSON.stringify({ depth: 1, oldTip, newTip, deactivatedHeaders: [oldTip] })}\n\n`])
-    }) as unknown as typeof fetch
+    })
     const client = new GoChaintracksServiceClient('main', 'https://arcade.example/v2', {
       fetch: fetchMock,
       reconnectWaitMsecs: 1,
@@ -415,7 +415,8 @@ describe('GoChaintracksServiceClient', () => {
     }) as any
     let consume!: (payload: unknown, signal: AbortSignal) => Promise<void>
     jest.spyOn(client, 'subscribe').mockImplementation(async (_type, _path, onPayload) => {
-      consume = onPayload
+      if (typeof onPayload !== 'function') throw new Error('fixture subscription callback is not callable')
+      consume = (payload, signal) => onPayload(payload, signal)
       return 'reorg-test'
     })
     const listener = jest.fn()
