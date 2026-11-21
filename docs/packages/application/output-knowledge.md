@@ -4,9 +4,9 @@ title: '@bsv/output-knowledge'
 kind: package
 domain: application
 npm: '@bsv/output-knowledge'
-version: '0.1.0'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '0.1.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge'
 status: experimental

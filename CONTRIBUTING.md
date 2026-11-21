@@ -268,6 +268,22 @@ artifact does not require a cosmetic version bump.
 Use the root pull request template and keep the PR draft while work or evidence
 is incomplete.
 
+Every PR, including automated dependency PRs, needs exactly one visible
+`release-note` JSON fence in its description. Record affected npm packages and
+their SemVer impacts, a plain-language consumer summary, and migration steps or
+the exact string `none`. For repository-only, documentation-only or service-only
+changes with no npm release impact, use `"packages": "none"` and
+`"migration": "none"`, and explain the change in the summary. See the
+[schema and examples](./docs/about/versioning.md#pull-request-release-note).
+Maintainers add the block to automated PRs when the bot cannot supply it.
+
+CI validates presence and structure on PR creation, updates, description edits
+and reruns. Reviewers assess package completeness, SemVer correctness, consumer
+usefulness and migration accuracy. Use the existing affected-work plan above to
+identify packages and dependents; path detection alone does not decide release
+impact. Reuse the note's prose in the existing release ledger/changelog when
+appropriate; the description does not replace those publication contracts.
+
 Before pushing, self-review the complete diff for:
 
 - correctness and root cause;

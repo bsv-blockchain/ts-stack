@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { appendFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -30,8 +31,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 const name = fc.array(fc.constantFrom('x', 'é', '中', '😀'), { minLength: 1, maxLength: 8 }).map(v => v.join(''))
@@ -203,204 +202,228 @@ async function checkpoint(trx: Knex.Transaction, fromRow: number, done: boolean,
 // Actual independently authenticated staging and source-owned native schema only.
 // Each generated native transaction rolls back. This component source does not
 // establish full13-table merge, activation, process-loss or provider qualification.
-test('generated actual authenticated headers create one-use native source checkpoints without replacing the primary', async () => {
-  await open(true)
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(fc.integer({ min: 0, max: 256 }), async reserved => {
-      const trx = await target.writer.transaction()
-      try {
-        const allowance = budget()
-        allowance.remaining -= reserved
-        const { value } = await checkpoint(trx, 0, false, allowance)
-        expect(allowance.remaining).toBeLessThan(allowance.maximum - reserved)
-        await value.assert(trx)
-        await value.apply(trx)
-        const rows = await trx('sync_states')
-        expect(rows).toHaveLength(1)
-        expect(rows[0]).toMatchObject({
-          userId: 7,
-          storageIdentityKey: header.sourceStorage.storageIdentityKey,
-          storageName: header.sourceStorage.storageName
-        })
-        const map = JSON.parse(rows[0].syncMap)
-        expect(Object.keys(map).sort()).toEqual(Object.keys(createSyncMap()).sort())
-        for (const item of Object.values(map) as Array<{ count: number; idMap: object }>) {
-          expect(item.count).toBe(0)
-          expect(item.idMap).toEqual({})
-        }
-        expect((await trx('users').where({ userId: 7 }).first()).activeStorage).toBe('local-primary')
-        await expect(value.apply(trx)).rejects.toThrow('already consumed')
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-test('generated renamed source retains its prior identity reference and map while stale prior state refuses', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(name, fc.integer({ min: 0, max: 12 }), fc.boolean(), async (oldName, count, remove) => {
-      const trx = await target.writer.transaction()
-      try {
-        await insertSource(trx, oldName, count)
-        const prior = await trx('sync_states').first(),
-          { value } = await checkpoint(trx, 0, false)
-        await value.assert(trx)
-        await value.apply(trx)
-        const saved = await trx('sync_states').first()
-        expect(saved.syncStateId).toBe(prior.syncStateId)
-        expect(saved.refNum).toBe('retained-ref')
-        expect(saved.storageName).toBe(header.sourceStorage.storageName)
-        expect(JSON.parse(saved.syncMap).outputBasket.count).toBe(count)
-        const next = await checkpoint(trx, 0, false)
-        if (remove) await trx('sync_states').where({ syncStateId: saved.syncStateId }).delete()
-        else {
-          const map = JSON.parse(saved.syncMap)
-          map.outputBasket.count += 1
-          await trx('sync_states')
-            .where({ syncStateId: saved.syncStateId })
-            .update({ syncMap: JSON.stringify(map) })
-        }
-        await expect(next.value.assert(trx)).rejects.toThrow('checkpoint differs')
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-test('generated actual durable ID mapping increments or finalizes the bounded source map and rejects prior mapping conflicts', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(
-      fc.integer({ min: 1, max: 1000 }),
-      fc.integer({ min: 0, max: 12 }),
-      fc.boolean(),
-      fc.boolean(),
-      async (localId, count, done, conflict) => {
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated actual authenticated headers create one-use native source checkpoints without replacing the primary (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open(true)
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 0, max: 256 }), async reserved => {
         const trx = await target.writer.transaction()
         try {
-          const incoming = await store().withAuthenticatedImportRead(async (_json, metadata, reader) => {
-            const page = await prepareBrc38ImportPage(reader, metadata, admission, 2)
-            return await page.consume(async data => {
-              if (data.kind !== 'table' || data.table !== 'outputBaskets')
-                throw new Error('Actual basket page required')
-              return data.rows[0]
-            })
-          })
-          await insertSource(
-            trx,
-            header.sourceStorage.storageName,
-            count,
-            incoming.basketId,
-            conflict ? localId + 1 : localId
-          )
-          const refs = [{ entity: 'outputBasket' as const, incomingId: incoming.basketId, required: false }],
-            loaded = await loadBrc38ImportIdMap(trx, admission.scope, refs)
-          loaded.map.outputBasket.idMap[incoming.basketId] = localId
-          await loaded.persist()
-          const { value } = await checkpoint(trx, 2, done)
+          const allowance = budget()
+          allowance.remaining -= reserved
+          const { value } = await checkpoint(trx, 0, false, allowance)
+          expect(allowance.remaining).toBeLessThan(allowance.maximum - reserved)
           await value.assert(trx)
-          if (conflict) await expect(value.apply(trx)).rejects.toThrow('checkpoint differs')
-          else {
-            await value.apply(trx)
-            const saved = await trx('sync_states').first(),
-              map = JSON.parse(saved.syncMap)
-            expect(map.outputBasket.idMap[incoming.basketId]).toBe(localId)
-            expect(map.outputBasket.count).toBe(done ? 0 : count + 1)
-            expect(new Date(map.outputBasket.maxUpdated_at).getTime()).toBe(incoming.updated_at.getTime())
-            if (done) {
-              for (const item of Object.values(map) as Array<{ count: number }>) expect(item.count).toBe(0)
-              expect(target.storage.validateDate(saved.when).getTime()).toBe(incoming.updated_at.getTime())
-            }
+          await value.apply(trx)
+          const rows = await trx('sync_states')
+          expect(rows).toHaveLength(1)
+          expect(rows[0]).toMatchObject({
+            userId: 7,
+            storageIdentityKey: header.sourceStorage.storageIdentityKey,
+            storageName: header.sourceStorage.storageName
+          })
+          const map = JSON.parse(rows[0].syncMap)
+          expect(Object.keys(map).sort()).toEqual(Object.keys(createSyncMap()).sort())
+          for (const item of Object.values(map) as Array<{ count: number; idMap: object }>) {
+            expect(item.count).toBe(0)
+            expect(item.idMap).toEqual({})
           }
+          expect((await trx('users').where({ userId: 7 }).first()).activeStorage).toBe('local-primary')
+          await expect(value.apply(trx)).rejects.toThrow('already consumed')
         } finally {
           await trx.rollback()
         }
         expect(await state()).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 30000)
-test('generated changed destination user refuses its original prepared header update and preserves the outer transaction', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(name, fc.boolean(), async (suffix, identity) => {
-      const trx = await target.writer.transaction()
-      try {
-        const { value } = await checkpoint(trx, 0, false)
-        await trx('users')
-          .where({ userId: 7 })
-          .update(identity ? { identityKey: 'changed-' + suffix } : { activeStorage: 'changed-' + suffix })
-        const changed = await trx('users').first()
-        await value.assert(trx)
-        await expect(value.apply(trx)).rejects.toThrow('checkpoint differs')
-        expect(await trx('users').first()).toEqual(changed)
-        expect(await trx('sync_states')).toEqual([])
-        await expect(value.apply(trx)).rejects.toThrow('already consumed')
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-test('generated cancellation after real preparation consumes apply authority and leaves durable checkpoint effects unchanged', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(name, fc.boolean(), async (message, prior) => {
-      const trx = await target.writer.transaction()
-      try {
-        if (prior) await insertSource(trx, header.sourceStorage.storageName)
-        const controller = new AbortController(),
-          { value } = await checkpoint(trx, 0, false, budget(controller.signal)),
-          rows = await trx('sync_states')
-        const reason = new Error(message)
-        controller.abort(reason)
-        await expect(value.assert(trx)).rejects.toBe(reason)
-        await expect(value.apply(trx)).rejects.toBe(reason)
-        expect(await trx('sync_states')).toEqual(rows)
-        await expect(value.apply(trx)).rejects.toThrow('already consumed')
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated renamed source retains its prior identity reference and map while stale prior state refuses (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(name, fc.integer({ min: 0, max: 12 }), fc.boolean(), async (oldName, count, remove) => {
+        const trx = await target.writer.transaction()
+        try {
+          await insertSource(trx, oldName, count)
+          const prior = await trx('sync_states').first(),
+            { value } = await checkpoint(trx, 0, false)
+          await value.assert(trx)
+          await value.apply(trx)
+          const saved = await trx('sync_states').first()
+          expect(saved.syncStateId).toBe(prior.syncStateId)
+          expect(saved.refNum).toBe('retained-ref')
+          expect(saved.storageName).toBe(header.sourceStorage.storageName)
+          expect(JSON.parse(saved.syncMap).outputBasket.count).toBe(count)
+          const next = await checkpoint(trx, 0, false)
+          if (remove) await trx('sync_states').where({ syncStateId: saved.syncStateId }).delete()
+          else {
+            const map = JSON.parse(saved.syncMap)
+            map.outputBasket.count += 1
+            await trx('sync_states')
+              .where({ syncStateId: saved.syncStateId })
+              .update({ syncMap: JSON.stringify(map) })
+          }
+          await expect(next.value.assert(trx)).rejects.toThrow('checkpoint differs')
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated actual durable ID mapping increments or finalizes the bounded source map and rejects prior mapping conflicts (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 1000 }),
+        fc.integer({ min: 0, max: 12 }),
+        fc.boolean(),
+        fc.boolean(),
+        async (localId, count, done, conflict) => {
+          const trx = await target.writer.transaction()
+          try {
+            const incoming = await store().withAuthenticatedImportRead(async (_json, metadata, reader) => {
+              const page = await prepareBrc38ImportPage(reader, metadata, admission, 2)
+              return await page.consume(async data => {
+                if (data.kind !== 'table' || data.table !== 'outputBaskets')
+                  throw new Error('Actual basket page required')
+                return data.rows[0]
+              })
+            })
+            await insertSource(
+              trx,
+              header.sourceStorage.storageName,
+              count,
+              incoming.basketId,
+              conflict ? localId + 1 : localId
+            )
+            const refs = [{ entity: 'outputBasket' as const, incomingId: incoming.basketId, required: false }],
+              loaded = await loadBrc38ImportIdMap(trx, admission.scope, refs)
+            loaded.map.outputBasket.idMap[incoming.basketId] = localId
+            await loaded.persist()
+            const { value } = await checkpoint(trx, 2, done)
+            await value.assert(trx)
+            if (conflict) await expect(value.apply(trx)).rejects.toThrow('checkpoint differs')
+            else {
+              await value.apply(trx)
+              const saved = await trx('sync_states').first(),
+                map = JSON.parse(saved.syncMap)
+              expect(map.outputBasket.idMap[incoming.basketId]).toBe(localId)
+              expect(map.outputBasket.count).toBe(done ? 0 : count + 1)
+              expect(new Date(map.outputBasket.maxUpdated_at).getTime()).toBe(incoming.updated_at.getTime())
+              if (done) {
+                for (const item of Object.values(map) as Array<{ count: number }>) expect(item.count).toBe(0)
+                expect(target.storage.validateDate(saved.when).getTime()).toBe(incoming.updated_at.getTime())
+              }
+            }
+          } finally {
+            await trx.rollback()
+          }
+          expect(await state()).toEqual(before)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated changed destination user refuses its original prepared header update and preserves the outer transaction (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(name, fc.boolean(), async (suffix, identity) => {
+        const trx = await target.writer.transaction()
+        try {
+          const { value } = await checkpoint(trx, 0, false)
+          await trx('users')
+            .where({ userId: 7 })
+            .update(identity ? { identityKey: 'changed-' + suffix } : { activeStorage: 'changed-' + suffix })
+          const changed = await trx('users').first()
+          await value.assert(trx)
+          await expect(value.apply(trx)).rejects.toThrow('checkpoint differs')
+          expect(await trx('users').first()).toEqual(changed)
+          expect(await trx('sync_states')).toEqual([])
+          await expect(value.apply(trx)).rejects.toThrow('already consumed')
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated cancellation after real preparation consumes apply authority and leaves durable checkpoint effects unchanged (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(name, fc.boolean(), async (message, prior) => {
+        const trx = await target.writer.transaction()
+        try {
+          if (prior) await insertSource(trx, header.sourceStorage.storageName)
+          const controller = new AbortController(),
+            { value } = await checkpoint(trx, 0, false, budget(controller.signal)),
+            rows = await trx('sync_states')
+          const reason = new Error(message)
+          controller.abort(reason)
+          await expect(value.assert(trx)).rejects.toBe(reason)
+          await expect(value.apply(trx)).rejects.toBe(reason)
+          expect(await trx('sync_states')).toEqual(rows)
+          await expect(value.apply(trx)).rejects.toThrow('already consumed')
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
 
-test('generated original small decoded budgets refuse existing checkpoints without durable effects or writable-phase leaks', async () => {
-  await open()
-  const before = await state()
-  await fc.assert(
-    fc.asyncProperty(name, fc.integer({ min: 32768, max: 65536 }), async (oldName, maximum) => {
-      const trx = await target.writer.transaction()
-      try {
-        await insertSource(trx, oldName)
-        const original = await trx('sync_states').orderBy('syncStateId'),
-          allowance: Brc38ImportDecodedBudget = { maximum, remaining: maximum }
-        await expect(checkpoint(trx, 0, false, allowance)).rejects.toThrow('allocation budget')
-        expect(allowance.remaining).toBeGreaterThanOrEqual(0)
-        expect(allowance.remaining).toBeLessThanOrEqual(maximum)
-        expect(await trx('sync_states').orderBy('syncStateId')).toEqual(original)
-        expect(await trx('brc38_import_ids')).toEqual([])
-        expect((await trx.raw('PRAGMA query_only'))[0].query_only).toBe(0)
-      } finally {
-        await trx.rollback()
-      }
-      expect(await state()).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated original small decoded budgets refuse existing checkpoints without durable effects or writable-phase leaks (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await open()
+    const before = await state()
+    await fc.assert(
+      fc.asyncProperty(name, fc.integer({ min: 32768, max: 65536 }), async (oldName, maximum) => {
+        const trx = await target.writer.transaction()
+        try {
+          await insertSource(trx, oldName)
+          const original = await trx('sync_states').orderBy('syncStateId'),
+            allowance: Brc38ImportDecodedBudget = { maximum, remaining: maximum }
+          await expect(checkpoint(trx, 0, false, allowance)).rejects.toThrow('allocation budget')
+          expect(allowance.remaining).toBeGreaterThanOrEqual(0)
+          expect(allowance.remaining).toBeLessThanOrEqual(maximum)
+          expect(await trx('sync_states').orderBy('syncStateId')).toEqual(original)
+          expect(await trx('brc38_import_ids')).toEqual([])
+          expect((await trx.raw('PRAGMA query_only'))[0].query_only).toBe(0)
+        } finally {
+          await trx.rollback()
+        }
+        expect(await state()).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)

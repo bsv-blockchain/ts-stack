@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../../test/utils/property-test-batches.cjs'
 import { migrateBeforeSnapshotJournal } from '../../../../test/utils/snapshotJournalHistoricalFixture'
 import fc from 'fast-check'
 import { knex, type Knex } from 'knex'
@@ -406,67 +407,70 @@ describe('SnapshotJournalPage', () => {
     }
   })
 
-  test('generated bounded pages equal an independent exact integer and byte-order oracle', async () => {
-    const k = await database()
-    try {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.uniqueArray(
-            fc.record({
-              userId: fc.integer({ min: 1, max: 2 }),
-              tableId: fc.constantFrom(3, 12),
-              id1: fc.integer({ min: 1, max: 8 }),
-              id2: fc.integer({ min: 0, max: 3 }),
-              exactText: fc.constantFrom('', 'a', 'A', 'a ', 'é', '😀', 'a\0b'),
-              offset: fc.integer({ min: 0, max: 11 }),
-              present: fc.boolean()
-            }),
-            {
-              maxLength: 40,
-              selector: row => JSON.stringify([row.userId, row.tableId, row.id1, row.id2, row.exactText])
+  test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+    'generated bounded pages equal an independent exact integer and byte-order oracle (property $path, $numRuns cases)',
+    async propertyBatch => {
+      const k = await database()
+      try {
+        await fc.assert(
+          fc.asyncProperty(
+            fc.uniqueArray(
+              fc.record({
+                userId: fc.integer({ min: 1, max: 2 }),
+                tableId: fc.constantFrom(3, 12),
+                id1: fc.integer({ min: 1, max: 8 }),
+                id2: fc.integer({ min: 0, max: 3 }),
+                exactText: fc.constantFrom('', 'a', 'A', 'a ', 'é', '😀', 'a\0b'),
+                offset: fc.integer({ min: 0, max: 11 }),
+                present: fc.boolean()
+              }),
+              {
+                maxLength: 40,
+                selector: row => JSON.stringify([row.userId, row.tableId, row.id1, row.id2, row.exactText])
+              }
+            ),
+            fc.integer({ min: 1, max: 6 }),
+            async (records, limit) => {
+              await k('snapshot_journal_scope').delete()
+              const rows = records.map(({ offset, present, ...row }) => ({
+                ...row,
+                revision: rev(String(base + BigInt(offset))),
+                present: Number(present)
+              }))
+              if (rows.length) await k('snapshot_journal_scope').insert(rows)
+              const actual = []
+              let after: SnapshotJournalPosition | undefined
+              for (let pageIndex = 0; pageIndex <= rows.length; pageIndex++) {
+                const page = await readSnapshotJournalMetadataPage(k, { ...interval, limit, after })
+                expect(page.examined).toBeLessThanOrEqual(limit)
+                actual.push(...page.rows)
+                if (page.complete) break
+                after = page.after
+              }
+              expect(actual).toEqual(
+                rows
+                  .filter(
+                    row =>
+                      row.tableId === 12 &&
+                      row.userId === 1 &&
+                      BigInt(row.revision) > base &&
+                      BigInt(row.revision) <= base + 10n
+                  )
+                  .sort(compare)
+                  .map(({ tableId: _table, userId: _user, present, ...row }) => ({
+                    ...row,
+                    present: present === 1
+                  }))
+              )
             }
           ),
-          fc.integer({ min: 1, max: 6 }),
-          async (records, limit) => {
-            await k('snapshot_journal_scope').delete()
-            const rows = records.map(({ offset, present, ...row }) => ({
-              ...row,
-              revision: rev(String(base + BigInt(offset))),
-              present: Number(present)
-            }))
-            if (rows.length) await k('snapshot_journal_scope').insert(rows)
-            const actual = []
-            let after: SnapshotJournalPosition | undefined
-            for (let pageIndex = 0; pageIndex <= rows.length; pageIndex++) {
-              const page = await readSnapshotJournalMetadataPage(k, { ...interval, limit, after })
-              expect(page.examined).toBeLessThanOrEqual(limit)
-              actual.push(...page.rows)
-              if (page.complete) break
-              after = page.after
-            }
-            expect(actual).toEqual(
-              rows
-                .filter(
-                  row =>
-                    row.tableId === 12 &&
-                    row.userId === 1 &&
-                    BigInt(row.revision) > base &&
-                    BigInt(row.revision) <= base + 10n
-                )
-                .sort(compare)
-                .map(({ tableId: _table, userId: _user, present, ...row }) => ({
-                  ...row,
-                  present: present === 1
-                }))
-            )
-          }
-        ),
-        propertyParameters
-      )
-    } finally {
-      await k.destroy()
+          propertyBatch
+        )
+      } finally {
+        await k.destroy()
+      }
     }
-  })
+  )
 
   test.each(['oversized response', 'at lower bound', 'above upper bound', 'out of order', 'null text'])(
     'driver response integrity rejects %s before returning a page',
@@ -755,13 +759,14 @@ describe('SnapshotJournalSqliteObservers', () => {
               }
             }
           ),
-          propertyParameters
+          { ...propertyParameters, timeout: 5000 }
         )
       } finally {
         await k.destroy()
       }
     },
-    60000
+    // These generated transitions intentionally build on one prior database state.
+    Math.min(2147483647, Math.max(60000, propertyParameters.numRuns * 200))
   )
 
   test.each([false, true].flatMap(reverse => [false, true].map(recursive => ({ reverse, recursive }))))(
@@ -1015,125 +1020,128 @@ describe('SnapshotJournalSqliteObservers', () => {
 
 // The receipt store's model is independent of SQL affected-row counts, database
 // snapshots and the implementation's parser. It exercises actual SQLite commits.
-test('bounded receipt schedules preserve exact committed identity, expiry, floor and capacity', async () => {
-  const Receipt = await import('./SnapshotJournalReceipt')
-  const ArchiveClock = await import('../archive/SnapshotArchiveSql')
-  const k = knex({
-    client: 'better-sqlite3',
-    connection: { filename: ':memory:' },
-    useNullAsDefault: true,
-    pool: { min: 1, max: 1 }
-  })
-  let clock = 1000000
-  const now = jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockImplementation(async () => clock)
-  try {
-    await k.raw('PRAGMA busy_timeout=0')
-    for (const sql of Receipt.snapshotJournalReceiptDdl(k)) await k.raw(sql)
-    await k('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 3, receiptLifetimeMs: 1000 })
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(
-          fc.record({
-            kind: fc.integer({ min: 0, max: 4 }),
-            key: fc.integer({ min: 1, max: 8 }),
-            other: fc.boolean(),
-            rollback: fc.boolean(),
-            step: fc.integer({ min: 0, max: 80 })
-          }),
-          { minLength: 1, maxLength: 32 }
+test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'bounded receipt schedules preserve exact committed identity, expiry, floor and capacity (property $path, $numRuns cases)',
+  async propertyBatch => {
+    const Receipt = await import('./SnapshotJournalReceipt')
+    const ArchiveClock = await import('../archive/SnapshotArchiveSql')
+    const k = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+    let clock = 1000000
+    const now = jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockImplementation(async () => clock)
+    try {
+      await k.raw('PRAGMA busy_timeout=0')
+      for (const sql of Receipt.snapshotJournalReceiptDdl(k)) await k.raw(sql)
+      await k('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 3, receiptLifetimeMs: 1000 })
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(
+            fc.record({
+              kind: fc.integer({ min: 0, max: 4 }),
+              key: fc.integer({ min: 1, max: 8 }),
+              other: fc.boolean(),
+              rollback: fc.boolean(),
+              step: fc.integer({ min: 0, max: 80 })
+            }),
+            { minLength: 1, maxLength: 32 }
+          ),
+          async commands => {
+            clock = 1000000
+            let floor = 0n
+            const model = new Map<
+              string,
+              { requestId: string; binding: string; highWater: string; floor: string; expiresAt: number }
+            >()
+            await k('snapshot_journal_receipts').delete()
+            await k('snapshot_journal_retention').update({ floor: '0' })
+            const binding = {
+              backend: '11'.repeat(32),
+              epoch: '12345678-1234-4234-9234-123456789012',
+              source: '22'.repeat(32),
+              schema: '33'.repeat(32),
+              storageIdentity: 'synthetic-receipt-model',
+              identityKey: '02' + '44'.repeat(32),
+              userId: 1,
+              chain: 'test'
+            }
+            const rollback = new Error('model rollback')
+            for (const command of commands) {
+              const high = 9007199254740992n + BigInt(command.key)
+              const request = {
+                requestId: command.key.toString(16).padStart(64, '0'),
+                highWater: snapshotJournalRevision(high.toString()),
+                expiresAt: 1000100 + command.key * 20
+              }
+              const owner = { ...binding, userId: command.other ? 2 : 1 }
+              const digest = Receipt.snapshotJournalReceiptBinding(owner)
+              const prior = model.get(request.requestId)
+              async function recordCommand() {
+                const valid =
+                  request.expiresAt > clock &&
+                  high >= floor &&
+                  (prior === undefined ? model.size < 3 : prior.binding === digest)
+                const result = { ...request, binding: digest, floor: floor.toString() }
+                const operation = k.transaction(async t => {
+                  const value = await Receipt.recordSnapshotJournalReceipt(t, owner, request)
+                  if (command.rollback) throw rollback
+                  return value
+                })
+                if (!valid || command.rollback) await expect(operation).rejects.toThrow()
+                else {
+                  await expect(operation).resolves.toEqual(prior ?? result)
+                  if (prior === undefined) model.set(request.requestId, result)
+                }
+              }
+              async function readCommand() {
+                const valid =
+                  prior !== undefined && prior.binding === digest && request.expiresAt > clock && high >= floor
+                const operation = k.transaction(t => Receipt.readSnapshotJournalReceipt(t, owner, request))
+                if (valid) await expect(operation).resolves.toEqual(prior)
+                else await expect(operation).rejects.toThrow()
+              }
+              async function collectCommand() {
+                const removed = [...model.values()].filter(row => row.expiresAt <= clock)
+                const operation = k.transaction(async t => {
+                  expect(await Receipt.collectSnapshotJournalReceipts(t)).toBe(removed.length)
+                  if (command.rollback) throw rollback
+                })
+                if (command.rollback) await expect(operation).rejects.toThrow('model rollback')
+                else {
+                  await operation
+                  for (const row of removed) model.delete(row.requestId)
+                }
+              }
+              async function advanceTime() {
+                clock += command.step
+              }
+              async function advanceFloor() {
+                const next = high > floor ? high : floor
+                await k.transaction(async t => {
+                  await t('snapshot_journal_retention').update({ floor: next.toString() })
+                  if (command.rollback) await t.rollback()
+                })
+                if (!command.rollback) floor = next
+              }
+              if (command.kind === 0) await recordCommand()
+              else if (command.kind === 1) await readCommand()
+              else if (command.kind === 2) await collectCommand()
+              else if (command.kind === 3) await advanceTime()
+              else await advanceFloor()
+              const rows = await k('snapshot_journal_receipts').select('*').orderBy('requestId')
+              expect(rows).toEqual([...model.values()].sort((a, b) => a.requestId.localeCompare(b.requestId)))
+              expect(rows.length).toBeLessThanOrEqual(3)
+            }
+          }
         ),
-        async commands => {
-          clock = 1000000
-          let floor = 0n
-          const model = new Map<
-            string,
-            { requestId: string; binding: string; highWater: string; floor: string; expiresAt: number }
-          >()
-          await k('snapshot_journal_receipts').delete()
-          await k('snapshot_journal_retention').update({ floor: '0' })
-          const binding = {
-            backend: '11'.repeat(32),
-            epoch: '12345678-1234-4234-9234-123456789012',
-            source: '22'.repeat(32),
-            schema: '33'.repeat(32),
-            storageIdentity: 'synthetic-receipt-model',
-            identityKey: '02' + '44'.repeat(32),
-            userId: 1,
-            chain: 'test'
-          }
-          const rollback = new Error('model rollback')
-          for (const command of commands) {
-            const high = 9007199254740992n + BigInt(command.key)
-            const request = {
-              requestId: command.key.toString(16).padStart(64, '0'),
-              highWater: snapshotJournalRevision(high.toString()),
-              expiresAt: 1000100 + command.key * 20
-            }
-            const owner = { ...binding, userId: command.other ? 2 : 1 }
-            const digest = Receipt.snapshotJournalReceiptBinding(owner)
-            const prior = model.get(request.requestId)
-            async function recordCommand() {
-              const valid =
-                request.expiresAt > clock &&
-                high >= floor &&
-                (prior === undefined ? model.size < 3 : prior.binding === digest)
-              const result = { ...request, binding: digest, floor: floor.toString() }
-              const operation = k.transaction(async t => {
-                const value = await Receipt.recordSnapshotJournalReceipt(t, owner, request)
-                if (command.rollback) throw rollback
-                return value
-              })
-              if (!valid || command.rollback) await expect(operation).rejects.toThrow()
-              else {
-                await expect(operation).resolves.toEqual(prior ?? result)
-                if (prior === undefined) model.set(request.requestId, result)
-              }
-            }
-            async function readCommand() {
-              const valid =
-                prior !== undefined && prior.binding === digest && request.expiresAt > clock && high >= floor
-              const operation = k.transaction(t => Receipt.readSnapshotJournalReceipt(t, owner, request))
-              if (valid) await expect(operation).resolves.toEqual(prior)
-              else await expect(operation).rejects.toThrow()
-            }
-            async function collectCommand() {
-              const removed = [...model.values()].filter(row => row.expiresAt <= clock)
-              const operation = k.transaction(async t => {
-                expect(await Receipt.collectSnapshotJournalReceipts(t)).toBe(removed.length)
-                if (command.rollback) throw rollback
-              })
-              if (command.rollback) await expect(operation).rejects.toThrow('model rollback')
-              else {
-                await operation
-                for (const row of removed) model.delete(row.requestId)
-              }
-            }
-            async function advanceTime() {
-              clock += command.step
-            }
-            async function advanceFloor() {
-              const next = high > floor ? high : floor
-              await k.transaction(async t => {
-                await t('snapshot_journal_retention').update({ floor: next.toString() })
-                if (command.rollback) await t.rollback()
-              })
-              if (!command.rollback) floor = next
-            }
-            if (command.kind === 0) await recordCommand()
-            else if (command.kind === 1) await readCommand()
-            else if (command.kind === 2) await collectCommand()
-            else if (command.kind === 3) await advanceTime()
-            else await advanceFloor()
-            const rows = await k('snapshot_journal_receipts').select('*').orderBy('requestId')
-            expect(rows).toEqual([...model.values()].sort((a, b) => a.requestId.localeCompare(b.requestId)))
-            expect(rows.length).toBeLessThanOrEqual(3)
-          }
-        }
-      ),
-      propertyParameters
-    )
-  } finally {
-    now.mockRestore()
-    await k.destroy()
+        propertyBatch
+      )
+    } finally {
+      now.mockRestore()
+      await k.destroy()
+    }
   }
-})
+)

@@ -319,6 +319,32 @@ type MerkleProofEvidence = {
   incomplete: boolean
 }
 
+/** Adds the lowercase IDs of the transactions a proven transaction spends. */
+function addProvenSpends(proven: Transaction, spends: Set<string>): void {
+  for (const input of proven.inputs) {
+    const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+    if (source !== undefined) spends.add(source.toLowerCase())
+  }
+}
+
+/**
+ * Queues the linked source transactions of an unproven transaction for the
+ * proof walk and returns whether any input names a source it does not link.
+ */
+function queueLinkedSources(tx: Transaction, pending: Transaction[]): boolean {
+  let unlinked = false
+  for (const input of tx.inputs) {
+    if (input.sourceTransaction === undefined) unlinked = true
+    if (typeof input.sourceTransaction === 'object') {
+      if (pending.length >= MAX_PROOF_UPDATE_OUTPUTS) {
+        throw new RangeError('Merkle-proof source traversal exceeded its work budget')
+      }
+      pending.push(input.sourceTransaction)
+    }
+  }
+  return unlinked
+}
+
 /**
  * Receives each per-topic validation failure that `Engine.submit` records in
  * `failedTopics`. The Engine swallows those errors by design and reports the
@@ -4078,21 +4104,10 @@ export class Engine {
       // A mined transaction's source graph is no longer part of its BEEF. Do
       // not replace an unrelated transaction's proof with an ancestor proof.
       if (current.merklePath !== undefined) {
-        for (const input of current.inputs) {
-          const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-          if (source !== undefined) provenSpends.add(source.toLowerCase())
-        }
+        addProvenSpends(current, provenSpends)
         continue
       }
-      for (const input of current.inputs) {
-        if (input.sourceTransaction === undefined) incomplete = true
-        if (typeof input.sourceTransaction === 'object') {
-          if (pending.length >= MAX_PROOF_UPDATE_OUTPUTS) {
-            throw new RangeError('Merkle-proof source traversal exceeded its work budget')
-          }
-          pending.push(input.sourceTransaction)
-        }
-      }
+      if (queueLinkedSources(current, pending)) incomplete = true
     }
     return { found, provenSpends, incomplete }
   }
@@ -4152,8 +4167,9 @@ export class Engine {
         else waiting.push(id)
       }
     }
-    for (let cursor = 0; cursor < queue.length; cursor++) {
-      for (const id of spenders.get(queue[cursor]) ?? []) bind(id)
+    // `bind` appends to `queue`, and an array iterator visits appended items.
+    for (const spent of queue) {
+      for (const id of spenders.get(spent) ?? []) bind(id)
     }
     return bound
   }

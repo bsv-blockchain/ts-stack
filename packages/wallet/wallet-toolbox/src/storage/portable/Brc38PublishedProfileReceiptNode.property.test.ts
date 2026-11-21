@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import { createHash } from 'node:crypto'
 import createKnex, { type Knex } from 'knex'
@@ -23,8 +24,6 @@ fc.configureGlobal({
   seed: Number(process.env.FAST_CHECK_SEED ?? process.env.FC_SEED ?? 3242026)
 })
 const controls = {
-  interruptAfterTimeLimit: 150000,
-  markInterruptAsFailure: true,
   path: process.env.FAST_CHECK_PATH ?? process.env.FC_PATH ?? ''
 }
 const text = fc.array(fc.constantFrom('x', 'é', '中', '😀'), { minLength: 1, maxLength: 24 }).map(v => v.join(''))
@@ -81,117 +80,137 @@ const reader = (name: (typeof tables)[number]) =>
 // Ordinary valid source-owned SQLite catalog transport and pure policy parsing.
 // These synthetic receipts grant no native process, wallet, inventory, physical
 // allocation, publication or activation authority.
-test('generated original and forwarded receiving rows preserve complete Unicode metadata and absent copy fields', async () => {
-  await fc.assert(
-    fc.asyncProperty(text, fc.constantFrom(...tables), async (value, name) => {
-      const row = receiving(value)
-      await replace(name, row)
-      expect(await reader(name)).toEqual(row)
-      if (name === 'profile') expect(await readRow(db)).toEqual(row)
-      expect(await db(name)).toEqual([{ slot: 1, ...row }])
-    }),
-    controls
-  )
-}, 30000)
-test('generated complete receipt states preserve their independently computed digest and exact copy extent', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      text,
-      fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
-      fc.integer({ min: 4096, max: 1048576 }),
-      fc.constantFrom(...tables),
-      async (value, state, bytes, name) => {
-        const row: Row = {
-          ...receiving(value),
-          state,
-          copySha256: hash('copied bytes ' + value),
-          copyBytes: bytes
-        }
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated original and forwarded receiving rows preserve complete Unicode metadata and absent copy fields (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(text, fc.constantFrom(...tables), async (value, name) => {
+        const row = receiving(value)
         await replace(name, row)
         expect(await reader(name)).toEqual(row)
+        if (name === 'profile') expect(await readRow(db)).toEqual(row)
         expect(await db(name)).toEqual([{ slot: 1, ...row }])
-      }
-    ),
-    controls
-  )
-}, 30000)
-test('generated same-size metadata changes, unknown states and above-limit byte metadata refuse without changing durable rows', async () => {
-  await fc.assert(
-    fc.asyncProperty(text, fc.integer({ min: 0, max: 3 }), fc.constantFrom(...tables), async (value, kind, name) => {
-      const base = receiving(value)
-      const row =
-        kind === 0
-          ? { ...base, fixedSha256: hash(base.fixedJson + '!') }
-          : kind === 1
-            ? { ...base, state: 'STALLED' }
-            : kind === 2
-              ? { ...base, fixedJson: 'x'.repeat(8193) }
-              : { ...base, fixedSha256: 'a'.repeat(65) }
-      await chooseTable(name)
-      await db(name).delete()
-      await expect(reader(name)).rejects.toThrow('catalog differs')
-      await db(name).insert({ slot: 1, ...row })
-      const before = await db(name)
-      await expect(reader(name)).rejects.toThrow('catalog differs')
-      expect(await db(name)).toEqual(before)
-    }),
-    controls
-  )
-}, 30000)
-test('generated complete states refuse absent, noncanonical or out-of-range copy receipts while retaining the original catalog', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      text,
-      fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
-      fc.integer({ min: 0, max: 5 }),
-      async (value, state, kind) => {
-        const row: Row = { ...receiving(value), state, copySha256: hash(value), copyBytes: 4096 }
-        if (kind === 0) row.copySha256 = null
-        else if (kind === 1) row.copySha256 = 'a'.repeat(63)
-        else if (kind === 2) row.copySha256 = 'A' + 'a'.repeat(63)
-        else if (kind === 3) row.copyBytes = null
-        else if (kind === 4) row.copyBytes = 4095
-        else row.copyBytes = 4096.5
-        await replace('profile', row)
-        const before = await db('profile')
-        await expect(readRow(db)).rejects.toThrow('copy receipt differs')
-        expect(await db('profile')).toEqual(before)
-      }
-    ),
-    controls
-  )
-}, 30000)
-test('generated page budgets and every primary-state rule match the independent fixed-overhead model', () => {
-  fc.assert(
-    fc.property(
-      text,
-      fc.integer({ min: 1048576, max: 1000000000 }),
-      fc.constantFrom(...states),
-      fc.integer({ min: 0, max: 2 }),
-      (selected, maximumPhysicalBytes, state, mode) => {
-        const limits: KnexBrc38StagingLimits = {
-          maximumRows: 1,
-          maximumLogicalBytes: 1,
-          maximumPhysicalBytes,
-          maximumRowBytes: 1,
-          maximumRowAllocationBytes: 1,
-          expiresAt: 1
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated complete receipt states preserve their independently computed digest and exact copy extent (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        text,
+        fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
+        fc.integer({ min: 4096, max: 1048576 }),
+        fc.constantFrom(...tables),
+        async (value, state, bytes, name) => {
+          const row: Row = {
+            ...receiving(value),
+            state,
+            copySha256: hash('copied bytes ' + value),
+            copyBytes: bytes
+          }
+          await replace(name, row)
+          expect(await reader(name)).toEqual(row)
+          expect(await db(name)).toEqual([{ slot: 1, ...row }])
         }
-        expect(pages(limits)).toBe(Math.floor((maximumPhysicalBytes - 131072) / 12288))
-        expect(pages({ ...limits, maximumPhysicalBytes: Number.MAX_SAFE_INTEGER })).toBe(2147483646)
-        const primary = mode === 0 ? '' : mode === 1 ? selected : selected + '!'
-        const expected =
-          state === 'READY'
-            ? primary === ''
-            : state === 'ACTIVE'
-              ? primary === selected
-              : primary === '' || primary === selected
-        expect(validPrimary(state, primary, selected)).toBe(expected)
-      }
-    ),
-    controls
-  )
-}, 30000)
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated same-size metadata changes, unknown states and above-limit byte metadata refuse without changing durable rows (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(text, fc.integer({ min: 0, max: 3 }), fc.constantFrom(...tables), async (value, kind, name) => {
+        const base = receiving(value)
+        const row =
+          kind === 0
+            ? { ...base, fixedSha256: hash(base.fixedJson + '!') }
+            : kind === 1
+              ? { ...base, state: 'STALLED' }
+              : kind === 2
+                ? { ...base, fixedJson: 'x'.repeat(8193) }
+                : { ...base, fixedSha256: 'a'.repeat(65) }
+        await chooseTable(name)
+        await db(name).delete()
+        await expect(reader(name)).rejects.toThrow('catalog differs')
+        await db(name).insert({ slot: 1, ...row })
+        const before = await db(name)
+        await expect(reader(name)).rejects.toThrow('catalog differs')
+        expect(await db(name)).toEqual(before)
+      }),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated complete states refuse absent, noncanonical or out-of-range copy receipts while retaining the original catalog (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        text,
+        fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
+        fc.integer({ min: 0, max: 5 }),
+        async (value, state, kind) => {
+          const row: Row = { ...receiving(value), state, copySha256: hash(value), copyBytes: 4096 }
+          if (kind === 0) row.copySha256 = null
+          else if (kind === 1) row.copySha256 = 'a'.repeat(63)
+          else if (kind === 2) row.copySha256 = 'A' + 'a'.repeat(63)
+          else if (kind === 3) row.copyBytes = null
+          else if (kind === 4) row.copyBytes = 4095
+          else row.copyBytes = 4096.5
+          await replace('profile', row)
+          const before = await db('profile')
+          await expect(readRow(db)).rejects.toThrow('copy receipt differs')
+          expect(await db('profile')).toEqual(before)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated page budgets and every primary-state rule match the independent fixed-overhead model (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.integer({ min: 1048576, max: 1000000000 }),
+        fc.constantFrom(...states),
+        fc.integer({ min: 0, max: 2 }),
+        (selected, maximumPhysicalBytes, state, mode) => {
+          const limits: KnexBrc38StagingLimits = {
+            maximumRows: 1,
+            maximumLogicalBytes: 1,
+            maximumPhysicalBytes,
+            maximumRowBytes: 1,
+            maximumRowAllocationBytes: 1,
+            expiresAt: 1
+          }
+          expect(pages(limits)).toBe(Math.floor((maximumPhysicalBytes - 131072) / 12288))
+          expect(pages({ ...limits, maximumPhysicalBytes: Number.MAX_SAFE_INTEGER })).toBe(2147483646)
+          const primary = mode === 0 ? '' : mode === 1 ? selected : selected + '!'
+          const expected =
+            state === 'READY'
+              ? primary === ''
+              : state === 'ACTIVE'
+                ? primary === selected
+                : primary === '' || primary === selected
+          expect(validPrimary(state, primary, selected)).toBe(expected)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
 function fixed(value: string, generation: number): { profile: FixedProfile; digest: string } {
   const limits: KnexBrc38StagingLimits = {
     maximumRows: 1000,
@@ -245,48 +264,56 @@ function fixed(value: string, generation: number): { profile: FixedProfile; dige
     }
   }
 }
-test('generated original fixed policies retain independently bound identities and refuse changed digests, admission or expiry', () => {
-  fc.assert(
-    fc.property(
-      text,
-      fc.integer({ min: 0, max: 1000000 }),
-      fc.integer({ min: 0, max: 3 }),
-      (value, generation, kind) => {
-        const { profile, digest } = fixed(value, generation)
-        const original = { ...receiving(value), fixedJson: JSON.stringify(profile) }
-        expect(fixedProfile(original, digest)).toEqual(profile)
-        const changed = structuredClone(profile)
-        if (kind === 0) changed.bindingSha256 = hash(digest)
-        else if (kind === 1)
-          changed.admission = {
-            ...changed.admission,
-            scope: { ...changed.admission.scope, bindingSha256: hash(digest) }
-          }
-        else if (kind === 2) changed.admission = { ...changed.admission, expiresAt: changed.admission.expiresAt + 1 }
-        else changed.admission = { ...changed.admission, originalLimitsJson: '[]' }
-        expect(() => fixedProfile({ ...original, fixedJson: JSON.stringify(changed) }, digest)).toThrow(
-          'original binding or policy differs'
-        )
-        expect(fixedProfile(original, digest)).toEqual(profile)
-      }
-    ),
-    controls
-  )
-}, 30000)
-test('generated v2 completed receipts refuse absent physical bindings while the explicit receiving parser retains its limited role', () => {
-  fc.assert(
-    fc.property(
-      text,
-      fc.integer({ min: 0, max: 1000000 }),
-      fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
-      (value, generation, state) => {
-        const { profile, digest } = fixed(value, generation)
-        profile.protocol = 'brc38-published-profile/v2'
-        const original = { ...receiving(value), fixedJson: JSON.stringify(profile) }
-        expect(fixedProfile(original, digest)).toEqual(profile)
-        expect(() => fixedProfile({ ...original, state }, digest)).toThrow('physical binding is incomplete')
-      }
-    ),
-    controls
-  )
-}, 30000)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated original fixed policies retain independently bound identities and refuse changed digests, admission or expiry (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.integer({ min: 0, max: 1000000 }),
+        fc.integer({ min: 0, max: 3 }),
+        (value, generation, kind) => {
+          const { profile, digest } = fixed(value, generation)
+          const original = { ...receiving(value), fixedJson: JSON.stringify(profile) }
+          expect(fixedProfile(original, digest)).toEqual(profile)
+          const changed = structuredClone(profile)
+          if (kind === 0) changed.bindingSha256 = hash(digest)
+          else if (kind === 1)
+            changed.admission = {
+              ...changed.admission,
+              scope: { ...changed.admission.scope, bindingSha256: hash(digest) }
+            }
+          else if (kind === 2) changed.admission = { ...changed.admission, expiresAt: changed.admission.expiresAt + 1 }
+          else changed.admission = { ...changed.admission, originalLimitsJson: '[]' }
+          expect(() => fixedProfile({ ...original, fixedJson: JSON.stringify(changed) }, digest)).toThrow(
+            'original binding or policy differs'
+          )
+          expect(fixedProfile(original, digest)).toEqual(profile)
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)
+test.each(propertyTestBatches({ ...fc.readConfigureGlobal(), ...controls }))(
+  'generated v2 completed receipts refuse absent physical bindings while the explicit receiving parser retains its limited role (property $path, $numRuns cases)',
+  propertyBatch => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.integer({ min: 0, max: 1000000 }),
+        fc.constantFrom<State>('READY', 'ACTIVATING', 'ACTIVE'),
+        (value, generation, state) => {
+          const { profile, digest } = fixed(value, generation)
+          profile.protocol = 'brc38-published-profile/v2'
+          const original = { ...receiving(value), fixedJson: JSON.stringify(profile) }
+          expect(fixedProfile(original, digest)).toEqual(profile)
+          expect(() => fixedProfile({ ...original, state }, digest)).toThrow('physical binding is incomplete')
+        }
+      ),
+      propertyBatch
+    )
+  },
+  30000
+)

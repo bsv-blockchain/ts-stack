@@ -1153,8 +1153,47 @@ export class KnexMigrations implements MigrationSource<string> {
         await knex.schema.dropTable('proven_txs')
       }
     }
+    migrations[MONITOR_STATE_MIGRATION] = {
+      async up(knex) {
+        if (!(await knex.schema.hasTable('monitor_confirmed_spends'))) {
+          await knex.schema.createTable('monitor_confirmed_spends', table => {
+            table.integer('outputId').unsigned().primary().references('outputId').inTable('outputs').onDelete('CASCADE')
+            table.text('details').notNullable()
+          })
+        }
+        // MySQL can commit DDL independently. Publish the checkpoint table
+        // last so a partial migration never enables the new spend writer.
+        if (!(await knex.schema.hasTable('monitor_checkpoints'))) {
+          await knex.schema.createTable('monitor_checkpoints', table => {
+            table.string('name', 64).primary()
+            table.text('details').notNullable()
+            table.bigInteger('updatedAt').notNullable()
+          })
+        }
+      },
+      async down(knex) {
+        const spendState =
+          (await knex.schema.hasTable('monitor_confirmed_spends')) &&
+          (await knex('monitor_confirmed_spends').first('outputId')) != null
+        const checkpointState =
+          (await knex.schema.hasTable('monitor_checkpoints')) &&
+          (await knex('monitor_checkpoints').first('name')) != null
+        if (spendState || checkpointState)
+          throw new Error('Cannot discard durable monitor state. Retain these tables for an application rollback.')
+        await dropMonitorStateForDataDeletion(knex)
+      }
+    }
+
     return migrations
   }
+}
+
+export const MONITOR_STATE_MIGRATION = '2026-11-19-001 durable wallet monitor state'
+
+/** @internal Also removes a partial MySQL migration during explicit full erasure. */
+export async function dropMonitorStateForDataDeletion(knex: Knex): Promise<void> {
+  await knex.schema.dropTableIfExists('monitor_checkpoints')
+  await knex.schema.dropTableIfExists('monitor_confirmed_spends')
 }
 
 /**

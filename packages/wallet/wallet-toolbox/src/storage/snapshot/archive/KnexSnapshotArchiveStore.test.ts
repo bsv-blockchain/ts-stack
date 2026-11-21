@@ -3,7 +3,7 @@ import { PRIMARY_HANDOFF_MIGRATION } from '../../schema/primaryHandoffMigration'
 import { SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION } from '../../schema/snapshotArchivePacketLabels'
 import { SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION } from '../../schema/snapshotSyncReceiptMigration'
 import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
-import { KnexMigrations } from '../../schema/KnexMigrations'
+import { KnexMigrations, MONITOR_STATE_MIGRATION } from '../../schema/KnexMigrations'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -737,7 +737,9 @@ test('the auxiliary migration is registered after the durable sync schema', asyn
   expect(registered.indexOf(SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION)).toBeGreaterThan(
     registered.indexOf(PRIMARY_HANDOFF_MIGRATION)
   )
-  expect(await migrations.getLatestMigration()).toBe(SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION)
+  expect(registered.indexOf(MONITOR_STATE_MIGRATION)).toBeGreaterThan(
+    registered.indexOf(SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION)
+  )
 })
 
 test('MySQL DDL accommodates the declared metadata and page byte ceilings', async () => {

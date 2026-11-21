@@ -1,5 +1,7 @@
 # Overlay Express
 
+Release candidate `2.9.0`. Adds optional script verifier configuration and accepts Arcade SEEN_MULTIPLE_NODES and STUMP_PROCESSING as successful rebroadcast states. Existing deployments retain JavaScript verification. Operators may configure a preloaded verifier; no wire or data migration is required.
+
 BSV BLOCKCHAIN | Overlay Express
 
 An opinionated but configurable Overlay Services deployment system:

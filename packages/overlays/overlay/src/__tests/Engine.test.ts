@@ -2440,6 +2440,31 @@ describe('BSV Overlay Services Engine', () => {
         expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(1)
       })
 
+      it('binds a second proven spender of the ancestor and the proven descendant behind it', async () => {
+        // B and C are proven and spend different outputs of A; D is proven and spends C.
+        // Storage returns B before C, so C waits on A behind B and must still be bound.
+        const ancestor = root()
+        const ancestorId = ancestor.id('hex')
+        const b1 = spend([{ txid: ancestorId, outputIndex: 0 }], [1], true)
+        const c1 = spend([{ txid: ancestorId, outputIndex: 1 }], [1], true)
+        const d1 = spend([{ txid: c1.id('hex'), outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(b1, b1.toBEEF())
+        const c = outputOf(c1, c1.toBEEF())
+        const d = outputOf(d1, d1.toBEEF())
+        link(a, b)
+        link(a, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(1)
+        expect(Transaction.fromBEEF(updates[a.txid]).merklePath?.toHex()).toBe(proof.toHex())
+      })
+
       it('refuses a stored output whose BEEF does not match its transaction ID before it can bind anything', async () => {
         const ancestor = root()
         const child = spend([ancestor], [1])

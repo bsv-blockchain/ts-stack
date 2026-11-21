@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-discovery-services",
-  "version": "2.2.9",
+  "version": "2.2.10",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

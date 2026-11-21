@@ -1,3 +1,4 @@
+import { propertyTestBatches } from '../../../test/utils/property-test-batches.cjs'
 import fc from 'fast-check'
 import type { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { StorageKnex } from '../StorageKnex'
@@ -25,76 +26,80 @@ const reads: ReadonlyArray<(storage: StorageKnex, trx: TrxToken) => Promise<unkn
   (storage, trx) => storage.findSyncStates({ partial: { syncStateId: 1 }, trx })
 ]
 
-test('generated direct and retained view schedules preserve consistent reads, writable locks and exact failures', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      fc.record({
-        retained: fc.boolean(),
-        fail: fc.boolean(),
-        schedule: fc.array(
-          fc.record({
-            selector: fc.integer({ min: 0, max: reads.length - 1 }),
-            peer: fc.boolean(),
-            write: fc.boolean()
-          }),
-          { minLength: 1, maxLength: 24 }
-        )
-      }),
-      async input => {
-        // The installed Knex transaction/query builders run against a bounded
-        // synthetic driver. The separate native fixture proves server isolation.
-        const fixture = mysqlReadSnapshotFixture()
-        const peer = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: fixture.db })
-        peer._settings = fixture.storage.getSettings()
-        jest.spyOn(fixture.storage, 'readSettings').mockResolvedValue(fixture.storage.getSettings())
-        const failure = new Error('generated callback failure')
-        const expectedLocks: boolean[] = []
-        const read = async (trx: TrxToken): Promise<number> => {
-          await runInSeries(input.schedule, async operation => {
-            const storage = operation.peer ? peer : fixture.storage
-            await reads[operation.selector](storage, trx)
-            expectedLocks.push(false)
-            if (operation.write) {
-              await fixture.db.transaction(async writable => {
-                await reads[operation.selector](storage, writable)
-              })
-              // Only the four exact writable authority selectors require locks.
-              expectedLocks.push(operation.selector < 4)
-            }
-          })
-          if (input.fail) throw failure
-          return input.schedule.length
-        }
-        try {
-          if (input.retained) {
-            const view = await fixture.storage.openReadSnapshot({ lifetimeMs: 30000 })
-            const result = view.read(read)
-            if (input.fail) {
-              await expect(result).rejects.toBe(failure)
-              await expect(view.close()).rejects.toBe(failure)
-            } else {
-              await expect(result).resolves.toBe(input.schedule.length)
-              await view.close()
-            }
-          } else {
-            const result = fixture.storage.readSnapshot(read)
-            if (input.fail) await expect(result).rejects.toBe(failure)
-            else await expect(result).resolves.toBe(input.schedule.length)
+test.each(propertyTestBatches(fc.readConfigureGlobal()))(
+  'generated direct and retained view schedules preserve consistent reads, writable locks and exact failures (property $path, $numRuns cases)',
+  async propertyBatch => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          retained: fc.boolean(),
+          fail: fc.boolean(),
+          schedule: fc.array(
+            fc.record({
+              selector: fc.integer({ min: 0, max: reads.length - 1 }),
+              peer: fc.boolean(),
+              write: fc.boolean()
+            }),
+            { minLength: 1, maxLength: 24 }
+          )
+        }),
+        async input => {
+          // The installed Knex transaction/query builders run against a bounded
+          // synthetic driver. The separate native fixture proves server isolation.
+          const fixture = mysqlReadSnapshotFixture()
+          const peer = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: fixture.db })
+          peer._settings = fixture.storage.getSettings()
+          jest.spyOn(fixture.storage, 'readSettings').mockResolvedValue(fixture.storage.getSettings())
+          const failure = new Error('generated callback failure')
+          const expectedLocks: boolean[] = []
+          const read = async (trx: TrxToken): Promise<number> => {
+            await runInSeries(input.schedule, async operation => {
+              const storage = operation.peer ? peer : fixture.storage
+              await reads[operation.selector](storage, trx)
+              expectedLocks.push(false)
+              if (operation.write) {
+                await fixture.db.transaction(async writable => {
+                  await reads[operation.selector](storage, writable)
+                })
+                // Only the four exact writable authority selectors require locks.
+                expectedLocks.push(operation.selector < 4)
+              }
+            })
+            if (input.fail) throw failure
+            return input.schedule.length
           }
-          await fixture.db.transaction(async trx => {
-            await fixture.storage.findProvenTxs({ partial: { provenTxId: 1 }, trx })
-          })
-          expectedLocks.push(true)
-          const actual = fixture.events.filter(sql => sql.startsWith('SELECT'))
-          expect(actual).toHaveLength(expectedLocks.length)
-          expect(actual.map(sql => sql.endsWith('FOR UPDATE'))).toEqual(expectedLocks)
-          expect(fixture.events.at(-1)).toBe('RELEASE')
-        } finally {
-          await fixture.db.destroy()
-          jest.restoreAllMocks()
+          try {
+            if (input.retained) {
+              const view = await fixture.storage.openReadSnapshot({ lifetimeMs: 30000 })
+              const result = view.read(read)
+              if (input.fail) {
+                await expect(result).rejects.toBe(failure)
+                await expect(view.close()).rejects.toBe(failure)
+              } else {
+                await expect(result).resolves.toBe(input.schedule.length)
+                await view.close()
+              }
+            } else {
+              const result = fixture.storage.readSnapshot(read)
+              if (input.fail) await expect(result).rejects.toBe(failure)
+              else await expect(result).resolves.toBe(input.schedule.length)
+            }
+            await fixture.db.transaction(async trx => {
+              await fixture.storage.findProvenTxs({ partial: { provenTxId: 1 }, trx })
+            })
+            expectedLocks.push(true)
+            const actual = fixture.events.filter(sql => sql.startsWith('SELECT'))
+            expect(actual).toHaveLength(expectedLocks.length)
+            expect(actual.map(sql => sql.endsWith('FOR UPDATE'))).toEqual(expectedLocks)
+            expect(fixture.events.at(-1)).toBe('RELEASE')
+          } finally {
+            await fixture.db.destroy()
+            jest.restoreAllMocks()
+          }
         }
-      }
-    ),
-    { interruptAfterTimeLimit: 150000, markInterruptAsFailure: true }
-  )
-}, 180000)
+      ),
+      propertyBatch
+    )
+  },
+  180000
+)

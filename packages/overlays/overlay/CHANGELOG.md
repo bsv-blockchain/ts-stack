@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.8.1`: `handleNewMerkleProof` now stores an ancestor's proof when a descendant's stored BEEF already ends at a proven transaction; see the entry below. No migration.
+
+- Prepare `2.8.0`: Adds an optional script verifier backend for transaction and GASP SPV checks while keeping the JavaScript verifier as the default. Existing constructors keep the default verifier. Operators may pass a preloaded BdkVerifier as the final optional Engine argument.
+
 - `handleNewMerkleProof` stores an ancestor's proof when a descendant output's stored BEEF no longer carries the ancestor because it already ends at a proven transaction (proven, or admitted already mined, before the ancestor's proof arrived) that spends the ancestor or a bound descendant of it. A descendant is bound when its own stored BEEF carries the ancestor or ends that way, so a chain such as A -> B -> C with C proven first is covered, whatever order storage returns the outputs in; storage relation records alone bind nothing. Such a descendant needs no update and is skipped; previously the whole update threw `Stored descendant BEEF does not contain the proven transaction` and the ancestor's own proof was never stored. The update still throws, writing nothing, when a BEEF that does not carry the ancestor has no proven transaction spending a bound one, or has an unproven transaction whose source transaction it does not carry. A BEEF that carries the ancestor is updated as before. No migration.
 
 - Add an optional `scriptVerifier` (last `Engine` constructor argument) used for SPV verification in `submit` and GASP graph anchoring, for example a preloaded `BdkVerifier` from `@bsv/verifast` (about 11x less CPU per input script than the default interpreter). Omitted, scripts are verified by the SDK interpreter exactly as before. Additive; no migration.
