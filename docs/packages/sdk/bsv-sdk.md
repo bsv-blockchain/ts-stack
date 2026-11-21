@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.2'
+version: '4.2.0'
 npm: '@bsv/sdk'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,19 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## Teranode and ARC broadcast status
+
+`Teranode.broadcast` reads an ARC-style JSON body that carries a string
+`txStatus`, with the rules `ARC` uses. A 2xx body reporting `REJECTED`,
+`DOUBLE_SPEND_ATTEMPTED`, `INVALID`, `MALFORMED`, `MINED_IN_STALE_BLOCK`, an
+orphan or another txid is now a failure; a non-2xx keeps its HTTP `code` and
+`description` and adds the body's `status`, `txStatus` and `detail` under `more`.
+`BroadcastResponse` gains optional `txStatus` and `arcStatus`, set by `Teranode`
+and `ARC` and kept by `validateBroadcastResult`. `RECEIVED` stays a success but
+means received, not yet validated; callers that need certainty check `txStatus`
+or poll the service. A bare 2xx, `OK` or any other body is unchanged. No code
+migration is required.
 
 ## Script ASM for data outputs
 

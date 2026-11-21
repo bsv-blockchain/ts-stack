@@ -904,7 +904,8 @@ describe('Transaction', () => {
       expect(rv).toEqual({
         status: 'success',
         txid: expectedTXID,
-        message: 'success received'
+        message: 'success received',
+        txStatus: 'success'
       })
     })
 
