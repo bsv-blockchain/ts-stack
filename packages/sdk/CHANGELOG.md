@@ -302,6 +302,15 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Added: transaction size from script lengths (minor candidate)
+
+- Export `transactionSize(inputScriptLengths, outputScriptLengths)` with
+  `transactionInputSize`, `transactionOutputSize` and `varUintSize`, so a fee
+  can be estimated before a transaction is built. The formula is the one
+  wallet-toolbox already uses for funding; `SatoshisPerKilobyte.computeFee`
+  now sizes through it, with identical results. Lengths must be non-negative
+  safe integers (`RangeError` otherwise). No migration is required.
+
 ### LocalKVStore removal stops on an inconsistent empty page
 
 - `LocalKVStore.remove` throws when `listOutputs` returns an empty page while
