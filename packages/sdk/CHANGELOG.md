@@ -1,4 +1,12 @@
-# 4.1.2 unpublished patch candidate
+# 4.1.3 unpublished patch candidate
+
+- Refuse a `createAction` input that omits `unlockingScript` and sets
+  `unlockingScriptLength` to 0. The field is a BRC-100 `PositiveInteger`
+  (minimum 1). Lengths of 1 and above remain accepted.
+- An empty `unlockingScript` is still refused as a hexadecimal string, before
+  the length check. No wire, storage, or schema migration.
+
+# 4.1.2
 
 - `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
   instructions in the usual ASM. If that notation would change any suffix bytes,

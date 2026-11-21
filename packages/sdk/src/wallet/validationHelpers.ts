@@ -592,6 +592,8 @@ export interface ValidCreateActionInput {
  *
  * Ensures either unlockingScript or unlockingScriptLength is provided and consistent,
  * validates outpoint, description length, and sequence number.
+ * A supplied or derived unlockingScriptLength must be a positive integer (at least 1).
+ * An empty unlockingScript is refused as a hexadecimal string before that length check.
  *
  * @param i - CreateActionInput to validate
  * @returns ValidCreateActionInput
@@ -608,7 +610,7 @@ export function validateCreateActionInput(i: CreateActionInput): ValidCreateActi
   const unlockingScript = validateOptionalHexString(i.unlockingScript, 'unlockingScript')
   const unlockingScriptLength =
     i.unlockingScriptLength ?? (unlockingScript == null ? 0 : unlockingScript.length / 2)
-  validateInteger(unlockingScriptLength, 'unlockingScriptLength', undefined, 0)
+  validateInteger(unlockingScriptLength, 'unlockingScriptLength', undefined, 1)
   if (unlockingScript && unlockingScriptLength !== unlockingScript.length / 2) {
     throw new WERR_INVALID_PARAMETER(
       'unlockingScriptLength',
