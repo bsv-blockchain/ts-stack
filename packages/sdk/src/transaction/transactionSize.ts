@@ -39,6 +39,17 @@ export function transactionOutputSize(scriptSize: number): number {
  * be estimated before the transaction is built. `SatoshisPerKilobyte` sizes a
  * built transaction with this same function.
  *
+ * The size is exact for the script lengths given. Before signing, pass the
+ * largest unlocking script each input can have, or the fee may fall short
+ * once the real script is in place. For P2PKH, 107 bytes is typical; 108,
+ * which the P2PKH template's `estimateLength` returns, covers a 73-byte
+ * signature.
+ *
+ * These four helpers have the same names and formula as wallet-toolbox's
+ * `storage/methods/utils.ts`. Their refusals differ: these throw `RangeError`
+ * for any length that is not a non-negative safe integer, while the toolbox's
+ * throw `WERR_INVALID_PARAMETER` for a negative length only.
+ *
  * @param inputs - Unlocking script lengths, one per input, in bytes.
  * @param outputs - Locking script lengths, one per output, in bytes.
  * @returns Total transaction size in bytes, including version and lock time.
