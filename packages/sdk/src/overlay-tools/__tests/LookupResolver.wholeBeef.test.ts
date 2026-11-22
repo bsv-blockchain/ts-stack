@@ -359,6 +359,33 @@ describe('LookupResolver wholeBeef', () => {
     expect(evidence).toEqual([{ host: jsonHost, beef: history.beef }])
   })
 
+  it('takes the last transaction as the subject and drops an output whose txid names another', async () => {
+    const answerWith = (txid: string): typeof fetch =>
+      (async () =>
+        new Response(
+          JSON.stringify({
+            type: 'output-list',
+            outputs: [{ beef: history.beef, outputIndex: 0, txid }]
+          }),
+          { headers: { 'content-type': 'application/json' } }
+        )) as unknown as typeof fetch
+    const resolverFor = (txid: string): LookupResolver =>
+      new LookupResolver({
+        facilitator: new HTTPSOverlayLookupFacilitator(answerWith(txid)),
+        hostOverrides: { [service]: [host] }
+      })
+
+    const matching = await resolverFor(history.subject).query(question, undefined, {
+      wholeBeef: true
+    })
+    const other = await resolverFor(history.proven).query(question, undefined, { wholeBeef: true })
+
+    expect(matching.outputs).toEqual([
+      { beef: history.beef, outputIndex: 0, txid: history.subject }
+    ])
+    expect(other.outputs).toEqual([])
+  })
+
   it('counts a binary answer without its content type as a failure, with the usual penalty', async () => {
     const untypedHost = 'https://untyped.example'
     const resolver = new LookupResolver({

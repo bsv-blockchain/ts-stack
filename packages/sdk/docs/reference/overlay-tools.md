@@ -433,8 +433,11 @@ resolver re-extracts each output as Atomic BEEF. History a lookup service
 deliberately returns beyond a proof (for example an overlay Engine `history`
 selector) is therefore dropped. When `true`, the facilitator omits the header
 and reads the per-output JSON answer, so each output carries the BEEF the
-service produced: usually plain BEEF with the subject last, and often no
-`txid` hint. A host that still answers with the aggregated binary form is
+service produced, usually plain BEEF with no `txid` hint. Each output's
+subject is its BEEF's last transaction. A `txid` hint, when a host sends
+one, must name that same transaction, and an output whose hint names another
+is dropped, so a lookup service should put each subject last. A host that
+still answers with the aggregated binary form is
 counted as having rejected the query, without a reputation penalty: it
 appears in `rejectedHosts` (`queryDetailed`, `query$`), while `query()`
 returns only the other hosts' outputs (an empty list if every host rejected).
@@ -442,7 +445,8 @@ returns only the other hosts' outputs (an empty list if every host rejected).
 SLAP discovery is unaffected. Outputs from several hosts are still
 deduplicated by outpoint, keeping the first accepted response; `onEvidence`
 receives each host's copy before deduplication, within its evidence limits.
-The JSON answer is larger on the wire and whole BEEFs carry more
+A caller that wants the longest history from several hosts merges those
+copies itself. The JSON answer is larger on the wire and whole BEEFs carry more
 transactions, so `limits.maxResponseBytes`, `limits.maxTotalBytes` and
 `evidenceLimits` may need raising for long histories. Custom facilitators
 receive the flag in their request options and may ignore it. Defaults to
