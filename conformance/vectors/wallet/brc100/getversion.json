@@ -3,7 +3,8 @@
   "id": "wallet.brc100.getversion",
   "name": "BRC-100 getversion",
   "brc": [
-    "BRC-100"
+    "BRC-100",
+    "BRC-205"
   ],
   "version": "2.0.0",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
@@ -29,7 +30,7 @@
       "description": "getVersion format is vendor-major.minor.patch",
       "input": {
         "args": {},
-        "_schema_note": "version format: [vendor]-[major].[minor].[patch], 7-30 bytes"
+        "_schema_note": "version base format: [vendor]-[major].[minor].[patch], 7-30 bytes; BRC-205 allows '; key=value;' attributes after the base, up to 2048 bytes in total (see getversion.6)"
       },
       "expected": {
         "version": "wallet-1.0.0"
@@ -87,6 +88,23 @@
         "getVersion",
         "schema",
         "edge-case"
+      ]
+    },
+    {
+      "id": "wallet.brc100.getversion.6",
+      "description": "getVersion with BRC-205 capability attributes after the base",
+      "input": {
+        "args": {},
+        "_schema_note": "BRC-205: the base before the first ';' keeps BRC-100's 7-30 bytes; the whole string may be up to 2048 bytes. A client must accept this string unchanged."
+      },
+      "expected": {
+        "version": "wallet-brc100-1.0.0; brc207-color=4; brc207-color-attested=1; brc177-nosend=2;"
+      },
+      "tags": [
+        "brc-100",
+        "brc-205",
+        "getVersion",
+        "schema"
       ]
     }
   ]

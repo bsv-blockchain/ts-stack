@@ -112,13 +112,13 @@ recorded container release route; they are not published by the public-package j
 | Metric | Current value |
 | --- | --- |
 | Vector files | 79 |
-| Vectors | 6724 |
-| Structurally passed | 6511 |
+| Vectors | 6725 |
+| Structurally passed | 6512 |
 | Governed skips | 213 |
-| Required parity vectors | 6518 |
+| Required parity vectors | 6519 |
 | Intended parity vectors | 206 |
 | Explicitly skipped vector entries | 7 |
-| Corpus metadata revision | 2026-10-28 |
+| Corpus metadata revision | 2026-11-22 |
 
 Structural runner pass/skip results and parity classifications answer different questions:
 the former is the current runner outcome, while the latter records cross-language

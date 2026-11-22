@@ -628,7 +628,7 @@ async function dispatchGetVersion(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // MISMATCH wallet.brc100.getversion.{1..5}:
+  // MISMATCH wallet.brc100.getversion.{1..6}:
   //   Each vector expects a different version string (wallet-0.1.0, wallet-1.0.0,
   //   x-0.0.0, …) — a single stub cannot satisfy all. We assert structural shape.
   if ('error' in expected) return
