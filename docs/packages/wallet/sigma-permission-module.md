@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/sigma-permission-module'
 version: '0.1.0'
-last_updated: '2026-11-20'
-last_verified: '2026-11-20'
+last_updated: '2026-11-22'
+last_verified: '2026-11-22'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc98', 'sigma', 'cryptography']
@@ -241,6 +241,24 @@ The module accepts only `encrypt`. It refuses every other method the wallet
 host routes to it, and every basket or label beginning `p sigma` that reaches
 it. Authorization precedes key derivation. The module is trusted wallet code:
 applications never receive a key deriver or a private scalar.
+
+### A Diffie–Hellman oracle on `x`
+
+`key` with a base and `dleq` return `x·H` for a base `H` the application
+chooses, so together they are a static Diffie–Hellman oracle on `x`:
+
+- `x·H` is not a secret and must not be used as one. Never reuse a sigma key as
+  a Diffie–Hellman secret.
+- Published bounds on static Diffie–Hellman oracles (Cheon's attack is the
+  usual reference) mean that many queries on distinct bases can lower the cost
+  of recovering `x`. Applications that need the full strength of a long-lived
+  key should limit the number of distinct bases they request.
+- At security level 0 these requests are not prompted unless privileged. Under
+  `proofAuthorization: 'each'`, the default, each one is authorized on its
+  own; under `'grant'`, one approval covers every such request until the
+  grant expires.
+- The authorization request marks them with `applicationBase: true`, so the
+  host can tell them apart and may bound their rate.
 
 ## Verifying proofs
 
