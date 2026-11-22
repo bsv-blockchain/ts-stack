@@ -300,7 +300,7 @@
     "@bsv/chirp": "0.1.7",
     "@bsv/lch": "0.3.1",
     "@bsv/air-gap": "0.1.4",
-    "@bsv/amountinator": "2.1.10",
+    "@bsv/amountinator": "2.1.11",
     "@bsv/wallet-helper": "0.1.12",
     "create-bsv-app": "1.2.1",
     "@bsv/did": "0.3.3",
