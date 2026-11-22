@@ -14,6 +14,7 @@ export const ARC_ERROR_STATUSES = new Set([
 export const MAX_ARC_STATUS_BYTES = 128
 export const MAX_ARC_INFO_BYTES = 8192
 const MAX_ARC_RESPONSE_PROPERTIES = 32
+const MAX_COMPETING_TXS = 256
 
 export function boundedText(
   value: unknown,
@@ -42,6 +43,39 @@ export function ownArcData(value: unknown): Record<string, PropertyDescriptor> |
     return undefined
   }
   return properties
+}
+
+/**
+ * A canonical copy of an ARC-style competingTxs array: own, plain, at most
+ * MAX_COMPETING_TXS distinct transaction ids, lower-cased. Undefined when absent or malformed.
+ */
+export function snapshotCompetingTxs(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > MAX_COMPETING_TXS) return undefined
+  const properties = Object.getOwnPropertyDescriptors(value)
+  const expectedKeys = new Set([
+    'length',
+    ...Array.from({ length: value.length }, (_, index) => String(index))
+  ])
+  if (
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.keys(properties).length !== expectedKeys.size ||
+    Object.keys(properties).some(key => !expectedKeys.has(key)) ||
+    Object.values(properties).some(property => property.get != null || property.set != null)
+  ) {
+    return undefined
+  }
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (let index = 0; index < value.length; index++) {
+    const candidate = properties[index]?.value
+    if (typeof candidate !== 'string' || !TRANSACTION_ID.test(candidate)) return undefined
+    const normalized = candidate.toLowerCase()
+    if (seen.has(normalized)) return undefined
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
 }
 
 /** Parses a JSON text body; any other value, or text that is not JSON, is returned as is. */

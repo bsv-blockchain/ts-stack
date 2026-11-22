@@ -10,7 +10,8 @@ import {
   MAX_ARC_INFO_BYTES,
   MAX_ARC_STATUS_BYTES,
   ownArcData,
-  parseArcData
+  parseArcData,
+  snapshotCompetingTxs
 } from './BroadcasterValidation.js'
 import { lockConfiguration } from '../http/ConfigurationLock.js'
 
@@ -21,7 +22,6 @@ function defaultDeploymentId(): string {
 }
 
 const TXID = /^[0-9a-f]{64}$/i
-const MAX_COMPETING_TXS = 256
 const ARC_ACCEPTED_STATUSES = new Set([
   'SUCCESS',
   'RECEIVED',
@@ -33,35 +33,6 @@ const ARC_ACCEPTED_STATUSES = new Set([
   'MINED',
   'IMMUTABLE'
 ])
-
-function snapshotCompetingTxs(value: unknown): string[] | undefined {
-  if (value === undefined) return undefined
-  if (!Array.isArray(value) || value.length > MAX_COMPETING_TXS) return undefined
-  const properties = Object.getOwnPropertyDescriptors(value)
-  const expectedKeys = new Set([
-    'length',
-    ...Array.from({ length: value.length }, (_, index) => String(index))
-  ])
-  if (
-    Object.getOwnPropertySymbols(value).length !== 0 ||
-    Object.keys(properties).length !== expectedKeys.size ||
-    Object.keys(properties).some(key => !expectedKeys.has(key)) ||
-    Object.values(properties).some(property => property.get != null || property.set != null)
-  ) {
-    return undefined
-  }
-  const result: string[] = []
-  const seen = new Set<string>()
-  for (let index = 0; index < value.length; index++) {
-    const candidate = properties[index]?.value
-    if (typeof candidate !== 'string' || !TXID.test(candidate)) return undefined
-    const normalized = candidate.toLowerCase()
-    if (seen.has(normalized)) return undefined
-    seen.add(normalized)
-    result.push(normalized)
-  }
-  return result
-}
 
 function transactionHex(tx: Transaction): string {
   try {
