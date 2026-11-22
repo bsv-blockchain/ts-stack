@@ -261,7 +261,9 @@ export class Peer {
   async #afterInitialCertificateAnswer(sessionNonce: string): Promise<void> {
     const answer = this.#initialCertificateAnswers.get(sessionNonce)
     if (answer == null) return
-    // A send from inside a certificates-received observer: the answer waits for that observer.
+    // While this session's certificates-received observers run, the answer waits for them, so
+    // their own sends must not wait for it. Without async context in every runtime, a send from
+    // elsewhere in that window is not held either, as before.
     if (this.#certificateObserversRunning.has(sessionNonce)) return
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
@@ -1046,8 +1048,8 @@ export class Peer {
     this.#resolveCertificateValidation(sessionNonce)
 
     // Observers run before the automatic answer so that one which throws still prevents our
-    // disclosure. While they run, their own sends on this session skip the hold, which would
-    // otherwise wait for an answer that comes only after they return.
+    // disclosure. While they run, sends on this session skip the hold, which would otherwise
+    // wait for an answer that comes only after they return.
     this.#certificateObserversRunning.set(
       sessionNonce,
       (this.#certificateObserversRunning.get(sessionNonce) ?? 0) + 1
