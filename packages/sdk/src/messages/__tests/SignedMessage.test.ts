@@ -240,6 +240,17 @@ describe('SignedMessage through a wallet and with an expected signer', () => {
     expect(verify(message, designated, recipientKey, { expectedSigner: senderHex })).toBe(true)
   })
 
+  it('checks the expected signer before the recipient', () => {
+    const other = new PrivateKey(16).toPublicKey()
+    const designated = sign(message, senderKey, recipientKey.toPublicKey())
+
+    expect(verify(message, designated, undefined, { expectedSigner: other })).toBe(false)
+    expect(verify(message, designated, new PrivateKey(22), { expectedSigner: other })).toBe(false)
+    expect(() => verify(message, designated, undefined, { expectedSigner: senderHex })).toThrow(
+      TypeError
+    )
+  })
+
   it('refuses a malformed expected signer', () => {
     const signature = sign(message, senderKey)
 

@@ -142,6 +142,10 @@ export interface SignedMessageVerifyOptions {
  * audience, unique challenge, and expiry and must reject challenge reuse. Without
  * `expectedSigner`, it also does not say who signed: the signer is whoever the
  * signature names.
+ *
+ * The expected signer is checked first. For a designated-verifier signature by
+ * another key, `verify` therefore returns `false` before the recipient checks,
+ * even where a missing or wrong `recipient` would otherwise throw.
  */
 export const verify = (
   message: number[],
