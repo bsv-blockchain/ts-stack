@@ -270,6 +270,35 @@ describe('StorageUploader boundary validation', () => {
     expect(putInits[0].headers).toEqual({ 'Content-Type': 'text/plain' })
   })
 
+  it('sends the same PUT headers for an omitted and an empty requiredHeaders', async () => {
+    const putHeaders = async (requiredHeaders?: Record<string, string>): Promise<unknown> => {
+      const reply: Record<string, unknown> = {
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10
+      }
+      if (requiredHeaders !== undefined) reply.requiredHeaders = requiredHeaders
+      jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(jsonResponse(reply))
+      let headers: unknown
+      const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+        if (String(input).endsWith('/quote')) {
+          return jsonResponse({ status: 'success', quote: 10 })
+        }
+        headers = (init as RequestInit).headers
+        return new Response('', { status: 200 })
+      })
+      await uploader(fetchClient, ['https://one.example']).publishFile({
+        file: { data: [1, 2, 3], type: 'text/plain' },
+        retentionPeriod: 60
+      })
+      return headers
+    }
+    const omitted = await putHeaders()
+    const empty = await putHeaders({})
+    expect(omitted).toEqual({ 'Content-Type': 'text/plain' })
+    expect(empty).toEqual(omitted)
+  })
+
   it.each([
     [new Response('', { status: 500 }), 'Upload info request failed'],
     [jsonResponse({ status: 'error' }), 'Upload route returned an error'],
