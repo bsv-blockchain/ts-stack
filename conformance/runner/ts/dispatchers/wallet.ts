@@ -22,9 +22,9 @@
  *   isAuthenticated, waitForAuthentication, getHeight, getHeaderForHeight,
  *   getNetwork, getVersion
  *
- *   MISMATCH — getversion vectors:
- *     Each vector expects a different version string; a static stub cannot
- *     satisfy all simultaneously. We check structural shape only.
+ *   getversion vectors: a stub wallet serves each vector's expected version and
+ *   the SDK client reads it back over the wallet wire and through result
+ *   validation, so the client-side bound (BRC-205) is what is checked.
  *
  * ACTION / OUTPUT / CERT METHODS (real wallet-toolbox harness — Wave 1G):
  *   setupTestWallet() creates a fresh in-memory Wallet (pure-TS, no native
@@ -625,16 +625,21 @@ async function dispatchGetNetwork(
 }
 
 async function dispatchGetVersion(
-  _input: Record<string, unknown>,
+  input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // MISMATCH wallet.brc100.getversion.{1..6}:
-  //   Each vector expects a different version string (wallet-0.1.0, wallet-1.0.0,
-  //   x-0.0.0, …) — a single stub cannot satisfy all. We assert structural shape.
   if ('error' in expected) return
-  const result = { version: 'wallet-bsv-conformance-1.0.0' }
-  expect(result).toHaveProperty('version')
-  expect(result.version.length).toBeGreaterThanOrEqual(7)
+  // The client must return the wallet's version string unchanged, attributes and all.
+  const version = getString(expected, 'version')
+  const provider = { getVersion: async () => ({ version }) } as unknown as WalletInterface
+  const binary = new WalletWireTransceiver(new WalletWireProcessor(provider))
+  for (const substrate of [provider, binary]) {
+    const client = new WalletClient(
+      substrate,
+      getString(input, 'originator') || 'conformance.example'
+    )
+    await expect(client.getVersion()).resolves.toEqual({ version })
+  }
 }
 
 // ─── ACTION / OUTPUT / CERT DISPATCHERS (real wallet-toolbox harness) ─────────
