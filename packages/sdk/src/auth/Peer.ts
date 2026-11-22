@@ -5,7 +5,7 @@ import { getVerifiableCertificates } from './utils/getVerifiableCertificates.js'
 import { validateCertificates } from './utils/validateCertificates.js'
 import {
   AuthMessage,
-  AuthMessageValidationOptions,
+  PeerOptions,
   PeerSession,
   RequestedCertificateSet,
   Transport
@@ -92,6 +92,9 @@ export class Peer {
   // Per session nonce: settles when this Peer's answer to a certificate request embedded in
   // that session's initialResponse has been sent or has ended without one.
   readonly #initialCertificateAnswers = new Map<string, Promise<void>>()
+  // Per session nonce: how many certificates-received observer runs are in progress.
+  readonly #certificateObserversRunning = new Map<string, number>()
+  readonly #sendEmptyCertificateResponses: boolean
 
   // Promise-based mechanism for waiting on certificate validation
   private readonly certificateValidationPromises: Map<
@@ -140,7 +143,7 @@ export class Peer {
    * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} with atomic `claimMessageNonce` and `claimInitialRequestNonce` for shared/durable storage in load-balanced deployments; otherwise the bounded default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
-   * @param {AuthMessageValidationOptions} [messageValidation] - Local policy; set maxGeneralPayloadBytes to null to delegate capacity to the transport. Omission preserves existing limits.
+   * @param {PeerOptions} [options] - Local policy; set maxGeneralPayloadBytes to null to delegate capacity to the transport, and sendEmptyCertificateResponses to answer an embedded certificate request when no certificate matches. Omission preserves existing behaviour.
    */
   constructor(
     wallet: WalletInterface,
@@ -149,11 +152,12 @@ export class Peer {
     sessionManager?: SessionManager | AsyncSessionManager,
     autoPersistLastSession?: boolean,
     originator?: OriginatorDomainNameStringUnder250Bytes,
-    messageValidation: AuthMessageValidationOptions = {}
+    options: PeerOptions = {}
   ) {
-    const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes
+    const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
     assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
     this.#maxGeneralPayloadBytes = maxGeneralPayloadBytes
+    this.#sendEmptyCertificateResponses = options.sendEmptyCertificateResponses === true
     this.#wallet = wallet
     this.#originator = originator
     this.#transport = transport
@@ -257,6 +261,8 @@ export class Peer {
   async #afterInitialCertificateAnswer(sessionNonce: string): Promise<void> {
     const answer = this.#initialCertificateAnswers.get(sessionNonce)
     if (answer == null) return
+    // A send from inside a certificates-received observer: the answer waits for that observer.
+    if (this.#certificateObserversRunning.has(sessionNonce)) return
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       await Promise.race([
@@ -1017,8 +1023,7 @@ export class Peer {
 
   private async validateInitialResponseCertificates(
     message: AuthMessage,
-    peerSession: PeerSession,
-    beforeObservers?: () => Promise<void>
+    peerSession: PeerSession
   ): Promise<void> {
     if (
       !peerSession.certificatesRequired ||
@@ -1040,14 +1045,26 @@ export class Peer {
     })
     this.#resolveCertificateValidation(sessionNonce)
 
-    if (this.onCertificatesReceivedCallbacks.size > 0) await beforeObservers?.()
-    for (const callback of this.onCertificatesReceivedCallbacks.values()) {
-      await callback(
-        message.identityKey,
-        message.certificates as VerifiableCertificate[],
-        sessionNonce,
-        peerSession.peerNonce
-      )
+    // Observers run before the automatic answer so that one which throws still prevents our
+    // disclosure. While they run, their own sends on this session skip the hold, which would
+    // otherwise wait for an answer that comes only after they return.
+    this.#certificateObserversRunning.set(
+      sessionNonce,
+      (this.#certificateObserversRunning.get(sessionNonce) ?? 0) + 1
+    )
+    try {
+      for (const callback of this.onCertificatesReceivedCallbacks.values()) {
+        await callback(
+          message.identityKey,
+          message.certificates as VerifiableCertificate[],
+          sessionNonce,
+          peerSession.peerNonce
+        )
+      }
+    } finally {
+      const running = (this.#certificateObserversRunning.get(sessionNonce) ?? 1) - 1
+      if (running > 0) this.#certificateObserversRunning.set(sessionNonce, running)
+      else this.#certificateObserversRunning.delete(sessionNonce)
     }
   }
 
@@ -1091,42 +1108,23 @@ export class Peer {
       message.identityKey,
       this.#originator
     )
-    // Answer even when nothing matches, as processCertificateRequest does: an empty list
-    // validates nothing, but a peer that decides on the certificates it receives need not
-    // wait for its own deadline. A wallet error or declined disclosure throws above and
-    // sends nothing.
-    await this.sendCertificateResponse(message.identityKey, verifiableCertificates)
+    // An empty answer is opt-in: some servers refuse one (auth-express-middleware replies
+    // 400). A wallet error or declined disclosure throws above and sends nothing.
+    if (verifiableCertificates.length > 0 || this.#sendEmptyCertificateResponses) {
+      await this.sendCertificateResponse(message.identityKey, verifiableCertificates)
+    }
   }
 
   async #processInitialResponse(message: AuthMessage): Promise<void> {
     let releaseHold: (() => void) | undefined
-    let earlyAnswer: Promise<{ error: unknown } | undefined> | undefined
     try {
       const peerSession = await this.authenticateInitialResponse(message, release => {
         releaseHold = release
       })
-      await this.validateInitialResponseCertificates(message, peerSession, async () => {
-        // A certificates-received observer may send on this session, and that send waits on
-        // the hold, so the automatic answer goes out before observers run. Application
-        // certificate-request listeners keep their place after the handshake waiters.
-        if (this.onCertificateRequestReceivedCallbacks.size === 0) {
-          earlyAnswer = this.#answerInitialCertificateRequest(message).then(
-            () => undefined,
-            (error: unknown) => ({ error })
-          )
-          await earlyAnswer
-        }
-        releaseHold?.()
-      })
+      await this.validateInitialResponseCertificates(message, peerSession)
       this.lastInteractedWithPeer = message.identityKey
       this.#releaseInitialResponseWaiters(peerSession)
-      if (earlyAnswer === undefined) {
-        await this.#answerInitialCertificateRequest(message, releaseHold)
-      } else {
-        // An early answer's failure surfaces here, after the waiters, as a late one's does.
-        const failure = await earlyAnswer
-        if (failure !== undefined) throw failure.error
-      }
+      await this.#answerInitialCertificateRequest(message, releaseHold)
     } finally {
       // Sent, failed, declined, or never reached: held general messages go out either way.
       releaseHold?.()

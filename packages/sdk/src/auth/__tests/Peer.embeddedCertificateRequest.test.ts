@@ -1,16 +1,22 @@
 import { jest } from '@jest/globals'
 import { Peer } from '../Peer.js'
 import { SessionManager } from '../SessionManager.js'
-import { AuthMessage, PeerSession, RequestedCertificateSet, Transport } from '../types.js'
+import {
+  AuthMessage,
+  PeerOptions,
+  PeerSession,
+  RequestedCertificateSet,
+  Transport
+} from '../types.js'
 import { PrivateKey } from '../../primitives/index.js'
 import { ListCertificatesResult, ProveCertificateResult } from '../../wallet/Wallet.interfaces.js'
 import { CompletedProtoWallet } from '../certificates/__tests/CompletedProtoWallet.js'
 import { MasterCertificate } from '../certificates/MasterCertificate.js'
 
 // A server may request certificates in its initialResponse and refuse (not queue) a general
-// message of that session until a certificateResponse arrives. The default Peer must answer
-// that request even when it holds no matching certificate, and must not let a general message
-// of the session reach the transport before the answer has been sent or has ended without one.
+// message of that session until a certificateResponse arrives. Peer must not let a general
+// message of the session reach the transport before its answer has been sent or has ended
+// without one. An empty answer is sent only when the Peer opts in.
 
 const certifierKey = new PrivateKey(9)
 const certifier = certifierKey.toPublicKey().toString()
@@ -170,7 +176,8 @@ class SocketLikeTransport implements Transport {
 function gatedConnection(
   clientWallet: CompletedProtoWallet,
   clientSessions?: SessionManager,
-  mutual = false
+  mutual = false,
+  clientOptions: PeerOptions = {}
 ): {
   client: Peer
   clientTransport: SocketLikeTransport
@@ -217,7 +224,10 @@ function gatedConnection(
     clientWallet,
     clientTransport,
     mutual ? requested : undefined,
-    clientSessions
+    clientSessions,
+    undefined,
+    undefined,
+    clientOptions
   )
   return { client, clientTransport, arrivals, refused, admitted }
 }
@@ -237,8 +247,30 @@ describe('Peer answers a certificate request embedded in an initialResponse', ()
     jest.useRealTimers()
   })
 
-  test('a peer holding no requested certificate answers with an empty list before its first general message', async () => {
+  test('by default a peer holding no requested certificate sends no answer', async () => {
     const connection = gatedConnection(new SlowNoCertificateWallet(new PrivateKey(8)))
+
+    await connection.client.toPeer(payload, serverIdentity)
+    await untilArrived(connection.arrivals, 'general')
+    // Long enough for a late answer to reach the server.
+    await settle(WALLET_LATENCY_MS * 3)
+
+    expect(connection.clientTransport.sent.map(m => m.messageType)).toEqual([
+      'initialRequest',
+      'general'
+    ])
+    // As before this change, a server that refuses general messages until it hears an answer
+    // refuses this one.
+    expect(connection.refused.map(m => m.payload)).toEqual([payload])
+  }, 15000)
+
+  test('with sendEmptyCertificateResponses, an empty answer precedes the first general message', async () => {
+    const connection = gatedConnection(
+      new SlowNoCertificateWallet(new PrivateKey(8)),
+      undefined,
+      false,
+      { sendEmptyCertificateResponses: true }
+    )
 
     await connection.client.toPeer(payload, serverIdentity)
     await untilArrived(connection.arrivals, 'general')
@@ -282,7 +314,9 @@ describe('Peer answers a certificate request embedded in an initialResponse', ()
     }
     const connection = gatedConnection(
       new SlowNoCertificateWallet(new PrivateKey(8)),
-      new ObservingSessionManager()
+      new ObservingSessionManager(),
+      false,
+      { sendEmptyCertificateResponses: true }
     )
     client = connection.client
 
@@ -349,17 +383,56 @@ describe('Peer answers a certificate request embedded in an initialResponse', ()
     ])
   }, 15000)
 
-  test('a certificates-received observer that sends on the session finds the answer already sent', async () => {
+  test.each([
+    ['a populated answer', () => new SlowCertificateHolderWallet(new PrivateKey(8)), {}],
+    [
+      'an opted-in empty answer',
+      () => new SlowNoCertificateWallet(new PrivateKey(8)),
+      { sendEmptyCertificateResponses: true }
+    ]
+  ])(
+    'a certificates-received observer that throws prevents %s',
+    async (_case, wallet, options: PeerOptions) => {
+      const connection = gatedConnection(wallet(), undefined, true, options)
+      let observed: string[] | undefined
+      connection.client.listenForCertificatesReceived((_sender, certificates) => {
+        observed = certificates.map(certificate => certificate.type)
+        throw new Error('server certificate refused by application policy')
+      })
+
+      // The handshake is rejected, so this send never completes; only the disclosure matters.
+      void connection.client.toPeer(payload, serverIdentity).catch(() => {})
+      await withinMs(
+        (async () => {
+          while (connection.clientTransport.handlerErrors.length === 0) await settle(5)
+        })(),
+        3000,
+        'the observer veto'
+      )
+      // Long enough for an answer that ignored the veto to be sent.
+      await settle(WALLET_LATENCY_MS * 3)
+
+      expect(observed).toEqual([certificateType])
+      expect(String(connection.clientTransport.handlerErrors[0])).toContain(
+        'refused by application policy'
+      )
+      expect(connection.clientTransport.sent.map(m => m.messageType)).toEqual(['initialRequest'])
+    },
+    15000
+  )
+
+  test('a certificates-received observer that sends on the session is not held behind the answer that follows it', async () => {
     const connection = gatedConnection(
       new SlowNoCertificateWallet(new PrivateKey(8)),
       undefined,
-      true
+      true,
+      { sendEmptyCertificateResponses: true }
     )
     let observed: string[] | undefined
     let observerSent = false
     connection.client.listenForCertificatesReceived(async (sender, certificates) => {
       observed = certificates.map(certificate => certificate.type)
-      // Awaited inside the observer: a hold released only after observers return stalls here.
+      // Awaited inside the observer: holding it until the answer would stall for the full bound.
       await connection.client.toPeer([5], sender)
       observerSent = true
     })
@@ -375,13 +448,16 @@ describe('Peer answers a certificate request embedded in an initialResponse', ()
 
     expect(observed).toEqual([certificateType])
     expect(observerSent).toBe(true)
+    // The observer's own message precedes the answer, as before this change; a strict server
+    // refuses it. The handshake waiter's message is still held until the answer is sent.
     expect(connection.arrivals).toEqual([
       'initialRequest',
-      'certificateResponse',
       'general',
+      'certificateResponse',
       'general'
     ])
-    expect(connection.refused).toEqual([])
+    expect(connection.refused.map(m => m.payload)).toEqual([[5]])
+    expect(connection.admitted.map(m => m.payload)).toEqual([payload])
     const answer = connection.clientTransport.sent.find(
       m => m.messageType === 'certificateResponse'
     )

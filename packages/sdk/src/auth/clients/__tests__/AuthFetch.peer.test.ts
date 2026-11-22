@@ -220,20 +220,62 @@ describe('AuthFetch authenticated peer lifecycle', () => {
     )
     expect(sendCertificateResponse).toHaveBeenCalledWith('server-identity-key', [certificateToSend])
 
-    // Holding no requested certificate is answered with an empty list, so the server can
-    // decide now rather than at its certificate deadline.
+    // By default, holding no requested certificate sends nothing.
     getVerifiableCertificatesMock.mockResolvedValue([])
     await certificatesRequested?.('server-identity-key', requestedCertificates)
-    expect(sendCertificateResponse).toHaveBeenCalledTimes(2)
-    expect(sendCertificateResponse).toHaveBeenLastCalledWith('server-identity-key', [])
+    expect(sendCertificateResponse).toHaveBeenCalledTimes(1)
+    expect(authFetch.peers['https://service.example'].pendingCertificateRequests).toEqual([])
+  })
+
+  test.each([
+    ['by default sends nothing', {}, 0],
+    [
+      'with sendEmptyCertificateResponses answers with an empty list',
+      { sendEmptyCertificateResponses: true },
+      1
+    ]
+  ])('holding no requested certificate %s', async (_case, options, emptyAnswers) => {
+    let certificatesRequested:
+      | ((verifier: string, requestedCertificates: Record<string, unknown>) => Promise<void>)
+      | undefined
+    const sendCertificateResponse = jest.fn(async () => {})
+    const peer = {
+      ready: Promise.resolve(),
+      listenForCertificatesReceived: jest.fn(),
+      listenForCertificatesRequested: jest.fn((listener: typeof certificatesRequested) => {
+        certificatesRequested = listener
+      }),
+      stopListeningForCertificatesReceived: jest.fn(),
+      // Only the peer and its listeners are needed, so the request itself ends at once.
+      requestCertificates: jest.fn(async () => {
+        throw new Error('request not needed')
+      }),
+      sendCertificateResponse
+    }
+    PeerMock.mockImplementation(() => peer)
+    const authFetch = new AuthFetch({} as any, undefined, undefined, undefined, options)
+    jest.spyOn(authFetch as any, 'wait').mockResolvedValue(undefined)
+    await expect(
+      authFetch.sendCertificateRequest('https://service.example/certificates', {
+        certifiers: [],
+        types: {}
+      })
+    ).rejects.toThrow('request not needed')
+    const requestedCertificates = { certifiers: ['certifier'], types: { identity: ['name'] } }
+
+    getVerifiableCertificatesMock.mockResolvedValue([])
+    await certificatesRequested?.('server-identity-key', requestedCertificates)
+    expect(sendCertificateResponse).toHaveBeenCalledTimes(emptyAnswers)
+    if (emptyAnswers > 0) {
+      expect(sendCertificateResponse).toHaveBeenCalledWith('server-identity-key', [])
+    }
 
     // A wallet error or declined disclosure is not "no certificates": nothing is sent.
     getVerifiableCertificatesMock.mockRejectedValue(new Error('user declined disclosure'))
     await expect(
       certificatesRequested?.('server-identity-key', requestedCertificates)
     ).rejects.toThrow('user declined disclosure')
-    expect(sendCertificateResponse).toHaveBeenCalledTimes(2)
-    expect(authFetch.peers['https://service.example'].pendingCertificateRequests).toEqual([])
+    expect(sendCertificateResponse).toHaveBeenCalledTimes(emptyAnswers)
   })
 
   test('waits for pending certificate decisions before sending', async () => {
