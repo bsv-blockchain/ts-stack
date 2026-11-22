@@ -180,15 +180,9 @@ export class CurrencyConverter {
 
       const fiatPerUsd = Object.fromEntries(
         SUPPORTED_FIAT_CURRENCY_CODES.map(code => {
+          if (code === 'USD') return [code, 1]
           const rate = fiatRates.rates[code]
-          return [
-            code,
-            code === 'USD'
-              ? 1
-              : rate === undefined
-                ? 0
-                : requirePositiveRate(rate, `${code} per USD`)
-          ]
+          return [code, rate === undefined ? 0 : requirePositiveRate(rate, `${code} per USD`)]
         })
       ) as Record<FiatCurrencyCode, number>
 
