@@ -398,7 +398,9 @@ export class StorageUploader {
     // Required header names arrive lowercased and may be signed into the upload
     // URL. fetch joins repeated names case-insensitively, so sending the file's
     // own Content-Type beside a required content-type would change the signed
-    // value; the provider's header wins.
+    // value; the provider's header wins. The stored object then takes the
+    // provider's type: a host that signs application/octet-stream serves the
+    // file back as octet-stream, so StorageDownloader reports that mimeType.
     const headers: Record<string, string> =
       'content-type' in requiredHeaders
         ? { ...requiredHeaders }
