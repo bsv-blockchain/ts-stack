@@ -434,9 +434,10 @@ deliberately returns beyond a proof (for example an overlay Engine `history`
 selector) is therefore dropped. When `true`, the facilitator omits the header
 and reads the per-output JSON answer, so each output carries the BEEF the
 service produced, usually plain BEEF with no `txid` hint. Each output's
-subject is its BEEF's last transaction. A `txid` hint, when a host sends
-one, must name that same transaction, and an output whose hint names another
-is dropped, so a lookup service should put each subject last. A host that
+subject is its Atomic BEEF subject or, for plain BEEF, its last transaction.
+A `txid` hint, when a host sends one, must name that same transaction, and an
+output whose hint names another is dropped, so a lookup service returning
+plain BEEF should put each subject last. A host that
 still answers with the aggregated binary form is
 counted as having rejected the query, without a reputation penalty: it
 appears in `rejectedHosts` (`queryDetailed`, `query$`), while `query()`
