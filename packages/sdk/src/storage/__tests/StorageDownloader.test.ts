@@ -471,7 +471,7 @@ describe('StorageDownloader', () => {
       expect(cancel).toHaveBeenCalledTimes(1)
     })
 
-    it('cancels the body of a response that arrives after the deadline', async () => {
+    it('cancels a streamed body whose signal is already aborted when headers arrive', async () => {
       const cancel = jest.fn()
       let arrive: () => void = () => {}
       const late = new Promise<void>(resolve => {
