@@ -287,6 +287,15 @@ export class CurrencyConverter {
     const from = normalizeCurrencyArgument(fromCurrency, 'fromCurrency')
     const to = normalizeCurrencyArgument(toCurrency, 'toCurrency')
     if (from === to) return amount
+    if (from === 'SATS' && to === 'BSV') return amount / 100_000_000
+    if (from === 'BSV' && to === 'SATS') {
+      // Scale the number's decimal representation before rounding to whole satoshis.
+      const [coefficient, exponent = '0'] = amount.toString().split('e')
+      return requireFiniteNumber(
+        Number(`${coefficient}e${Number(exponent) + 8}`),
+        'converted amount'
+      )
+    }
 
     const usdPerBsv = requirePositiveRate(this.exchangeRates.usdPerBsv, 'usdPerBsv')
 

@@ -3,10 +3,10 @@ id: pkg-amountinator
 title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: '2.1.10'
+version: '2.1.11'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-11-20'
-last_verified: '2026-11-20'
+last_updated: '2026-11-22'
+last_verified: '2026-11-22'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/amountinator'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator'
@@ -49,12 +49,12 @@ converter.dispose()
 
 - **CurrencyConverter** — Main class for conversions with auto-refresh
 - **Multi-currency support** — 15+ fiat currencies (USD, GBP, EUR, JPY, CNY, INR, etc.)
-- **Crypto conversion** — SATS ↔ BSV ↔ Fiat via USD
+- **Crypto conversion** — SATS ↔ BSV directly, with exchange rates for fiat
 - **Exchange rate caching** — Configurable auto-refresh interval (default: 5 min)
 - **Auto-detection** — Parse "100" (SATS), "0.1" (BSV), or "10 USD" from user input
 - **Settings integration** — Read/write preferred currency to wallet settings
 - **Formatted output** — Display string with symbol, decimals, and hover text
-- **Satoshi rounding** — `convertToSatoshis()` rounds up to ensure sufficient payment
+- **Satoshi rounding** — `convertToSatoshis()` preserves whole satoshis and rounds up fractional satoshis
 
 ## Runtime and package compatibility
 
