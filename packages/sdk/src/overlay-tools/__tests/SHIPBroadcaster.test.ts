@@ -330,6 +330,41 @@ describe('SHIPCast', () => {
     ).rejects.toMatchObject({ status: response.status, body: kept })
   })
 
+  it('skips reading a text-only error body that declares more than 8 KiB', async () => {
+    const text = jest.fn(async () => 'z'.repeat(9000))
+    const httpClient = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      headers: new Headers({ 'content-length': '9000' }),
+      text
+    })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toMatchObject({ name: 'OverlayBroadcastHTTPError', status: 502, body: '' })
+    expect(text).not.toHaveBeenCalled()
+  })
+
+  it.each([['5'], [' 5 '], ['not-a-length'], ['']])(
+    'reads a text-only error body whose Content-Length is %p',
+    async contentLength => {
+      const httpClient = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        headers: new Headers({ 'content-length': contentLength }),
+        text: async () => 'small'
+      })
+      const facilitator = new HTTPSOverlayBroadcastFacilitator(
+        httpClient as unknown as typeof fetch
+      )
+
+      await expect(
+        facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+      ).rejects.toMatchObject({ status: 400, body: 'small' })
+    }
+  )
+
   it('keeps the status when a failed response body stalls', async () => {
     jest.useFakeTimers()
     const cancel = jest.fn()

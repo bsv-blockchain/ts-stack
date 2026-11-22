@@ -354,6 +354,13 @@ export class OverlayBroadcastHTTPError extends Error {
  * A body that stalls or fails keeps what arrived, so the known HTTP status is
  * never lost to a slow diagnostic.
  */
+function declaredLengthExceeds(response: Response, maximumBytes: number): boolean {
+  const header =
+    typeof response.headers?.get === 'function' ? response.headers.get('content-length') : null
+  if (typeof header !== 'string' || !/^\d+$/.test(header.trim())) return false
+  return Number(header.trim()) > maximumBytes
+}
+
 async function readSHIPErrorBody(response: Response, timeoutMs: number): Promise<string> {
   const chunks: Uint8Array[] = []
   let total = 0
@@ -363,6 +370,10 @@ async function readSHIPErrorBody(response: Response, timeoutMs: number): Promise
     reader = response.body?.getReader()
     const read = async (): Promise<void> => {
       if (reader == null) {
+        // Without a stream, text() buffers the whole body before the cut, so a
+        // declared length over the cap skips the read. An absent or understated
+        // Content-Length is bounded only by the timer.
+        if (declaredLengthExceeds(response, MAX_SHIP_ERROR_BODY_BYTES)) return
         if (typeof response.text === 'function') chunks.push(utf8Bytes(await response.text()))
         return
       }
