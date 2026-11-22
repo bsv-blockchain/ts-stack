@@ -45,6 +45,25 @@ export function challenge(transcript: number[]): BigNumber {
   return new BigNumber([...Hash.sha256(transcript)].reverse()).umod(n)
 }
 
+const CHALLENGE_TAG = utf8('p sigma v1 challenge')
+const OPERATION_CODE = { schnorr: 1, dleq: 2, or: 3 } as const
+
+/** e = LE(SHA256(tag_op || transcript)) mod n; ringSize is required for 'or'. */
+export function challengeFor(
+  op: 'schnorr' | 'dleq' | 'or',
+  transcript: number[],
+  ringSize?: number
+): BigNumber {
+  const tag = [...CHALLENGE_TAG, OPERATION_CODE[op]]
+  if (op === 'or') {
+    if (ringSize === undefined || !Number.isInteger(ringSize) || ringSize < 1 || ringSize > 255) {
+      throw new Error('ring size must be a single byte')
+    }
+    tag.push(ringSize)
+  }
+  return challenge([...tag, ...transcript])
+}
+
 /** q = SHA256("p sigma v1 request" || op || statement || uint32be(len(ctx)) || ctx). */
 export function requestDigest(op: 1 | 2 | 3, statement: number[], ctx: number[]): number[] {
   return Hash.sha256([
@@ -91,7 +110,7 @@ export function proveSchnorr(x: BigNumber, ctx: number[]): number[] {
   for (let a = 0; ; a++) {
     const k = streamScalar(x, q, a, 1, 0)
     const R = point64(curve.g.mul(k))
-    const e = challenge([...R, ...P, ...ctx])
+    const e = challengeFor('schnorr', [...R, ...P, ...ctx])
     const s = k.add(e.mul(x)).umod(n)
     if (!s.isZero()) return [...R, ...scalar32(s)]
   }
@@ -104,7 +123,7 @@ export function verifySchnorr(P: Point, ctx: number[], result: number[]): boolea
     const R = readPoint64(result.slice(0, 64))
     const s = readScalar(result.slice(64))
     if (R === undefined || s === undefined) return false
-    const e = challenge([...result.slice(0, 64), ...point64(P), ...ctx])
+    const e = challengeFor('schnorr', [...result.slice(0, 64), ...point64(P), ...ctx])
     return curve.g.mul(s).eq(R.add(P.mul(e)))
   } catch {
     return false
@@ -121,7 +140,7 @@ export function proveDleq(x: BigNumber, H: Point, ctx: number[]): number[] {
     const k = streamScalar(x, q, a, 1, 0)
     const R1 = point64(curve.g.mul(k))
     const R2 = point64(H.mul(k))
-    const e = challenge([...R1, ...R2, ...P, ...P2, ...Hb, ...ctx])
+    const e = challengeFor('dleq', [...R1, ...R2, ...P, ...P2, ...Hb, ...ctx])
     const s = k.add(e.mul(x)).umod(n)
     if (!s.isZero()) return [...P2, ...R1, ...R2, ...scalar32(s)]
   }
@@ -136,7 +155,7 @@ export function verifyDleq(P: Point, H: Point, ctx: number[], result: number[]):
     const R2 = readPoint64(result.slice(128, 192))
     const s = readScalar(result.slice(192))
     if (P2 === undefined || R1 === undefined || R2 === undefined || s === undefined) return false
-    const e = challenge([
+    const e = challengeFor('dleq', [
       ...result.slice(64, 192),
       ...point64(P),
       ...result.slice(0, 64),
@@ -186,7 +205,7 @@ export function proveOr(x: BigNumber, ring: Point[], index: number, ctx: number[
     }
     const k = streamScalar(x, q, a, 1, index)
     R[index - 1] = point64(curve.g.mul(k))
-    const total = challenge([...R.flat(), ...points, ...ctx])
+    const total = challengeFor('or', [...R.flat(), ...points, ...ctx], count)
     const ei = total.sub(sum).umod(n)
     if (ei.isZero()) continue
     const si = k.add(ei.mul(x)).umod(n)
@@ -231,7 +250,11 @@ export function verifyOr(ring: Point[], ctx: number[], result: number[]): boolea
       e.push(v)
       sum = sum.add(v).umod(n)
     }
-    const total = challenge([...result.slice(0, 64 * count), ...ringBytes(ring), ...ctx])
+    const total = challengeFor(
+      'or',
+      [...result.slice(0, 64 * count), ...ringBytes(ring), ...ctx],
+      count
+    )
     const last = total.sub(sum).umod(n)
     if (last.isZero()) return false
     e.push(last)

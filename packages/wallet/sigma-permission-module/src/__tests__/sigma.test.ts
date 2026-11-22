@@ -2,10 +2,12 @@ import BigNumber from '@bsv/sdk/primitives/BigNumber'
 import Curve from '@bsv/sdk/primitives/Curve'
 import * as Hash from '@bsv/sdk/primitives/Hash'
 import PrivateKey from '@bsv/sdk/primitives/PrivateKey'
+import type Point from '@bsv/sdk/primitives/Point'
 import * as Utils from '@bsv/sdk/primitives/utils'
 import { point64, scalar32 } from '../encoding.js'
 import {
   challenge,
+  challengeFor,
   deriveScalar,
   proveDleq,
   proveOr,
@@ -113,7 +115,7 @@ describe('schnorr and dleq proofs', () => {
     const R1 = point64(curve.g.mul(k))
     const R2 = point64(H.mul(k))
     const P2 = point64(H.mul(x.addn(1)))
-    const e = challenge([...R1, ...R2, ...point64(P), ...P2, ...point64(H), ...ctx])
+    const e = challengeFor('dleq', [...R1, ...R2, ...point64(P), ...P2, ...point64(H), ...ctx])
     const s = k.add(e.mul(x)).umod(curve.n)
     expect(curve.g.mul(s).eq(curve.g.mul(k).add(P.mul(e)))).toBe(true)
     expect(H.mul(s).eq(H.mul(k).add(H.mul(x.addn(1)).mul(e)))).toBe(false)
@@ -222,5 +224,147 @@ describe('schnorr and dleq proofs', () => {
     for (const value of [or[or.length - 1] + 256, -1, 1.5, '1']) {
       expect(verifyOr(ring, ctx, replaceLast(or, value))).toBe(false)
     }
+  })
+})
+
+describe('operation tag', () => {
+  const curve = new Curve()
+  const x = deriveScalar(new PrivateKey(5))
+  const P = curve.g.mul(x)
+  const H = curve.g.mul(new BigNumber(7))
+  const ctx = filled(68, 3)
+  const others = [11, 13, 17].map(k => curve.g.mul(new BigNumber(k)))
+  const ascii = [...Buffer.from('p sigma v1 challenge', 'ascii')]
+  // Any nonce will do: a verifier does not see how it was chosen.
+  const k = new BigNumber(23)
+
+  /**
+   * A one-of-n result assembled by hand: branches other than `index` simulated with fixed
+   * e_j and s_j, the real branch closed against `total`, the challenge over the transcript.
+   */
+  const assembleOr = (
+    ring: Point[],
+    index: number,
+    total: (transcript: number[]) => BigNumber
+  ): { result: number[]; e: BigNumber[]; s: BigNumber[]; R: Point[]; total: BigNumber } => {
+    const e: BigNumber[] = []
+    const s: BigNumber[] = []
+    const R: Point[] = []
+    let sum = new BigNumber(0)
+    ring.forEach((Pj, i) => {
+      if (i === index - 1) {
+        e.push(new BigNumber(0))
+        s.push(new BigNumber(0))
+        R.push(curve.g.mul(k))
+        return
+      }
+      const ej = new BigNumber(100 + i)
+      const sj = new BigNumber(200 + i)
+      e.push(ej)
+      s.push(sj)
+      R.push(curve.g.mul(sj).add(Pj.mul(ej).neg()))
+      sum = sum.add(ej).umod(curve.n)
+    })
+    const t = total([...R.flatMap(point64), ...ring.flatMap(point64), ...ctx])
+    e[index - 1] = t.sub(sum).umod(curve.n)
+    s[index - 1] = k.add(e[index - 1].mul(x)).umod(curve.n)
+    const result = [
+      ...R.flatMap(point64),
+      ...s.flatMap(scalar32),
+      ...e.slice(0, ring.length - 1).flatMap(scalar32)
+    ]
+    return { result, e, s, R, total: t }
+  }
+
+  /** Every equation a verifier checks holds for the hand-assembled result. */
+  const orEquationsHold = (ring: Point[], a: ReturnType<typeof assembleOr>): boolean => {
+    const sum = a.e.reduce((acc, ej) => acc.add(ej).umod(curve.n), new BigNumber(0))
+    return (
+      sum.eq(a.total) &&
+      a.e.every(ej => !ej.isZero()) &&
+      ring.every((Pj, j) => curve.g.mul(a.s[j]).eq(a.R[j].add(Pj.mul(a.e[j]))))
+    )
+  }
+
+  const ringWith = (size: number, index: number): Point[] => {
+    const ring = others.slice(0, size - 1)
+    ring.splice(index - 1, 0, P)
+    return ring
+  }
+
+  it('challengeFor prefixes the BRC-230 tag', () => {
+    const t = [1, 2, 3]
+    expect(Utils.toHex(ascii)).toBe('70207369676d61207631206368616c6c656e6765')
+    expect(challengeFor('schnorr', t).eq(challenge([...ascii, 1, ...t]))).toBe(true)
+    expect(challengeFor('dleq', t).eq(challenge([...ascii, 2, ...t]))).toBe(true)
+    expect(challengeFor('or', t, 3).eq(challenge([...ascii, 3, 3, ...t]))).toBe(true)
+    expect(() => challengeFor('or', t)).toThrow()
+  })
+
+  it('challengeFor refuses a ring size that is not one byte from 1 to 255', () => {
+    for (const ringSize of [0, 256, 1.5, -1]) {
+      expect(() => challengeFor('or', [1, 2, 3], ringSize)).toThrow()
+    }
+    expect(challengeFor('or', [1, 2, 3], 255).eq(challenge([...ascii, 3, 255, 1, 2, 3]))).toBe(true)
+  })
+
+  it('verifySchnorr rejects a proof made without the tag', () => {
+    const R = point64(curve.g.mul(k))
+    const e = challenge([...R, ...point64(P), ...ctx])
+    const s = k.add(e.mul(x)).umod(curve.n)
+    expect(curve.g.mul(s).eq(curve.g.mul(k).add(P.mul(e)))).toBe(true)
+    expect(verifySchnorr(P, ctx, [...R, ...scalar32(s)])).toBe(false)
+    expect(verifySchnorr(P, ctx, proveSchnorr(x, ctx))).toBe(true)
+  })
+
+  it('verifyDleq rejects a proof made without the tag', () => {
+    const R1 = point64(curve.g.mul(k))
+    const R2 = point64(H.mul(k))
+    const P2 = point64(H.mul(x))
+    const e = challenge([...R1, ...R2, ...point64(P), ...P2, ...point64(H), ...ctx])
+    const s = k.add(e.mul(x)).umod(curve.n)
+    expect(curve.g.mul(s).eq(curve.g.mul(k).add(P.mul(e)))).toBe(true)
+    expect(H.mul(s).eq(H.mul(k).add(H.mul(x).mul(e)))).toBe(true)
+    expect(verifyDleq(P, H, ctx, [...P2, ...R1, ...R2, ...scalar32(s)])).toBe(false)
+    expect(verifyDleq(P, H, ctx, proveDleq(x, H, ctx))).toBe(true)
+  })
+
+  it.each([
+    [2, 1],
+    [2, 2],
+    [3, 2]
+  ])('verifyOr rejects an untagged proof (n=%i, position %i)', (size, index) => {
+    const ring = ringWith(size, index)
+    const untagged = assembleOr(ring, index, challenge)
+    expect(orEquationsHold(ring, untagged)).toBe(true)
+    expect(verifyOr(ring, ctx, untagged.result)).toBe(false)
+    expect(verifyOr(ring, ctx, proveOr(x, ring, index, ctx))).toBe(true)
+  })
+
+  it('verifyOr rejects a proof tagged for another ring size', () => {
+    const ring = ringWith(2, 2)
+    const wrongSize = assembleOr(ring, 2, t => challengeFor('or', t, 3))
+    expect(orEquationsHold(ring, wrongSize)).toBe(true)
+    expect(verifyOr(ring, ctx, wrongSize.result)).toBe(false)
+    // The same assembly with the right ring size is accepted.
+    expect(verifyOr(ring, ctx, assembleOr(ring, 2, t => challengeFor('or', t, 2)).result)).toBe(
+      true
+    )
+  })
+
+  it('an or request cannot hash the bytes of a dleq transcript', () => {
+    const c = ctx
+    const P2 = H.mul(x)
+    const R1 = point64(curve.g.mul(k))
+    const R2 = point64(H.mul(k))
+    // dleq over (P, P2, H) with ctx c, and or over the ring [P, P2] with ctx H64 || c.
+    const dleqTranscript = [...R1, ...R2, ...point64(P), ...point64(P2), ...point64(H), ...c]
+    const orTranscript = [...R1, ...R2, ...[P, P2].flatMap(point64), ...point64(H), ...c]
+    expect(orTranscript).toEqual(dleqTranscript)
+    const dleqInput = [...ascii, 2, ...dleqTranscript]
+    const orInput = [...ascii, 3, 2, ...orTranscript]
+    expect(challengeFor('dleq', dleqTranscript).eq(challenge(dleqInput))).toBe(true)
+    expect(challengeFor('or', orTranscript, 2).eq(challenge(orInput))).toBe(true)
+    expect(orInput).not.toEqual(dleqInput)
   })
 })

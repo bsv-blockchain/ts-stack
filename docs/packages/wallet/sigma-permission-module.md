@@ -76,8 +76,10 @@ The module is deterministic: the same request always returns the same bytes.
 ## Operations
 
 The `plaintext` of the `encrypt` call is a byte array. The challenge is the
-SHA-256 of the transcript, read as a little-endian integer, modulo the group
-order.
+SHA-256 of the operation's tag followed by its transcript, read as a
+little-endian integer, modulo the group order. The tag is the 20 ASCII bytes
+`p sigma v1 challenge` followed by the operation byte: `0x01` for `schnorr`,
+`0x02` for `dleq`, and `0x03` then `n` (one byte, the ring size) for `or`.
 
 | Operation | Plaintext                     | Result                                          | Transcript hashed for the challenge |
 | --------- | ----------------------------- | ----------------------------------------------- | ----------------------------------- |
