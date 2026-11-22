@@ -184,6 +184,36 @@ describe('HTTPSOverlayLookupFacilitator wholeBeef', () => {
     await new Promise<void>(resolve => setTimeout(resolve, 0))
     expect(issued?.bodyUsed).toBe(true)
   })
+
+  // Only an application/octet-stream answer is recognised as the aggregated
+  // form. A binary body under any other content type is read as JSON, as it
+  // is for a default lookup, and fails as an ordinary malformed answer.
+  it.each([
+    ['no content type', undefined],
+    ['a JSON content type', 'application/json']
+  ])(
+    'reads a binary answer with %s as JSON and fails it as malformed',
+    async (_label, contentType) => {
+      const fetchClient = jest.fn(
+        async () =>
+          new Response(
+            aggregatedPayload(history.subject, history.beef),
+            contentType === undefined ? {} : { headers: { 'content-type': contentType } }
+          )
+      )
+      const facilitator = new HTTPSOverlayLookupFacilitator(fetchClient as unknown as typeof fetch)
+
+      const error = await facilitator
+        .lookup(host, question, 2000, undefined, { wholeBeef: true })
+        .then(
+          () => undefined,
+          (reason: unknown) => reason
+        )
+      expect(error).toBeInstanceOf(Error)
+      expect(error).not.toBeInstanceOf(LookupHTTPError)
+      expect((error as Error).message).toBe('Overlay response is not valid UTF-8.')
+    }
+  )
 })
 
 describe('LookupResolver wholeBeef', () => {
@@ -327,6 +357,29 @@ describe('LookupResolver wholeBeef', () => {
     expect(progress.successfulHosts).toBe(1)
     expect(progress.rejectedHosts).toBe(1)
     expect(evidence).toEqual([{ host: jsonHost, beef: history.beef }])
+  })
+
+  it('counts a binary answer without its content type as a failure, with the usual penalty', async () => {
+    const untypedHost = 'https://untyped.example'
+    const resolver = new LookupResolver({
+      facilitator: new HTTPSOverlayLookupFacilitator(
+        (async () =>
+          new Response(aggregatedPayload(history.subject, history.beef))) as unknown as typeof fetch
+      ),
+      hostOverrides: { [service]: [untypedHost] }
+    })
+
+    const { answer, progress } = await resolver.queryDetailed(question, undefined, {
+      wholeBeef: true
+    })
+
+    expect(answer.outputs).toEqual([])
+    expect(progress.failedHosts).toBe(1)
+    expect(progress.rejectedHosts).toBe(0)
+    expect(hostTracker.snapshot(untypedHost)?.totalFailures).toBe(1)
+    expect(hostTracker.snapshot(untypedHost)?.lastError).toBe(
+      'Overlay response is not valid UTF-8.'
+    )
   })
 
   it('does not back off a host for default lookups after it rejects wholeBeef lookups', async () => {
