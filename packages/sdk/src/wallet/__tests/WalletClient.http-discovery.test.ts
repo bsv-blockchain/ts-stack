@@ -17,7 +17,8 @@ describe('WalletClient automatic HTTP discovery', () => {
     ['json', 'http://localhost:3321', '1.0.0.0'],
     ['secure-json', 'https://localhost:2121', '1.0.0.0'],
     ['wire', 'http://localhost:3301', brc205Version],
-    ['json', 'http://localhost:3321', brc205Version]
+    ['json', 'http://localhost:3321', brc205Version],
+    ['secure-json', 'https://localhost:2121', brc205Version]
   ])(
     'preserves an explicit caller through %s discovery at %s and later calls (version %s)',
     async (kind, endpoint, version) => {
