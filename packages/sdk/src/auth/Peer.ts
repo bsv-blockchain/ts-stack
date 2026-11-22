@@ -130,7 +130,7 @@ export class Peer {
    *
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
    * @param {Transport} transport - The transport mechanism used for sending and receiving messages.
-   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization.
+   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization. A type listed with an empty field array asks for a zero-field proof, which only a Peer that initiated the handshake can accept, in the initial response. A responder, such as a server behind auth-express-middleware requesting `types: { T: [] }`, receives the client's answer as a standalone certificate response, and a zero-field proof there stays refused.
    * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} with atomic `claimMessageNonce` and `claimInitialRequestNonce` for shared/durable storage in load-balanced deployments; otherwise the bounded default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
@@ -558,6 +558,9 @@ export class Peer {
    * run. Throwing rejects message handling and stops subsequent observers; it does not
    * roll back validation or revoke the session. Apply acceptance policy through the locally
    * requested certificate set and explicit application authorization before protected work.
+   *
+   * A certificate accepted as a zero-field proof reaches observers with its fields still
+   * encrypted and no keyring, so do not call `decryptFields` on it.
    *
    * @param {(senderPublicKey: string, certs: VerifiableCertificate[], sessionNonce: string, peerNonce?: string) => void | Promise<void>} callback - The function to call when certificates are received. The local and peer session nonces identify the exact validated exchange; callbacks that do not need them remain compatible.
    * @returns {number} The ID of the callback listener.

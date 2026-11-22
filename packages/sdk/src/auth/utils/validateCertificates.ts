@@ -69,7 +69,10 @@ function assertRequestedDisclosedFields(
  * request authority. A zero-field proof carries no keyring encrypted for the
  * verifier, so it binds to the holder only through the subject check against
  * the authenticated identity key; it does not show that the holder's wallet
- * produced a proof for this verifier.
+ * produced a proof for this verifier. A certificate accepted this way keeps
+ * its encrypted fields and has no keyring, so callers must not decrypt it.
+ * `Peer` opts in only for the initial response on a session it initiated; a
+ * responder's standalone certificate responses keep the nonempty path.
  */
 export const validateCertificates = async (
   verifierWallet: WalletInterface,

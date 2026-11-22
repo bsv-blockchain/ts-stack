@@ -17,14 +17,21 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 ## Zero-field initial certificate proofs
 
-The 4.1.3 source candidate lets a `Peer` that initiates a handshake accept an
-initial response proving a certificate with zero revealed fields, when its
-retained request lists that certifier and type with an empty field list. The
-signed core is checked, the keyring must be empty, null or omitted, and nothing
-is decrypted. `validateCertificates` takes an optional `allowZeroFields`
-argument, default `false`, so existing callers keep the nonempty path. Responder
-sessions and standalone responses keep the nonempty path. No wire or stored-data
-change. Source is not publication.
+An unreleased source change after 4.1.2 lets a `Peer` that initiates a
+handshake accept an initial response proving a certificate with zero revealed
+fields, when its retained request lists that certifier and type with an empty
+field list. The signed core is checked, the keyring must be empty, null or
+omitted, and nothing is decrypted. `validateCertificates` takes an optional
+`allowZeroFields` argument, default `false`, so existing callers keep the
+nonempty path. Responder sessions and standalone responses keep the nonempty
+path. No wire or stored-data change. Source is not publication.
+
+Only the initiator can use zero-field requests. A server behind
+`auth-express-middleware` is the responder: a request such as
+`types: { T: [] }` still receives the client's answer as a standalone
+certificate response, which stays refused for an empty keyring. Certificates
+accepted on the zero-field path reach `onCertificatesReceived` listeners with
+encrypted `fields` and no keyring, so do not call `decryptFields` on them.
 
 ## Script ASM for data outputs
 
