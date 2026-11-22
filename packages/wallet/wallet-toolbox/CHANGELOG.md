@@ -8,6 +8,11 @@
   requires one. Entries that WhatsOnChain marks `isSpentInMempoolTx: true` are no longer
   reported as unspent; a non-boolean value for that field, or an outpoint listed twice,
   fails the answer. No migration is required.
+- This applies to confirmed outputs too. A confirmed output already spent by a mempool
+  transaction, which `getUtxoStatus` previously reported as unspent, now reads as
+  `'spent'`. `reviewSpendableOutputs` (and its release mode), proof recovery and
+  confirmed-spend recovery therefore treat it as spent, even if that mempool
+  transaction is later evicted or loses a race.
 
 # 2.18.0 source candidate
 
