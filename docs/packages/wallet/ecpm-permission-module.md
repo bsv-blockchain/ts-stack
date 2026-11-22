@@ -4,9 +4,9 @@ title: '@bsv/ecpm-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/ecpm-permission-module'
-version: '0.1.4'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+version: '0.2.0'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc98', 'ecpm', 'cryptography']
@@ -46,9 +46,13 @@ p ecpm <apply|remove> <pointHex> <logicalProtocolID>
 ```
 
 The module reads `keyID`, `counterparty`, `privileged`, `privilegedReason`, and
-`seekPermission` from their existing fields. It derives the scalar under
-`p ecpm <logicalProtocolID>`; the operation and point are deliberately omitted
-so `remove` uses the inverse of the exact scalar selected by `apply`.
+`seekPermission` from their existing fields. It derives a BRC-42/43 child key
+under `p ecpm <logicalProtocolID>` and maps it to the multiplication scalar by
+HKDF-SHA256 as `1 + (OKM mod (n - 1))`; the child key is never used as the scalar
+or returned. The operation and point are deliberately omitted from the
+derivation so `remove` uses the inverse of the exact scalar selected by `apply`.
+Version 0.2.0 introduced this mapping (GHSA-m3c6-3mv8-j86f), so every scalar
+differs from 0.1.x; do not mix versions within one protocol run.
 
 ```typescript
 const masked = await wallet.getPublicKey({
@@ -94,6 +98,9 @@ host for a privileged deriver and fails closed when no provider is available.
   compressed, finite secp256k1 points.
 - Security level 0 ordinary calls do not prompt. Levels 1 and 2 require the
   authorization callback; level 2 grants are scoped to the counterparty.
+- Any origin can remove a level 0 mask when it knows the derivation identity.
+  Protocols that need origin-scoped permission for masking or removal must use
+  security level 1 or 2.
 - Every privileged call requires authorization. Cached and concurrent grants
   are scoped to the exact approved `privilegedReason`, so a different reason
   cannot reuse the approval. `seekPermission: false` fails unless an applicable

@@ -1,6 +1,6 @@
 # @bsv/did
 
-Patch candidate `0.3.2` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Release candidate `0.3.3`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
 
 `@bsv/did` supplies the proposed BRC-202 identity-key DID profile and BRC-203
 signature-preserving bridge for existing encrypted BRC-52 certificates. It also

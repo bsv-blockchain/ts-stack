@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-23",
+  "lastReviewed": "2026-11-19",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -156,11 +156,11 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-10-23",
-    "method": "Reconciled the 26 existing selector/value registrations and their source files against main; they remain unchanged with their existing removal evidence. Added only two scoped repairs: remove the unused Chromium-BiDi dependency from Puppeteer 25.11.0 in the CDP-only private browser harness, and enforce patched Zod 4.6.7 within mutation-server-protocol's accepted ^4.1.12 range. Inspected Puppeteer's dynamic BiDi import boundary. Its available upstream upgrade fails the existing provenance downgrade policy. A broad root refresh moves unrelated Babel, Inquirer and Node-type dependencies; the narrow Zod floor preserves those reviewed resolutions. Retain the unchanged Chrome/CDP harness and qualify its full existing browser assertions, Stryker mutation execution, HTTP consumers, frozen graph and unexcluded audit.",
-    "retainedCount": 28,
-    "result": "The existing 26 substitutions retain their previously recorded compatibility and security rationale. The two additional selectors remove an unused vulnerable development-tool closure and replace vulnerable Zod 4 with an API-compatible patched release. They add no advisory exclusion, threshold change, provenance exception, disabled assertion or public application-wallet API change. Each new repair has a maintainer owner, upstream evidence, a November 6 review date and explicit retirement tests.",
-    "nextReview": "Rehearse removal monthly and after changes to the governed upstream dependencies; specifically recheck Puppeteer/Chromium-BiDi provenance and mutation-server-protocol/Zod security floors by 2026-11-06."
+    "reviewedAt": "2026-11-19",
+    "method": "Rehearsed removal of the metro-file-map repair after Dependabot could not update the root workspace: its exact metro-file-map@0.87.1 patch stopped every Metro update with ERR_PNPM_UNUSED_PATCH. Metro-file-map 0.87.2 and later match watched files without micromatch, so the official Metro 0.87.3 patch release removes the affected braces path. Moved the mobile Metro and Metro config pins to 0.87.3 and removed the scoped micromatch removal, the Picomatch package extension and the paired patch together. Replaced the watcher oracle, which tested the removed glob matcher, with a platform-gate assertion that metro-file-map resolves neither micromatch nor braces. The other 27 selector/value registrations remain unchanged with their existing removal evidence.",
+    "retainedCount": 27,
+    "result": "One temporary repair retired with no advisory exclusion, threshold change, provenance exception or public application-wallet API change. The packed Metro/Hermes platform gate, frozen graph and unexcluded audit qualify the retirement. The Puppeteer/Chromium-BiDi and Zod 4 repairs from the 2026-10-23 rehearsal remain open.",
+    "nextReview": "Rehearse removal monthly and after changes to the governed upstream dependencies; recheck Puppeteer/Chromium-BiDi provenance and the mutation-server-protocol/Zod security floor by 2026-12-01."
   },
   "overrideRegistry": [
     {
@@ -317,12 +317,6 @@
       "selector": "gaxios",
       "value": "7.3.0",
       "exceptionId": "standalone-gaxios-advisory-override"
-    },
-    {
-      "source": "pnpm-workspace.yaml",
-      "selector": "metro-file-map@0.87.1>micromatch",
-      "value": "'-'",
-      "exceptionId": "metro-file-map-picomatch-advisory-repair"
     },
     {
       "source": "pnpm-workspace.yaml",
