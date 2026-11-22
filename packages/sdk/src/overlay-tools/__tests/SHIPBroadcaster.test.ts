@@ -346,7 +346,7 @@ describe('SHIPCast', () => {
     expect(text).not.toHaveBeenCalled()
   })
 
-  it.each([['5'], [' 5 '], ['not-a-length'], ['']])(
+  it.each([['5'], [' 5 '], ['8192'], ['not-a-length'], ['']])(
     'reads a text-only error body whose Content-Length is %p',
     async contentLength => {
       const httpClient = jest.fn().mockResolvedValue({
