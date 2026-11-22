@@ -50,7 +50,14 @@ export default class SatoshisPerKilobyte implements FeeModel {
       }
       inputLengths.push(scriptLength)
     }
-    const outputLengths = tx.outputs.map(out => out.lockingScript.toBinary().length)
+    const outputLengths = tx.outputs.map(out => {
+      const length = out.lockingScript.toBinary().length
+      // Checked here so the error names the locking script, not the VarInt.
+      if (!Number.isSafeInteger(length) || length < 0) {
+        throw new RangeError('Locking script length must be a non-negative safe integer.')
+      }
+      return length
+    })
     const size = transactionSize(inputLengths, outputLengths)
     // We'll use Math.ceil to ensure the miners get the extra satoshi.
     const fee = Math.ceil((size / 1000) * rate)
