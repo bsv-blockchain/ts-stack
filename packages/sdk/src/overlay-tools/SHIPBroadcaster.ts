@@ -334,11 +334,20 @@ async function readSHIPJSON(response: Response): Promise<unknown> {
 /**
  * A non-2xx answer from an overlay's submit route. The message is unchanged
  * from earlier releases; `status` and the first 8 KiB of the response `body`
- * (untrusted text, empty when unreadable) let callers tell a refusal from an
- * outage and report what the overlay said.
+ * let callers tell a refusal from an outage and report what the overlay said.
  */
 export class OverlayBroadcastHTTPError extends Error {
+  /** The HTTP status, or 0 when the adapter reported a malformed one. */
   readonly status: number
+  /**
+   * The first 8 KiB of the response body, decoded as UTF-8; empty when the body
+   * was unreadable, stalled before any bytes arrived, or declared a
+   * Content-Length over 8 KiB without a stream to read from.
+   *
+   * This is untrusted, server-controlled text: do not render it as HTML or
+   * write it to logs or terminals unescaped. The cut is at a byte offset, so a
+   * truncated body can end in U+FFFD where a multibyte character was split.
+   */
   readonly body: string
 
   constructor(status: number, body: string) {
