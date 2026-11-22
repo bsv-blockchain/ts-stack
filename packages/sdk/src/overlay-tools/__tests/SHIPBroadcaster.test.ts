@@ -365,6 +365,28 @@ describe('SHIPCast', () => {
     }
   )
 
+  it('does not hold the process open on the error body timer', async () => {
+    jest.useFakeTimers()
+    const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout')
+    const httpClient = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => await new Promise<string>(() => {})
+    })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({ status: 503, body: '' })
+
+    await jest.advanceTimersByTimeAsync(2_000)
+    await rejection
+    const bodyTimers = setTimeoutSpy.mock.results
+      .filter((_result, index) => setTimeoutSpy.mock.calls[index][1] === 2_000)
+      .map(result => result.value as { hasRef: () => boolean })
+    expect(bodyTimers).toHaveLength(1)
+    expect(bodyTimers[0].hasRef()).toBe(false)
+    setTimeoutSpy.mockRestore()
+  })
+
   it('keeps the status when a failed response body stalls', async () => {
     jest.useFakeTimers()
     const cancel = jest.fn()

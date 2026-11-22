@@ -388,6 +388,7 @@ async function readSHIPErrorBody(response: Response, timeoutMs: number): Promise
       read(),
       new Promise<void>(resolve => {
         timer = setTimeout(resolve, timeoutMs)
+        if (typeof timer === 'object' && 'unref' in timer) timer.unref()
       })
     ])
   } catch {
