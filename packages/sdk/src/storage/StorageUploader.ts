@@ -184,7 +184,11 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
   if (response.body == null) {
     // Compatibility for fetch implementations without a WHATWG body stream
     // (such as React Native's). The declared length was checked above, but the
-    // body is only measured once it has been read.
+    // body is only measured once it has been read. Unlike StorageDownloader,
+    // a missing Content-Length is accepted here: these replies come from the
+    // storage URL the caller configured, not from an overlay-advertised host,
+    // and the /upload reply is read after its payment has settled, so refusing
+    // a chunked or compressed reply would abandon a paid upload.
     if (typeof response.arrayBuffer !== 'function') {
       throw new Error('Storage provider returned an empty response.')
     }

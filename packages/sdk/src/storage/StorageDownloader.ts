@@ -37,6 +37,9 @@ export interface DownloaderConfig {
    * Deadline in milliseconds for each host (1 to 2147483647), covering the
    * request and the body. A host that misses it has its request aborted and
    * its body read cancelled, and the next host is tried. No deadline by default.
+   * A fetch client without a body stream that also ignores the abort signal
+   * cannot be stopped: its transfer may continue in the background after the
+   * attempt is recorded as `timeout`, though its result is discarded.
    */
   timeoutMs?: number
 }
