@@ -179,7 +179,7 @@ describe('Teranode Broadcaster', () => {
     ['REJECTED ', undefined, 'REJECTED'],
     ['DOUBLE_SPEND_ATTEMPTED', undefined, 'DOUBLE_SPEND_ATTEMPTED'],
     ['SEEN_IN_ORPHAN_MEMPOOL', undefined, 'SEEN_IN_ORPHAN_MEMPOOL'],
-    ['STORED', 'parent is an orphan', 'STORED parent is an orphan']
+    ['SEEN_IN_ORPHAN_MEMPOOL', 'missing parent', 'SEEN_IN_ORPHAN_MEMPOOL missing parent']
   ])('returns a failure when a 2xx body reports %p', async (txStatus, extraInfo, description) => {
     const data = { txid: 'a'.repeat(64), txStatus, extraInfo }
     const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
@@ -189,6 +189,20 @@ describe('Teranode Broadcaster', () => {
       txid: 'a'.repeat(64),
       description,
       more: { txStatus }
+    })
+  })
+
+  it.each([
+    ['SEEN_ON_NETWORK', 'parent no longer orphaned'],
+    ['STORED', 'parent is an orphan']
+  ])('keeps a %p success whose extraInfo mentions an orphan', async (txStatus, extraInfo) => {
+    const data = { txid: 'a'.repeat(64), txStatus, extraInfo }
+    const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+      status: 'success',
+      txid: 'a'.repeat(64),
+      message: `${txStatus} ${extraInfo}`,
+      txStatus
     })
   })
 

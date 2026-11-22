@@ -45,8 +45,8 @@ export default class Teranode implements Broadcaster {
    * carries it as `txStatus` (and the body's numeric `status` as `arcStatus`),
    * and its message as `ARC` builds it. `RECEIVED` is still a success but means
    * taken in, not yet validated; callers that need certainty check `txStatus`
-   * or poll the service. A status in ARC's failure set, an orphan, or a body
-   * naming another transaction is returned as a failure. Unlike `ARC`, an
+   * or poll the service. A status in ARC's failure set, a `txStatus` naming an
+   * orphan, or a body naming another transaction is returned as a failure. Unlike `ARC`, an
    * unknown status stays a success, since a plain node may answer anything.
    * A non-2xx keeps the HTTP status as `code` and adds the body's ARC
    * `status`, `txStatus` and `detail` under `more`.
@@ -114,8 +114,11 @@ function successfulResponse(data: unknown, txid: string): BroadcastResponse | Br
   const fields: { txStatus: string; arcStatus?: number } = { txStatus }
   const arcStatus = read('status')
   if (Number.isSafeInteger(arcStatus)) fields.arcStatus = arcStatus as number
-  const upper = description.toUpperCase()
-  if (ARC_ERROR_STATUSES.has(txStatus.trim().toUpperCase()) || upper.includes('ORPHAN')) {
+  const upperStatus = txStatus.trim().toUpperCase()
+  // Orphan detection reads txStatus only: free text such as "parent no longer
+  // orphaned" must not turn an accepted transaction into a failure, which would
+  // invite the caller to release its inputs and double-spend itself.
+  if (ARC_ERROR_STATUSES.has(upperStatus) || upperStatus.includes('ORPHAN')) {
     return { status: 'error', code: txStatus, txid, description, more: fields }
   }
   return { status: 'success', txid, message: description, ...fields }
