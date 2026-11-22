@@ -38,6 +38,7 @@ export {
   type OverlayMonitorThresholds,
   type OverlayMonitorWarning
 } from './src/OverlayMonitor.js'
+// remove-arcade-alias: ArcadeProvider, ArcadeMerkleProof and ArcadeProviderConfig.
 export {
   ArcadeProvider,
   BsvBroadcasterProvider,

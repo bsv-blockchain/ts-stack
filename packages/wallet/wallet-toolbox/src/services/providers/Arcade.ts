@@ -1,5 +1,8 @@
 // BsvBroadcaster is implemented in this file, which keeps its former Arcade name so the code
 // keeps its history here. Import it from './BsvBroadcaster'.
+// remove-arcade-alias: if the deprecated Arcade names are ever removed, move this
+// implementation into ./BsvBroadcaster.ts (a file move, not a delete) and drop the aliases
+// marked below.
 import { Beef, HexString, HttpClient, HttpClientResponse, HttpClientRequestOptions, MerklePath, Random } from '@bsv/sdk'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import {
@@ -57,6 +60,7 @@ function defaultDeploymentId(): string {
 // one EF transaction per request, so submit independent transactions concurrently
 // while preserving dependency order and avoiding an unbounded burst.
 export const BSV_BROADCASTER_POST_BEEF_CONCURRENCY = 4
+// remove-arcade-alias
 /** @deprecated Use BSV_BROADCASTER_POST_BEEF_CONCURRENCY. Arcade was renamed to BSV Broadcaster. */
 export const ARCADE_POST_BEEF_CONCURRENCY = BSV_BROADCASTER_POST_BEEF_CONCURRENCY
 export {
@@ -572,6 +576,7 @@ export class BsvBroadcaster {
   }
 }
 
+// remove-arcade-alias
 /** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */
 export const Arcade = BsvBroadcaster
 /** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */

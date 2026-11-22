@@ -440,6 +440,7 @@ export class BsvBroadcasterProvider implements Broadcaster {
   }
 }
 
+// remove-arcade-alias
 /** @deprecated Use BsvBroadcasterProvider. Arcade was renamed to BSV Broadcaster. */
 export const ArcadeProvider = BsvBroadcasterProvider
 /** @deprecated Use BsvBroadcasterProvider. Arcade was renamed to BSV Broadcaster. */

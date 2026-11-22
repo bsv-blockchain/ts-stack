@@ -10,7 +10,9 @@
   the `arcadeUrl`, `arcadeApiKey` and `arcadeConfig` options, the `*_ARCADE_URL` environment
   variables, the public `arcade-*` hostnames, the `arcade` provider name, history-note
   `what` values and the `ArcadeSSE` monitor task name stay as they were. No configuration
-  or consumer migration is required.
+  or consumer migration is required. Every alias site is tagged `remove-arcade-alias`; if
+  the aliases are ever removed, the implementation moves from `providers/Arcade.ts` into
+  `providers/BsvBroadcaster.ts` rather than being deleted with the alias file.
 
 # 2.18.0 source candidate
 

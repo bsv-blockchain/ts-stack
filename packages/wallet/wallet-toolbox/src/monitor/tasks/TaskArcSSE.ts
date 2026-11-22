@@ -537,6 +537,7 @@ export class TaskBsvBroadcasterSSE extends WalletMonitorTask {
   }
 }
 
+// remove-arcade-alias
 /** @deprecated Use TaskBsvBroadcasterSSE. Arcade was renamed to BSV Broadcaster. */
 export const TaskArcadeSSE = TaskBsvBroadcasterSSE
 /** @deprecated Use TaskBsvBroadcasterSSE. Arcade was renamed to BSV Broadcaster. */

@@ -1288,6 +1288,7 @@ export default class OverlayExpress {
 
   /**
    * @deprecated Use configureBsvBroadcaster. Arcade was renamed to BSV Broadcaster.
+   * remove-arcade-alias
    */
   configureArcade(
     url: string,
