@@ -50,7 +50,7 @@ converter.dispose()
 - **CurrencyConverter** — Main class for conversions with auto-refresh
 - **Multi-currency support** — 15+ fiat currencies (USD, GBP, EUR, JPY, CNY, INR, etc.)
 - **Crypto conversion** — SATS ↔ BSV directly, with exchange rates for fiat
-- **Exchange rate caching** — Configurable auto-refresh interval (default: 5 min)
+- **Exchange rate caching** — Configurable auto-refresh interval (default: 5 min). Partial provider responses retain available currencies. Converting an unavailable currency raises an error instead of quoting it.
 - **Auto-detection** — Parse "100" (SATS), "0.1" (BSV), or "10 USD" from user input
 - **Settings integration** — Read/write preferred currency to wallet settings
 - **Formatted output** — Display string with symbol, decimals, and hover text

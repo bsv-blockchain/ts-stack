@@ -1,6 +1,6 @@
 # @bsv/amountinator
 
-Release candidate `2.1.11`. Converts BSV and satoshis directly without fiat rates. A whole-satoshi amount expressed in BSV preserves its integer amount, and fractional satoshis still round up when converted for payment. No API, wire or data migration is required.
+Release candidate `2.1.11`. Converts BSV and satoshis directly without fiat rates. A whole-satoshi amount expressed in BSV preserves its integer amount, and fractional satoshis still round up when converted for payment. Fiat refreshes accept partial provider results. Currencies without a valid rate remain unavailable for conversion. No API, wire or data migration is required.
 
 [![npm version](https://img.shields.io/npm/v/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)

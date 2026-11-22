@@ -179,10 +179,17 @@ export class CurrencyConverter {
       const fiatRates = await this.services.getFiatExchangeRates(fiatTargets)
 
       const fiatPerUsd = Object.fromEntries(
-        SUPPORTED_FIAT_CURRENCY_CODES.map(code => [
-          code,
-          code === 'USD' ? 1 : requirePositiveRate(fiatRates.rates?.[code], `${code} per USD`)
-        ])
+        SUPPORTED_FIAT_CURRENCY_CODES.map(code => {
+          const rate = fiatRates.rates[code]
+          return [
+            code,
+            code === 'USD'
+              ? 1
+              : rate === undefined
+                ? 0
+                : requirePositiveRate(rate, `${code} per USD`)
+          ]
+        })
       ) as Record<FiatCurrencyCode, number>
 
       const rates = { usdPerBsv, fiatPerUsd }
