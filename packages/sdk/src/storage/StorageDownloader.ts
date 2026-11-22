@@ -47,7 +47,10 @@ export type StorageDownloadFailureReason =
   | 'http'
   /** The host missed the configured `timeoutMs`. */
   | 'timeout'
-  /** The declared or actual size was malformed or exceeded `maxDownloadBytes`. */
+  /**
+   * The declared or actual size was malformed or exceeded `maxDownloadBytes`,
+   * or a response without a body stream declared no Content-Length.
+   */
   | 'size'
   /** The bytes did not hash to the UHRP URL. */
   | 'integrity'
@@ -277,8 +280,11 @@ export class StorageDownloader {
         data = body
       } else if (typeof result.arrayBuffer === 'function') {
         // Compatibility for fetch implementations without a WHATWG body stream
-        // (such as React Native's). The declared length was checked above, but
-        // the body is only measured once it has been read.
+        // (such as React Native's). arrayBuffer() buffers the whole body before
+        // it can be measured, so only a host that declared a length within
+        // maxDownloadBytes (checked above) is read this way. A transparently
+        // decoded body can still exceed its declared length, hence the re-check.
+        if (declaredLength === null) return { url, reason: 'size' }
         data = new Uint8Array(await result.arrayBuffer())
         if (data.byteLength > this.#maxDownloadBytes) return { url, reason: 'size' }
       } else {

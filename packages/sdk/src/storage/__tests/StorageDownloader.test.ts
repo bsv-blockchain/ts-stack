@@ -362,7 +362,7 @@ describe('StorageDownloader', () => {
       const streamless = {
         ok: true,
         status: 200,
-        headers: new Headers({ 'Content-Type': 'application/test' }),
+        headers: new Headers({ 'Content-Type': 'application/test', 'Content-Length': '4' }),
         body: null,
         arrayBuffer: async () => content.slice().buffer
       } as unknown as Response
@@ -373,17 +373,52 @@ describe('StorageDownloader', () => {
       })
     })
 
+    it('does not buffer a response without a body stream or a Content-Length', async () => {
+      const arrayBuffer = jest.fn(async () => content.slice().buffer)
+      const undeclared = {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: null,
+        arrayBuffer
+      } as unknown as Response
+      const declared = {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'Content-Length': '4' }),
+        body: null,
+        arrayBuffer: async () => content.slice().buffer
+      } as unknown as Response
+      const responses: Record<string, Response> = {
+        'https://a.example/f': undeclared,
+        'https://b.example/f': declared
+      }
+      const instance = new StorageDownloader({
+        fetchClient: async input => responses[String(input)]
+      })
+      jest.spyOn(instance, 'resolve').mockResolvedValue(Object.keys(responses))
+      await expect(instance.download(uhrpUrl)).resolves.toMatchObject({ data: content })
+      expect(arrayBuffer).not.toHaveBeenCalled()
+
+      jest.spyOn(instance, 'resolve').mockResolvedValue(['https://a.example/f'])
+      await expect(instance.download(uhrpUrl)).rejects.toMatchObject({
+        attempts: [{ url: 'https://a.example/f', reason: 'size' }]
+      })
+      expect(arrayBuffer).not.toHaveBeenCalled()
+    })
+
     it('bounds and verifies a response without a body stream', async () => {
-      const streamless = (bytes: Uint8Array): Response =>
+      const streamless = (bytes: Uint8Array, declared: string): Response =>
         ({
           ok: true,
           status: 200,
-          headers: new Headers(),
+          headers: new Headers({ 'Content-Length': declared }),
           arrayBuffer: async () => bytes.slice().buffer
         }) as unknown as Response
       const responses: Record<string, Response> = {
-        'https://a.example/f': streamless(new Uint8Array(5)),
-        'https://b.example/f': streamless(new Uint8Array([4, 3, 2, 1]))
+        // Declares an acceptable length but delivers more, as a decoded body can.
+        'https://a.example/f': streamless(new Uint8Array(5), '4'),
+        'https://b.example/f': streamless(new Uint8Array([4, 3, 2, 1]), '4')
       }
       const instance = new StorageDownloader({
         maxDownloadBytes: 4,
