@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- `/arc-ingest` answers `503` instead of `202` to a `MINED` or `IMMUTABLE` callback that carries no Merkle path. Arcade attaches the path best-effort and treats any 2xx as delivered, so the `202` ended delivery and the proof never arrived; with scheduled unproven maintenance off (the default) the transaction stayed unproven. Arcade retries a non-2xx with backoff and re-attaches the stored path. Other non-terminal statuses without a path are still answered `202`. No migration.
+
 - Prepare `2.9.0`: Adds optional script verifier configuration and accepts Arcade SEEN_MULTIPLE_NODES and STUMP_PROCESSING as successful rebroadcast states. Existing deployments retain JavaScript verification. Operators may configure a preloaded verifier; no wire or data migration is required.
 
 
