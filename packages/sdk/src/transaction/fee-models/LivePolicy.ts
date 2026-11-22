@@ -41,7 +41,7 @@ export default class LivePolicy extends SatoshisPerKilobyte {
     }
     this.cacheValidityMs = cacheValidityMs
     const { policyUrl = LivePolicy.ARC_POLICY_URL, httpClient } = options
-    if (typeof policyUrl !== 'string' || !/^https?:\/\/[^/]/i.test(policyUrl)) {
+    if (typeof policyUrl !== 'string' || !isHttpUrl(policyUrl)) {
       throw new TypeError('policyUrl must be an http(s) URL')
     }
     if (httpClient !== undefined && typeof httpClient?.request !== 'function') {
@@ -140,5 +140,15 @@ export default class LivePolicy extends SatoshisPerKilobyte {
     // Update the value property so parent's computeFee uses the live rate
     this.value = rate
     return super.computeFee(tx)
+  }
+}
+
+/** True when `value` parses as an absolute http: or https: URL with a host. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(value)
+    return (protocol === 'http:' || protocol === 'https:') && hostname !== ''
+  } catch {
+    return false
   }
 }

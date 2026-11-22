@@ -193,6 +193,8 @@ describe('LivePolicy', () => {
       ['a relative URL', { policyUrl: '/v1/policy' }],
       ['a non-HTTP URL', { policyUrl: 'ftp://arc.example.test/v1/policy' }],
       ['a non-string URL', { policyUrl: 42 }],
+      ['a URL with a space in the host', { policyUrl: 'http://a b/v1/policy' }],
+      ['a URL with no host', { policyUrl: 'https://:80' }],
       ['a client without request()', { httpClient: {} }]
     ])('refuses %s at construction', (_case, options) => {
       expect(() => new LivePolicy(60_000, options as any)).toThrow(TypeError)
