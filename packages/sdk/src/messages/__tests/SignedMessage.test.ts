@@ -176,6 +176,36 @@ describe('SignedMessage through a wallet and with an expected signer', () => {
     expect(createSignature).not.toHaveBeenCalled()
   })
 
+  it('refuses an anyone signature that does not verify against the reported identity key', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    const reported = new PrivateKey(16).toPublicKey().toString()
+    jest.spyOn(wallet, 'getPublicKey').mockResolvedValue({ publicKey: reported })
+
+    await expect(signWithWallet(message, wallet)).rejects.toThrow(
+      `The wallet's signature does not verify against its identity key ${reported}`
+    )
+  })
+
+  it('refuses a malformed signature from the wallet', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    jest.spyOn(wallet, 'createSignature').mockResolvedValue({ signature: [0x30, 0x01, 0x00] })
+
+    await expect(signWithWallet(message, wallet)).rejects.toThrow(
+      "The wallet's signature does not verify against its identity key"
+    )
+  })
+
+  it('cannot check a designated-verifier signature without the verifier key', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    jest
+      .spyOn(wallet, 'getPublicKey')
+      .mockResolvedValue({ publicKey: new PrivateKey(16).toPublicKey().toString() })
+
+    const signature = await signWithWallet(message, wallet, recipientKey.toPublicKey())
+
+    expect(verify(message, signature, recipientKey)).toBe(false)
+  })
+
   it('refuses a malformed message or verifier before calling the wallet', async () => {
     const wallet = new ProtoWallet(senderKey)
     const createSignature = jest.spyOn(wallet, 'createSignature')

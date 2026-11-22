@@ -65,6 +65,11 @@ export const sign = (message: number[], signer: PrivateKey, verifier?: PublicKey
  * @param [originator] The originator passed to the wallet
  *
  * @returns The message signature.
+ *
+ * The wallet is asked for its identity key first, then for the signature. An anyone-verifiable
+ * signature is verified before it is returned, and an Error is thrown if it does not verify
+ * against the wallet's identity key. A signature for a specific verifier can only be checked
+ * with that verifier's private key, so it is not checked here.
  */
 export const signWithWallet = async (
   message: number[],
@@ -88,12 +93,30 @@ export const signWithWallet = async (
     },
     originator
   )
-  return toArray(VERSION, 'hex').concat(
+  const signed = toArray(VERSION, 'hex').concat(
     signerKey.encode(true) as number[],
     verifierKey === undefined ? [0] : (verifierKey.encode(true) as number[]),
     keyID,
     signature
   )
+  // An anyone-verifiable result can be checked here with public data alone. A wallet whose
+  // identity key is not its derivation root (a proxy or a misconfigured substrate) then fails
+  // now instead of returning bytes that never verify. A designated-verifier result cannot be
+  // checked without the verifier's private key, so it is returned as signed.
+  if (verifierKey === undefined) {
+    let verified = false
+    try {
+      verified = verify(plaintext, signed)
+    } catch {
+      verified = false
+    }
+    if (!verified) {
+      throw new Error(
+        `The wallet's signature does not verify against its identity key ${signerKey.toString()}`
+      )
+    }
+  }
+  return signed
 }
 
 /** Options for {@link verify}. */
