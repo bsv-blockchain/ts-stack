@@ -71,7 +71,8 @@ function successfulArcResponse(
     return invalidArcResponse('ARC returned invalid transaction status metadata.')
   }
   const competingTxs = snapshotCompetingTxs(competingValue)
-  if (competingValue !== undefined && competingTxs === undefined) {
+  // ARC sends null when nothing competes; any other non-list value is malformed.
+  if (competingValue !== undefined && competingValue !== null && competingTxs === undefined) {
     return invalidArcResponse('ARC returned invalid competing transaction identifiers.')
   }
   const upperStatus = txStatus.toUpperCase()

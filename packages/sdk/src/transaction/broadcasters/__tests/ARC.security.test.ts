@@ -122,6 +122,40 @@ describe('ARC security boundaries', () => {
     competingTxs[0] = OTHER_TXID
     expect(result).toMatchObject({ competingTxs: ['c'.repeat(64)] })
 
+    // ARC encodes "nothing competes" as null (a nil *[]string without omitempty).
+    const noneCompeting = client({ ...accepted(), competingTxs: null })
+    await expect(
+      new ARC('https://arc.example', { httpClient: noneCompeting.httpClient }).broadcast(
+        transaction()
+      )
+    ).resolves.toEqual({
+      status: 'success',
+      txid: TXID,
+      message: 'SEEN_ON_NETWORK',
+      txStatus: 'SEEN_ON_NETWORK'
+    })
+    const rejectedNoneCompeting = client({
+      ...accepted(),
+      txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+      competingTxs: null
+    })
+    await expect(
+      new ARC('https://arc.example', { httpClient: rejectedNoneCompeting.httpClient }).broadcast(
+        transaction()
+      )
+    ).resolves.toEqual({
+      status: 'error',
+      code: 'DOUBLE_SPEND_ATTEMPTED',
+      description: 'DOUBLE_SPEND_ATTEMPTED',
+      txid: TXID
+    })
+    for (const malformed of ['', 'c'.repeat(64), {}, [null], ['not-a-txid'], [TXID, TXID]]) {
+      const invalid = client({ ...accepted(), competingTxs: malformed })
+      await expect(
+        new ARC('https://arc.example', { httpClient: invalid.httpClient }).broadcast(transaction())
+      ).resolves.toMatchObject({ status: 'error', code: 'ERR_INVALID_RESPONSE' })
+    }
+
     const unknown = client({ ...accepted(), txStatus: 'ATTACKER_APPROVED' })
     await expect(
       new ARC('https://arc.example', { httpClient: unknown.httpClient }).broadcast(transaction())
