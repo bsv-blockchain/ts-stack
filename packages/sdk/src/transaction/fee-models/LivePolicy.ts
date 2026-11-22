@@ -10,7 +10,12 @@ export interface LivePolicyOptions {
    * such as the `/v1/policy` route of the broadcaster in use. Default: GorillaPool's mainnet ARC.
    */
   policyUrl?: string
-  /** The HTTP client for the policy request. Default: `defaultHttpClient()` at request time. */
+  /**
+   * The HTTP client for the policy request. Default: `defaultHttpClient()` at request time.
+   * For an ARC deployment that requires authentication on `/v1/policy`, wrap a client to add
+   * the header, for example
+   * `{ request: async (url, o) => await base.request(url, { ...o, headers: { ...o.headers, Authorization: auth } }) }`.
+   */
   httpClient?: HttpClient
 }
 
@@ -18,6 +23,13 @@ export interface LivePolicyOptions {
  * Represents a live fee policy that fetches current rates from an ARC policy endpoint
  * (GorillaPool unless configured). Extends SatoshisPerKilobyte to reuse transaction size
  * calculation logic.
+ *
+ * `LivePolicy.getInstance()`, which `Transaction.fee()` uses by default, always reads
+ * GorillaPool's mainnet endpoint. Pass a configured instance to use another network.
+ *
+ * @example
+ * // Fee rate from a testnet ARC instead of mainnet GorillaPool:
+ * await tx.fee(new LivePolicy(undefined, { policyUrl: 'https://testnet-arc.example/v1/policy' }))
  */
 export default class LivePolicy extends SatoshisPerKilobyte {
   private static readonly ARC_POLICY_URL = 'https://arc.gorillapool.io/v1/policy'
