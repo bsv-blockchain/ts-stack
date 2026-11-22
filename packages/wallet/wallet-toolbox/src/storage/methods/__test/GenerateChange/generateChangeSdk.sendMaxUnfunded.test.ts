@@ -77,6 +77,16 @@ describe('generateChangeSdk sendMax with insufficient funding', () => {
     })
   })
 
+  test('the refusal is logged as an ordinary message, not an error, because tiered funding expects it', async () => {
+    const a = allocatorOver([])
+    const logger = { group: jest.fn(), groupEnd: jest.fn(), log: jest.fn(), error: jest.fn() }
+    await expect(generateChangeSdk(params(), a.allocate, a.release, logger)).rejects.toMatchObject({
+      name: 'WERR_INSUFFICIENT_FUNDS'
+    })
+    expect(logger.error).not.toHaveBeenCalled()
+    expect(logger.log).toHaveBeenCalledWith('throwing WERR_INSUFFICIENT_FUNDS for sendMax moreSatoshisNeeded 6')
+  })
+
   test('coins worth less than the fee refuse and release the inputs', async () => {
     const a = allocatorOver([3, 4])
     // 340-byte transaction spending both coins: fee 34, plus the 1-sat minimum output.

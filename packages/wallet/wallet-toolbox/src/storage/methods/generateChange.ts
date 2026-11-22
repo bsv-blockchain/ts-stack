@@ -607,7 +607,8 @@ async function generateChangeSdkCore(
         // The funding leaves nothing (or less) for the output after the fee. Refusing rather
         // than planning a zero or negative output lets tiered callers try the next funding tier.
         const werr = new WERR_INSUFFICIENT_FUNDS(spending() - maxPossibleSatoshis + 1 + feeTarget(), 1 - adjusted)
-        logger?.error(`throwing WERR_INSUFFICIENT_FUNDS for sendMax moreSatoshisNeeded ${werr.moreSatoshisNeeded}`)
+        // An expected fallback between funding tiers, so log it without marking the request as failed.
+        logger?.log(`throwing WERR_INSUFFICIENT_FUNDS for sendMax moreSatoshisNeeded ${werr.moreSatoshisNeeded}`)
         await releaseAllocatedChangeInputs()
         throw werr
       }
