@@ -20,9 +20,11 @@ function memoryKnex(): Knex {
 
 /**
  * A transaction whose nLockTime equals the chain tip height can be mined in the next
- * block, so createAction must commit it rather than refuse it as not final.
+ * block, so createAction must commit it rather than refuse it as not final. When a
+ * time lock cannot be judged because headers are unavailable, the caller must see
+ * that failure rather than "not final".
  */
-describe('createAction with a height lock time', () => {
+describe('createAction with a lock time', () => {
   jest.setTimeout(120_000)
 
   let chainDb: Knex
@@ -158,5 +160,37 @@ describe('createAction with a height lock time', () => {
     const checked = nLockTimeIsFinal.mock.calls.findIndex(([arg]) => (arg as Transaction).lockTime === tip)
     expect(checked).toBeGreaterThanOrEqual(0)
     await expect(nLockTimeIsFinal.mock.results[checked].value).resolves.toBe(true)
+  })
+
+  test('a time lock whose median time past cannot be read reports the header error, not "not final"', async () => {
+    const parent = await wallet.createAction({
+      description: 'parent for a time-locked spend',
+      outputs: [{ satoshis: 1_000, lockingScript: '7551', outputDescription: 'anyone can spend' }],
+      options: { randomizeOutputs: false }
+    })
+    expect(parent.txid).toBeDefined()
+
+    const hashToHeader = jest.spyOn(services, 'hashToHeader').mockRejectedValue(new Error('headers unavailable'))
+    try {
+      const attempt = wallet.createAction({
+        description: 'spend with a time lock',
+        inputBEEF: parent.tx,
+        inputs: [
+          {
+            outpoint: `${parent.txid!}.0`,
+            unlockingScript: '00',
+            inputDescription: 'anyone can spend',
+            sequenceNumber: 0xfffffffe
+          }
+        ],
+        lockTime: 500_000_001,
+        outputs: [{ satoshis: 500, lockingScript: '51', outputDescription: 'time-locked output' }],
+        options: { randomizeOutputs: false }
+      })
+      await expect(attempt).rejects.toThrow('headers unavailable')
+      expect(hashToHeader).toHaveBeenCalled()
+    } finally {
+      hashToHeader.mockRestore()
+    }
   })
 })
