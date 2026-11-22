@@ -206,6 +206,59 @@ describe('Teranode Broadcaster', () => {
     })
   })
 
+  it('carries competingTxs on a 2xx double-spend refusal', async () => {
+    const data = {
+      txid: 'a'.repeat(64),
+      txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+      status: 200,
+      competingTxs: ['B'.repeat(64), 'c'.repeat(64)]
+    }
+    const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+      status: 'error',
+      code: 'DOUBLE_SPEND_ATTEMPTED',
+      txid: 'a'.repeat(64),
+      description: 'DOUBLE_SPEND_ATTEMPTED',
+      more: {
+        txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+        arcStatus: 200,
+        competingTxs: ['b'.repeat(64), 'c'.repeat(64)]
+      }
+    })
+  })
+
+  it('carries competingTxs on a 2xx success as ARC does', async () => {
+    const data = {
+      txid: 'a'.repeat(64),
+      txStatus: 'SEEN_ON_NETWORK',
+      competingTxs: ['b'.repeat(64)]
+    }
+    const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+      status: 'success',
+      txid: 'a'.repeat(64),
+      message: 'SEEN_ON_NETWORK',
+      txStatus: 'SEEN_ON_NETWORK',
+      competingTxs: ['b'.repeat(64)]
+    })
+  })
+
+  it.each([
+    ['not an array', 'b'.repeat(64)],
+    ['a non-hex entry', ['zz']],
+    ['a duplicate entry', ['b'.repeat(64), 'B'.repeat(64)]]
+  ])('ignores competingTxs that is %s', async (_label, competingTxs) => {
+    const data = { txid: 'a'.repeat(64), txStatus: 'DOUBLE_SPEND_ATTEMPTED', competingTxs }
+    const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))
+    await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+      status: 'error',
+      code: 'DOUBLE_SPEND_ATTEMPTED',
+      txid: 'a'.repeat(64),
+      description: 'DOUBLE_SPEND_ATTEMPTED',
+      more: { txStatus: 'DOUBLE_SPEND_ATTEMPTED' }
+    })
+  })
+
   it('carries the ARC status of a 2xx refusal', async () => {
     const data = { txid: 'a'.repeat(64), txStatus: 'REJECTED', status: 200 }
     const broadcaster = new Teranode(URL, new BinaryFetchClient(mockedFetch({ status: 200, data })))

@@ -13,6 +13,7 @@ import {
   parseArcData,
   providerDiagnostic,
   providerStatusCode,
+  snapshotCompetingTxs,
   TRANSACTION_ID
 } from './BroadcasterValidation.js'
 import { lockConfiguration } from '../http/ConfigurationLock.js'
@@ -46,8 +47,11 @@ export default class Teranode implements Broadcaster {
    * and its message as `ARC` builds it. `RECEIVED` is still a success but means
    * taken in, not yet validated; callers that need certainty check `txStatus`
    * or poll the service. A status in ARC's failure set, a `txStatus` naming an
-   * orphan, or a body naming another transaction is returned as a failure. Unlike `ARC`, an
-   * unknown status stays a success, since a plain node may answer anything.
+   * orphan, or a body naming another transaction is returned as a failure; a
+   * well-formed `competingTxs` list is carried as ARC carries it (under `more`
+   * on a failure, at the top level on a success). Unlike `ARC`, an unknown
+   * status stays a success, since a plain node may answer anything, and
+   * malformed `extraInfo`, `competingTxs` or echoed `txid` values are ignored.
    * A non-2xx keeps the HTTP status as `code` and adds the body's ARC
    * `status`, `txStatus` and `detail` under `more`.
    *
@@ -115,14 +119,19 @@ function successfulResponse(data: unknown, txid: string): BroadcastResponse | Br
   const fields: { txStatus: string; arcStatus?: number } = { txStatus }
   const arcStatus = read('status')
   if (Number.isSafeInteger(arcStatus)) fields.arcStatus = arcStatus as number
+  const competingTxs = snapshotCompetingTxs(read('competingTxs'))
   const upperStatus = txStatus.trim().toUpperCase()
   // Orphan detection reads txStatus only: free text such as "parent no longer
   // orphaned" must not turn an accepted transaction into a failure, which would
   // invite the caller to release its inputs and double-spend itself.
   if (ARC_ERROR_STATUSES.has(upperStatus) || upperStatus.includes('ORPHAN')) {
-    return { status: 'error', code: txStatus, txid, description, more: fields }
+    const more: { txStatus: string; arcStatus?: number; competingTxs?: string[] } = { ...fields }
+    if (competingTxs !== undefined) more.competingTxs = competingTxs
+    return { status: 'error', code: txStatus, txid, description, more }
   }
-  return { status: 'success', txid, message: description, ...fields }
+  const success: BroadcastResponse = { status: 'success', txid, message: description, ...fields }
+  if (competingTxs !== undefined) success.competingTxs = competingTxs
+  return success
 }
 
 /** Keeps the HTTP status as the code and adds the ARC fields of an error body. */
