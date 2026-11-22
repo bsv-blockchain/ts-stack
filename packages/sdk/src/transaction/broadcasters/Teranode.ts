@@ -101,7 +101,8 @@ function successfulResponse(data: unknown, txid: string): BroadcastResponse | Br
     return { status: 'success', txid, message: 'broadcast successful' }
   }
   const echoed = read('txid')
-  if (typeof echoed === 'string' && echoed.toLowerCase() !== txid) {
+  // As in ARC, only a well-formed txid can name another transaction.
+  if (typeof echoed === 'string' && TRANSACTION_ID.test(echoed) && echoed.toLowerCase() !== txid) {
     return {
       status: 'error',
       code: 'ERR_TXID_MISMATCH',

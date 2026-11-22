@@ -226,6 +226,23 @@ describe('Teranode Broadcaster', () => {
     })
   })
 
+  it.each([[''], ['not-a-txid'], ['g'.repeat(64)], ['a'.repeat(63)]])(
+    'ignores a malformed echoed txid %p as ARC does',
+    async echoed => {
+      const data = { txid: echoed, txStatus: 'SEEN_ON_NETWORK' }
+      const broadcaster = new Teranode(
+        URL,
+        new BinaryFetchClient(mockedFetch({ status: 200, data }))
+      )
+      await expect(broadcaster.broadcast(transaction)).resolves.toStrictEqual({
+        status: 'success',
+        txid: 'a'.repeat(64),
+        message: 'SEEN_ON_NETWORK',
+        txStatus: 'SEEN_ON_NETWORK'
+      })
+    }
+  )
+
   it('keeps the HTTP code and exposes the ARC status of an error body', async () => {
     const body = JSON.stringify({
       status: 465,
