@@ -28,8 +28,10 @@ txid on a 2xx is dropped rather than refused. A non-2xx keeps its HTTP `code` an
 `BroadcastResponse` gains optional `txStatus` and `arcStatus`, set by `Teranode`
 and `ARC` and kept by `validateBroadcastResult`. `RECEIVED` stays a success but
 means received, not yet validated; callers that need certainty check `txStatus`
-or poll the service. A bare 2xx, `OK` or any other body is unchanged. No code
-migration is required.
+or poll the service. A bare 2xx, `OK` or any other body is unchanged. `ARC`
+reads `competingTxs: null`, which ARC sends when no transaction competes, as no
+competing transactions; it used to refuse that response with
+`ERR_INVALID_RESPONSE`. No code migration is required.
 
 ## Script ASM for data outputs
 
