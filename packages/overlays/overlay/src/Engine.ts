@@ -4175,11 +4175,7 @@ export class Engine {
       MAX_PROOF_UPDATE_OUTPUTS + 1
     )
 
-    if (
-      !Array.isArray(outputs) ||
-      outputs.length === 0 ||
-      outputs.length > MAX_PROOF_UPDATE_OUTPUTS
-    ) {
+    if (!Array.isArray(outputs) || outputs.length > MAX_PROOF_UPDATE_OUTPUTS) {
       throw new Error('Could not find matching transaction outputs for proof ingest!')
     }
     for (const output of outputs) {
@@ -4187,6 +4183,13 @@ export class Engine {
       if (output.txid.toLowerCase() !== txid.toLowerCase()) {
         throw new TypeError('Storage returned an unbound Merkle-proof root output')
       }
+    }
+    const appliedTopicsWithoutOutputs = await this.findAppliedTopicsWithoutOutputs(
+      txid,
+      new Set(outputs.map(output => output.topic))
+    )
+    if (outputs.length === 0 && appliedTopicsWithoutOutputs.length === 0) {
+      throw new Error('Could not find matching transaction outputs for proof ingest!')
     }
 
     const graphOutputs = await this.collectMerkleProofOutputs(outputs)
@@ -4237,6 +4240,82 @@ export class Engine {
         await this.recomputeTopicBlockAnchor(output.topic, resolvedBlockHeight, resolvedBlockHash)
       }
     }
+
+    if (appliedTopicsWithoutOutputs.length === 0) return
+    if (outputs.length === 0) {
+      await this.recordProofForTransactionWithoutOutputs(txid, proof, resolvedBlockHash)
+    }
+    for (const topic of appliedTopicsWithoutOutputs) {
+      if (resolvedBlockHeight !== undefined) {
+        await this.storage.updateAppliedTransactionProof?.({
+          txid,
+          topic,
+          blockHeight: resolvedBlockHeight,
+          blockHash: resolvedBlockHash,
+          blockIndex: proofMetadata?.blockIndex,
+          merkleRoot: proofMetadata?.merkleRoot
+        })
+      }
+      if (resolvedBlockHeight !== undefined && resolvedBlockHash !== undefined) {
+        await this.recomputeTopicBlockAnchor(topic, resolvedBlockHeight, resolvedBlockHash)
+      }
+    }
+  }
+
+  /**
+   * Topics that applied the transaction but hold none of its outputs: the topic accepted it
+   * only for the coins it consumed, or its outputs were spent and not retained. BRC-136
+   * counts these applied rows, so a proof must still mark them proven.
+   */
+  private async findAppliedTopicsWithoutOutputs(
+    txid: string,
+    outputTopics: Set<string>
+  ): Promise<string[]> {
+    // A storage that cannot record an applied proof keeps the previous refusal.
+    if (typeof this.storage.updateAppliedTransactionProof !== 'function') return []
+    const topics: string[] = []
+    for (const topic of Object.keys(this.managers)) {
+      if (outputTopics.has(topic)) continue
+      const applied = await this.storage.doesAppliedTransactionExist({ txid, topic })
+      if (typeof applied !== 'boolean') {
+        throw new TypeError('Storage returned an invalid applied-transaction verdict')
+      }
+      if (applied) topics.push(topic)
+    }
+    return topics
+  }
+
+  /** Stores the proof on the transaction record so BASM can serve it for the applied rows. */
+  private async recordProofForTransactionWithoutOutputs(
+    txid: string,
+    proof: MerklePath,
+    blockHash?: string
+  ): Promise<void> {
+    if (typeof this.storage.upsertTransactionRecord !== 'function') return
+    const stored = await this.storage.findRawTransactions?.([txid])
+    if (stored !== undefined && !Array.isArray(stored)) {
+      throw new TypeError('Storage returned an invalid raw-transaction set')
+    }
+    const rawTx = stored?.find(record => record.txid.toLowerCase() === txid.toLowerCase())?.rawTx
+    if (rawTx !== undefined) {
+      const tx = Transaction.fromHex(rawTx)
+      if (tx.id('hex') !== txid.toLowerCase()) {
+        throw new TypeError('Stored raw transaction does not match its transaction ID')
+      }
+      tx.merklePath = proof
+      await this.recordTransactionData(tx, tx.toBEEF(), blockHash)
+      return
+    }
+    // The transaction record went with its last output; keep the proof for BASM.
+    const metadata = extractMerkleProofMetadata(txid, proof)
+    await this.storage.upsertTransactionRecord({
+      txid,
+      merklePath: proof.toBinary(),
+      blockHeight: metadata?.blockHeight,
+      blockHash,
+      blockIndex: metadata?.blockIndex,
+      merkleRoot: metadata?.merkleRoot
+    })
   }
 
   /**
