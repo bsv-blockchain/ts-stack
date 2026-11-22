@@ -335,8 +335,9 @@ rejected. Proof callbacks are accepted only when the Merkle path contains the
 claimed transaction, agrees with the claimed height, and verifies affirmatively
 against the configured chain tracker. A `MINED` or `IMMUTABLE` callback that
 arrives without a Merkle path is answered `503` so the provider retries it;
-Arcade attaches the stored path when it retries. Other non-terminal statuses
-without a path are acknowledged with `202`.
+Arcade re-attaches the stored path, when available, on each retry (10 attempts
+by default). Other non-terminal statuses without a path are acknowledged with
+`202`.
 
 The reorg SSE adapter treats each event as state-critical: a malformed event or
 handler failure closes the stream, reconnects, and runs catch-up revalidation
