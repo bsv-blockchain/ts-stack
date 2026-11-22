@@ -68,8 +68,8 @@ export const sign = (message: number[], signer: PrivateKey, verifier?: PublicKey
  *
  * The wallet is asked for its identity key first, then for the signature. An anyone-verifiable
  * signature is verified before it is returned, and an Error is thrown if it does not verify
- * against the wallet's identity key. A signature for a specific verifier can only be checked
- * with that verifier's private key, so it is not checked here.
+ * against the wallet's identity key. A signature for a specific verifier cannot be checked
+ * against the identity key without that verifier's private key, so it is returned as signed.
  */
 export const signWithWallet = async (
   message: number[],
@@ -102,7 +102,8 @@ export const signWithWallet = async (
   // An anyone-verifiable result can be checked here with public data alone. A wallet whose
   // identity key is not its derivation root (a proxy or a misconfigured substrate) then fails
   // now instead of returning bytes that never verify. A designated-verifier result cannot be
-  // checked without the verifier's private key, so it is returned as signed.
+  // checked against the identity key without the verifier's private key (asking the wallet for
+  // its own derived key would not prove that binding), so it is returned as signed.
   if (verifierKey === undefined) {
     let verified = false
     try {
