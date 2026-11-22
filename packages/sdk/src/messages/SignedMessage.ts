@@ -75,20 +75,21 @@ export const signWithWallet = async (
   const plaintext = copyMessageBytes(message, 'Message')
   const verifierKey = verifier === undefined ? undefined : copyPublicKey(verifier, 'Verifier')
   const keyID = Random(32)
-  const [{ signature }, { publicKey }] = await Promise.all([
-    wallet.createSignature(
-      {
-        data: plaintext,
-        protocolID: [2, 'message signing'],
-        keyID: toBase64(keyID),
-        counterparty: verifierKey?.toString() ?? 'anyone'
-      },
-      originator
-    ),
-    wallet.getPublicKey({ identityKey: true }, originator)
-  ])
+  // One call at a time: behind a permissions manager each call is its own prompt, so the user
+  // sees them in order, and a refused identity-key read never leaves a signing prompt pending.
+  const { publicKey } = await wallet.getPublicKey({ identityKey: true }, originator)
+  const signerKey = PublicKey.fromString(publicKey)
+  const { signature } = await wallet.createSignature(
+    {
+      data: plaintext,
+      protocolID: [2, 'message signing'],
+      keyID: toBase64(keyID),
+      counterparty: verifierKey?.toString() ?? 'anyone'
+    },
+    originator
+  )
   return toArray(VERSION, 'hex').concat(
-    PublicKey.fromString(publicKey).encode(true) as number[],
+    signerKey.encode(true) as number[],
     verifierKey === undefined ? [0] : (verifierKey.encode(true) as number[]),
     keyID,
     signature

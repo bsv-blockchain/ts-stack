@@ -145,6 +145,37 @@ describe('SignedMessage through a wallet and with an expected signer', () => {
     expect(getPublicKey).toHaveBeenCalledWith({ identityKey: true }, 'app.example')
   })
 
+  it('reads the identity key before asking for the signature, one call at a time', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    const calls: string[] = []
+    let identityKeyPending = false
+    jest.spyOn(wallet, 'getPublicKey').mockImplementation(async (args) => {
+      calls.push('getPublicKey')
+      identityKeyPending = true
+      await Promise.resolve()
+      identityKeyPending = false
+      return await ProtoWallet.prototype.getPublicKey.call(wallet, args)
+    })
+    jest.spyOn(wallet, 'createSignature').mockImplementation(async (args) => {
+      calls.push(identityKeyPending ? 'createSignature (while getPublicKey pending)' : 'createSignature')
+      return await ProtoWallet.prototype.createSignature.call(wallet, args)
+    })
+
+    const signature = await signWithWallet(message, wallet)
+
+    expect(calls).toEqual(['getPublicKey', 'createSignature'])
+    expect(verify(message, signature)).toBe(true)
+  })
+
+  it('never asks for a signature when the identity key is refused', async () => {
+    const wallet = new ProtoWallet(senderKey)
+    jest.spyOn(wallet, 'getPublicKey').mockRejectedValue(new Error('Permission denied'))
+    const createSignature = jest.spyOn(wallet, 'createSignature')
+
+    await expect(signWithWallet(message, wallet)).rejects.toThrow('Permission denied')
+    expect(createSignature).not.toHaveBeenCalled()
+  })
+
   it('refuses a malformed message or verifier before calling the wallet', async () => {
     const wallet = new ProtoWallet(senderKey)
     const createSignature = jest.spyOn(wallet, 'createSignature')
