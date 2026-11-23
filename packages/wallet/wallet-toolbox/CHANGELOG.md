@@ -1,15 +1,3 @@
-# 2.18.1 source candidate
-
-- `TaskCheckNoSends` runs its scheduled, unfiltered sweep again. The sweep catches
-  externally broadcast `nosend` rows that the block-triggered aging schedule defers, but
-  it shared its clock with every run of the task: each block-triggered run reset it, so
-  while blocks kept arriving it never came due in a long-lived process, and at start it
-  fired before the first header was processed and was spent on a run that returned early.
-  The sweep now keeps its own clock, waits for the first processed header, and is not
-  filtered by the aging schedule when a block has also set `checkNow`. A new process
-  therefore sweeps once at its first processed header, then once per `triggerMsecs`
-  (one day by default); other block-triggered runs keep the aging schedule. No migration.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
