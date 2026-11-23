@@ -4,7 +4,7 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.19.0'
+version: '2.18.0'
 last_updated: '2026-11-20'
 last_verified: '2026-11-20'
 review_cadence_days: 30
@@ -17,7 +17,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 ## Key-linkage permission
 
-The 2.19.0 source candidate can ask for permission on
+The next minor release can ask for permission on
 `revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage` separately.
 `seekPermissionsForCounterpartyKeyLinkageRevelation` and
 `seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is

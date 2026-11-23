@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.19.0'
+version: '2.18.0'
 last_updated: '2026-11-20'
 last_verified: '2026-11-20'
 review_cadence_days: 30
@@ -17,7 +17,7 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 
 ## Key-linkage permission
 
-The 2.19.0 source candidate stays in version lockstep with the core and browser
+The next minor release stays in version lockstep with the core and browser
 packages and publishes the same `WalletPermissionsManager`.
 `seekPermissionsForCounterpartyKeyLinkageRevelation` and
 `seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is

@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.19.0'
+version: '2.18.0'
 last_updated: '2026-11-20'
 last_verified: '2026-11-20'
 review_cadence_days: 30
@@ -17,7 +17,7 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 ## Key-linkage permission
 
-The 2.19.0 source candidate publishes the same `WalletPermissionsManager` as
+The next minor release publishes the same `WalletPermissionsManager` as
 the core package, including independent gates for
 `revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage`.
 `seekPermissionsForCounterpartyKeyLinkageRevelation` and

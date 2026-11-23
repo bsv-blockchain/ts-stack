@@ -1,24 +1,3 @@
-# 2.19.0 source candidate
-
-Wallets can gate `revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage`
-independently. Client and mobile stay in version lockstep because they publish
-the same `WalletPermissionsManager`.
-
-- `seekPermissionsForCounterpartyKeyLinkageRevelation` and
-  `seekPermissionsForSpecificKeyLinkageRevelation` are optional. When unset,
-  each follows `seekPermissionsForKeyLinkageRevelation`, which remains the
-  legacy combined default (`true`). Existing configs keep today's behavior.
-- Counterparty linkage reveals the root ECDH shared secret for a counterparty.
-  Every BRC-2 symmetric encryption key and HMAC for that pair, at any protocol
-  and key ID, can be derived from it. Specific linkage reveals one per-invoice
-  HMAC.
-- Permission prompts for the two calls use `counterpartyLinkageRevelation` and
-  `specificLinkageRevelation`. `ensureProtocolPermission` still accepts the
-  legacy `linkageRevelation` usage, which follows only the combined flag.
-- Protocol ID strings and the reserved-protocol guard on
-  `revealSpecificKeyLinkage` are unchanged. No BRC-100 wire or stored-permission
-  migration is required.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet

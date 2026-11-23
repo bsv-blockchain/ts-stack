@@ -1,6 +1,6 @@
 # @bsv/wallet-toolbox-mobile
 
-## Key-linkage permission (2.19.0 source candidate)
+## Key-linkage permission
 
 `WalletPermissionsManager` can gate `revealCounterpartyKeyLinkage` and
 `revealSpecificKeyLinkage` separately.
