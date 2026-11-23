@@ -1,0 +1,118 @@
+name: Version packages
+
+# Feature pull requests record their release impact as new files under
+# changes/ and never edit package versions, release notes, changelogs, or the
+# generated ledgers. Those shared files are written here only: after every push
+# to main while change files are pending, this workflow folds every pending change into
+# one commit on a fixed branch and keeps one pull request open for it. Merging
+# that pull request sets the source versions; publication still requires the
+# separate protected release workflow and tag.
+
+on:
+  # Every push, not only pushes that add change files: the version branch also
+  # rewrites generated docs, so it must be rebuilt whenever main moves.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: version-packages
+  cancel-in-progress: true
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      VERSION_BRANCH: automation/version-packages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+
+      - name: Install workspace without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Apply pending change files
+        id: apply
+        run: |
+          node scripts/release-changes.mjs status | tee "$RUNNER_TEMP/plan.txt"
+          if [ -z "$(git ls-files changes | grep -v '^changes/README.md$' || true)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The required PR release-note contract (scripts/pr-release-note.mjs)
+          # applies to this pull request too; build the note before the change
+          # files are deleted.
+          node scripts/release-changes.mjs release-note > "$RUNNER_TEMP/release-note.json"
+          pnpm changes:version
+          pnpm docs:facts:check
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version changes
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A changes packages governance docs
+          git commit -m "chore: version packages"
+
+      - name: Push version branch
+        if: steps.apply.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git push --force origin "HEAD:$VERSION_BRANCH"
+
+      - name: Open or update version pull request
+        if: steps.apply.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          plan="$(cat "$RUNNER_TEMP/plan.txt")"
+          note="$(cat "$RUNNER_TEMP/release-note.json")"
+          body="$(cat <<EOF
+          ## Summary
+
+          Folds every pending \`changes/\` file on \`main\` into package versions,
+          \`governance/package-release-notes.json\`, package changelogs, recorded
+          baseline versions, and the generated ledgers. This workflow rewrites the
+          branch after each merge to \`main\`, so the pull request always reflects
+          every pending change and never conflicts.
+
+          ## Planned versions
+
+          \`\`\`text
+          $plan
+          \`\`\`
+
+          ## Release note
+
+          \`\`\`release-note
+          $note
+          \`\`\`
+
+          ## Completion evidence
+
+          - [x] Generated from reviewed change files already on \`main\`
+          - [x] Merging sets source versions only; publication still needs the protected release workflow
+          EOF
+          )"
+          existing_pr="$(gh pr list --base main --head "$VERSION_BRANCH" --state open --json number --jq '.[0].number')"
+          if [[ -n "$existing_pr" ]]; then
+            gh pr edit "$existing_pr" --title "chore: version packages" --body "$body"
+          else
+            gh pr create --base main --head "$VERSION_BRANCH" --title "chore: version packages" --body "$body"
+          fi
