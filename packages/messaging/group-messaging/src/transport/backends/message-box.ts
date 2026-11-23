@@ -501,11 +501,9 @@ export class MessageBoxTransport implements TransportBackend {
   #chain: Promise<unknown> = Promise.resolve()
   /** Releases the client's status subscription on close. */
   #unfollow: Unsubscribe | undefined
-  /** The last status reported, so an unchanged one is not reported again. */
-  #lastStatus: LiveStatus | undefined
   /**
-   * The last status describing the connection rather than a delivery, which is
-   * what a late subscriber is replayed.
+   * The last status describing the connection rather than a delivery: what a
+   * late subscriber is replayed, and what the next status is deduped against.
    *
    * `delivered` is a report about one batch, true for an instant; the
    * connection phases are states the socket stays in. Replaying the former
@@ -666,10 +664,14 @@ export class MessageBoxTransport implements TransportBackend {
     // The socket's lifecycle and the client's report both describe the same
     // socket, so they can say the same thing twice. Only transitions go out,
     // which is the contract the client itself keeps.
-    const last = this.#lastStatus
+    //
     // `delivered` reports an event rather than a state, and two polls that each
     // carry one new message produce byte-identical reports; deduping them loses
-    // the second delivery for a host counting them.
+    // the second delivery for a host counting them. So it is neither deduped
+    // nor recorded: comparing against the last *connection* status is what
+    // keeps a delivery between two identical phases from letting the second
+    // one through.
+    const last = this.#lastPhase
     if (
       status.phase !== 'delivered' &&
       last?.phase === status.phase &&
@@ -678,7 +680,6 @@ export class MessageBoxTransport implements TransportBackend {
     ) {
       return
     }
-    this.#lastStatus = status
     if (status.phase !== 'delivered') this.#lastPhase = status
     for (const handler of this.#liveStatusHandlers) {
       try {

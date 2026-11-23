@@ -1510,6 +1510,35 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * `delivered` is reported, but it must not become the baseline the next
+   * status is compared against. The socket's lifecycle and the client's report
+   * both describe the same socket and say `subscribed` twice, which is the
+   * whole reason the dedup exists; a delivery landing between the two let the
+   * duplicate through, and deliveries land between them routinely.
+   */
+  it('still suppresses a repeated connection phase after a delivery', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
+    await vi.advanceTimersByTimeAsync(1)
+
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    expect(phases.filter(phase => phase === 'subscribed')).toHaveLength(1)
+
+    await transport.close()
+  })
+
   // Live, and unstarted. Built without `live` it could not have a status at
   // all, so it passed for a reason that had nothing to do with the replay.
   it('has nothing to replay before the socket has said anything', () => {
