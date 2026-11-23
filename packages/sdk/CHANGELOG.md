@@ -1,5 +1,9 @@
 # 4.1.2 unpublished patch candidate
 
+- `Transaction.verify()` and the default `Spend` interpreter reject a signature
+  whose sighash omits `SIGHASH_FORKID`. Callers that pass `verifyFlags` keep
+  the previous rule: the bit is required only when that set includes it.
+  No API migration is required.
 - `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
   instructions in the usual ASM. If that notation would change any suffix bytes,
   the entire suffix prints as one final `0x<hex>` token immediately after

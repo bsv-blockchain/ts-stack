@@ -28,7 +28,12 @@ describe('Chronicle Tests', () => {
       // input sourceTxid e9166ef24d3bb23a5af806a35e2b4924d325ddc655d7482e6716eedc5040ff4d vout 0
       // 'OP_DUP OP_HASH160 5478d152bb557ac994c9793cece77d4295ed37e3 OP_EQUALVERIFY OP_CHECKSIG'
       '76a9145478d152bb557ac994c9793cece77d4295ed37e388ac'
-    const ok = validateUnlockScript(rawTx, 0, lockingScript, 36473000000, true)
+    // Block 300000 is pre-fork, so this signature has no SIGHASH_FORKID bit.
+    // The default interpreter now requires that bit; this vector opts out.
+    const ok = validateUnlockScript(rawTx, 0, lockingScript, 36473000000, true, [
+      'DERSIG',
+      'STRICTENC'
+    ])
     expect(ok).toBe(true)
     // preimage 148 bytes
     // "01000000014dff4050dcee16672e48d755c6dd25d324492b5ea306f85a3ab23b4df26e16e9000000001976a9145478d152bb557ac994c9793cece77d4295ed37e388acffffffff020049d971020000001976a91461cf5af7bb84348df3fd695672e53c7d5b3f3db988ac30601c0c060000001976a914fd4ed114ef85d350d6d40ed3f6dc23743f8f99c488ac0000000001000000"
@@ -97,7 +102,8 @@ function validateUnlockScript (
   vin: number,
   lockingScript: string,
   amount: number,
-  isRelaxed?: boolean
+  isRelaxed?: boolean,
+  verifyFlags?: string[]
 ): boolean {
   const spendingTx = Transaction.fromHex(spendingRawTx)
   const ls = Script.fromHex(lockingScript)
@@ -114,7 +120,8 @@ function validateUnlockScript (
     outputs: spendingTx.outputs,
     inputSequence: verifyTruthy(spendingTx.inputs[vin].sequence),
     lockTime: spendingTx.lockTime,
-    isRelaxed
+    isRelaxed,
+    verifyFlags
   })
 
   const valid = spend.validate()
