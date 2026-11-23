@@ -195,15 +195,21 @@ function validateStringArrayOption(
   }
 }
 
-function validateNameList(value: unknown, name: string): asserts value is string[] {
+/** Validates and normalises tag/label names as the wallet does: trim, lowercase, 1..300 UTF-8 bytes. */
+function normaliseNameList(value: unknown, name: string): string[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error(`${name} requires a non-empty array of strings`)
   }
-  for (let index = 0; index < value.length; index++) {
-    if (typeof value[index] !== 'string' || value[index].length === 0) {
+  return value.map((item, index) => {
+    const normalised = typeof item === 'string' ? item.trim().toLowerCase() : ''
+    if (normalised.length === 0) {
       throw new TypeError(`${name}[${index}] must be a non-empty string`)
     }
-  }
+    if (new TextEncoder().encode(normalised).length > 300) {
+      throw new TypeError(`${name}[${index}] must be at most 300 UTF-8 bytes`)
+    }
+    return normalised
+  })
 }
 
 function mergeNames(existing: string[] | undefined, added: string[]): string[] {
@@ -428,14 +434,15 @@ export class OutputBuilder {
 
   /**
    * Adds tags to THIS output only, for lookup with wallet.listOutputs({ basket, tags }).
-   * Repeated calls add to the existing tags; duplicates are dropped.
+   * Tags only help that lookup when the output also has a basket.
+   * Names are trimmed and lowercased as the wallet does, and must be 1-300 UTF-8 bytes.
+   * Repeated calls add to the existing tags; duplicates are dropped after normalising.
    *
    * @param values - Tag names
    * @returns This OutputBuilder for further output configuration
    */
   tags(values: string[]): this {
-    validateNameList(values, 'tags')
-    this.outputConfig.tags = mergeNames(this.outputConfig.tags, values)
+    this.outputConfig.tags = mergeNames(this.outputConfig.tags, normaliseNameList(values, 'tags'))
     return this
   }
 
@@ -652,14 +659,14 @@ export class TransactionBuilder {
 
   /**
    * Adds transaction-level labels, for lookup with wallet.listActions({ labels }).
-   * Repeated calls add to the existing labels; duplicates are dropped.
+   * Names are trimmed and lowercased as the wallet does, and must be 1-300 UTF-8 bytes.
+   * Repeated calls add to the existing labels; duplicates are dropped after normalising.
    *
    * @param values - Label names
    * @returns This TransactionBuilder for further chaining
    */
   labels(values: string[]): this {
-    validateNameList(values, 'labels')
-    this._labels = mergeNames(this._labels, values)
+    this._labels = mergeNames(this._labels, normaliseNameList(values, 'labels'))
     return this
   }
 
@@ -1006,7 +1013,7 @@ export class TransactionBuilder {
       output.customInstructions = customInstructions
     }
     if (config.basket != null && config.basket !== '') output.basket = config.basket
-    if (config.tags != null && config.tags.length > 0) output.tags = config.tags
+    if (config.tags != null && config.tags.length > 0) output.tags = [...config.tags]
     return output
   }
 
@@ -1304,7 +1311,7 @@ export class TransactionBuilder {
       ...(inputBEEF != null && { inputBEEF }),
       ...(inputArtifacts.actionInputs.length > 0 && { inputs: inputArtifacts.actionInputs }),
       ...(outputArtifacts.actionOutputs.length > 0 && { outputs: outputArtifacts.actionOutputs }),
-      ...(this._labels.length > 0 && { labels: this._labels }),
+      ...(this._labels.length > 0 && { labels: [...this._labels] }),
       options: { ...this.transactionOptions }
     }
 

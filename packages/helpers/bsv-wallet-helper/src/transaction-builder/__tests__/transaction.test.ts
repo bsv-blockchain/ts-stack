@@ -957,12 +957,67 @@ describe('TransactionTemplate', () => {
       expect(args.outputs[0].tags).toEqual(['token'])
     })
 
+    test('normalises tags and labels like the wallet', async () => {
+      const privateKey = new PrivateKey(147)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const preview = (await new TransactionBuilder(wallet)
+        .labels([' Funds ', 'funds'])
+        .labels(['FUNDS', 'Treasury'])
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .basket('tokens')
+        .tags(['Token', ' token'])
+        .tags(['TOKEN '])
+        .preview()) as any
+
+      expect(preview.labels).toEqual(['funds', 'treasury'])
+      expect(preview.outputs[0].tags).toEqual(['token'])
+    })
+
+    test('accepts names up to 300 UTF-8 bytes', async () => {
+      const privateKey = new PrivateKey(148)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const name = 'é'.repeat(150)
+
+      const preview = (await new TransactionBuilder(wallet)
+        .labels([name])
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .tags([name])
+        .preview()) as any
+
+      expect(preview.labels).toEqual([name])
+      expect(preview.outputs[0].tags).toEqual([name])
+    })
+
+    test('wallet args do not share arrays with builder state', async () => {
+      const privateKey = new PrivateKey(149)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const builder = new TransactionBuilder(wallet)
+        .labels(['mint'])
+        .addP2PKHOutput({ publicKey, satoshis: 1 })
+        .tags(['token'])
+
+      const first = (await builder.preview()) as any
+      first.labels.push('tampered')
+      first.outputs[0].tags.push('tampered')
+      const second = (await builder.preview()) as any
+
+      expect(second.labels).toEqual(['mint'])
+      expect(second.outputs[0].tags).toEqual(['token'])
+    })
+
     test.each([
       [undefined, 'tags requires a non-empty array of strings'],
       [[], 'tags requires a non-empty array of strings'],
       ['token', 'tags requires a non-empty array of strings'],
       [[''], 'tags[0] must be a non-empty string'],
-      [['token', 1], 'tags[1] must be a non-empty string']
+      [['   '], 'tags[0] must be a non-empty string'],
+      [['token', 1], 'tags[1] must be a non-empty string'],
+      [['token', 'a'.repeat(301)], 'tags[1] must be at most 300 UTF-8 bytes'],
+      [['é'.repeat(151)], 'tags[0] must be at most 300 UTF-8 bytes']
     ])('rejects invalid tags %p', async (value, message) => {
       const privateKey = new PrivateKey(145)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())
@@ -977,7 +1032,9 @@ describe('TransactionTemplate', () => {
       [[], 'labels requires a non-empty array of strings'],
       ['mint', 'labels requires a non-empty array of strings'],
       [[''], 'labels[0] must be a non-empty string'],
-      [['mint', null], 'labels[1] must be a non-empty string']
+      [[' \t'], 'labels[0] must be a non-empty string'],
+      [['mint', null], 'labels[1] must be a non-empty string'],
+      [['a'.repeat(301)], 'labels[0] must be at most 300 UTF-8 bytes']
     ])('rejects invalid labels %p', async (value, message) => {
       const privateKey = new PrivateKey(146)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())

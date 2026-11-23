@@ -541,18 +541,18 @@ builder.addChangeOutput()  // Explicit self-derived change destination
 
 #### `tags()`
 
-Add tags to the current output. Tags let you find specific outputs within a basket with `wallet.listOutputs({ basket, tags })`. Repeated calls add to the existing tags; duplicates are dropped.
+Add tags to the current output. Tags let you find specific outputs within a basket with `wallet.listOutputs({ basket, tags })`, so they only help that lookup when the output also has a `basket()`. Tags are trimmed and lowercased as the wallet does. Repeated calls add to the existing tags; duplicates are dropped after normalising.
 
 ```typescript
 tags(values: string[]): OutputBuilder
 ```
 
 **Parameters:**
-- `values` - Non-empty array of non-empty tag strings
+- `values` - Non-empty array of tag strings, each 1-300 UTF-8 bytes after trimming
 
 **Returns:** `OutputBuilder` (same output, can chain more output methods)
 
-**Throws:** `Error` if values is not a non-empty array; `TypeError` if any tag is empty or not a string
+**Throws:** `Error` if values is not a non-empty array; `TypeError` if any tag is not a string, is empty after trimming, or exceeds 300 UTF-8 bytes
 
 **Example:**
 ```typescript
@@ -774,18 +774,18 @@ builder.options({
 
 #### `labels()`
 
-Add labels to the transaction (passed to `wallet.createAction()` as `labels`). Labels let you find and filter past transactions with `wallet.listActions({ labels })`. Repeated calls add to the existing labels; duplicates are dropped. Also callable from `OutputBuilder` and `InputBuilder`.
+Add labels to the transaction (passed to `wallet.createAction()` as `labels`). Labels let you find and filter past transactions with `wallet.listActions({ labels })`. Labels are trimmed and lowercased as the wallet does. Repeated calls add to the existing labels; duplicates are dropped after normalising. Also callable from `OutputBuilder` and `InputBuilder`.
 
 ```typescript
 labels(values: string[]): TransactionBuilder
 ```
 
 **Parameters:**
-- `values` - Non-empty array of non-empty label strings
+- `values` - Non-empty array of label strings, each 1-300 UTF-8 bytes after trimming
 
 **Returns:** `TransactionBuilder`
 
-**Throws:** `Error` if values is not a non-empty array; `TypeError` if any label is empty or not a string
+**Throws:** `Error` if values is not a non-empty array; `TypeError` if any label is not a string, is empty after trimming, or exceeds 300 UTF-8 bytes
 
 **Example:**
 ```typescript
