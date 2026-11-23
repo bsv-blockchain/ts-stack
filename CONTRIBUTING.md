@@ -285,6 +285,25 @@ changes with no npm release impact, use `"packages": "none"` and
 [schema and examples](./docs/about/versioning.md#pull-request-release-note).
 Maintainers add the block to automated PRs when the bot cannot supply it.
 
+[`.github/workflows/label-pull-requests.yml`](./.github/workflows/label-pull-requests.yml)
+adds area labels on a schedule of every 30 minutes (minute 0 and minute 30, UTC)
+and on `workflow_dispatch`. The label is the package or infra folder name, with
+no prefix. Group directories under `packages/` are not labels: a file in
+`packages/wallet/wallet-toolbox`, including its nested `client` and `mobile`
+workspaces, is `wallet-toolbox`. Infra labels are the top-level service
+directories under `infra/` that contain a `package.json` (`infra/wab` is `wab`).
+`infra/local` and loose files in `infra/` are not components. The pre-existing
+`wab` label is reused and is not recolored. Missing labels are created in color
+`c5def5` with a description `Touches <path>`.
+
+The workflow only adds labels. It does not remove labels, comment, review,
+merge, or close. An open pull request is skipped, and its files are not read,
+when it already has any current area label or any label described as
+`Touches packages/<path>` or `Touches infra/<path>`. Drafts and fork pull
+requests follow the same rule. Pull requests with none of those labels are
+scanned again on later runs. After the first area label is present, a later
+commit that touches another package is not labeled automatically.
+
 CI validates presence and structure on PR creation, updates, description edits
 and reruns. Reviewers assess package completeness, SemVer correctness, consumer
 usefulness and migration accuracy. Use the existing affected-work plan above to
