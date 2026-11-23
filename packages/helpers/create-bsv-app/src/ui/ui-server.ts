@@ -105,10 +105,10 @@ async function handleGenerate(
   existing: ProjectManifest | null,
   targetDir: string,
   flags: ConfigDraft,
-  runCommand: RunCommand | undefined,
-  upgradeBsvDeps: boolean,
+  run: { runCommand: RunCommand | undefined; upgradeBsvDeps: boolean },
   resolveDone: (r: RunResult) => void
 ): Promise<void> {
+  const { runCommand, upgradeBsvDeps } = run
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
     const config = {
@@ -259,8 +259,7 @@ export async function startUiServer(opts: {
             existing,
             targetDir,
             flags,
-            opts.deps?.runCommand,
-            opts.upgradeBsvDeps === true,
+            { runCommand: opts.deps?.runCommand, upgradeBsvDeps: opts.upgradeBsvDeps === true },
             resolveDone
           )
         if (req.method === 'POST' && req.url === '/plan')
