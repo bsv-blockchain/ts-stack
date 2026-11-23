@@ -1,20 +1,3 @@
-# 2.18.1 source candidate
-
-- The `ARC` broadcaster treats HTTP 401 and 403 as service errors, as `Arcade` does since
-  2.15.1. An API-key protected ARC answers 401 before it reads the transaction:
-  `arc.taal.com` and `arc-test.taal.com`, the default `arcUrl` on main and test, answer
-  every keyless request that way. A transaction was recorded as rejected, and its inputs
-  released, when no other provider accepted it in the same attempt. The history note
-  says whether the configured key was refused or the endpoint requires one. A failed
-  status read for an extra txid in `ARC.postBeef` is a service error for that txid
-  rather than an exception.
-- WhatsOnChain post answers are service errors when the status is 401, 403, 408, 429
-  (after the existing retries) or 5xx, and when WhatsOnChain relays such a status from
-  its node (`unexpected response code 503: ...`). A relayed node refusal of the
-  transaction (`unexpected response code 500: ...`) keeps its classification.
-- A per-transaction `ECONNRESET` in a Bitails `postRaws` answer is a service error.
-- No configuration or consumer migration is required.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
