@@ -3,10 +3,8 @@ import { readFileSync, existsSync } from 'node:fs'
 import type { ProjectConfig, Mode } from './model.js'
 import { resolveConfig, ConfigError } from './validate.js'
 
-export function resolveConfigFromFile(
-  path: string,
-  opts: { overrideMode?: Mode } = {}
-): ProjectConfig {
+/** The parsed JSON of a `--file` config, not yet validated. */
+export function readConfigFile(path: string): unknown {
   if (!existsSync(path)) throw new ConfigError(`config file not found: ${path}`)
   let text: string
   try {
@@ -20,5 +18,12 @@ export function resolveConfigFromFile(
   } catch {
     throw new ConfigError(`invalid JSON in ${path}`)
   }
-  return resolveConfig(parsed, opts)
+  return parsed
+}
+
+export function resolveConfigFromFile(
+  path: string,
+  opts: { overrideMode?: Mode } = {}
+): ProjectConfig {
+  return resolveConfig(readConfigFile(path), opts)
 }

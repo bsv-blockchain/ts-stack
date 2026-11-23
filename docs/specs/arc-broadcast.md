@@ -75,7 +75,7 @@ tags: ["spec", "broadcast", "arc"]
 - `txid: string` — Transaction ID (64-char hex)
 - `txStatus: string` — Status code (see above)
 - `extraInfo: string` — Additional details (e.g., competing txids for double-spend)
-- `competingTxs?: string[]` — Array of conflicting txids (if double-spend)
+- `competingTxs?: string[] | null` — Array of conflicting txids (if double-spend); `null` when none
 
 ## Example: Submit transaction with SDK
 
