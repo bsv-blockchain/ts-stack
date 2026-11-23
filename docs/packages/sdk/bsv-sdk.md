@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: '4.1.2'
 npm: '@bsv/sdk'
-last_updated: '2026-11-20'
-last_verified: '2026-11-20'
+last_updated: '2026-11-22'
+last_verified: '2026-11-22'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,24 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## Teranode and ARC broadcast status
+
+`Teranode.broadcast` reads an ARC-style JSON body that carries a string
+`txStatus`, with the rules `ARC` uses. A 2xx body reporting `REJECTED`,
+`DOUBLE_SPEND_ATTEMPTED`, `INVALID`, `MALFORMED`, `MINED_IN_STALE_BLOCK`, a
+`txStatus` naming an orphan (free-text `extraInfo` is not matched) or another
+well-formed txid is now a failure, and a well-formed `competingTxs` list is
+carried as `ARC` carries it. A malformed `extraInfo`, `competingTxs` or echoed
+txid on a 2xx is dropped rather than refused. A non-2xx keeps its HTTP `code` and
+`description` and adds the body's `status`, `txStatus` and `detail` under `more`.
+`BroadcastResponse` gains optional `txStatus` and `arcStatus`, set by `Teranode`
+and `ARC` and kept by `validateBroadcastResult`. `RECEIVED` stays a success but
+means received, not yet validated; callers that need certainty check `txStatus`
+or poll the service. A bare 2xx, `OK` or any other body is unchanged. `ARC`
+reads `competingTxs: null`, which ARC sends when no transaction competes, as no
+competing transactions; it used to refuse that response with
+`ERR_INVALID_RESPONSE`. No code migration is required.
 
 ## createAction unlockingScriptLength
 

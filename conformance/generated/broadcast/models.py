@@ -79,5 +79,5 @@ class ArcTxResponse(BaseModel):
     )
     competingTxs: list[str] | None = Field(
         None,
-        description='Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing\ntransaction IDs.\n',
+        description='Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing\ntransaction IDs. ARC sends `null` when no transaction competes.\n',
     )
