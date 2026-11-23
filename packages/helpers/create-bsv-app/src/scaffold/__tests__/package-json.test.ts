@@ -122,7 +122,7 @@ describe('a raise across a major version', () => {
       '@bsv/sdk': '^4.0.1',
       '@bsv/auth': '^0.1.8',
       '@bsv/wallet-relay': '^0.8.0',
-      '@bsv/wallet-helper': '^0.1.11'
+      '@bsv/wallet-helper': '^0.2.0'
     }
     const changes = mergePackageJsonDeps(dir, wanted, { upgradeOwned: true })
     expect(readPkg(dir).dependencies).toEqual(wanted)

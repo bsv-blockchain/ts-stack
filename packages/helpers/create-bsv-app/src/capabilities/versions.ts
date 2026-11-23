@@ -3,7 +3,7 @@
 export const BSV_SDK_RANGE = '^4.0.1'
 export const BSV_AUTH_RANGE = '^0.1.8'
 export const WALLET_RELAY_RANGE = '^0.8.0'
-export const WALLET_HELPER_RANGE = '^0.1.11'
+export const WALLET_HELPER_RANGE = '^0.2.0'
 
 /**
  * The packages whose ranges come from this file. Add mode raises them across a major only on

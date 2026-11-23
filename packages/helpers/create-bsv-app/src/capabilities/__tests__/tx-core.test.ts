@@ -90,7 +90,7 @@ describe('tx-core registry and placement', () => {
   ] as const)('%s: sdk and wallet-helper ranges on each target', (_n, config, targets) => {
     const { deps } = planPlacement(config, caps)
     for (const t of targets) {
-      expect(deps[t]).toMatchObject({ '@bsv/sdk': '^4.0.1', '@bsv/wallet-helper': '^0.1.11' })
+      expect(deps[t]).toMatchObject({ '@bsv/sdk': '^4.0.1', '@bsv/wallet-helper': '^0.2.0' })
     }
   })
   test('a new-mode config with no capabilities selects tx-core and wallet-connect', () => {
