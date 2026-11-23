@@ -51,6 +51,7 @@ export interface LinkPreview {
 }
 
 export interface Reaction {
+  /** The `messageId` of the message being reacted to. */
   reference: string
   action: 'added' | 'removed'
   content: string
@@ -69,6 +70,7 @@ export interface MessageContent {
   /** GFM/CommonMark source, when rich text is used. Raw HTML is stripped on render. */
   markdown?: string
   attachments?: RemoteAttachment[]
+  /** The `messageId` of the message being replied to. */
   replyTo?: string | null
   reaction?: Reaction
   mentions?: Mention[]
