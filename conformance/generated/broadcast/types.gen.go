@@ -142,7 +142,7 @@ type ArcMerkleCallback struct {
 // and any value containing "ORPHAN".
 type ArcTxResponse struct {
 	// CompetingTxs Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing
-	// transaction IDs.
+	// transaction IDs. ARC sends `null` when no transaction competes.
 	CompetingTxs *[]string `json:"competingTxs,omitempty"`
 
 	// ExtraInfo Additional human-readable context about the status.
