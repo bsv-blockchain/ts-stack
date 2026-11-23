@@ -17,6 +17,7 @@ import type { Layout, ProjectConfig } from '../config/model.js'
 import { layoutOf } from '../config/model.js'
 import type { Capability } from '../types.js'
 import { getStarter } from '../starters.js'
+import { formatPulledNotice } from '../config/requires.js'
 
 export interface UiServer {
   url: string
@@ -104,12 +105,16 @@ async function handleGenerate(
   existing: ProjectManifest | null,
   targetDir: string,
   flags: ConfigDraft,
-  runCommand: RunCommand | undefined,
+  run: { runCommand: RunCommand | undefined; upgradeBsvDeps: boolean },
   resolveDone: (r: RunResult) => void
 ): Promise<void> {
+  const { runCommand, upgradeBsvDeps } = run
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
-    const config = resolveDraft(seedDraft(existing, { ...flags, ...draft }))
+    const config = {
+      ...resolveDraft(seedDraft(existing, { ...flags, ...draft })),
+      upgradeBsvDeps
+    }
     // force:false — preserve existing capability files, matching the CLI default (the user re-runs with intent but we never clobber their edits)
     const result = applyConfig(config, targetDir, { runCommand, force: false })
     sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
@@ -158,12 +163,13 @@ async function handlePlan(
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
     const config = resolveDraft(seedDraft(existing, { ...flags, ...draft }))
-    const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
+    const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
     const files = planPaths(config, caps).map(p => ({
       path: p,
       status: existsSync(join(targetDir, p)) ? ('edit' as const) : ('new' as const)
     }))
-    sendJson(res, 200, { files })
+    const pulled = config.pulled ?? []
+    sendJson(res, 200, { files, pulled, notice: formatPulledNotice(pulled) })
   } catch (err) {
     if (err instanceof UiRequestError) throw err
     if (err instanceof ConfigError) {
@@ -180,6 +186,8 @@ export async function startUiServer(opts: {
   targetDir: string
   /** CLI flags given alongside `--ui`. */
   flags?: ConfigDraft
+  /** `--upgrade-bsv-deps`: raise owned @bsv packages across a major in add mode. */
+  upgradeBsvDeps?: boolean
   deps?: { runCommand?: RunCommand }
 }): Promise<UiServer> {
   const { existing, targetDir } = opts
@@ -251,7 +259,7 @@ export async function startUiServer(opts: {
             existing,
             targetDir,
             flags,
-            opts.deps?.runCommand,
+            { runCommand: opts.deps?.runCommand, upgradeBsvDeps: opts.upgradeBsvDeps === true },
             resolveDone
           )
         if (req.method === 'POST' && req.url === '/plan')
@@ -286,6 +294,7 @@ export interface RunUiOpts {
   targetDir: string
   flags?: ConfigDraft
   runCommand?: RunCommand
+  upgradeBsvDeps?: boolean
   openBrowser?: (url: string) => void
 }
 
@@ -294,6 +303,7 @@ export async function runUi(opts: RunUiOpts): Promise<RunResult> {
     existing: opts.existing,
     targetDir: opts.targetDir,
     flags: opts.flags,
+    upgradeBsvDeps: opts.upgradeBsvDeps,
     deps: { runCommand: opts.runCommand }
   })
   const open = opts.openBrowser ?? ((url: string) => defaultOpenBrowser(url))
