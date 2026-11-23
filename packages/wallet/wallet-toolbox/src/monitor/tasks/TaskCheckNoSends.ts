@@ -54,6 +54,11 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * from the block-triggered runs (which would otherwise reset it on every
  * block), it waits until a block header has been processed, and a due sweep
  * is not filtered when a block has also set `checkNow`.
+ *
+ * The first sweep therefore runs at the first processed header, seconds after
+ * launch rather than at launch. Like the old daily sweep it is unfiltered, so it
+ * also checks rows newer than `tier0FreshSkipMsecs`. That is harmless: a fresh
+ * row leaves `nosend` only when a proof for it is found.
  */
 export class TaskCheckNoSends extends WalletMonitorTask {
   static readonly taskName = 'CheckNoSends'
@@ -112,6 +117,10 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     }
     return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier4BlockInterval === 0
   }
+
+  // The sweep clock and sweepPending live on the task instance, while checkNow is static.
+  // With one Monitor per process that makes no difference; Monitors that share a
+  // process each keep their own sweep clock.
 
   /** When the last unfiltered sweep started; block-triggered runs do not move it. */
   private lastSweepMsecsSinceEpoch = 0
