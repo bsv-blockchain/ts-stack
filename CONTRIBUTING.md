@@ -246,13 +246,21 @@ Follow [`docs/about/versioning.md`](./docs/about/versioning.md).
 
 When a public package’s published bytes or manifest change:
 
-1. choose the SemVer impact from the consumer-visible contract;
-2. bump only affected packages and dependents whose packed contract changes;
-3. update the exact entry in `governance/package-release-notes.json`;
-4. regenerate the package API and migration ledger with
-   `pnpm docs:packages`;
-5. update the package README, API docs, and examples as needed; and
-6. update a package-local `CHANGELOG.md` when that package already has one.
+1. choose the SemVer impact from the consumer-visible contract for each
+   affected package and each dependent whose packed contract changes;
+2. add one new change file that records the impact, a summary, and the
+   migration decision, for example
+   `pnpm change @bsv/sdk:minor --summary "…" --migration "…"`
+   (see [`changes/README.md`](./changes/README.md)); and
+3. update the package README, API docs, and examples as needed.
+
+Do not edit the package `version`, `governance/package-release-notes.json`, a
+package `CHANGELOG.md`, the baseline package versions, or the generated
+ledgers. Each change file has a unique name, so pull requests that each add
+one never conflict. The `Version packages` workflow folds every pending change
+file on `main` into those shared files in one generated `chore: version
+packages` pull request. CI rejects a direct public version change in any other
+pull request.
 
 Every release-note entry includes a migration decision. Say explicitly that no
 consumer migration is required when behavior is unchanged. An incompatible
