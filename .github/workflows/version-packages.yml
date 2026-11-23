@@ -52,6 +52,10 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The required PR release-note contract (scripts/pr-release-note.mjs)
+          # applies to this pull request too; build the note before the change
+          # files are deleted.
+          node scripts/release-changes.mjs release-note > "$RUNNER_TEMP/release-note.json"
           pnpm changes:version
           pnpm docs:facts:check
           echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -78,6 +82,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           plan="$(cat "$RUNNER_TEMP/plan.txt")"
+          note="$(cat "$RUNNER_TEMP/release-note.json")"
           body="$(cat <<EOF
           ## Summary
 
@@ -91,6 +96,12 @@ jobs:
 
           \`\`\`text
           $plan
+          \`\`\`
+
+          ## Release note
+
+          \`\`\`release-note
+          $note
           \`\`\`
 
           ## Completion evidence

@@ -16,8 +16,12 @@ import {
   nextVersion,
   parseChange,
   planRelease,
+  releaseNoteFor,
   setPageVersion
 } from './release-changes.mjs'
+import { validateReleaseNote } from './pr-release-note.mjs'
+
+const PROJECTS_PATH = 'governance/repository-health/projects.json'
 
 const MIGRATION = 'No consumer migration is required for this change.'
 const roots = []
@@ -218,6 +222,25 @@ describe('release plan', () => {
     assert.deepEqual(errors, [])
     const versions = Object.fromEntries(plan.map(item => [item.name, item.version]))
     assert.deepEqual(versions, { '@bsv/a': '1.3.0', '@bsv/b': '2.0.1', '@bsv/b-client': '2.0.1' })
+  })
+
+  test('builds a release-note block that the PR release-note contract accepts', () => {
+    const root = fixture()
+    change(root, '20261104-one.md', { '@bsv/a': 'minor' }, 'Adds the first feature to a.')
+    change(root, '20261104-two.md', { '@bsv/b-client': 'patch' }, 'Fixes a defect in b.')
+    const { plan, changes, errors } = planRelease(root)
+    assert.deepEqual(errors, [])
+    const note = releaseNoteFor(plan, changes)
+    assert.deepEqual(note.packages, {
+      '@bsv/a': 'minor',
+      '@bsv/b': 'patch',
+      '@bsv/b-client': 'patch'
+    })
+    assert.match(note.summary, /first feature to a\..*defect in b\./)
+    assert.deepEqual(validateReleaseNote(note, readJson(root, PROJECTS_PATH).projects), [])
+    const empty = releaseNoteFor([], [])
+    assert.equal(empty.packages, 'none')
+    assert.deepEqual(validateReleaseNote(empty, readJson(root, PROJECTS_PATH).projects), [])
   })
 
   test('applies every pending change in one pass', () => {

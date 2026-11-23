@@ -17,6 +17,7 @@
  *   node scripts/release-changes.mjs new <package>:<patch|minor|major> [...] \
  *     --summary "<consumer-visible change>" --migration "<migration decision>" [--slug <name>]
  *   node scripts/release-changes.mjs status
+ *   node scripts/release-changes.mjs release-note
  *   node scripts/release-changes.mjs check [--base <ref> --head <ref>]
  *   node scripts/release-changes.mjs version [--date YYYY-MM-DD]
  */
@@ -574,6 +575,34 @@ function printPlan(plan) {
   }
 }
 
+/**
+ * The structured `release-note` block (scripts/pr-release-note.mjs) for the
+ * version pull request, built from the plan before the change files go.
+ */
+export function releaseNoteFor(plan, changes) {
+  const packages = {}
+  for (const item of plan) {
+    if (item.releaseType !== undefined && item.releaseType !== 'none') {
+      packages[item.name] = item.releaseType
+    }
+  }
+  const summary = collapse(changes.map(change => change.summary).join(' '))
+  if (Object.keys(packages).length === 0) {
+    return {
+      schemaVersion: 1,
+      packages: 'none',
+      summary: summary || 'No pending release changes.',
+      migration: 'none'
+    }
+  }
+  return {
+    schemaVersion: 1,
+    packages,
+    summary,
+    migration: collapse(changes.map(change => change.migration).join(' '))
+  }
+}
+
 function fail(errors) {
   for (const error of errors) console.error(`error: ${error}`)
   process.exitCode = 1
@@ -628,9 +657,16 @@ function commandVersion(rest, root) {
   }
 }
 
+function commandReleaseNote(_rest, root) {
+  const { plan, changes, errors } = planRelease(root)
+  if (errors.length > 0) return fail(errors)
+  console.log(JSON.stringify(releaseNoteFor(plan, changes), null, 2))
+}
+
 const COMMANDS = {
   new: commandNew,
   status: commandStatus,
+  'release-note': commandReleaseNote,
   check: commandCheck,
   version: commandVersion
 }
@@ -640,7 +676,7 @@ export function main(argv, root = ROOT) {
   const run = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
   if (run === undefined) {
     return fail([
-      `usage: release-changes.mjs <new|status|check|version> (got ${command ?? 'nothing'})`
+      `usage: release-changes.mjs <new|status|release-note|check|version> (got ${command ?? 'nothing'})`
     ])
   }
   return run(rest, root)
