@@ -45,6 +45,7 @@ import {
   type TopicAnchorRangeResponse,
   type TopicAnchorTip,
   type TopicBlockAnchor,
+  type MerkleProofMetadata,
   computeBasmRoot,
   computeTac,
   extractMerkleProofMetadata
@@ -4243,23 +4244,28 @@ export class Engine {
 
     if (appliedTopicsWithoutOutputs.length === 0) return
     if (outputs.length === 0) {
-      await this.recordProofForTransactionWithoutOutputs(txid, proof, resolvedBlockHash)
+      await this.recordProofForTransactionWithoutOutputs(
+        txid,
+        proof,
+        proofMetadata,
+        resolvedBlockHash
+      )
     }
-    for (const topic of appliedTopicsWithoutOutputs) {
-      if (resolvedBlockHeight !== undefined) {
+    await Promise.all(
+      appliedTopicsWithoutOutputs.map(async topic => {
         await this.storage.updateAppliedTransactionProof?.({
           txid,
           topic,
           blockHeight: resolvedBlockHeight,
           blockHash: resolvedBlockHash,
-          blockIndex: proofMetadata?.blockIndex,
-          merkleRoot: proofMetadata?.merkleRoot
+          blockIndex: proofMetadata.blockIndex,
+          merkleRoot: proofMetadata.merkleRoot
         })
-      }
-      if (resolvedBlockHeight !== undefined && resolvedBlockHash !== undefined) {
-        await this.recomputeTopicBlockAnchor(topic, resolvedBlockHeight, resolvedBlockHash)
-      }
-    }
+        if (resolvedBlockHash !== undefined) {
+          await this.recomputeTopicBlockAnchor(topic, resolvedBlockHeight, resolvedBlockHash)
+        }
+      })
+    )
   }
 
   /**
@@ -4273,22 +4279,21 @@ export class Engine {
   ): Promise<string[]> {
     // A storage that cannot record an applied proof keeps the previous refusal.
     if (typeof this.storage.updateAppliedTransactionProof !== 'function') return []
-    const topics: string[] = []
-    for (const topic of Object.keys(this.managers)) {
-      if (outputTopics.has(topic)) continue
-      const applied = await this.storage.doesAppliedTransactionExist({ txid, topic })
-      if (typeof applied !== 'boolean') {
-        throw new TypeError('Storage returned an invalid applied-transaction verdict')
-      }
-      if (applied) topics.push(topic)
+    const candidates = Object.keys(this.managers).filter(topic => !outputTopics.has(topic))
+    const verdicts = await Promise.all(
+      candidates.map(async topic => await this.storage.doesAppliedTransactionExist({ txid, topic }))
+    )
+    if (verdicts.some(applied => typeof applied !== 'boolean')) {
+      throw new TypeError('Storage returned an invalid applied-transaction verdict')
     }
-    return topics
+    return candidates.filter((_, index) => verdicts[index])
   }
 
   /** Stores the proof on the transaction record so BASM can serve it for the applied rows. */
   private async recordProofForTransactionWithoutOutputs(
     txid: string,
     proof: MerklePath,
+    metadata: MerkleProofMetadata,
     blockHash?: string
   ): Promise<void> {
     if (typeof this.storage.upsertTransactionRecord !== 'function') return
@@ -4307,14 +4312,13 @@ export class Engine {
       return
     }
     // The transaction record went with its last output; keep the proof for BASM.
-    const metadata = extractMerkleProofMetadata(txid, proof)
     await this.storage.upsertTransactionRecord({
       txid,
       merklePath: proof.toBinary(),
-      blockHeight: metadata?.blockHeight,
+      blockHeight: metadata.blockHeight,
       blockHash,
-      blockIndex: metadata?.blockIndex,
-      merkleRoot: metadata?.merkleRoot
+      blockIndex: metadata.blockIndex,
+      merkleRoot: metadata.merkleRoot
     })
   }
 

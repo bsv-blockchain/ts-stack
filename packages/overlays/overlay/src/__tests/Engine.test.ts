@@ -663,7 +663,12 @@ describe('BSV Overlay Services Engine', () => {
     })
 
     it('is not invoked for a duplicate or a successful admission', async () => {
-      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
       const onTopicFailed = jest.fn()
       engine.onTopicFailed = onTopicFailed
 
@@ -681,7 +686,12 @@ describe('BSV Overlay Services Engine', () => {
       mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
         throw new Error('manager rejected the transaction')
       })
-      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
       const logger = { ...console, error: jest.fn() }
       engine.logger = logger
       engine.onTopicFailed = jest.fn(() => {
@@ -2089,6 +2099,73 @@ describe('BSV Overlay Services Engine', () => {
         expect(upsertTransactionRecord).not.toHaveBeenCalled()
       })
 
+      it('refuses a malformed output set from storage', async () => {
+        mockStorageEngine.findOutputsForTransaction = jest.fn(
+          async () => null as unknown as Output[]
+        )
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+
+      it('marks the applied row proven on a storage that cannot upsert transaction records', async () => {
+        delete mockStorageEngine.upsertTransactionRecord
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(mockStorageEngine.findRawTransactions).not.toHaveBeenCalled()
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+      })
+
+      it('keeps the proof on a storage that cannot list raw transactions', async () => {
+        delete mockStorageEngine.findRawTransactions
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(upsertTransactionRecord).toHaveBeenCalledWith(
+          expect.objectContaining({ txid, merklePath: proof.toBinary() })
+        )
+      })
+
+      it('refuses a malformed raw-transaction set from storage', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => ({}) as unknown as [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Storage returned an invalid raw-transaction set'
+        )
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
       it('refuses a stored raw transaction that does not match the proven txid', async () => {
         mockStorageEngine.findRawTransactions = jest.fn(async () => [
           { txid, rawTx: Transaction.fromHexBEEF(beef27c8f1).toHex() }
@@ -2342,7 +2419,12 @@ describe('BSV Overlay Services Engine', () => {
     it('Verifies with the SDK interpreter when no script verifier is configured', async () => {
       const verify = jest.spyOn(Transaction.prototype, 'verify')
       try {
-        const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
         expect(engine.scriptVerifier).toBeUndefined()
         await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
         expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, undefined)
