@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/sigma-permission-module",
+  "entry": ".",
+  "requiredExports": [
+    "SigmaPermissionModule",
+    "createSigmaModule",
+    "verifySchnorr",
+    "verifyDleq",
+    "verifyOr",
+    "parsePoint33",
+    "point64"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 115000, "gzip": 40000, "brotli": 34000 },
+    "esbuild": { "raw": 114000, "gzip": 43000, "brotli": 37000 }
+  }
+}

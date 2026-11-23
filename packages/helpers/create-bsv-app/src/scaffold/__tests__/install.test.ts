@@ -101,6 +101,27 @@ describe('candidate selection', () => {
     expect(calls).toEqual(['npm'])
   })
 
+  test('a layout without recorded targets installs in its default target folders', () => {
+    const client = packageDirectory('client')
+    const server = packageDirectory('server')
+    packageDirectory('other') // not a target of this layout
+    const stack = {
+      frontend: { framework: 'react' as const, variant: 'react-ts' },
+      backend: { framework: 'express' as const }
+    }
+    expect(installProject(config({ stack, targets: {} }), targetDir, () => {})).toEqual([
+      client,
+      server
+    ])
+  })
+
+  test('a single-target layout without recorded targets installs at the root only', () => {
+    packageDirectory()
+    packageDirectory('client') // backend-only has no client target
+    const stack = { backend: { framework: 'express' as const } }
+    expect(installProject(config({ stack, targets: {} }), targetDir, () => {})).toEqual([targetDir])
+  })
+
   test('does nothing when installation is disabled', () => {
     expect(
       installProject(config({ install: false }), targetDir, () => {
