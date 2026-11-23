@@ -137,3 +137,50 @@ describe('scaffoldNewProject', () => {
     expect(result.written).toContain('server/src/index.ts')
   })
 })
+
+describe('scaffoldNewProject: explicit single-target folder', () => {
+  test('frontend-only with targets.client "web" scaffolds React and everything else into web/', () => {
+    const dir = join(base, 'app')
+    const calls: Array<{ args: string[]; cwd: string }> = []
+    const fake: RunCommand = (_command, args, opts) => {
+      calls.push({ args, cwd: opts.cwd })
+    }
+    const result = scaffoldNewProject(
+      cfg({
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        targets: { client: 'web' },
+        glue: true
+      }),
+      dir,
+      { runCommand: fake }
+    )
+    // create-vite runs from the parent with the folder name as its argument.
+    const vite = calls.find(c => c.args.some(a => a.startsWith('vite@')))
+    expect(vite?.cwd).toBe(dir)
+    expect(vite?.args).toContain('web')
+    expect(existsSync(join(dir, 'web/src/bsv/useWalletLogin.tsx'))).toBe(true)
+    expect(existsSync(join(dir, 'web/src/main.tsx'))).toBe(true)
+    expect(result.written).toContain('web/src/main.tsx')
+    expect(existsSync(join(dir, 'src'))).toBe(false)
+    const pkg = JSON.parse(readFileSync(join(dir, 'web/package.json'), 'utf8'))
+    expect(pkg.dependencies).toHaveProperty('@bsv/sdk')
+    expect(existsSync(join(dir, 'package.json'))).toBe(false)
+  })
+
+  test('backend-only with targets.server "api" scaffolds Express and everything else into api/', () => {
+    const dir = join(base, 'svc')
+    const result = scaffoldNewProject(
+      cfg({ stack: { backend: { framework: 'express' } }, targets: { server: 'api' }, glue: true }),
+      dir,
+      { runCommand: () => {} }
+    )
+    const pkg = JSON.parse(readFileSync(join(dir, 'api/package.json'), 'utf8'))
+    expect(pkg.dependencies).toHaveProperty('express') // the Express skeleton
+    expect(pkg.dependencies).toHaveProperty('@bsv/auth') // capability deps
+    expect(existsSync(join(dir, 'api/src/bsv/loginRoute.ts'))).toBe(true)
+    expect(readFileSync(join(dir, 'api/src/index.ts'), 'utf8')).toContain('loginRoute')
+    expect(result.written).toContain('api/src/index.ts')
+    expect(existsSync(join(dir, 'package.json'))).toBe(false)
+    expect(existsSync(join(dir, 'src'))).toBe(false)
+  })
+})
