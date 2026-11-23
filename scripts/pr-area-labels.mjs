@@ -185,12 +185,25 @@ function assertGitHubUrl(value, owner, repo) {
   return url
 }
 
+function linkTarget(part, relation) {
+  const trimmed = part.trim()
+  if (!trimmed.startsWith('<')) return undefined
+  const close = trimmed.indexOf('>')
+  if (close < 2) return undefined
+  const parameters = trimmed
+    .slice(close + 1)
+    .split(';')
+    .map(parameter => parameter.trim())
+    .filter(parameter => parameter !== '')
+  if (!parameters.includes(`rel="${relation}"`)) return undefined
+  return trimmed.slice(1, close)
+}
+
 function nextPage(link, owner, repo) {
   if (!link) return undefined
   for (const part of link.split(',')) {
-    const match = /<([^>]+)>;\s*rel="next"/.exec(part.trim())
-    if (!match) continue
-    return assertGitHubUrl(match[1], owner, repo).toString()
+    const target = linkTarget(part, 'next')
+    if (target) return assertGitHubUrl(target, owner, repo).toString()
   }
   return undefined
 }
@@ -249,22 +262,22 @@ async function github(state, target, options = {}) {
   throw new Error('GitHub request did not finish.')
 }
 
-async function listPages(state, path, cap) {
-  const items = []
-  let next = `${state.base}${path}`
-  let pages = 0
-  while (next) {
-    pages += 1
-    if (pages > 100) throw new Error('GitHub list did not finish within the page limit.')
-    const response = await github(state, next)
-    if (!response.ok || !Array.isArray(response.body))
-      throw new Error(`GitHub list failed with status ${response.status}.`)
-    items.push(...response.body)
-    if (cap !== undefined && items.length > cap)
-      throw new Error('Changed-file list exceeded the GitHub 3000-file cap. No labels were added.')
-    next = nextPage(response.headers.get('link'), state.owner, state.repo)
-  }
-  return items
+async function listPages(state, next, cap, items = [], pages = 0) {
+  if (!next) return items
+  if (pages >= 100) throw new Error('GitHub list did not finish within the page limit.')
+  const response = await github(state, next)
+  if (!response.ok || !Array.isArray(response.body))
+    throw new Error(`GitHub list failed with status ${response.status}.`)
+  const combined = items.concat(response.body)
+  if (cap !== undefined && combined.length > cap)
+    throw new Error('Changed-file list exceeded the GitHub 3000-file cap. No labels were added.')
+  return listPages(
+    state,
+    nextPage(response.headers.get('link'), state.owner, state.repo),
+    cap,
+    combined,
+    pages + 1
+  )
 }
 
 async function ensureLabel(state, item) {
@@ -284,6 +297,12 @@ async function ensureLabel(state, item) {
   throw new Error(`Unable to create label ${item.label} (${created.status}).`)
 }
 
+async function ensureAreas(state, areas, index = 0) {
+  if (index >= areas.length) return
+  await ensureLabel(state, areas[index])
+  await ensureAreas(state, areas, index + 1)
+}
+
 async function labelPullRequest(state, pullRequest) {
   const number = pullRequest?.number
   if (!Number.isInteger(number) || number < 1) throw new Error('Pull request number is invalid.')
@@ -291,13 +310,13 @@ async function labelPullRequest(state, pullRequest) {
     state.log(`#${number} skipped; an area label is already present.`)
     return 'skipped'
   }
-  const files = await listPages(state, `/pulls/${number}/files?per_page=100`, FILE_CAP)
+  const files = await listPages(state, `${state.base}/pulls/${number}/files?per_page=100`, FILE_CAP)
   const areas = areasForChangedPaths(changedPaths(files), state.catalog)
   if (areas.length === 0) {
     state.log(`#${number} has no package or infra area.`)
     return 'unchanged'
   }
-  for (const item of areas) await ensureLabel(state, item)
+  await ensureAreas(state, areas)
   const added = await github(state, `/issues/${number}/labels`, {
     method: 'POST',
     body: { labels: areas.map(item => item.label) }
@@ -328,20 +347,9 @@ export async function labelOpenPullRequests({
     sleep,
     log
   }
-  const pullRequests = await listPages(state, '/pulls?state=open&per_page=100')
+  const pullRequests = await listPages(state, `${state.base}/pulls?state=open&per_page=100`)
   const summary = { open: pullRequests.length, skipped: 0, labeled: 0, unchanged: 0, failed: [] }
-  for (const pullRequest of pullRequests) {
-    try {
-      const result = await labelPullRequest(state, pullRequest)
-      summary[result] += 1
-    } catch (error) {
-      const number = pullRequest?.number
-      summary.failed.push(number)
-      state.log(
-        `#${number ?? '?'} failed: ${error instanceof Error ? error.message : 'labeling failed.'}`
-      )
-    }
-  }
+  await labelEach(state, pullRequests, 0, summary)
   state.log(
     `Open ${summary.open}; skipped ${summary.skipped}; labeled ${summary.labeled}; unchanged ${summary.unchanged}; failed ${summary.failed.length}.`
   )
@@ -350,9 +358,27 @@ export async function labelOpenPullRequests({
   return summary
 }
 
+async function labelEach(state, pullRequests, index, summary) {
+  if (index >= pullRequests.length) return
+  const pullRequest = pullRequests[index]
+  try {
+    const result = await labelPullRequest(state, pullRequest)
+    summary[result] += 1
+  } catch (error) {
+    const number = pullRequest?.number
+    summary.failed.push(number)
+    state.log(
+      `#${number ?? '?'} failed: ${error instanceof Error ? error.message : 'labeling failed.'}`
+    )
+  }
+  await labelEach(state, pullRequests, index + 1, summary)
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  labelOpenPullRequests().catch(error => {
+  try {
+    await labelOpenPullRequests()
+  } catch (error) {
     console.error(error instanceof Error ? error.message : 'Area labeling failed.')
     process.exitCode = 1
-  })
+  }
 }
