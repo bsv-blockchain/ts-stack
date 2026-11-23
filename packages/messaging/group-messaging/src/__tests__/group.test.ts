@@ -308,6 +308,86 @@ describe('deliveryFailed', () => {
     await Promise.all([alice.close(), bob.close(), carol.close()])
   })
 
+  /**
+   * `send` tells a caller to write its own copy without waiting for the
+   * promise, because the group has already advanced. That copy needs a key,
+   * and on this path the promise that would have carried the id rejects.
+   */
+  it('carries the id of the message that did not get through', async () => {
+    let blocked = new Set<IdentityKey>()
+    const { alice, bob, carol, group } = await trio(() => blocked)
+    blocked = new Set([carol.identityKey])
+
+    const ids: Array<string | undefined> = []
+    alice.on('deliveryFailed', ({ messageId }) => {
+      ids.push(messageId)
+    })
+    // Bob was reached, so he derives the id the event should be carrying.
+    // Matching a shape instead would pass for an id hashed from the envelope,
+    // which no peer agrees with.
+    const received: string[] = []
+    bob.on('message', ({ messageId }) => {
+      received.push(messageId)
+    })
+    await expect(group.sendText('hello')).rejects.toThrow()
+
+    expect(ids).toHaveLength(1)
+    expect(received).toEqual([ids[0]])
+
+    await Promise.all([alice.close(), bob.close(), carol.close()])
+  })
+
+  /**
+   * The event is client-wide and names only the chat, so two sends in flight
+   * together produce two events a host cannot tell apart — and `send` releases
+   * the group lock before it broadcasts, so two in flight is reachable. The
+   * rejection belongs to exactly one send, which makes it the only place the
+   * id can be read unambiguously.
+   */
+  it('carries the id on the rejection, and it is the id the recipients derive', async () => {
+    let blocked = new Set<IdentityKey>()
+    const { alice, bob, carol, group } = await trio(() => blocked)
+    blocked = new Set([carol.identityKey])
+
+    const received: string[] = []
+    bob.on('message', ({ messageId }) => {
+      received.push(messageId)
+    })
+
+    const error = await group.sendText('hello').catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(BroadcastError)
+    // Agreement, not shape. `payload` is the envelope rather than the MLS
+    // message, so an id hashed from it would satisfy a regex while matching
+    // nothing any peer holds.
+    expect(received).toHaveLength(1)
+    expect((error as BroadcastError).messageId).toBe(received[0])
+
+    await Promise.all([alice.close(), bob.close(), carol.close()])
+  })
+
+  /**
+   * A retry that fails again throws a fresh error. Minting that one without
+   * the id would lose on the second attempt exactly what the first carried,
+   * and a host retrying in a loop would hold an id for none of the failures
+   * after the first.
+   */
+  it('keeps the id on a retry that fails again', async () => {
+    let blocked = new Set<IdentityKey>()
+    const { alice, bob, carol, group } = await trio(() => blocked)
+    blocked = new Set([carol.identityKey])
+
+    const first = (await group.sendText('hello').catch((cause: unknown) => cause)) as BroadcastError
+    expect(first.messageId).toMatch(/^[0-9a-f]{64}$/)
+
+    const again = (await alice.retryDelivery(first).catch((cause: unknown) => cause)) as unknown
+
+    expect(again).toBeInstanceOf(BroadcastError)
+    expect((again as BroadcastError).messageId).toBe(first.messageId)
+
+    await Promise.all([alice.close(), bob.close(), carol.close()])
+  })
+
   it('leaves `failed` absent when the transport did not say who was missed', async () => {
     // A backend with its own `broadcast` throws whatever it throws; the
     // partition is genuinely unknown. An empty array would read as "nothing

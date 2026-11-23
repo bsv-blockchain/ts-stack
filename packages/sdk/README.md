@@ -8,7 +8,7 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
-## Plain HTTP 400 wallet errors (4.1.3 patch candidate)
+## Plain HTTP 400 wallet errors
 
 `HTTPWalletJSON` keeps the typed `isError` path for integer wallet-error codes,
 including `WERR_REVIEW_ACTIONS`. When a wallet answers HTTP 400 with a JSON
