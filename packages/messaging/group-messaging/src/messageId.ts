@@ -6,17 +6,31 @@
  * inventing differently do not interoperate, where the rest of the envelope
  * merely costs them effort.
  *
- * Derived rather than carried, the way `draft-ietf-mimi-content` derives its
- * own message ids: the sender does not get to choose it, so it cannot collide
- * by accident or be claimed by forgery. The preimage is the MLS application
- * message — one ciphertext, broadcast unchanged to every member, unique per
- * message because MLS framing is. Sender and recipients therefore hash exactly
- * the same bytes without agreeing on a canonical JSON form, which is the usual
- * way a scheme like this goes wrong.
+ * Derived rather than carried: the sender does not get to choose it, so it
+ * cannot collide by accident or be claimed by forgery. That idea is borrowed
+ * from `draft-ietf-mimi-content`; the construction is not. MIMI (§3.3) hashes
+ * the content envelope together with a mandatory per-message random salt and
+ * the sender and room URIs, and prefixes a hash identifier. We have no URI for
+ * an identity or a group and the envelope carries no salt, so ids derived here
+ * and ids derived there cannot agree. This is not a step toward MIMI interop
+ * and should not be read as one — that would mean adopting their content
+ * format, at which point the ids change anyway.
  *
- * Re-sending the same bytes — what `retryDelivery` does — keeps the id, since
- * it is the same message. Encrypting the same text a second time does not,
- * since it is not.
+ * The preimage is the MLS application message — one ciphertext, broadcast
+ * unchanged to every member, unique per message because MLS framing is. That
+ * uniqueness is free here and is exactly what MIMI needs its salt for: a
+ * plaintext envelope carrying no nonce hashes the same for two identical
+ * messages. Sender and recipients therefore hash exactly the same bytes
+ * without agreeing on a canonical JSON form, which is the usual way a scheme
+ * like this goes wrong.
+ *
+ * Because the preimage is the ciphertext, the id belongs to one encryption
+ * rather than to the message as a thing a person sent. Re-sending the same
+ * bytes — what `retryDelivery` does — keeps it. Encrypting the same text a
+ * second time does not, so a host that ever re-encrypts a stored backlog into
+ * a later epoch has to carry the ids it stored rather than recompute them, or
+ * every `replyTo` and reaction `reference` pointing into that backlog stops
+ * resolving.
  *
  * `Hash.sha256` rather than `crypto.subtle.digest`: it is pure JavaScript, so
  * this works on a React Native runtime whose WebCrypto is partial.

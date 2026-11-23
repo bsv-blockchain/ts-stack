@@ -100,6 +100,15 @@ a reaction's `reference` name. Every send returns it, every `message` event
 carries it, and a send that failed carries it on both the `deliveryFailed` event
 and the `BroadcastError` it rejects with.
 
+The id is the digest of one ciphertext, so it belongs to that encryption rather
+than to the message as a thing a person sent. A retry of the same bytes keeps
+it; the same text encrypted again is a different message with a different id. A
+host that re-encrypts a stored backlog — replaying history to a member who was
+not there for it — must carry the ids it stored rather than recompute them,
+or every reply and reaction pointing into that backlog stops resolving. The
+scheme borrows the derived-not-chosen idea from `draft-ietf-mimi-content` but
+not its construction, and the two are not interoperable.
+
 `templates/` ships alongside `dist/`, to read and copy rather than import.
 There is deliberately no export subpath for it: the files are `.ts`, and Node
 does not strip types inside `node_modules`, so importing the package path would
