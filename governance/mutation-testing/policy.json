@@ -349,6 +349,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "sigma-permission",
+      "manifest": "packages/wallet/sigma-permission-module/package.json",
+      "propertyTest": "packages/wallet/sigma-permission-module/src/__tests__/SigmaPermissionModule.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet-derived secret scalars proving statements about untrusted caller-supplied points and contexts",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "chirp-codec",
       "manifest": "packages/network/chirp/package.json",
       "propertyTest": "packages/network/chirp/test/codec.property.test.ts",

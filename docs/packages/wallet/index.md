@@ -4,8 +4,8 @@ title: Wallet
 kind: meta
 domain: wallet
 version: 'n/a'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'wallet']
@@ -29,6 +29,7 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 | [@bsv/ecpm-permission-module](./ecpm-permission-module.md)   | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                      |
 | [@bsv/color-permission-module](./color-permission-module.md) | BRC-207 module for holding, sending and receiving BRC-162 fungible tokens                                                          |
 | [@bsv/rabin-permission-module](./rabin-permission-module.md) | BRC-206 module for Rabin moduli and signatures carried through encrypt                                                             |
+| [@bsv/sigma-permission-module](./sigma-permission-module.md) | BRC-98 semantic module for wallet-held Sigma-protocol proofs (Schnorr, DLEQ, OR) that Bitcoin Script can verify                    |
 | [@bsv/wallet-relay](./wallet-relay.md)                       | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
 ## Common Use Cases
@@ -77,6 +78,12 @@ Use [@bsv/rabin-permission-module](./rabin-permission-module.md) to install the
 BRC-206 `p rabin` scheme. Applications request a modulus or a signature through
 `encrypt`. The signature verifies on chain with Rúnar's
 `(signature^2 + padding) mod n` equation, and `decrypt` is rejected.
+### I need proofs that a contract can verify with a wallet-held key
+
+Use [@bsv/sigma-permission-module](./sigma-permission-module.md) to install the
+`p sigma` scheme. It reuses `encrypt`, so applications can obtain a statement
+point and deterministic Schnorr, DLEQ and OR proofs that Bitcoin Script
+verifies, without ever holding the secret scalar.
 
 ## Key Concepts
 
@@ -108,6 +115,7 @@ BRC-206 `p rabin` scheme. Applications request a modulus or a signature through
 | **ecpm-permission-module**  | ✓             | ✓                 | Host-dependent           |
 | **color-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **rabin-permission-module** | ✓             | ✓                 | Host-dependent           |
+| **sigma-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **wallet-relay**            | Server        | React components  | Supported via relay      |
 
 ## When to Use Each Package

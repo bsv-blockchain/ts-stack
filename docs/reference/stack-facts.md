@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **39 public packages**. Versions
+The release graph currently contains **40 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -72,6 +72,7 @@ authorized release action.
 | wallet | `@bsv/color-permission-module` | `0.2.2` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/color-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/color-permission-module) |
 | wallet | `@bsv/ecpm-permission-module` | `0.2.0` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/ecpm-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm-permission-module) |
 | wallet | `@bsv/rabin-permission-module` | `0.1.0` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/rabin-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/rabin-permission-module) |
+| wallet | `@bsv/sigma-permission-module` | `0.1.0` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/sigma-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/sigma-permission-module) |
 | wallet | `@bsv/wallet-relay` | `0.8.0` | cli-library | browser-bundler, browser-esm, cli, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/ts-wallet-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay) |
 | wallet | `@bsv/wallet-toolbox` | `2.18.0` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
 | wallet | `@bsv/wallet-toolbox-client` | `2.18.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
@@ -97,9 +98,9 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 48 |
-| Package-area projects | 42 |
-| Public npm packages | 39 |
+| Governed projects | 49 |
+| Package-area projects | 43 |
+| Public npm packages | 40 |
 | Private package-area projects | 3 |
 | Standalone infrastructure projects | 8 |
 
@@ -134,7 +135,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 41 | current package manifests |
+| Projects with a test:coverage script | 42 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |

@@ -146,6 +146,13 @@
       "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled. The reviewed security candidate remains one chunk: Vite 100044/35203/29547 raw/gzip/Brotli bytes across 15 modules and two packages, and esbuild 78035/32862/27909 across 18 modules. The rounded Vite limits retain roughly 14-15% headroom; the existing esbuild limits retain more."
     },
     {
+      "name": "@bsv/sigma-permission-module",
+      "path": "packages/wallet/sigma-permission-module",
+      "budget": "packages/wallet/sigma-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1, BigNumber and SHA-256/HMAC primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, worker, or privileged-key adapter is bundled. The proof code is deterministic and calls no random source. The reviewed candidate remains one chunk, within the budget recorded in browser-budget.json."
+    },
+    {
       "name": "@bsv/wallet-toolbox-client",
       "path": "packages/wallet/wallet-toolbox/client",
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",
