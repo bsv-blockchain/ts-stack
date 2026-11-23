@@ -19,8 +19,25 @@
 - [ ] Security-sensitive boundary changed
 - [ ] Documentation or examples changed
 
-Affected packages/services and intended patch versions (publication occurs only
-through the release workflow after approval):
+Affected services (if any; package release impact is recorded once below):
+
+## Release note
+
+<!-- Required for every PR, including automation. Replace the placeholders.
+Map each affected npm package to patch, minor, major or initial. For no npm
+release impact, use "packages": "none" and "migration": "none", with a summary
+explaining the repository/service change. See docs/about/versioning.md.
+CI checks structure; reviewers assess content. Existing release-ledger and
+changelog requirements still apply. Reuse this prose there where appropriate. -->
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": { "<package name>": "<patch|minor|major|initial>" },
+  "summary": "<plain-language consumer summary>",
+  "migration": "<steps or the exact word none>"
+}
+```
 
 ## Verification
 
