@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: '4.1.2'
 npm: '@bsv/sdk'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,16 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+## Plain HTTP 400 wallet errors
+
+`HTTPWalletJSON` keeps typed `isError` envelopes, including `WERR_REVIEW_ACTIONS`.
+An HTTP 400 JSON object without `isError` and with a string `message` of at most
+4096 UTF-8 bytes throws an `Error` that includes that message and `HTTP status 400`.
+A string `name` and `code` of at most 128 characters are copied onto the
+error. Blank, non-string, or oversized messages, and every
+non-400 status, keep the generic status error. No call or wire migration is
+required.
 
 ## Script ASM for data outputs
 
