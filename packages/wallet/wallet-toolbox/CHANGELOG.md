@@ -1,19 +1,3 @@
-# 2.18.1 source candidate
-
-- WhatsOnChain `getUtxoStatus` accepts `/unspent/all` entries whose `status` is
-  `'unconfirmed'` and that carry no `height`, as WhatsOnChain returns them for mempool
-  outputs. Any answer containing one previously failed as a whole, so `isUtxo` could
-  report neither the unconfirmed output nor confirmed outputs of the same script until
-  it was mined. A height that is present is still validated, and a confirmed entry still
-  requires one. Entries that WhatsOnChain marks `isSpentInMempoolTx: true` are no longer
-  reported as unspent; a non-boolean value for that field, or an outpoint listed twice,
-  fails the answer. No migration is required.
-- This applies to confirmed outputs too. A confirmed output already spent by a mempool
-  transaction, which `getUtxoStatus` previously reported as unspent, now reads as
-  `'spent'`. `reviewSpendableOutputs` (and its release mode), proof recovery and
-  confirmed-spend recovery therefore treat it as spent, even if that mempool
-  transaction is later evicted or loses a race.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
