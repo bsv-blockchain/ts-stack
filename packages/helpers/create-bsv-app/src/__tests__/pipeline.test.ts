@@ -2,7 +2,7 @@ import { expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyConfig } from '../pipeline'
+import { applyConfig, pendingBsvUpgrades } from '../pipeline'
 import type { ProjectConfig } from '../config/model'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 
@@ -119,7 +119,7 @@ test('applyConfig add-mode written includes AGENTS.md and manifest', () => {
   expect(res.written).toContain('bsv-scaffold.json')
 })
 
-test('raises an old sdk floor in add mode', () => {
+function oldSdkProject(): ProjectConfig {
   for (const t of ['client', 'server']) {
     mkdirSync(join(dir, t), { recursive: true })
     writeFileSync(
@@ -128,7 +128,7 @@ test('raises an old sdk floor in add mode', () => {
       'utf8'
     )
   }
-  const addConfig: ProjectConfig = {
+  return {
     ...newConfig,
     mode: 'add',
     stack: {
@@ -138,16 +138,71 @@ test('raises an old sdk floor in add mode', () => {
     targets: { client: 'client', server: 'server' },
     capabilities: ['tx-core'] // wallet-connect comes along as a requirement
   }
-  const res = applyConfig(addConfig, dir, { runCommand: () => {}, force: false })
+}
+
+const sdkIn = (t: string): string =>
+  JSON.parse(readFileSync(join(dir, t, 'package.json'), 'utf8')).dependencies['@bsv/sdk']
+
+test('add mode leaves an old sdk major alone unless upgradeBsvDeps is set', () => {
+  const res = applyConfig(oldSdkProject(), dir, { runCommand: () => {}, force: false })
   expect(res.written).toContain('server/src/bsv/auth.ts')
   const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
   expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
-  for (const t of ['client', 'server']) {
-    const pkg = JSON.parse(readFileSync(join(dir, t, 'package.json'), 'utf8'))
-    expect(pkg.dependencies['@bsv/sdk']).toBe('^4.0.1')
-  }
+  for (const t of ['client', 'server']) expect(sdkIn(t)).toBe('^2.4.1')
+  expect(res.dependencyChanges.filter(c => c.name === '@bsv/sdk')).toEqual([
+    {
+      target: 'client',
+      name: '@bsv/sdk',
+      from: '^2.4.1',
+      to: '^4.0.1',
+      action: 'left',
+      reason: 'majorUpgrade'
+    },
+    {
+      target: 'server',
+      name: '@bsv/sdk',
+      from: '^2.4.1',
+      to: '^4.0.1',
+      action: 'left',
+      reason: 'majorUpgrade'
+    }
+  ])
+})
+
+test('add mode with upgradeBsvDeps raises an old sdk major', () => {
+  const config = { ...oldSdkProject(), upgradeBsvDeps: true }
+  const res = applyConfig(config, dir, { runCommand: () => {}, force: false })
+  for (const t of ['client', 'server']) expect(sdkIn(t)).toBe('^4.0.1')
   expect(res.dependencyChanges).toEqual([
     { target: 'client', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' },
     { target: 'server', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' }
   ])
+})
+
+test('pendingBsvUpgrades lists the owned majors add mode would leave, without writing', () => {
+  const config = oldSdkProject()
+  const pending = pendingBsvUpgrades(config, dir)
+  expect(pending).toEqual([
+    {
+      target: 'client',
+      name: '@bsv/sdk',
+      from: '^2.4.1',
+      to: '^4.0.1',
+      action: 'left',
+      reason: 'majorUpgrade'
+    },
+    {
+      target: 'server',
+      name: '@bsv/sdk',
+      from: '^2.4.1',
+      to: '^4.0.1',
+      action: 'left',
+      reason: 'majorUpgrade'
+    }
+  ])
+  expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(false)
+  expect(JSON.parse(readFileSync(join(dir, 'client', 'package.json'), 'utf8'))).toEqual({
+    dependencies: { '@bsv/sdk': '^2.4.1' }
+  })
+  expect(pendingBsvUpgrades({ ...config, mode: 'new' }, dir)).toEqual([])
 })

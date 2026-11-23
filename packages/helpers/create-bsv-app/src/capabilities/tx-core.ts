@@ -5,12 +5,12 @@ import { sectionLines } from './section-lines.js'
 import { BSV_SDK_RANGE, WALLET_HELPER_RANGE, WALLET_RELAY_RANGE } from './versions.js'
 
 export const TX_UTILS_SOURCE = `// Read and handle transactions: parse BEEF / AtomicBEEF / raw bytes, summarize, find outputs, pass outpoints and BEEF around.
-import { Beef, Transaction, Utils } from '@bsv/sdk'
+import { ATOMIC_BEEF, BEEF_V1, BEEF_V2, Beef, Transaction, Utils } from '@bsv/sdk'
 import type { ListOutputsArgs, WalletInterface, WalletOutput } from '@bsv/sdk'
 import { getScriptType } from '@bsv/wallet-helper'
 import type { ScriptType } from '@bsv/wallet-helper'
 
-/** Bytes, or a hex / base64 string of them. */
+/** Bytes, or a hex / base64 string of them: a string of only hex digits is read as hex, anything else as base64. */
 export type TxInput = string | number[] | Uint8Array
 
 const PARSE_ERROR = 'Could not parse a transaction: expected BEEF, AtomicBEEF or a raw transaction, as bytes, hex or base64'
@@ -23,18 +23,27 @@ function toBytes (input: TxInput): number[] | Uint8Array {
   throw new Error(PARSE_ERROR)
 }
 
-/** Parse AtomicBEEF, then BEEF (the last transaction is the subject), then a raw transaction. */
+// The first 4 bytes as a little-endian uint32: the AtomicBEEF / BEEF version marker, if any.
+function prefix (bytes: number[] | Uint8Array): number {
+  if (bytes.length < 4) return -1
+  return (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0
+}
+
+/**
+ * Parse AtomicBEEF, BEEF (the last transaction is the subject) or a raw transaction, chosen by
+ * the 4-byte prefix. Bytes with a BEEF prefix that do not parse as BEEF are an error, never raw.
+ */
 export function parseTransaction (input: TxInput): Transaction {
   const bytes = toBytes(input)
-  const attempts = [Transaction.fromAtomicBEEF, Transaction.fromBEEF, Transaction.fromBinary]
-  for (const attempt of attempts) {
-    try {
-      return attempt(bytes)
-    } catch {
-      // try the next format
-    }
+  const version = prefix(bytes)
+  let parse = Transaction.fromBinary
+  if (version === ATOMIC_BEEF) parse = Transaction.fromAtomicBEEF
+  else if (version === BEEF_V1 || version === BEEF_V2) parse = Transaction.fromBEEF
+  try {
+    return parse(bytes)
+  } catch {
+    throw new Error(PARSE_ERROR)
   }
-  throw new Error(PARSE_ERROR)
 }
 
 export interface OutputSummary {
@@ -597,7 +606,7 @@ Core (\`transactions.ts\`):
 - \`internalizePayment(wallet, { tx, outputIndex, derivationPrefix, derivationSuffix })\` — \`internalizeAction\` with protocol \`wallet payment\`, so the wallet adds the output to its balance. The sender defaults to your own identity key.
 
 Helpers (\`txUtils.ts\`):
-- \`parseTransaction(input)\` — AtomicBEEF, BEEF or raw bytes/hex/base64 to a \`Transaction\`.
+- \`parseTransaction(input)\` — AtomicBEEF, BEEF or raw bytes/hex/base64 to a \`Transaction\`, chosen by the 4-byte prefix. A string of only hex digits is read as hex, anything else as base64.
 - \`summarizeTransaction(tx)\` — \`{ txid, inputs, outputs }\` with script types and decoded OP_RETURN data.
 - \`findOutputByScript(tx, lockingScriptHex, satoshis?)\` — the vout of the output you made.
 - \`explorerTxUrl(txid, network)\` — WhatsOnChain link for a transaction (\`undefined\` on ttn or for a bad txid).

@@ -39,21 +39,31 @@ function caretLine([major, minor, patch]: [number, number, number]): string {
   return `0.0.${patch}`
 }
 
+/** How the merge treats an existing project. */
+export interface MergeOptions {
+  /** Raise owned packages across a caret line too; otherwise they are left as for any package. */
+  upgradeOwned?: boolean
+  /** Report what the merge would do without writing package.json. */
+  dryRun?: boolean
+}
+
 /**
  * What merging `to` over an existing `from` in `dependencies` does, or undefined to keep `from`
- * silently. A raise onto another caret line is a breaking upgrade, so only packages this tool owns
- * get one; any other package is left and reported.
+ * silently. A raise onto another caret line is a breaking upgrade, so it is left and reported,
+ * unless `upgradeOwned` is set and this tool owns the package.
  */
 function dependencyChange(
   name: string,
   from: string,
   to: string,
-  wanted: [number, number, number]
+  wanted: [number, number, number],
+  upgradeOwned: boolean
 ): Omit<DependencyChange, 'target'> | undefined {
   const found = rangeFloor(from)
   if (found === undefined) return { name, from, to, action: 'left', reason: 'unparseable' }
   if (compareFloors(wanted, found) <= 0) return undefined
-  if (!OWNED_PACKAGES.has(name) && caretLine(wanted) !== caretLine(found))
+  const owned = upgradeOwned && OWNED_PACKAGES.has(name)
+  if (!owned && caretLine(wanted) !== caretLine(found))
     return { name, from, to, action: 'left', reason: 'majorUpgrade' }
   return { name, from, to, action: 'raised' }
 }
@@ -75,7 +85,8 @@ function mergeDependency(
   name: string,
   to: string,
   dependencies: Record<string, string>,
-  devDependencies: Record<string, string>
+  devDependencies: Record<string, string>,
+  upgradeOwned: boolean
 ): Omit<DependencyChange, 'target'> | undefined {
   const wanted = rangeFloor(to)
   // Capability ranges are constants in this package, so a bad one is our bug, not the project's.
@@ -83,7 +94,7 @@ function mergeDependency(
     throw new Error(`capability range for ${name} is not a plain version floor: ${to}`)
   }
   if (dependencies[name] !== undefined) {
-    const change = dependencyChange(name, dependencies[name], to, wanted)
+    const change = dependencyChange(name, dependencies[name], to, wanted, upgradeOwned)
     if (change?.action === 'raised') dependencies[name] = to
     return change
   }
@@ -96,11 +107,13 @@ function mergeDependency(
 
 /**
  * Adds missing names to `dependencies` and raises lower floors there, across a major only for
- * owned packages. Never edits `devDependencies`. Returns what was raised or could not be raised.
+ * owned packages with `upgradeOwned`. Never edits `devDependencies`. Returns what was raised or
+ * could not be raised.
  */
 export function mergePackageJsonDeps(
   dir: string,
-  deps: Record<string, string>
+  deps: Record<string, string>,
+  opts: MergeOptions = {}
 ): Omit<DependencyChange, 'target'>[] {
   const names = Object.keys(deps)
   if (names.length === 0) return []
@@ -112,19 +125,28 @@ export function mergePackageJsonDeps(
     (pkg.devDependencies as Record<string, string>) ?? {}
   const changes: Omit<DependencyChange, 'target'>[] = []
   for (const name of names) {
-    const change = mergeDependency(name, deps[name], dependencies, devDependencies)
+    const change = mergeDependency(
+      name,
+      deps[name],
+      dependencies,
+      devDependencies,
+      opts.upgradeOwned === true
+    )
     if (change !== undefined) changes.push(change)
   }
+  if (opts.dryRun === true) return changes
   pkg.dependencies = dependencies
   mkdirSync(dirname(file), { recursive: true })
   writeUtf8FileAtomic(file, JSON.stringify(pkg, null, 2) + '\n')
   return changes
 }
 
+/** Merges each target's capability deps into its package.json; see `mergePackageJsonDeps`. */
 export function applyCapabilityDeps(
   targetDir: string,
   config: Pick<ProjectConfig, 'stack' | 'targets'>,
-  deps: Record<TargetKey, Record<string, string>>
+  deps: Record<TargetKey, Record<string, string>>,
+  opts: MergeOptions = {}
 ): DependencyChange[] {
   const dirForTarget = (key: TargetKey): string => {
     if (key === 'root') return targetDir
@@ -133,7 +155,7 @@ export function applyCapabilityDeps(
   }
   const changes: DependencyChange[] = []
   for (const key of ['root', 'client', 'server'] as TargetKey[]) {
-    for (const change of mergePackageJsonDeps(dirForTarget(key), deps[key])) {
+    for (const change of mergePackageJsonDeps(dirForTarget(key), deps[key], opts)) {
       changes.push({ target: key, ...change })
     }
   }

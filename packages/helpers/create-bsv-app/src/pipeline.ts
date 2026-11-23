@@ -11,6 +11,7 @@ import {
 } from './config/project-manifest.js'
 import { scaffoldNewProject } from './scaffold/new-project.js'
 import { applyCapabilityDeps, type DependencyChange } from './scaffold/package-json.js'
+import { OWNED_PACKAGES } from './capabilities/versions.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import { defaultRunCommand } from './scaffold/run-command.js'
 import { installProject } from './scaffold/install.js'
@@ -49,7 +50,9 @@ export function addCapabilities(
     ...manifestFromConfig(config),
     capabilities: caps.map(c => c.id)
   })
-  const dependencyChanges = applyCapabilityDeps(targetDir, config, placement.deps)
+  const dependencyChanges = applyCapabilityDeps(targetDir, config, placement.deps, {
+    upgradeOwned: config.upgradeBsvDeps === true
+  })
   installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return {
     deps: placement.deps,
@@ -95,6 +98,19 @@ export function applyConfig(
   }
 }
 
+/** An owned package left below the major the generated code needs. */
+function isHeldBsvUpgrade(change: DependencyChange): boolean {
+  return change.reason === 'majorUpgrade' && OWNED_PACKAGES.has(change.name)
+}
+
+/** Owned packages an add-mode run without `upgradeBsvDeps` would leave below a capability's major. */
+export function pendingBsvUpgrades(config: ProjectConfig, targetDir: string): DependencyChange[] {
+  if (config.mode !== 'add') return []
+  const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
+  const { deps } = planPlacement(config, caps)
+  return applyCapabilityDeps(targetDir, config, deps, { dryRun: true }).filter(isHeldBsvUpgrade)
+}
+
 const MANUAL_FIX: Record<NonNullable<DependencyChange['reason']>, string> = {
   devDependency: 'it is a devDependency, move it to dependencies manually',
   unparseable: 'check it manually',
@@ -105,11 +121,15 @@ function manualFix(change: DependencyChange): string {
   return MANUAL_FIX[change.reason ?? 'unparseable']
 }
 
+function leftLine(c: DependencyChange): string {
+  if (isHeldBsvUpgrade(c))
+    return `${c.target}: ${c.name} is "${c.from}" — warning: the generated code needs ${c.to}, a major upgrade; re-run with --upgrade-bsv-deps to raise it, or raise it yourself`
+  return `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${manualFix(c)}`
+}
+
 /** One human-readable line per dependency change, for the CLI. */
 export function formatDependencyChanges(changes: DependencyChange[]): string[] {
   return changes.map(c =>
-    c.action === 'raised'
-      ? `${c.target}: ${c.name} ${c.from} → ${c.to}`
-      : `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${manualFix(c)}`
+    c.action === 'raised' ? `${c.target}: ${c.name} ${c.from} → ${c.to}` : leftLine(c)
   )
 }

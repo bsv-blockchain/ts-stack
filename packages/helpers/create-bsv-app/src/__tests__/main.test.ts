@@ -72,6 +72,25 @@ describe('main', () => {
     expect(out).toContain('@bsv/sdk')
   })
 
+  test('warns when an owned package is left below the major the generated code needs', async () => {
+    const { out } = await runMain(['--yes'], {
+      ...base,
+      dependencyChanges: [
+        {
+          target: 'client',
+          name: '@bsv/sdk',
+          from: '^1.2.0',
+          to: '^4.0.1',
+          action: 'left',
+          reason: 'majorUpgrade'
+        }
+      ]
+    })
+    expect(out).toContain(
+      'client: @bsv/sdk is "^1.2.0" — warning: the generated code needs ^4.0.1, a major upgrade; re-run with --upgrade-bsv-deps to raise it, or raise it yourself'
+    )
+  })
+
   test('reports whether dependencies were installed', async () => {
     expect((await runMain(['--yes'], { ...base, installed: false })).out).toContain(
       'Dependencies were not installed.'

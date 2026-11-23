@@ -41,6 +41,8 @@ export interface ProjectConfig {
   capabilities: string[]
   /** What the closure added beyond the request; set by `resolveConfig`. */
   pulled?: PulledCapability[]
+  /** Add mode: raise owned @bsv packages across a major; set by the prompt or `--upgrade-bsv-deps`. */
+  upgradeBsvDeps?: boolean
   glue: boolean
   install: boolean
   packageManager: PackageManager

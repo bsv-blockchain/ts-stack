@@ -5,6 +5,7 @@ import { basename, join } from 'node:path'
 import { CLI_HELP, parseArgs, run, summaryNotice } from '../cli'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 import type { RunResult } from '../pipeline'
+import { runPrompts, type Ask, type ConfigProvider } from '../prompts'
 
 let dir: string
 beforeEach(() => {
@@ -57,6 +58,12 @@ describe('parseArgs', () => {
     expect(a.yes).toBe(false)
     expect(a.force).toBe(false)
     expect(a.draft).toEqual({})
+  })
+
+  test('--upgrade-bsv-deps opts in to cross-major raises of owned packages', () => {
+    expect(parseArgs([]).upgradeBsvDeps).toBe(false)
+    expect(parseArgs(['--upgrade-bsv-deps']).upgradeBsvDeps).toBe(true)
+    expect(CLI_HELP).toContain('--upgrade-bsv-deps')
   })
 
   test('--force sets force:true', () => {
@@ -643,7 +650,115 @@ describe('run interactive (no --yes)', () => {
   })
 })
 
+describe('add mode over an older @bsv/sdk major', () => {
+  // a react project on @bsv/sdk 1.x; tx-core needs ^4.0.1
+  function oldSdkProject(): void {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'demo',
+        network: 'test',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        targets: { client: '' },
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-connect']
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^1.2.0' } }),
+      'utf8'
+    )
+  }
+  const sdk = (): string =>
+    JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies['@bsv/sdk']
+  const add = ['--capabilities', 'tx-core', '--skip-install']
+  const left = { name: '@bsv/sdk', action: 'left', reason: 'majorUpgrade' }
+
+  test('--yes leaves it and reports it', async () => {
+    oldSdkProject()
+    const res = await run(['--dir', dir, ...add, '--yes'])
+    expect(sdk()).toBe('^1.2.0')
+    expect(res.dependencyChanges).toContainEqual(expect.objectContaining(left))
+  })
+
+  test('--yes --upgrade-bsv-deps raises it', async () => {
+    oldSdkProject()
+    const res = await run(['--dir', dir, ...add, '--yes', '--upgrade-bsv-deps'])
+    expect(sdk()).toBe('^4.0.1')
+    expect(res.dependencyChanges).toContainEqual(
+      expect.objectContaining({ name: '@bsv/sdk', from: '^1.2.0', action: 'raised' })
+    )
+  })
+
+  // the real prompt flow, with scripted answers: capabilities, then the upgrade question
+  function scripted(upgrade: boolean, asked: string[]): ConfigProvider {
+    const ask: Ask = async field => {
+      asked.push(field.key)
+      if (field.key === 'capabilities') return ['tx-core']
+      if (field.key === 'upgradeBsvDeps') return upgrade
+      return field.type === 'toggle' ? false : field.default
+    }
+    return async ctx => await runPrompts(ctx, ask)
+  }
+
+  test.each([
+    [true, '^4.0.1'],
+    [false, '^1.2.0']
+  ])(
+    'interactive: answering %s to the upgrade prompt leaves @bsv/sdk at %s',
+    async (yes, range) => {
+      oldSdkProject()
+      const asked: string[] = []
+      await run(['--dir', dir, '--skip-install'], scripted(yes, asked))
+      expect(asked).toContain('upgradeBsvDeps')
+      expect(sdk()).toBe(range)
+    }
+  )
+
+  test('interactive with --upgrade-bsv-deps raises without asking', async () => {
+    oldSdkProject()
+    const asked: string[] = []
+    await run(['--dir', dir, '--skip-install', '--upgrade-bsv-deps'], scripted(false, asked))
+    expect(asked).not.toContain('upgradeBsvDeps')
+    expect(sdk()).toBe('^4.0.1')
+  })
+
+  test('interactive does not ask when nothing would cross a major', async () => {
+    oldSdkProject()
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^4.0.0' } }),
+      'utf8'
+    )
+    const asked: string[] = []
+    await run(['--dir', dir, '--skip-install'], scripted(false, asked))
+    expect(asked).not.toContain('upgradeBsvDeps')
+    expect(sdk()).toBe('^4.0.1')
+  })
+})
+
 describe('run --ui', () => {
+  test('passes --upgrade-bsv-deps through to startUi', async () => {
+    const seen: unknown[] = []
+    const stub = async (o: { targetDir: string; upgradeBsvDeps?: boolean }): Promise<RunResult> => {
+      seen.push(o.upgradeBsvDeps)
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: [],
+        dependencyChanges: [],
+        pulled: []
+      }
+    }
+    await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
+    await run(['--dir', dir, '--ui', '--upgrade-bsv-deps'], undefined, { startUi: stub })
+    expect(seen).toEqual([false, true])
+  })
+
   test('delegates to the injected startUi with existing + targetDir and returns its result', async () => {
     const seen: Array<{ targetDir: string }> = []
     const stub = async (o: {

@@ -5,7 +5,10 @@ export const BSV_AUTH_RANGE = '^0.1.8'
 export const WALLET_RELAY_RANGE = '^0.8.0'
 export const WALLET_HELPER_RANGE = '^0.1.11'
 
-/** The packages whose ranges come from this file: owned here, so add mode may raise them across a major. */
+/**
+ * The packages whose ranges come from this file. Add mode raises them across a major only on
+ * opt-in (the prompt or `--upgrade-bsv-deps`); otherwise they are left and reported like any other.
+ */
 export const OWNED_PACKAGES: ReadonlySet<string> = new Set([
   '@bsv/sdk',
   '@bsv/auth',

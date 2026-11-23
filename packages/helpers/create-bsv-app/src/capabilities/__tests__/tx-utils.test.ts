@@ -99,6 +99,24 @@ describe('parseTransaction', () => {
   test('rejects arbitrary bytes', () => {
     expect(() => u.parseTransaction([1, 2, 3])).toThrow(PARSE_ERROR)
   })
+
+  // A raw tx whose version field spells a BEEF header parses as raw bytes, so a malformed BEEF
+  // must not fall through to the raw parser and come back as a nonsense transaction.
+  test.each([
+    ['AtomicBEEF', [0x01, 0x01, 0x01, 0x01]],
+    ['BEEF V1', [0x01, 0x00, 0xbe, 0xef]],
+    ['BEEF V2', [0x02, 0x00, 0xbe, 0xef]]
+  ])('rejects malformed bytes with a %s prefix', async (_name, prefix) => {
+    const { tx } = await build(funding, [{ lockingScript: p2pkh, satoshis: 100 }])
+    const bytes = [...prefix, ...tx.toBinary().slice(4)]
+    expect(() => Transaction.fromBinary(bytes)).not.toThrow() // what the fall-through returned
+    expect(() => u.parseTransaction(bytes)).toThrow(PARSE_ERROR)
+    expect(() => u.parseTransaction(Utils.toHex(bytes))).toThrow(PARSE_ERROR)
+  })
+
+  test('the doc comment says how a string is read', () => {
+    expect(TX_UTILS_SOURCE).toContain('only hex digits is read as hex, anything else as base64')
+  })
 })
 
 describe('summarizeTransaction', () => {

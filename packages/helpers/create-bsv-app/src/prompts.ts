@@ -7,6 +7,7 @@ import { seedDraft, resolveDraft } from './config/draft.js'
 import { formatPulledNotice } from './config/requires.js'
 import type { ConfigDraft, SeededDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
+import type { DependencyChange } from './scaffold/package-json.js'
 
 /** Shown instead of an empty capabilities list (terminal and `--ui`). */
 export const ALL_CAPABILITIES_INCLUDED = 'Project already includes all available capabilities'
@@ -17,10 +18,16 @@ export type Ask = (
   options: FieldOption[],
   initial: string | boolean | string[] | undefined
 ) => Promise<unknown>
-export type ConfigProvider = (ctx: {
+export interface PromptContext {
   existing: ProjectManifest | null
   flags: ConfigDraft
-}) => Promise<ProjectConfig>
+  /**
+   * Owned packages the resolved config would leave below a capability's major; when it returns
+   * any, the user is asked whether to raise them. Unset when `--upgrade-bsv-deps` already decided.
+   */
+  majorUpgrades?: (config: ProjectConfig) => DependencyChange[]
+}
+export type ConfigProvider = (ctx: PromptContext) => Promise<ProjectConfig>
 
 /** Prints one notice line; the terminal uses `p.log.info`. */
 export type Info = (message: string) => void
@@ -81,8 +88,19 @@ async function promptField(
   draft.capabilities = mergeCapabilityIds(draft.capabilities, value)
 }
 
+// a yes/no asked after the schema fields, once the config says which packages are behind
+function upgradeField(upgrades: DependencyChange[]): ConfigField {
+  const list = upgrades.map(c => `${c.name} ${c.from} → ${c.to} (${c.target})`).join(', ')
+  return {
+    key: 'upgradeBsvDeps',
+    label: `The generated code needs newer majors: ${list}. Upgrade them? A major upgrade can break your existing code.`,
+    type: 'toggle',
+    default: false
+  }
+}
+
 export async function runPrompts(
-  ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
+  ctx: PromptContext,
   ask: Ask,
   info: Info = () => {}
 ): Promise<ProjectConfig> {
@@ -97,6 +115,9 @@ export async function runPrompts(
   const config = resolveDraft(draft)
   // only a run that resolved announces what it adds
   for (const line of formatPulledNotice(config.pulled ?? [])) info(line)
+  const upgrades = ctx.majorUpgrades?.(config) ?? []
+  if (upgrades.length > 0)
+    config.upgradeBsvDeps = (await ask(upgradeField(upgrades), [], false)) === true
   return config
 }
 

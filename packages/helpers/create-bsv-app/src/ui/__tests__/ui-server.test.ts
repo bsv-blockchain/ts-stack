@@ -807,3 +807,43 @@ test('/plan reports a capability that has nowhere to go in a project with no fro
     srv.close()
   }
 })
+
+test.each([
+  [false, '^1.2.0'],
+  [true, '^4.0.1']
+])('POST /generate add with upgradeBsvDeps %s leaves @bsv/sdk at %s', async (upgrade, range) => {
+  const target = join(dir, `app-${String(upgrade)}`)
+  mkdirSync(target, { recursive: true })
+  writeFileSync(
+    join(target, 'package.json'),
+    JSON.stringify({ dependencies: { '@bsv/sdk': '^1.2.0' } }),
+    'utf8'
+  )
+  const existing: ProjectManifest = {
+    version: 2,
+    name: 'demo',
+    network: 'test',
+    stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+    targets: { client: '' },
+    bsvDir: 'src/bsv',
+    capabilities: ['wallet-connect']
+  }
+  const srv: UiServer = await startUiServer({
+    existing,
+    targetDir: target,
+    upgradeBsvDeps: upgrade,
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify({ mode: 'add', capabilities: ['tx-core'], install: false })
+    })
+    expect(res.status).toBe(200)
+    const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'))
+    expect(pkg.dependencies['@bsv/sdk']).toBe(range)
+  } finally {
+    srv.close()
+  }
+})

@@ -6,7 +6,12 @@ import { readConfigFile } from './config/file.js'
 import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
-import { applyConfig, formatDependencyChanges, type RunResult } from './pipeline.js'
+import {
+  applyConfig,
+  formatDependencyChanges,
+  pendingBsvUpgrades,
+  type RunResult
+} from './pipeline.js'
 import {
   ConfigError,
   formatConfigError,
@@ -24,6 +29,7 @@ export type StartUi = (opts: {
   targetDir: string
   flags?: ConfigDraft
   runCommand?: RunCommand
+  upgradeBsvDeps?: boolean
 }) => Promise<RunResult>
 
 export interface CliArgs {
@@ -32,6 +38,8 @@ export interface CliArgs {
   yes: boolean
   force: boolean
   ui: boolean
+  /** Raise owned @bsv packages across a major in add mode without asking. */
+  upgradeBsvDeps: boolean
   draft: ConfigDraft
 }
 
@@ -54,6 +62,8 @@ Options:
   --network <main|test|ttn>    Select the BSV network
   --yes                        Resolve from flags without prompting
   --force                      Overwrite conflicting generated files
+  --upgrade-bsv-deps           In add mode, raise @bsv packages to the major the
+                               generated code needs (left and reported otherwise)
   --ui                         Open the browser-based configurator
   --glue | --no-glue          Enable or disable integration glue
   --install | --skip-install  Enable or disable dependency installation
@@ -121,6 +131,9 @@ const BOOLEAN_FLAGS: Record<string, BooleanFlagHandler> = {
   '--ui': args => {
     args.ui = true
   },
+  '--upgrade-bsv-deps': args => {
+    args.upgradeBsvDeps = true
+  },
   '--glue': args => {
     args.draft.glue = true
   },
@@ -169,7 +182,7 @@ function consumeArgument(args: CliArgs, argv: string[], index: number): number {
 }
 
 export function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { yes: false, force: false, ui: false, draft: {} }
+  const args: CliArgs = { yes: false, force: false, ui: false, upgradeBsvDeps: false, draft: {} }
   let i = 0
   while (i < argv.length) i += consumeArgument(args, argv, i)
   return args
@@ -230,7 +243,11 @@ async function resolveCliConfig(
   if (args.yes)
     return resolveDraft(seedDraft(existing, flagsWithDefaultName(args, existing, targetDir)))
   if (provider === undefined) throw new Error('interactive run requires a config provider')
-  return await provider({ existing, flags: args.draft })
+  // ask before a cross-major raise, unless the flag already said yes
+  const majorUpgrades = args.upgradeBsvDeps
+    ? undefined
+    : (config: ProjectConfig) => pendingBsvUpgrades(config, args.dir ?? config.dir)
+  return await provider({ existing, flags: args.draft, majorUpgrades })
 }
 
 /** Pulled-notice lines for the run summary; prompts and `--ui` show them before generating. */
@@ -261,6 +278,7 @@ export async function run(
         targetDir: string
         flags?: ConfigDraft
         runCommand?: RunCommand
+        upgradeBsvDeps?: boolean
       }) => {
         return await (await import('./ui/ui-server.js')).runUi(o)
       })
@@ -269,11 +287,13 @@ export async function run(
       targetDir: initialTargetDir,
       // the page can switch to either mode, so the name defaults as for --yes in new mode
       flags: withDefaultName(args.draft, initialTargetDir),
-      runCommand: deps?.runCommand
+      runCommand: deps?.runCommand,
+      upgradeBsvDeps: args.upgradeBsvDeps
     })
   }
 
-  const config = await resolveCliConfig(args, initialTargetDir, provider)
+  const resolved = await resolveCliConfig(args, initialTargetDir, provider)
+  const config = args.upgradeBsvDeps ? { ...resolved, upgradeBsvDeps: true } : resolved
   const targetDir = args.dir ?? config.dir
   return applyConfig(config, targetDir, { runCommand: deps?.runCommand, force: args.force })
 }
