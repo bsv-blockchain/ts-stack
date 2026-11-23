@@ -1,11 +1,4 @@
-# 4.1.3 unpublished patch candidate
-
-- `Transaction.fee(..., 'random')` draws its change-split digit uniformly.
-  Bytes 252–255 are discarded, so each digit 1–9 is equally likely. The
-  logarithmic share formula, fee total, and output order are unchanged.
-  No migration is required.
-
-# 4.1.2
+# 4.1.2 unpublished patch candidate
 
 - `Script.toASM` includes a top-level `OP_RETURN` and prints ordinary suffix
   instructions in the usual ASM. If that notation would change any suffix bytes,
