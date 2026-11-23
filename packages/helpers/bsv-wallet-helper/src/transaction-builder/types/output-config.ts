@@ -15,6 +15,7 @@ export type OutputConfig =
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string
+      tags?: string[]
     }
   | {
       type: 'ordinalP2PKH'
@@ -26,6 +27,7 @@ export type OutputConfig =
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string
+      tags?: string[]
     }
   | {
       type: 'ordLock'
@@ -35,6 +37,7 @@ export type OutputConfig =
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string
+      tags?: string[]
     }
   | {
       type: 'custom'
@@ -44,6 +47,7 @@ export type OutputConfig =
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string
+      tags?: string[]
     }
   | {
       type: 'change'
@@ -53,4 +57,5 @@ export type OutputConfig =
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string
+      tags?: string[]
     }

@@ -8,7 +8,7 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
-## createAction unlockingScriptLength (4.1.3 patch)
+## createAction unlockingScriptLength
 
 `createAction` inputs type `unlockingScriptLength` as a positive integer.
 Omitting `unlockingScript` and sending `unlockingScriptLength: 0` is refused

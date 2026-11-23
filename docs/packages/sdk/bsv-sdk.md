@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.1.3'
+version: '4.1.2'
 npm: '@bsv/sdk'
 last_updated: '2026-11-20'
 last_verified: '2026-11-20'
@@ -17,12 +17,12 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 ## createAction unlockingScriptLength
 
-The 4.1.3 source candidate refuses a `createAction` input that omits
+The next SDK patch release refuses a `createAction` input that omits
 `unlockingScript` and sets `unlockingScriptLength` to 0. BRC-100 and
 `CreateActionInput` type that field as `PositiveInteger` (minimum 1). An empty
 `unlockingScript` is still refused as a hexadecimal string, before the length
 check. Callers that already pass a script or a length of at least 1 are
-unchanged. This candidate is not publication.
+unchanged.
 
 ## Script ASM for data outputs
 
