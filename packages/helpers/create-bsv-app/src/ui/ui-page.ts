@@ -84,6 +84,7 @@ body { background: #0b0e13; color: #cdd4de; font: 14px/1.5 system-ui, -apple-sys
 .term .prompt { color: var(--accent); }
 .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 18px; }
 .chip { font: 400 11px/1 system-ui; color: #9fb4c9; background: #11202e; border: 1px solid #1c3346; border-radius: 20px; padding: 6px 10px; }
+.notice { font: 400 12px/1.5 system-ui; color: #9fb4c9; background: #11202e; border: 1px solid #1c3346; border-radius: 7px; padding: 9px 11px; margin-bottom: 14px; }
 .impact { border-top: 1px solid #161d25; padding-top: 15px; }
 .impact-head { width: 100%; display: flex; align-items: center; justify-content: space-between; background: transparent; border: 0; padding: 3px 0; cursor: pointer; }
 .impact-head .ht { display: flex; align-items: center; gap: 8px; font: 600 10px/1 system-ui; letter-spacing: .14em; color: #9aa6b2; text-transform: uppercase; }
@@ -260,7 +261,8 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     error: '',
     planError: '',
     ov: null,
-    plan: []
+    plan: [],
+    notice: []
   };
 
   /* schema fields only; the server re-applies CLI flags and the existing manifest */
@@ -311,8 +313,8 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     planTimer = setTimeout(function () {
       fetch('/plan', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(payload()) })
         .then(function (r) { return r.json(); })
-        .then(function (d) { state.plan = (d && d.files) || []; state.planError = (d && d.error) || ''; renderRail(); })
-        .catch(function () { state.plan = []; state.planError = ''; renderRail(); });
+        .then(function (d) { state.plan = (d && d.files) || []; state.notice = (d && d.notice) || []; state.planError = (d && d.error) || ''; renderRail(); })
+        .catch(function () { state.plan = []; state.notice = []; state.planError = ''; renderRail(); });
     }, 150);
   }
 
@@ -476,6 +478,9 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
       INCLUDED.forEach(function (c) { chips.appendChild(el('span', { class: 'chip', text: c.label })); });
       rail.appendChild(chips);
     }
+
+    /* capabilities added because a selected one requires them, worded as in the terminal */
+    state.notice.forEach(function (line) { rail.appendChild(el('div', { class: 'notice', text: line })); });
 
     /* RECONCILIATION 3: use state.plan (from /plan) instead of computeFiles() */
     var files = state.plan;
