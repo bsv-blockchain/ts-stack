@@ -343,6 +343,20 @@ gates remained required, with no additional npm build or publication. This
 consumed the same one-time release waiver. The temporary image-only dispatch
 adapter is removed together with the original admission.
 
+## Version pull request
+
+Feature pull requests add change files under `changes/` and never move a
+version. The `Version packages` workflow runs on every push to `main` while change
+files are pending. It applies all pending change files with
+`pnpm changes:version`, which sets source versions, release-note entries,
+package changelogs, baseline package versions, and the generated ledgers, and
+deletes the applied change files. It force-pushes the result to
+`automation/version-packages` and keeps one `chore: version packages` pull
+request open. Review the planned versions in that pull request, then merge it
+before you tag a release. Pull requests opened with the workflow token do not
+start CI on their own; close and reopen the pull request to start the required
+checks. To preview the plan locally, run `pnpm changes:status`.
+
 ## Reconcile verified published baselines
 
 After a protected cascade publishes, independently verify every public version,
