@@ -436,6 +436,9 @@ if it needs the underlying wallet operation, `next` is guarded to one call.
 The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
 this hook to implement point multiplication under `p ecpm` while keeping
 `getPublicKey` as the public wallet method.
+[@bsv/sigma-permission-module](./sigma-permission-module.md) uses it to
+return statement points and zero-knowledge proofs under `p sigma` through
+`encrypt`.
 
 ## Action Flow
 

@@ -219,6 +219,22 @@ test('an initial push selects its files, and an empty push selects none', t => {
   assert.deepEqual(documentationChangedFiles(directory, ['--base', 'HEAD~1'], {}), ['later.ts'])
 })
 
+test('a release tag push has no PR scope, even when the tag object is absent', t => {
+  const { directory, write } = fixture(t)
+  // An annotated tag push reports the tag object, which a main-only checkout lacks.
+  write('event.json', JSON.stringify({ before: '0'.repeat(40), after: 'd'.repeat(40) }))
+  const env = {
+    GITHUB_EVENT_PATH: join(directory, 'event.json'),
+    GITHUB_EVENT_NAME: 'push',
+    GITHUB_REF: 'refs/tags/packages/helpers/bsv-wallet-helper/v0.2.0'
+  }
+  assert.deepEqual(documentationChangedFiles(directory, [], env), [])
+  assert.throws(
+    () => documentationChangedFiles(directory, [], { ...env, GITHUB_REF: 'refs/heads/main' }),
+    /Command failed/
+  )
+})
+
 test('a local checkout without origin/main requires an explicit comparison', t => {
   const { directory, git } = fixture(t)
   git('update-ref', '-d', 'refs/remotes/origin/main')
