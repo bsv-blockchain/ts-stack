@@ -24,7 +24,6 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./templates/*": "./templates/*",
     "./package.json": "./package.json"
   },
   "files": [

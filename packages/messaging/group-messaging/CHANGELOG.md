@@ -50,8 +50,10 @@
   `web-crypto-conformance` (which primitives a runtime actually has, answered
   before the first `keyPackages.create()` rather than after it). Each is
   machinery the first real host integration wrote from scratch and got wrong.
-  They ship as source to copy and carry no compatibility promise. A
-  `./templates/*` export subpath makes them reachable from a consumer.
+  They ship as source to copy and carry no compatibility promise, and
+  deliberately have no export subpath: they are `.ts`, and Node does not strip
+  types inside `node_modules`, so an import of the package path would fail at
+  runtime where a copy does not. `files` ships them for reading and copying.
 
 ## [0.1.1] - 2026-11-20
 

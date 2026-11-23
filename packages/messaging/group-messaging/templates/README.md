@@ -2,7 +2,9 @@
 
 Source to copy into your host and own. None of it is part of the package's API
 and none of it carries a compatibility promise. Each file ships as `.ts`, so
-import your copy, not the package path.
+import your copy, not the package path: the package deliberately exports no
+subpath for them, and Node does not strip types inside `node_modules`, so an
+import of the package path would fail at runtime where a copy does not.
 
 | file                        | what it owns                                      | why it is not in the library                                                                                                           |
 | --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |

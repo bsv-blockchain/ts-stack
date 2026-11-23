@@ -100,7 +100,10 @@ a reaction's `reference` name. Every send returns it, every `message` event
 carries it, and a send that failed carries it on both the `deliveryFailed` event
 and the `BroadcastError` it rejects with.
 
-`templates/` ships alongside `dist/`, reachable at `@bsv/group-messaging/templates/*`.
+`templates/` ships alongside `dist/`, to read and copy rather than import.
+There is deliberately no export subpath for it: the files are `.ts`, and Node
+does not strip types inside `node_modules`, so importing the package path would
+fail at runtime where a copy does not.
 These are copy-paste starting points for the machinery the library deliberately
 does not own — client lifecycle, the KeyPackage shelf, a message transcript, a
 WebCrypto conformance probe and a managed invitation exchange. They are source to
