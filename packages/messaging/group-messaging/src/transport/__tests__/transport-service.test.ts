@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { decodeEnvelope, encodeEnvelope } from '../../bootstrap/envelope.js'
 import type { IdentityKey, WirePayload } from '../../types.js'
-import type { TransportBackend } from '../backend.js'
+import type { LiveStatus, TransportBackend } from '../backend.js'
 import { InProcessTransportHub } from '../backends/in-process.js'
 import { BroadcastError, DeliveryFailed, TransportService } from '../transport-service.js'
 
@@ -485,5 +485,74 @@ describe('a MessageBox client with its options', () => {
     await expect(TransportService.open({ client: { nope: true } } as never)).rejects.toThrow(
       /Unrecognized transport/
     )
+  })
+})
+
+describe('live status from the backend', () => {
+  /** A backend that reports what its connection is doing. */
+  const reportingBackend = () => {
+    const handlers = new Set<(status: LiveStatus) => void>()
+    return {
+      async send() {},
+      onMessage() {
+        return () => undefined
+      },
+      onLiveStatus(handler: (status: LiveStatus) => void) {
+        handlers.add(handler)
+        return () => {
+          handlers.delete(handler)
+        }
+      },
+      report(status: LiveStatus) {
+        for (const handler of handlers) handler(status)
+      },
+      get watchers() {
+        return handlers.size
+      }
+    }
+  }
+
+  it('forwards what the backend reports', () => {
+    const backend = reportingBackend()
+    const service = new TransportService(backend)
+    const seen: LiveStatus[] = []
+    service.onLiveStatus(status => {
+      seen.push(status)
+    })
+
+    backend.report({ phase: 'subscribed' })
+
+    expect(seen).toEqual([{ phase: 'subscribed' }])
+  })
+
+  it('stops forwarding once the caller unsubscribes', () => {
+    const backend = reportingBackend()
+    const service = new TransportService(backend)
+    const seen: LiveStatus[] = []
+    const stop = service.onLiveStatus(status => {
+      seen.push(status)
+    })
+
+    stop()
+    backend.report({ phase: 'closed' })
+
+    expect(seen).toEqual([])
+    expect(backend.watchers).toBe(0)
+  })
+
+  /**
+   * A backend with no live delivery has nothing to say, and saying so must not
+   * be an error: a host writes one status handler and swaps backends freely.
+   */
+  it('is silent, not broken, for a backend that cannot report', () => {
+    const service = new TransportService(fakeBackend())
+
+    const stop = service.onLiveStatus(() => {
+      throw new Error('nothing should arrive')
+    })
+
+    expect(() => {
+      stop()
+    }).not.toThrow()
   })
 })
