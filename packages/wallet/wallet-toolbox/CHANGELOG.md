@@ -1,27 +1,3 @@
-# 2.18.1 source candidate
-
-Fixes the 2.18.0 admin-originator hooks on the default `auto` action-batch path.
-No wire, BEEF or BRC-100 change. 2.18.0 was not published; this candidate includes it.
-
-- `validateResolvedActionInput` runs for explicit inputs in `auto` as well as
-  `legacy`. The batch path does not accept those inputs while the hook is set,
-  so legacy `createAction` still verifies BEEF before the hook. A non-admin
-  spend of a protected output is refused in both modes.
-- Admin actions keep the minimal funding plan on the batch planner as well as
-  on legacy `createAction`. An exact input set does not gain funding inputs.
-  Wallet `createAction` also keeps admin actions on the legacy path, so a
-  noSend result is persisted before a later spend.
-- Admin originator matching uses the same hostname normalization as
-  `WalletPermissionsManager` (scheme, port and case). Any other host fails closed.
-- `AdminValidCreateActionArgs` and `ValidateResolvedActionInput` are exported
-  from the package root.
-- Admin privilege follows the originator argument the host passes in. Wallet
-  does not authenticate that string. A host that exposes Wallet without
-  `WalletPermissionsManager` must supply a trustworthy originator and must not
-  forward an application-controlled value. `isAdminOriginator` sent to remote
-  storage is only the client's assertion: a storage server must not trust it
-  for authorization.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
