@@ -525,7 +525,7 @@ CLI entry points: `{"lch":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/wallet/sigma-permission-module.md](../packages/wallet/sigma-permission-module.md)
 - Source: [packages/wallet/sigma-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/sigma-permission-module)
-- Release note: First release: the sigma semantic module, specified by the sigma BRC (draft, not yet numbered). Applications obtain a wallet-held statement point and deterministic Schnorr, DLEQ and OR zero-knowledge proofs through BRC-100 encrypt, with no new method or wire message; the proof scalar is derived from the BRC-42 child key and is never the child key itself. The module accepts only encrypt; it refuses every other method the wallet host routes to it, and every basket or label beginning p sigma that reaches it, and authorization precedes derivation. Exports the module, createSigmaModule, the pure verifiers and the point codecs. Requires the repaired SDK4.0.1 hotfix for the SDK4 peer alternative while retaining the SDK2/3 alternatives and lower bound.
+- Release note: First release: the sigma semantic module, specified by the sigma BRC (draft, not yet numbered).
 - Migration: No consumer migration required; first release.
 
 | Public subpath | Runtime target(s)  | Declaration target(s) |
