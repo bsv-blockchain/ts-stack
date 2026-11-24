@@ -89,6 +89,60 @@ describe('Bitails postRaws response handling', () => {
     })
   })
 
+  test('scores a per-transaction connection reset as a service error, not a verdict', async () => {
+    const bitails = new Bitails('main', {
+      httpClient: mockHttpClient({
+        ok: true,
+        status: 201,
+        statusText: 'Created',
+        data: [{ code: 'ECONNRESET', error: { code: 0, message: 'socket hang up' } }]
+      })
+    })
+
+    const result = await bitails.postRaws([RAW_TX])
+
+    expect(result.status).toBe('error')
+    expect(result.txidResults[0].status).toBe('error')
+    expect(result.txidResults[0].serviceError).toBe(true)
+    expect(result.txidResults[0].doubleSpend).toBeFalsy()
+    expect(result.txidResults[0].notes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ what: 'postRawsErrorECONNRESET' })])
+    )
+  })
+
+  test('scores a connection reset reported without an error object as a service error, not a success', async () => {
+    const bitails = new Bitails('main', {
+      httpClient: mockHttpClient({
+        ok: true,
+        status: 201,
+        statusText: 'Created',
+        data: [{ code: 'ECONNRESET', message: 'socket hang up' }]
+      })
+    })
+
+    const result = await bitails.postRaws([RAW_TX])
+
+    expect(result.status).toBe('error')
+    expect(result.txidResults[0].status).toBe('error')
+    expect(result.txidResults[0].serviceError).toBe(true)
+  })
+
+  test('keeps an ordinary per-transaction refusal as a verdict', async () => {
+    const bitails = new Bitails('main', {
+      httpClient: mockHttpClient({
+        ok: true,
+        status: 201,
+        statusText: 'Created',
+        data: [{ error: { code: -26, message: 'mandatory-script-verify-flag-failed' } }]
+      })
+    })
+
+    const result = await bitails.postRaws([RAW_TX])
+
+    expect(result.txidResults[0].status).toBe('error')
+    expect(result.txidResults[0].serviceError).toBeFalsy()
+  })
+
   test('records HTTP and transport failures as aggregate errors', async () => {
     const httpFailure = new Bitails('main', {
       httpClient: mockHttpClient({
