@@ -69,9 +69,53 @@ function log(message) {
   process.stdout.write(`[pane-run] ${message}\n`)
 }
 
-function run(command, args, options = {}) {
+const SYSTEM32 = path.join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32')
+const WINDOWS_TOOLS = {
+  netstat: path.join(SYSTEM32, 'netstat.exe'),
+  taskkill: path.join(SYSTEM32, 'taskkill.exe'),
+  powershell: path.join(SYSTEM32, 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+}
+const UNIX_SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
+const executableCache = new Map()
+
+function isFile(file) {
   try {
-    return execFileSync(command, args, {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Absolute path of `name`, found on PATH (plus the system directories on Unix).
+ * Commands are never spawned by bare name, so a relative PATH entry or the
+ * current directory cannot supply the binary.
+ */
+function resolveExecutable(name) {
+  if (IS_WINDOWS && WINDOWS_TOOLS[name]) return WINDOWS_TOOLS[name]
+  if (executableCache.has(name)) return executableCache.get(name)
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(dir => path.isAbsolute(dir))
+  if (!IS_WINDOWS) dirs.push(...UNIX_SYSTEM_DIRS)
+  const extensions = IS_WINDOWS ? ['.exe', '.cmd', '.bat'] : ['']
+  let found = null
+  for (const dir of dirs) {
+    found = extensions.map(ext => path.join(dir, name + ext)).find(isFile) ?? null
+    if (found) break
+  }
+  executableCache.set(name, found)
+  return found
+}
+
+/** Windows runs .cmd and .bat files (pnpm.cmd, npm.cmd) only through a shell. */
+function needsShell(file) {
+  return IS_WINDOWS && /\.(cmd|bat)$/i.test(file)
+}
+
+function run(command, args, options = {}) {
+  const file = path.isAbsolute(command) ? command : resolveExecutable(command)
+  if (!file) return ''
+  try {
+    return execFileSync(file, args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
@@ -255,7 +299,10 @@ function installCommand(manager) {
 
 function runVisible(command, args, cwd) {
   log(`$ ${command} ${args.join(' ')}`)
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: IS_WINDOWS })
+  const file = path.isAbsolute(command) ? command : resolveExecutable(command)
+  if (!file) throw new Error(`${command} is not on PATH`)
+  // Arguments here are fixed by this script (install and build commands), never user input.
+  const result = spawnSync(file, args, { cwd, stdio: 'inherit', shell: needsShell(file) })
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`)
   }
@@ -372,12 +419,18 @@ function packageEntryFiles(pkg) {
 
 /** Why the build of a workspace package is stale, or null when it is current. */
 function workspaceBuildStaleReason(pkg, depDir) {
-  const missing = packageEntryFiles(pkg).find(file => !exists(path.join(depDir, file)))
-  if (missing) return `${missing} is missing`
-  const srcTime = newestMtime(path.join(depDir, 'src'))
-  const distTime = newestMtime(path.join(depDir, 'dist'))
-  if (distTime === 0) return 'dist/ is missing'
-  return srcTime > distTime ? 'src/ is newer than dist/' : null
+  const entries = packageEntryFiles(pkg).map(file => path.join(depDir, file))
+  const missing = entries.find(file => !exists(file))
+  if (missing) return `${path.relative(depDir, missing)} is missing`
+  // Some packages (wallet-toolbox-client) build from shared source outside src/.
+  // For them, a present entry file is the only check.
+  if (!exists(path.join(depDir, 'src'))) return null
+  const outputTime = entries.length > 0 ? Math.min(...entries.map(mtimeMs)) : 0
+  const builtAt = outputTime || newestMtime(path.join(depDir, 'dist'))
+  if (builtAt === 0) return 'dist/ is missing'
+  return newestMtime(path.join(depDir, 'src')) > builtAt
+    ? 'src/ is newer than its build output'
+    : null
 }
 
 /**
@@ -397,7 +450,7 @@ function rebuildStaleWorkspaceDependencies(context) {
   for (const [name, depDir] of deps) {
     if (!depDir) continue
     const pkg = readJson(path.join(depDir, 'package.json')) ?? {}
-    if (!pkg.scripts?.build || !exists(path.join(depDir, 'src'))) continue
+    if (!pkg.scripts?.build) continue
     const reason = workspaceBuildStaleReason(pkg, depDir)
     if (!reason) continue
     log(`${name} build is stale (${reason}) — rebuilding`)
@@ -465,7 +518,7 @@ async function isPortFree(port) {
 /** Parse `netstat -ano` output into the PIDs that listen on `port`. */
 function parseNetstatPids(output, port) {
   const pids = new Set()
-  const pattern = new RegExp(`^\\s*TCP\\s+\\S*:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)\\s*$`, 'i')
+  const pattern = new RegExp(String.raw`^\s*TCP\s+\S*:${port}\s+\S+\s+LISTENING\s+(\d+)\s*$`, 'i')
   for (const line of output.split(/\r?\n/)) {
     const match = pattern.exec(line)
     if (match && match[1] !== '0') pids.add(Number(match[1]))
@@ -511,7 +564,7 @@ function processCwd(pid) {
 function commandLinePaths(commandLine) {
   const tokens = commandLine.match(/"[^"]+"|'[^']+'|\S+/g) ?? []
   return tokens
-    .map(token => token.replace(/^["']|["']$/g, ''))
+    .map(token => token.replaceAll(/^["']|["']$/g, ''))
     .filter(token => path.isAbsolute(token))
 }
 
@@ -561,11 +614,13 @@ function killTree(pid, signal = 'SIGTERM') {
 
 async function waitFor(predicate, timeoutMs) {
   const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
+  const poll = async () => {
     if (await predicate()) return true
+    if (Date.now() >= deadline) return false
     await sleep(150)
+    return poll()
   }
-  return predicate()
+  return poll()
 }
 
 /** Try to free `port` from an earlier run of this target. */
@@ -646,7 +701,7 @@ function expandPattern(baseDir, pattern) {
   const dir = path.join(baseDir, path.dirname(pattern))
   const leaf = path.basename(pattern)
   if (!leaf.includes('*')) return exists(path.join(dir, leaf)) ? [path.join(dir, leaf)] : []
-  const escaped = leaf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+  const escaped = leaf.replaceAll(/[.+?^${}()|[\]\\]/g, String.raw`\$&`).replaceAll('*', '.*')
   const regex = new RegExp(`^${escaped}$`)
   try {
     return fs
@@ -698,12 +753,16 @@ function devCommand(project, context, port, extraArgs) {
   }
   if (project.type === 'node') {
     const script = project.pkg.scripts?.dev ? 'dev' : 'start'
-    return { command: project.manager.name, args: ['run', script, ...extraArgs], shell: IS_WINDOWS }
+    const file = resolveExecutable(project.manager.name)
+    // A .cmd shim runs through cmd.exe, so user arguments are not forwarded there.
+    const forwarded = file && needsShell(file) ? [] : extraArgs
+    return { command: project.manager.name, args: ['run', script, ...forwarded] }
   }
   if (project.type === 'rust') return { command: 'cargo', args: ['run', ...extraArgs] }
   if (project.type === 'go') return { command: 'go', args: ['run', '.', ...extraArgs] }
   const venv = path.join(targetDir, '.venv')
-  const python = exists(venv) ? pythonIn(venv) : IS_WINDOWS ? 'python' : 'python3'
+  let python = IS_WINDOWS ? 'python' : 'python3'
+  if (exists(venv)) python = pythonIn(venv)
   if (project.framework === 'django') {
     return { command: python, args: ['manage.py', 'runserver', `127.0.0.1:${port}`, ...extraArgs] }
   }
@@ -732,19 +791,23 @@ function resolveTarget(target, checkout) {
     const names = Object.keys(KNOWN_TARGETS).join(', ')
     throw new Error(`unknown target "${target}". Use one of: ${names}, or a directory`)
   }
-  const name = path.relative(checkout.root, targetDir).replace(/[\\/]/g, '__') || 'root'
+  const name = path.relative(checkout.root, targetDir).replaceAll(/[\\/]/g, '__') || 'root'
   return { name, dir: target, offset: 0, urlPath: '/', targetDir }
 }
 
 function startDevServer(command, context, port) {
-  const child = spawn(command.command, command.args, {
+  const file = path.isAbsolute(command.command)
+    ? command.command
+    : resolveExecutable(command.command)
+  if (!file) throw new Error(`${command.command} is not on PATH`)
+  const child = spawn(file, command.args, {
     cwd: context.targetDir,
     stdio: 'inherit',
     env: { ...process.env, PORT: String(port) },
     // A separate process group lets one signal stop the whole tree on Unix.
     // On Windows a detached child would open a new console window.
     detached: !IS_WINDOWS,
-    shell: command.shell ?? false,
+    shell: needsShell(file),
     windowsHide: false
   })
   writeState(context, child.pid, port)
@@ -768,7 +831,8 @@ function startDevServer(command, context, port) {
     // Vite can leave children (esbuild, workers) in its group.
     if (!IS_WINDOWS) killTree(child.pid, 'SIGKILL')
     if (stopping) process.exit(0)
-    log(`dev server exited (${signal ?? `code ${code}`})`)
+    const reason = signal ?? `code ${code}`
+    log(`dev server exited (${reason})`)
     process.exit(code ?? 1)
   })
   child.on('error', error => {
