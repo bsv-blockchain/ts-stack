@@ -156,11 +156,13 @@ export {
   OVERLAY_LOOKUP_SERVICE_NAME_PATTERN,
   OVERLAY_TOPIC_NAME_PATTERN,
   OverlayAdminTokenTemplate,
+  OverlayBroadcastHTTPError,
   SHIPBroadcaster,
   SHIPCast,
   TopicBroadcaster,
   isOverlayLookupServiceName,
   isOverlayTopicName,
+  validateSTEAK,
   withDoubleSpendRetry
 } from '@bsv/sdk/overlay-tools'
 export {
