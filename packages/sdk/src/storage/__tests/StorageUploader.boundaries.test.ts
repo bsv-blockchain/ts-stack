@@ -80,6 +80,55 @@ describe('StorageUploader boundary validation', () => {
     await expect(uploader(jest.fn<typeof fetch>()).estimateCost(params)).rejects.toThrow(message)
   })
 
+  it('reads provider JSON from a response without a body stream', async () => {
+    const streamless = (value: unknown, headers: Record<string, string> = {}): Response =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(headers),
+        body: null,
+        arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(value)).buffer
+      }) as unknown as Response
+    const fetchClient = jest.fn<typeof fetch>(async input =>
+      String(input).includes('one')
+        ? streamless({ status: 'success', quote: 3 })
+        : streamless({ status: 'success', quote: 1 }, { 'Content-Length': '1' })
+    )
+    await expect(
+      uploader(fetchClient, undefined, 1).estimateCost({ fileSize: 1, retentionPeriod: 1 })
+    ).resolves.toMatchObject({ quotes: [{ host: 'https://one.example', amount: 3 }] })
+  })
+
+  it('bounds provider JSON read from a response without a body stream', async () => {
+    const streamless = (bytes: Uint8Array): Response =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        arrayBuffer: async () => bytes.slice().buffer
+      }) as unknown as Response
+    const fetchClient = jest.fn<typeof fetch>(async input =>
+      String(input).includes('one')
+        ? streamless(new Uint8Array(1024 * 1024 + 1))
+        : streamless(new TextEncoder().encode('{"status":"success","quote":5}'))
+    )
+    await expect(
+      uploader(fetchClient, undefined, 1).estimateCost({ fileSize: 1, retentionPeriod: 1 })
+    ).resolves.toMatchObject({ quotes: [{ host: 'https://two.example', amount: 5 }] })
+  })
+
+  it('still refuses a provider response with no readable body', async () => {
+    const fetchClient = jest.fn<typeof fetch>(
+      async () => ({ ok: true, status: 200, headers: new Headers() }) as unknown as Response
+    )
+    await expect(
+      uploader(fetchClient, ['https://one.example']).estimateCost({
+        fileSize: 1,
+        retentionPeriod: 1
+      })
+    ).resolves.toMatchObject({ quotes: [], meetsResilienceThreshold: false })
+  })
+
   it('sorts bounded quotes and computes the cheapest resilience budget', async () => {
     const fetchClient = jest.fn<typeof fetch>(async input => {
       const url = String(input)
@@ -239,6 +288,64 @@ describe('StorageUploader boundary validation', () => {
       'https://one.example/upload',
       expect.objectContaining({ method: 'POST' })
     )
+  })
+
+  it('treats an omitted requiredHeaders as no extra upload headers', async () => {
+    // Reply shape served by go-uhrp-storage-server, which omits an empty header map.
+    jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10,
+        description: 'File can now be uploaded.'
+      })
+    )
+    const putInits: RequestInit[] = []
+    const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+      if (String(input).endsWith('/quote')) {
+        return jsonResponse({ status: 'success', quote: 10 })
+      }
+      expect(String(input)).toBe('https://uploads.example/put?objectID=abc')
+      putInits.push(init as RequestInit)
+      return new Response('', { status: 200 })
+    })
+    const result = await uploader(fetchClient, ['https://one.example']).publishFile({
+      file: { data: [1, 2, 3], type: 'text/plain' },
+      retentionPeriod: 60
+    })
+    expect(result).toMatchObject({ published: true, hostedBy: ['https://one.example'] })
+    expect(putInits).toHaveLength(1)
+    expect(putInits[0]).toMatchObject({ method: 'PUT', redirect: 'error' })
+    expect(putInits[0].headers).toEqual({ 'Content-Type': 'text/plain' })
+  })
+
+  it('sends the same PUT headers for an omitted and an empty requiredHeaders', async () => {
+    const putHeaders = async (requiredHeaders?: Record<string, string>): Promise<unknown> => {
+      const reply: Record<string, unknown> = {
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10
+      }
+      if (requiredHeaders !== undefined) reply.requiredHeaders = requiredHeaders
+      jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(jsonResponse(reply))
+      let headers: unknown
+      const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+        if (String(input).endsWith('/quote')) {
+          return jsonResponse({ status: 'success', quote: 10 })
+        }
+        headers = (init as RequestInit).headers
+        return new Response('', { status: 200 })
+      })
+      await uploader(fetchClient, ['https://one.example']).publishFile({
+        file: { data: [1, 2, 3], type: 'text/plain' },
+        retentionPeriod: 60
+      })
+      return headers
+    }
+    const omitted = await putHeaders()
+    const empty = await putHeaders({})
+    expect(omitted).toEqual({ 'Content-Type': 'text/plain' })
+    expect(empty).toEqual(omitted)
   })
 
   it.each([

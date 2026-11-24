@@ -97,6 +97,19 @@ describe('KnexStorage security and bounded-query behavior', () => {
     expect(outputRow.blockHeight).toBeNull()
   })
 
+  it('reads a bigint satoshis value returned as a string as a number on every output read', async () => {
+    const row = { ...outputRow, satoshis: '2100000000000000' }
+    const { knex } = mockKnex({ outputs: [row, [row], [row], [row]] })
+    const storage = new KnexStorage(knex)
+    const single = await storage.findOutput(txid, 0)
+    const batch = await storage.findOutputsByOutpoints([{ txid, outputIndex: 0 }])
+    const transaction = await storage.findOutputsForTransaction(txid)
+    const topicOutputs = await storage.findUTXOsForTopic(topic)
+    for (const output of [single, ...batch, ...transaction, ...topicOutputs]) {
+      expect(output?.satoshis).toBe(2_100_000_000_000_000)
+    }
+  })
+
   it.each([0, 123, -1, '123'])('does not coerce non-null height %p', async height => {
     const { knex } = mockKnex({ outputs: [{ ...outputRow, blockHeight: height }] })
     const output = await new KnexStorage(knex).findOutput(txid, 0)

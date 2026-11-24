@@ -285,6 +285,13 @@ migration discard security-relevant state. The engine serializes submissions
 inside one process, while database uniqueness and conditional unspent updates
 enforce the same spend/admission boundary across processes.
 
+The satoshis-width migration widens `outputs.satoshis` from a 32-bit to a 64-bit
+integer on MySQL and Postgres; SQLite's `INTEGER` is already 64-bit and is left
+alone. MySQL and Postgres both rewrite the `outputs` table to change the column
+type, and Postgres blocks reads and writes on it meanwhile, so allow for that on
+a large table. Its down refuses to run while any stored output is above
+2,147,483,647 satoshis.
+
 Prefer roll-forward after these migrations. Older package versions do not know
 their migration names, so a bare image rollback can fail migration-list
 validation. To restore an older version, stop writes and either use the new

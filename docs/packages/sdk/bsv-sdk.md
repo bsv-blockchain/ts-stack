@@ -15,6 +15,20 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+## Opt-in whole-BEEF overlay lookups
+
+An unreleased source change after 4.1.2 adds `LookupQueryOptions.wholeBeef`
+(default `false`), forwarded to facilitators as
+`LookupRequestOptions.wholeBeef`. When `true`, `HTTPSOverlayLookupFacilitator`
+omits `X-Aggregation: yes` and reads the host's per-output JSON answer, so each
+output's BEEF is returned as the lookup service produced it, including history
+beyond the first proven transaction that the aggregated answer drops. A binary
+answer to such a request counts as a rejection (`rejectedHosts`) with no
+reputation penalty. Raise `limits.maxResponseBytes`, `limits.maxTotalBytes` and
+`evidenceLimits` for long histories. Default lookups, SLAP discovery and
+outpoint deduplication are unchanged; no API, wire or data migration is
+required.
+
 ## Zero-field initial certificate proofs
 
 An unreleased source change after 4.1.2 lets a `Peer` that initiates a
@@ -715,6 +729,18 @@ nonce and its optional fourth argument is the peer nonce, allowing adapters to
 bind application approval to the exact validated exchange; existing two-argument
 callbacks remain compatible. Apply the requested certificate policy and
 explicit application authorization before performing protected work.
+
+When a peer's `initialResponse` requests certificates, `Peer` answers after it
+has validated the peer's certificates and run these listeners, so a listener
+that throws prevents that disclosure. Until the answer has been sent or has
+ended without one, `toPeer` on that session waits, at most 30 seconds. While
+the session's certificates-received listeners run, its sends are not held, as
+before, so a listener can send without waiting for the answer that follows it;
+such a message precedes the answer. When the wallet holds
+no requested certificate, nothing is sent unless the `Peer` options or the
+`AuthFetch` options set `sendEmptyCertificateResponses: true`. Enable it only
+for servers that accept an empty answer: `@bsv/auth-express-middleware` replies
+400 `ERR_CERTIFICATES_REQUIRED`.
 
 Custom `AsyncSessionManager` implementations must retain the complete
 `PeerSession`, including the optional local `certificatePolicy` and

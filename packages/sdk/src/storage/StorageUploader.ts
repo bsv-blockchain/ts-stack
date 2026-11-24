@@ -180,8 +180,43 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
     }
     declaredBytes = Number(declared)
   }
-  if (response.body == null) throw new Error('Storage provider returned an empty response.')
-  const reader = response.body.getReader()
+  let bytes: Uint8Array
+  if (response.body == null) {
+    // Compatibility for fetch implementations without a WHATWG body stream
+    // (such as React Native's). The declared length was checked above, but the
+    // body is only measured once it has been read. Unlike StorageDownloader,
+    // a missing Content-Length is accepted here: these replies come from the
+    // storage URL the caller configured, not from an overlay-advertised host,
+    // and the /upload reply is read after its payment has settled, so refusing
+    // a chunked or compressed reply would abandon a paid upload.
+    if (typeof response.arrayBuffer !== 'function') {
+      throw new TypeError('Storage provider returned an empty response.')
+    }
+    bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
+      throw new Error('Storage provider response exceeds the configured size limit.')
+    }
+  } else {
+    bytes = await readBoundedBody(response.body, declaredBytes)
+  }
+  if (declaredBytes !== undefined && bytes.byteLength !== declaredBytes) {
+    throw new Error('Storage provider response differs from its declared length.')
+  }
+  try {
+    return providerRecord(JSON.parse(toUTF8Strict(bytes)))
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Storage provider returned')) {
+      throw error
+    }
+    throw new Error('Storage provider returned malformed JSON.', { cause: error })
+  }
+}
+
+async function readBoundedBody(
+  body: ReadableStream<Uint8Array>,
+  declaredBytes: number | undefined
+): Promise<Uint8Array> {
+  const reader = body.getReader()
   const chunks: Uint8Array[] = []
   let total = 0
   while (true) {
@@ -198,23 +233,13 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
     }
     chunks.push(value)
   }
-  if (declaredBytes !== undefined && total !== declaredBytes) {
-    throw new Error('Storage provider response differs from its declared length.')
-  }
   const bytes = new Uint8Array(total)
   let offset = 0
   for (const chunk of chunks) {
     bytes.set(chunk, offset)
     offset += chunk.length
   }
-  try {
-    return providerRecord(JSON.parse(toUTF8Strict(bytes)))
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Storage provider returned')) {
-      throw error
-    }
-    throw new Error('Storage provider returned malformed JSON.', { cause: error })
-  }
+  return bytes
 }
 
 function validateUploadHeaders(
@@ -375,7 +400,12 @@ export class StorageUploader {
       throw new Error('Upload route returned an error.')
     }
     if (typeof data.uploadURL !== 'string') throw new Error('Upload route omitted uploadURL.')
-    const requiredHeaders = validateUploadHeaders(data.requiredHeaders, fileSize)
+    // An omitted header set means no extra headers, as 2.7.x treated it: some
+    // servers drop an empty map from the reply. A present value is still validated.
+    const requiredHeaders = validateUploadHeaders(
+      data.requiredHeaders === undefined ? {} : data.requiredHeaders,
+      fileSize
+    )
     if (
       data.amount !== undefined &&
       (!Number.isSafeInteger(data.amount) || data.amount < 0 || data.amount > MAX_SATOSHIS)
