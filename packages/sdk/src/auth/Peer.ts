@@ -139,7 +139,7 @@ export class Peer {
    *
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
    * @param {Transport} transport - The transport mechanism used for sending and receiving messages.
-   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization.
+   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization. A type listed with an empty field array asks for a zero-field proof, which only a Peer that initiated the handshake can accept, in the initial response. A responder, such as a server behind auth-express-middleware requesting `types: { T: [] }`, receives the client's answer as a standalone certificate response, and a zero-field proof there stays refused.
    * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} with atomic `claimMessageNonce` and `claimInitialRequestNonce` for shared/durable storage in load-balanced deployments; otherwise the bounded default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
@@ -617,6 +617,9 @@ export class Peer {
    * roll back validation or revoke the session. Apply acceptance policy through the locally
    * requested certificate set and explicit application authorization before protected work.
    *
+   * A certificate accepted as a zero-field proof reaches observers with its fields still
+   * encrypted and no keyring, so do not call `decryptFields` on it.
+   *
    * @param {(senderPublicKey: string, certs: VerifiableCertificate[], sessionNonce: string, peerNonce?: string) => void | Promise<void>} callback - The function to call when certificates are received. The local and peer session nonces identify the exact validated exchange; callbacks that do not need them remain compatible.
    * @returns {number} The ID of the callback listener.
    */
@@ -941,12 +944,13 @@ export class Peer {
    *
    * @private
    * @param {AuthMessage} message - The incoming initial response message.
+   * @returns The session, and whether this Peer initiated it.
    * @throws Will throw an error if nonce or signature verification fails.
    */
   private async authenticateInitialResponse(
     message: AuthMessage,
     onHold?: (release: () => void) => void
-  ): Promise<PeerSession> {
+  ): Promise<[peerSession: PeerSession, locallyInitiated: boolean]> {
     const validNonce = await verifyNonce(
       message.yourNonce as string,
       this.#wallet,
@@ -1008,24 +1012,32 @@ export class Peer {
     }
 
     // --- Transport authentication complete ---
+    // Only a session this Peer initiated and has not yet authenticated has no
+    // peer nonce: a responder session holds the initiator's nonce from
+    // creation, and authentication below sets it.
+    const locallyInitiated = peerSession.peerNonce == null
     peerSession.peerNonce = message.initialNonce
     peerSession.peerIdentityKey = message.identityKey
     peerSession.isAuthenticated = true
 
-    peerSession.certificatePolicy ??= this.#snapshotCertificatePolicy(this.certificatesToRequest)
-    peerSession.certificatesRequired = peerSession.certificatePolicy.certifiers.length > 0
+    // Do not backfill a lost snapshot: its absence is what keeps zero-field
+    // validation from being authorized by the mutable default below.
+    const certificatePolicy =
+      peerSession.certificatePolicy ?? this.#snapshotCertificatePolicy(this.certificatesToRequest)
+    peerSession.certificatesRequired = certificatePolicy.certifiers.length > 0
 
     // IMPORTANT: validation defaults to false if certs are required
     peerSession.certificatesValidated = !peerSession.certificatesRequired
 
     peerSession.lastUpdate = Date.now()
     await this.sessionManager.updateSession(peerSession)
-    return peerSession
+    return [peerSession, locallyInitiated]
   }
 
   private async validateInitialResponseCertificates(
     message: AuthMessage,
-    peerSession: PeerSession
+    peerSession: PeerSession,
+    locallyInitiated = false
   ): Promise<void> {
     if (
       !peerSession.certificatesRequired ||
@@ -1036,11 +1048,15 @@ export class Peer {
     }
     const sessionNonce = peerSession.sessionNonce as string
     await this.updateCertificateSession(sessionNonce, async session => {
+      // Zero fields answer only the request this Peer sent as initiator, from
+      // the snapshot its session retained; a store that drops the snapshot
+      // keeps the nonempty path rather than using the mutable default.
       await validateCertificates(
         this.#wallet,
         message,
         session.certificatePolicy ?? this.certificatesToRequest,
-        this.#originator
+        this.#originator,
+        locallyInitiated && session.certificatePolicy != null
       )
       session.certificatesValidated = true
       session.lastUpdate = Date.now()
@@ -1120,10 +1136,13 @@ export class Peer {
   async #processInitialResponse(message: AuthMessage): Promise<void> {
     let releaseHold: (() => void) | undefined
     try {
-      const peerSession = await this.authenticateInitialResponse(message, release => {
-        releaseHold = release
-      })
-      await this.validateInitialResponseCertificates(message, peerSession)
+      const [peerSession, locallyInitiated] = await this.authenticateInitialResponse(
+        message,
+        release => {
+          releaseHold = release
+        }
+      )
+      await this.validateInitialResponseCertificates(message, peerSession, locallyInitiated)
       this.lastInteractedWithPeer = message.identityKey
       this.#releaseInitialResponseWaiters(peerSession)
       await this.#answerInitialCertificateRequest(message, releaseHold)
@@ -1338,7 +1357,10 @@ export class Peer {
         if (policy == null) {
           throw new Error('Certificates do not match a locally requested set for this session.')
         }
-        await validateCertificates(this.#wallet, message, policy, this.#originator)
+        // Zero fields are an initial-response proof only. The matcher above
+        // already refuses an empty keyring; false keeps this call on the
+        // nonempty path if that ever changes.
+        await validateCertificates(this.#wallet, message, policy, this.#originator, false)
         if (requested != null) delete session.pendingCertificateRequests?.[requested[0]]
         // A separate dynamic request cannot satisfy a different handshake requirement.
         if (matchesHandshake) session.certificatesValidated = true
