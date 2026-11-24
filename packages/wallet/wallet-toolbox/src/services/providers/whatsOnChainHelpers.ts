@@ -44,7 +44,28 @@ function handleGenericPostError(
     n.status = response.status
     r.data += `,${response.status}`
   }
+  if (isWhatsOnChainServiceError(response.data, Number(response.status))) r.serviceError = true
   r.notes!.push(n)
+}
+
+/**
+ * WhatsOnChain relays its node's answer as a body starting "unexpected response code NNN". A
+ * relayed 500 is the node's RPC refusal of the transaction and stays a verdict whatever the HTTP
+ * status. Otherwise a missing or refused key (401/403), a timeout (408), rate limiting (429) or a
+ * server failure (5xx), from WhatsOnChain or relayed from its node, says nothing about the
+ * transaction.
+ */
+function isWhatsOnChainServiceError(data: unknown, status: number): boolean {
+  const relayed = typeof data === 'string' ? /^unexpected response code (\d{3})\b/.exec(data) : null
+  if (relayed != null) {
+    const relayedStatus = Number(relayed[1])
+    return relayedStatus !== 500 && isServiceErrorStatus(relayedStatus)
+  }
+  return isServiceErrorStatus(status)
+}
+
+function isServiceErrorStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 408 || status === 429 || (status >= 500 && status < 600)
 }
 
 /**
