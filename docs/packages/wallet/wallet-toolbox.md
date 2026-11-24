@@ -15,6 +15,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
+## nLockTime finality
+
+The 2.18.1 source candidate makes `nLockTimeIsFinal` apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
+
 ## Broadcaster service errors
 
 The 2.18.1 source candidate scores broadcaster answers that judge nothing about

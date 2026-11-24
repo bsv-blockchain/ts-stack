@@ -80,6 +80,55 @@ describe('StorageUploader boundary validation', () => {
     await expect(uploader(jest.fn<typeof fetch>()).estimateCost(params)).rejects.toThrow(message)
   })
 
+  it('reads provider JSON from a response without a body stream', async () => {
+    const streamless = (value: unknown, headers: Record<string, string> = {}): Response =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(headers),
+        body: null,
+        arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(value)).buffer
+      }) as unknown as Response
+    const fetchClient = jest.fn<typeof fetch>(async input =>
+      String(input).includes('one')
+        ? streamless({ status: 'success', quote: 3 })
+        : streamless({ status: 'success', quote: 1 }, { 'Content-Length': '1' })
+    )
+    await expect(
+      uploader(fetchClient, undefined, 1).estimateCost({ fileSize: 1, retentionPeriod: 1 })
+    ).resolves.toMatchObject({ quotes: [{ host: 'https://one.example', amount: 3 }] })
+  })
+
+  it('bounds provider JSON read from a response without a body stream', async () => {
+    const streamless = (bytes: Uint8Array): Response =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        arrayBuffer: async () => bytes.slice().buffer
+      }) as unknown as Response
+    const fetchClient = jest.fn<typeof fetch>(async input =>
+      String(input).includes('one')
+        ? streamless(new Uint8Array(1024 * 1024 + 1))
+        : streamless(new TextEncoder().encode('{"status":"success","quote":5}'))
+    )
+    await expect(
+      uploader(fetchClient, undefined, 1).estimateCost({ fileSize: 1, retentionPeriod: 1 })
+    ).resolves.toMatchObject({ quotes: [{ host: 'https://two.example', amount: 5 }] })
+  })
+
+  it('still refuses a provider response with no readable body', async () => {
+    const fetchClient = jest.fn<typeof fetch>(
+      async () => ({ ok: true, status: 200, headers: new Headers() }) as unknown as Response
+    )
+    await expect(
+      uploader(fetchClient, ['https://one.example']).estimateCost({
+        fileSize: 1,
+        retentionPeriod: 1
+      })
+    ).resolves.toMatchObject({ quotes: [], meetsResilienceThreshold: false })
+  })
+
   it('sorts bounded quotes and computes the cheapest resilience budget', async () => {
     const fetchClient = jest.fn<typeof fetch>(async input => {
       const url = String(input)

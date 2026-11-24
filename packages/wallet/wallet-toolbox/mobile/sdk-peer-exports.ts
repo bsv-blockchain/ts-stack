@@ -59,7 +59,11 @@ export {
   isChainTracker,
   registerScriptVerificationBackend,
   scriptVerificationBackend,
-  unregisterScriptVerificationBackend
+  transactionInputSize,
+  transactionOutputSize,
+  transactionSize,
+  unregisterScriptVerificationBackend,
+  varUintSize
 } from '@bsv/sdk/transaction'
 export { LivePolicy, SatoshisPerKilobyte } from '@bsv/sdk/transaction/fee-models'
 export { ARC, Teranode, WhatsOnChainBroadcaster, defaultBroadcaster } from '@bsv/sdk/transaction/broadcasters'
@@ -152,17 +156,20 @@ export {
   OVERLAY_LOOKUP_SERVICE_NAME_PATTERN,
   OVERLAY_TOPIC_NAME_PATTERN,
   OverlayAdminTokenTemplate,
+  OverlayBroadcastHTTPError,
   SHIPBroadcaster,
   SHIPCast,
   TopicBroadcaster,
   isOverlayLookupServiceName,
   isOverlayTopicName,
+  validateSTEAK,
   withDoubleSpendRetry
 } from '@bsv/sdk/overlay-tools'
 export {
   DEFAULT_UHRP_SERVERS,
   MAX_UHRP_ADVERTISEMENT_URL_BYTES,
   RenewResiliencyError,
+  StorageDownloadError,
   StorageDownloader,
   StorageUploader,
   StorageUtils,
