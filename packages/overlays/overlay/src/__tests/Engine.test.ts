@@ -16,7 +16,6 @@ import {
   PrivateKey,
   ProtoWallet,
   PushDrop,
-  type MerklePath,
   type WalletInterface
 } from '@bsv/sdk'
 import { Output } from '../Output'
