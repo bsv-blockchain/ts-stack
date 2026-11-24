@@ -9707,7 +9707,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/Peer.ts',
-          'const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes',
+          'const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes',
           'this.#wallet = wallet'
         ],
         ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
@@ -10906,6 +10906,14 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/EcpmPermissionModule*.test.ts'], {
         esm: true
       })
+    },
+    'sigma-permission': {
+      packageDirectory: 'packages/wallet/sigma-permission-module',
+      manifest: 'packages/wallet/sigma-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/sigma-permission-module/src/__tests__/SigmaPermissionModule.property.test.ts',
+      mutate: ['src/SigmaPermissionModule.ts', 'src/grants.ts', 'src/encoding.ts', 'src/sigma.ts'],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
     },
     'chirp-codec': {
       packageDirectory: 'packages/network/chirp',

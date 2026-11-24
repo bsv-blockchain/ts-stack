@@ -962,6 +962,18 @@ bind application approval to the exact validated exchange; existing two-argument
 callbacks remain compatible. Apply the requested certificate policy and
 explicit application authorization before performing protected work.
 
+When a peer's `initialResponse` requests certificates, `Peer` answers after it
+has validated the peer's certificates and run these listeners, so a listener
+that throws prevents that disclosure. Until the answer has been sent or has
+ended without one, `toPeer` on that session waits, at most 30 seconds. While
+the session's certificates-received listeners run, its sends are not held, as
+before, so a listener can send without waiting for the answer that follows it;
+such a message precedes the answer. When the wallet holds
+no requested certificate, nothing is sent unless the `Peer` options or the
+`AuthFetch` options set `sendEmptyCertificateResponses: true`. Enable it only
+for servers that accept an empty answer: `@bsv/auth-express-middleware` replies
+400 `ERR_CERTIFICATES_REQUIRED`.
+
 Custom `AsyncSessionManager` implementations must retain the complete
 `PeerSession`, including the optional local `certificatePolicy` and
 `pendingCertificateRequests` fields. They are never serialized into AuthMessage.

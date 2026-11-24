@@ -46,6 +46,13 @@ export interface AuthFetchOptions extends SimplifiedFetchTransportOptions {
    * of requestTimeoutMs, which bounds transport fetch and response-body reads.
    */
   responseTimeoutMs?: number
+  /**
+   * Answer a server's certificate request with an empty certificateResponse when the wallet
+   * holds no requested certificate. Defaults to false, which sends nothing in that case. Enable
+   * it only for servers that accept an empty answer: `@bsv/auth-express-middleware` replies
+   * 400 ERR_CERTIFICATES_REQUIRED.
+   */
+  sendEmptyCertificateResponses?: boolean
 }
 
 interface SimplifiedFetchRequestOptions {
@@ -230,6 +237,7 @@ export class AuthFetch {
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
   readonly #transportOptions: SimplifiedFetchTransportOptions
   readonly #responseTimeoutMs: number
+  readonly #sendEmptyCertificateResponses: boolean
   private readonly maxResponseBytes: number
   private readonly fetchClient?: typeof fetch
   peers: Record<string, AuthPeer> = {}
@@ -264,6 +272,7 @@ export class AuthFetch {
       throw new RangeError('responseTimeoutMs must be an integer between 1 and 2147483647')
     }
     this.#responseTimeoutMs = responseTimeoutMs
+    this.#sendEmptyCertificateResponses = transportOptions.sendEmptyCertificateResponses === true
     this.fetchClient = fetchClient
     this.maxResponseBytes = positiveResponseLimit(
       transportOptions.maxResponseBytes,
@@ -505,7 +514,9 @@ export class AuthFetch {
           verifier,
           this.originator
         )
-        if (certificatesToInclude.length > 0) {
+        // An empty answer is opt-in: some servers refuse one (auth-express-middleware replies
+        // 400). A wallet error or declined disclosure throws above and sends nothing.
+        if (certificatesToInclude.length > 0 || this.#sendEmptyCertificateResponses) {
           await newPeer.sendCertificateResponse(verifier, certificatesToInclude)
         }
       } finally {
