@@ -290,6 +290,64 @@ describe('StorageUploader boundary validation', () => {
     )
   })
 
+  it('treats an omitted requiredHeaders as no extra upload headers', async () => {
+    // Reply shape served by go-uhrp-storage-server, which omits an empty header map.
+    jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10,
+        description: 'File can now be uploaded.'
+      })
+    )
+    const putInits: RequestInit[] = []
+    const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+      if (String(input).endsWith('/quote')) {
+        return jsonResponse({ status: 'success', quote: 10 })
+      }
+      expect(String(input)).toBe('https://uploads.example/put?objectID=abc')
+      putInits.push(init as RequestInit)
+      return new Response('', { status: 200 })
+    })
+    const result = await uploader(fetchClient, ['https://one.example']).publishFile({
+      file: { data: [1, 2, 3], type: 'text/plain' },
+      retentionPeriod: 60
+    })
+    expect(result).toMatchObject({ published: true, hostedBy: ['https://one.example'] })
+    expect(putInits).toHaveLength(1)
+    expect(putInits[0]).toMatchObject({ method: 'PUT', redirect: 'error' })
+    expect(putInits[0].headers).toEqual({ 'Content-Type': 'text/plain' })
+  })
+
+  it('sends the same PUT headers for an omitted and an empty requiredHeaders', async () => {
+    const putHeaders = async (requiredHeaders?: Record<string, string>): Promise<unknown> => {
+      const reply: Record<string, unknown> = {
+        status: 'success',
+        uploadURL: 'https://uploads.example/put?objectID=abc',
+        amount: 10
+      }
+      if (requiredHeaders !== undefined) reply.requiredHeaders = requiredHeaders
+      jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(jsonResponse(reply))
+      let headers: unknown
+      const fetchClient = jest.fn<typeof fetch>(async (input, init) => {
+        if (String(input).endsWith('/quote')) {
+          return jsonResponse({ status: 'success', quote: 10 })
+        }
+        headers = (init as RequestInit).headers
+        return new Response('', { status: 200 })
+      })
+      await uploader(fetchClient, ['https://one.example']).publishFile({
+        file: { data: [1, 2, 3], type: 'text/plain' },
+        retentionPeriod: 60
+      })
+      return headers
+    }
+    const omitted = await putHeaders()
+    const empty = await putHeaders({})
+    expect(omitted).toEqual({ 'Content-Type': 'text/plain' })
+    expect(empty).toEqual(omitted)
+  })
+
   it.each([
     ['content-type', 'application/octet-stream'],
     ['Content-Type', 'text/plain'],

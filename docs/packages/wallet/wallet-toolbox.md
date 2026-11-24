@@ -23,6 +23,17 @@ median time past of the last eleven headers (BIP113), instead of the tip height
 and the wall clock. Inputs with an omitted sequence count as final. No API, wire
 or schema migration is required. Source is not publication or deployment.
 
+## Broadcaster service errors
+
+The 2.18.1 source candidate scores broadcaster answers that judge nothing about
+the transaction as service errors: ARC HTTP 401 and 403 (a keyless request to
+the default arc.taal.com, or a refused key), WhatsOnChain 401, 403, 408,
+exhausted 429 and 5xx answers that relay no node refusal, and a Bitails per-
+transaction connection reset. Such a transaction now stays queued for retry or
+fails over instead of being marked invalid with its inputs released. No API,
+wire, configuration or schema migration is required. Source is not publication
+or deployment.
+
 ## Key-linkage permission
 
 The next minor release can ask for permission on
