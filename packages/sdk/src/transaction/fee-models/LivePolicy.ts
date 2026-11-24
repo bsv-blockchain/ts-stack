@@ -1,10 +1,35 @@
 import SatoshisPerKilobyte from './SatoshisPerKilobyte.js'
 import Transaction from '../Transaction.js'
 import { defaultHttpClient } from '../http/DefaultHttpClient.js'
+import type { HttpClient } from '../http/HttpClient.js'
+
+/** Where a {@link LivePolicy} reads its fee rate. */
+export interface LivePolicyOptions {
+  /**
+   * An ARC-compatible policy endpoint answering `{ policy: { miningFee: { satoshis, bytes } } }`,
+   * such as the `/v1/policy` route of the broadcaster in use. Default: GorillaPool's mainnet ARC.
+   */
+  policyUrl?: string
+  /**
+   * The HTTP client for the policy request. Default: `defaultHttpClient()` at request time.
+   * For an ARC deployment that requires authentication on `/v1/policy`, wrap a client to add
+   * the header, for example
+   * `{ request: async (url, o) => await base.request(url, { ...o, headers: { ...o.headers, Authorization: auth } }) }`.
+   */
+  httpClient?: HttpClient
+}
 
 /**
- * Represents a live fee policy that fetches current rates from ARC GorillaPool.
- * Extends SatoshisPerKilobyte to reuse transaction size calculation logic.
+ * Represents a live fee policy that fetches current rates from an ARC policy endpoint
+ * (GorillaPool unless configured). Extends SatoshisPerKilobyte to reuse transaction size
+ * calculation logic.
+ *
+ * `LivePolicy.getInstance()`, which `Transaction.fee()` uses by default, always reads
+ * GorillaPool's mainnet endpoint. Pass a configured instance to use another network.
+ *
+ * @example
+ * // Fee rate from a testnet ARC instead of mainnet GorillaPool:
+ * await tx.fee(new LivePolicy(undefined, { policyUrl: 'https://testnet-arc.example/v1/policy' }))
  */
 export default class LivePolicy extends SatoshisPerKilobyte {
   private static readonly ARC_POLICY_URL = 'https://arc.gorillapool.io/v1/policy'
@@ -12,18 +37,30 @@ export default class LivePolicy extends SatoshisPerKilobyte {
   private cachedRate: number | null = null
   private cacheTimestamp: number = 0
   private readonly cacheValidityMs: number
+  private readonly policyUrl: string
+  private readonly httpClient?: HttpClient
 
   /**
    * Constructs an instance of the live policy fee model.
    *
    * @param {number} cacheValidityMs - How long to cache the fee rate in milliseconds (default: 5 minutes)
+   * @param {LivePolicyOptions} options - The policy endpoint and HTTP client to use
    */
-  constructor(cacheValidityMs: number = 5 * 60 * 1000) {
+  constructor(cacheValidityMs: number = 5 * 60 * 1000, options: LivePolicyOptions = {}) {
     super(100) // Initialize with dummy value, will be overridden by fetchFeeRate
     if (!Number.isSafeInteger(cacheValidityMs) || cacheValidityMs < 0) {
       throw new RangeError('cacheValidityMs must be a non-negative safe integer')
     }
     this.cacheValidityMs = cacheValidityMs
+    const { policyUrl = LivePolicy.ARC_POLICY_URL, httpClient } = options
+    if (typeof policyUrl !== 'string' || !isHttpUrl(policyUrl)) {
+      throw new TypeError('policyUrl must be an http(s) URL')
+    }
+    if (httpClient !== undefined && typeof httpClient?.request !== 'function') {
+      throw new TypeError('httpClient must have request()')
+    }
+    this.policyUrl = policyUrl
+    this.httpClient = httpClient
   }
 
   /**
@@ -38,7 +75,7 @@ export default class LivePolicy extends SatoshisPerKilobyte {
   }
 
   /**
-   * Fetches the current fee rate from ARC GorillaPool API.
+   * Fetches the current fee rate from the configured policy endpoint.
    *
    * @returns The current satoshis per kilobyte rate
    */
@@ -51,10 +88,13 @@ export default class LivePolicy extends SatoshisPerKilobyte {
     }
 
     try {
-      const response = await defaultHttpClient().request<unknown>(LivePolicy.ARC_POLICY_URL, {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      })
+      const response = await (this.httpClient ?? defaultHttpClient()).request<unknown>(
+        this.policyUrl,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        }
+      )
       if (!response.ok) {
         throw new Error('Fee-policy provider request failed')
       }
@@ -112,5 +152,15 @@ export default class LivePolicy extends SatoshisPerKilobyte {
     // Update the value property so parent's computeFee uses the live rate
     this.value = rate
     return super.computeFee(tx)
+  }
+}
+
+/** True when `value` parses as an absolute http: or https: URL with a host. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(value)
+    return (protocol === 'http:' || protocol === 'https:') && hostname !== ''
+  } catch {
+    return false
   }
 }

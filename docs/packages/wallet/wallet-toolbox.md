@@ -15,6 +15,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
+## nLockTime finality
+
+The 2.18.1 source candidate makes `nLockTimeIsFinal` apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
+
 ## Key-linkage permission
 
 The next minor release can ask for permission on
@@ -462,6 +470,9 @@ if it needs the underlying wallet operation, `next` is guarded to one call.
 The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
 this hook to implement point multiplication under `p ecpm` while keeping
 `getPublicKey` as the public wallet method.
+[@bsv/sigma-permission-module](./sigma-permission-module.md) uses it to
+return statement points and zero-knowledge proofs under `p sigma` through
+`encrypt`.
 
 ## Action Flow
 

@@ -1,0 +1,168 @@
+{
+  "parameters": {
+    "securityLevel": 2,
+    "logicalProtocolID": "example payout",
+    "keyID": "member 1",
+    "derivationProtocol": "p sigma example payout",
+    "invoiceNumber": "2-p sigma example payout-member 1",
+    "contextHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+    "hkdfSalt": "p sigma v1",
+    "points": {
+      "7G": "025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc",
+      "11G": "03774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+      "13G": "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8"
+    }
+  },
+  "wallets": {
+    "A": {
+      "rootPrivateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "identityKeyHex": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+    },
+    "B": {
+      "rootPrivateKeyHex": "0000000000000000000000000000000000000000000000000000000000000003",
+      "identityKeyHex": "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"
+    }
+  },
+  "vectors": [
+    {
+      "name": "key-self",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "key",
+      "plaintextHex": "",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040"
+    },
+    {
+      "name": "key-counterparty-b",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+      "operation": "key",
+      "plaintextHex": "",
+      "childKeyHex": "7d5837c6cdb0db76795fa99d8a836b97d9a7916f95bbc0be7b7e34922a2b23f3",
+      "scalarHex": "36f4969e8d9e733a48c75bc88d090b72083c9ed693344de534d8b1adb30b23e7",
+      "statementPointHex": "03728a19111836ea2828d3b1cfb6a19df2b2c72862c27af368d5c9b14c834bf7e1",
+      "resultHex": "03728a19111836ea2828d3b1cfb6a19df2b2c72862c27af368d5c9b14c834bf7e1"
+    },
+    {
+      "name": "key-counterparty-a",
+      "wallet": "B",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+      "operation": "key",
+      "plaintextHex": "",
+      "childKeyHex": "7d5837c6cdb0db76795fa99d8a836b97d9a7916f95bbc0be7b7e34922a2b23f4",
+      "scalarHex": "1a9f1980a256dd18555926699dd65529bb65a614dc79aa4897ccce942af23f7e",
+      "statementPointHex": "02214d1bf596facc869962dfc7d4bccb102f72d859755213befb10490ca39f6d79",
+      "resultHex": "02214d1bf596facc869962dfc7d4bccb102f72d859755213befb10490ca39f6d79"
+    },
+    {
+      "name": "key-anyone",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "anyone",
+      "operation": "key",
+      "plaintextHex": "",
+      "childKeyHex": "a313df8c9f46b4709c8731f685ad1f9ddcd8322aad5687bbbccc29a45503c23f",
+      "scalarHex": "c985a4675c0f3e9f08dbf1445a05d4118dca6854dcdecc1249e2800f78ed4252",
+      "statementPointHex": "03a0798044de4c49c628ee0f05fe37e37a780c963136b15264b543cf0fbc0c3de3",
+      "resultHex": "03a0798044de4c49c628ee0f05fe37e37a780c963136b15264b543cf0fbc0c3de3"
+    },
+    {
+      "name": "key-with-base",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "key",
+      "plaintextHex": "025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "0269fc6e854d50434de9dfde6d25573a921934d2cdfc572c1dea80a7c4f01d46f9"
+    },
+    {
+      "name": "schnorr",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "schnorr",
+      "plaintextHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "8ebc64093a681bb024e39950f48d09e54d9c90639f64e774b088893925a52d559b86416a9fadb35fdc73c4fce503fb34e4b69c63ba23fd882996b41724a155d968f6ecfd1b424dc0d1b7eed5d7d2b163e40a56811c69162eb56b1a39b3a0bc77"
+    },
+    {
+      "name": "dleq",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "dleq",
+      "plaintextHex": "025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "69fc6e854d50434de9dfde6d25573a921934d2cdfc572c1dea80a7c4f01d46f96b83fbc5bf7d39738b967bfe735eac6b871e83d31a974636bcefa277f54ab2064c38ea543cd97ac1436481de1b7d161897295c6f9d1fd054d3a51f6a34e9732478af4b3d2115427ebc4d9d98ea4f4364218944af6942f8157d7a0fa28c3a1082779a6b5a7622746abef26a9213de2b3a188cb38faa27ffd53b2b9a3fadd92235d75777457b4efa609fd92131a6b17442ee578baf758fe65a51ea5407e2c21d22ae3dfb76723bf1d954c722d66ed39f76addfae94d1593649363d98f93e83d1ad"
+    },
+    {
+      "name": "or-n2-position-1",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "or",
+      "plaintextHex": "020103774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "2ca8b25fee278398424b19e5d6361237492a84640aa7d0a68ef4db8f92f3cd2ea625f584cae9d0ac320822710c527f942e8dc64ef48ab92a3e3d1163c6168b318bd9a7f27c8ca619e02fd940ab1dab10e852b677ce4984983c0a2ad01fb59333d61485f0d427372b3db19a2c23a1a1890cd1f84b55ff248eec5f6892fa87b0fef21241bf5a1631fe1a186cf353dcc154bb8235c96fdbc356d9a947c78b3767de24bc7e4a56971034b8971d51a2028a00694edf7278e121e26ab38d1306e908ceab87f81b2a61cab971fd34254820637527fe410181f343541b71efbb7b6df593"
+    },
+    {
+      "name": "or-n2-position-2",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "or",
+      "plaintextHex": "020203774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "10e2fcd3dadb5b90770980e76e73cf72bda2aa358be8913644681b09488bb86cfe5cc5eeafde4531f35a87f40d4ea5558b5b6fdfd8bbf490455ee9b1235ac1a9836f88449ca364048d73d337af40b75a90021a07606b468171151de9df47e8cef74a18ac0a46e0119c662d04a7fdb1c43b273c4fb07d6c9148b37c8f6897e89de892089ae139afd6aa6392f087c3d9b5514c8aea5f460425bf56dc23cba311333efc9f045bfeb364438f1843967e6b3f9650d2067c7246240e2a6de73b6797b99ee01007088cff60ba9eecb367e27d23398f9b6beaf68427917026e0d40f977e"
+    },
+    {
+      "name": "or-n3-position-2",
+      "wallet": "A",
+      "securityLevel": 2,
+      "logicalProtocolID": "example payout",
+      "keyID": "member 1",
+      "counterparty": "self",
+      "operation": "or",
+      "plaintextHex": "030203774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+      "childKeyHex": "12257fb8911b4a6eea3ce1084b9cbd7d6a013508dab5bea958363f50a42d6116",
+      "scalarHex": "ff9aeef83a1ec2804f5fd5e7d01235ae7edd9af74bef7ed44a96d72255ef83ff",
+      "statementPointHex": "025019a88e25e4be842ff5071289d3bbbd16a29c39ce54bcbed09f9864554d0040",
+      "resultHex": "865d9ee2c96046112ac80886066009df72c8b41c06acb21a3d2f97e7a958243522dff2300a994043e9a0cf8aeac17034802bc5fff42f1604f4f3373b84048b7a1c9011686cb1e0743dcabaeb3b7dcd6b00bd5646e2fa76e8a196f77574cfcc9a349b4729ce9db307721b2a576b7064c00fc087098a4ba8618e60657e0771bac3eee70d74121d65025f8456c09a9905d283b8d23634fe0d48d7ab917b8e748e67cd11827b46aa0a32fac3e76f4bf3095db14a06a8f776cde2d1cbe08cfb3293598f02df06ab783157901a0927946e653e691d8cc0d5e8b11ac1a064f8ea0fdb2a953499240e8b2d6cb5580d0ce1c12af3dac58d0a31f5ad734e872ca89dc8953700a66cda47b58b7d92bd59dc90cbbbf15c6b2aa7d129c31e29baab6167da9d4f88e49e0597c3219b6814a2a98c6bdf5ac34f90c2f10849c49b40b62a50555bab6baaf8168d8c7d23ab7459556a95b9d653c5e8812a83fb75045f02c40781395a"
+    }
+  ]
+}

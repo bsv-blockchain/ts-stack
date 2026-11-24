@@ -31,6 +31,11 @@ function githubChangedFiles(root, env) {
   if (env.GITHUB_EVENT_NAME === 'pull_request') {
     return changedBetween(root, event.pull_request.base.sha, event.pull_request.head.sha, true)
   }
+  // A tag push is a release run, not a change to review. Its event names the tag
+  // object for an annotated tag, which a branch checkout does not contain.
+  if (env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF?.startsWith('refs/tags/')) {
+    return []
+  }
   if (env.GITHUB_EVENT_NAME === 'push') {
     if (/^0+$/.test(event.before)) {
       return git(root, 'ls-tree', '--name-only', '-r', '-z', revision(root, event.after), '--')
