@@ -1133,7 +1133,9 @@ export class ColorPermissionModule implements PermissionsModule {
   protected readonly colorStore?: ColorStore
   /** The BRC-162 reader: `readTokenOutput` without profiles, else the profile-aware reader. */
   protected readonly read: TokenReader
-  /** BRC-205 attributes for BRC-207's Discovery section: this module implements revision 4. */
+  /** BRC-263 flag 0: this module implements BRC-207 revision 4. */
+  readonly flags: readonly number[]
+  /** @deprecated BRC-205 form of flag 0, for `withBrc205Capabilities` callers. Use `flags`. */
   readonly capabilities: Readonly<Record<string, string>>
   /** Outputs a send in progress has selected, so a concurrent send does not select them too. */
   protected readonly selected = new Set<string>()
@@ -1169,6 +1171,7 @@ export class ColorPermissionModule implements PermissionsModule {
     this.provider = options.provider
     this.requestTokenAccess = options.requestTokenAccess
     this.store = options.store ?? undefined
+    this.flags = Object.freeze([0])
     this.capabilities = Object.freeze({ 'brc207-color': '4' })
     if (this.profiles.size > 0) {
       this.colorStore = new ColorStore(options.store!)

@@ -21,7 +21,7 @@ describe('Wallet getVersion Tests', () => {
   test('should return the correct wallet version', async () => {
     for (const { wallet } of ctxs) {
       const result = await wallet.getVersion({})
-      expect(result).toEqual({ version: 'wallet-brc100-1.0.0' })
+      expect(result).toEqual({ version: 'bsvwt-1.0.0' })
     }
   })
 })

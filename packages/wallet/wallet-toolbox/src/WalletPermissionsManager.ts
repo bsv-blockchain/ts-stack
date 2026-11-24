@@ -227,6 +227,9 @@ const BRC205_MAX_BYTES = 2048
 const compareCodeUnits = (a: string, b: string): number => Number(a > b) - Number(a < b)
 
 /**
+ * @deprecated `getVersion` no longer advertises BRC-205 attributes; it advertises BRC-263 flags
+ * (see `withBrc263Flags` and `PermissionsModule.flags`). Kept for compatibility only.
+ *
  * Appends the BRC-205 capability attributes of `modules` to a wallet version string:
  * `base; key=value; key2=value2;`, one space after every nonterminal semicolon, no spaces around
  * `=`, a trailing semicolon when attributes are present. Modules are visited by scheme id and
@@ -274,11 +277,52 @@ export function withBrc205Capabilities(version: string, modules: Readonly<Record
   return `${base}; ${attributes.join('; ')};`
 }
 
+// BRC-263: `vendor-major.minor.patch`, then an optional `~` and base64url capability flags.
+const BRC263_VERSION = /^[a-z0-9]{1,12}-((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:~([A-Za-z0-9_-]+))?$/
+const BRC263_MAX_SEMVER_BYTES = 8
+const BRC263_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+const BRC263_REGISTERED_FLAGS = 48
+const BRC100_MAX_VERSION_BYTES = 30
+
+/**
+ * Sets the BRC-263 capability flags of `modules` in a wallet version string:
+ * `vendor-major.minor.patch~flags`. Each flag index (0-47) is one bit; six bits make one
+ * base64url character, least significant bit first, and trailing `A` characters are left out.
+ * Flags the underlying string already carries are kept. A string that is not in the BRC-263
+ * format (a legacy string), an index outside 0-47, or a result longer than BRC-100's 30 bytes
+ * leaves the string unchanged. With no flag to add the string is returned unchanged.
+ */
+export function withBrc263Flags(version: string, modules: Readonly<Record<string, PermissionsModule>>): string {
+  const match = BRC263_VERSION.exec(version)
+  if (match === null || match[1].length > BRC263_MAX_SEMVER_BYTES) return version
+  const existing = match[2] ?? ''
+  const digits = Array.from(existing, character => BRC263_ALPHABET.indexOf(character))
+  for (const module of Object.values(modules)) {
+    for (const index of module?.flags ?? []) {
+      if (!Number.isInteger(index) || index < 0 || index >= BRC263_REGISTERED_FLAGS) continue
+      const position = Math.floor(index / 6)
+      while (digits.length <= position) digits.push(0)
+      digits[position] |= 1 << (index % 6)
+    }
+  }
+  while (digits.length > 0 && digits[digits.length - 1] === 0) digits.pop()
+  const flags = digits.map(digit => BRC263_ALPHABET[digit]).join('')
+  if (flags === existing.replace(/A+$/, '')) return version
+  const base = existing === '' ? version : version.slice(0, version.length - existing.length - 1)
+  const result = flags === '' ? base : `${base}~${flags}`
+  return result.length > BRC100_MAX_VERSION_BYTES ? version : result
+}
+
 export interface PermissionsModule {
   /**
-   * BRC-205 capability attributes the module advertises through `getVersion`, as attribute key to
-   * value. A key is a lowercase `brc<number>-<suffix>` (`[a-z][a-z0-9-]*`, 1-64 bytes); a value is
-   * 1-256 bytes of unreserved or percent-encoded characters. Invalid entries are left out.
+   * BRC-263 capability flags the module advertises through `getVersion`, as flag indexes from the
+   * BRC-263 registry (0-47). An index outside that range is left out.
+   */
+  flags?: readonly number[]
+
+  /**
+   * @deprecated `getVersion` no longer advertises BRC-205 attributes. Use `flags`. This field is
+   * kept for compatibility and is read only by the deprecated `withBrc205Capabilities`.
    */
   capabilities?: Readonly<Record<string, string>>
 
@@ -997,7 +1041,9 @@ export class WalletPermissionsManager implements WalletInterface {
         ...config.permissionModules,
         // BRC-177 is a built-in reserved BRC-111 module in every Toolbox wallet.
         nosend: {
-          // BRC-177 L365: this revision, including batches and `never`.
+          // BRC-263 flag 3: BRC-177 revision 2, including batches and `never`.
+          flags: [3],
+          // Deprecated BRC-205 form of the same capability, for `withBrc205Capabilities` callers.
           capabilities: { 'brc177-nosend': '2' },
           onRequest: async req => {
             // Signing an action this module already authorized at createAction needs nothing further.
@@ -5952,8 +5998,8 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /**
-   * The underlying wallet's version string with the BRC-205 capability attributes of every
-   * configured permission module appended (see `withBrc205Capabilities`).
+   * The underlying wallet's version string with the BRC-263 capability flags of every configured
+   * permission module set (see `withBrc263Flags`). A legacy underlying string is returned unchanged.
    */
   public async getVersion(
     ...args: Parameters<WalletInterface['getVersion']>
@@ -5961,7 +6007,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const result = await awaitFromSync(() => this.underlying.getVersion(...args))
     return {
       ...result,
-      version: withBrc205Capabilities(result.version, this.config.permissionModules ?? {})
+      version: withBrc263Flags(result.version, this.config.permissionModules ?? {})
     }
   }
 

@@ -237,6 +237,18 @@ describe('wallet result trust boundary', () => {
     expect(validateWalletResult('createAction', result)).toEqual(result)
   })
 
+  it('accepts a BRC-263 version string with flags up to the BRC-100 bound of 30 bytes', () => {
+    for (const version of ['x-0.0.0', 'bsvwt-1.0.0~J', 'abcdefghijkl-10.20.30~________']) {
+      expect(validateWalletResult('getVersion', { version })).toEqual({ version })
+    }
+  })
+
+  it('rejects a version string outside the BRC-100 bound of 7 to 30 bytes', () => {
+    for (const version of ['x-0.0', 'abcdefghijkl-10.20.30~_________', 'wallet-brc100-1.0.0; brc177-nosend=2;']) {
+      expect(() => validateWalletResult('getVersion', { version })).toThrow()
+    }
+  })
+
   it('rejects prototype-sensitive keys anywhere in an untrusted result', () => {
     const result = JSON.parse('{"version":"wallet-1.0.0","nested":{"__proto__":{"admin":true}}}')
     expect(() => validateWalletResult('getVersion', result)).toThrow('safe record key')

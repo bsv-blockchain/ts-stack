@@ -1462,7 +1462,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
     return promiseFromSync(() => {
       validateOriginator(originator)
-      return { version: 'wallet-brc100-1.0.0' }
+      return { version: 'bsvwt-1.0.0' }
     })
   }
 

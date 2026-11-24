@@ -61,7 +61,7 @@ Skip breakdown: 180 `parity_class: intended` + 7 `skip: true`. Zero `best-effort
 | getheight | 5 | 5 | 0 | Stub (vector.5 error vacuous) |
 | getheaderforheight | 8 | 8 | 0 | Stub (vector.6 error vacuous) |
 | getnetwork | 5 | 5 | 0 | Stub (vector.2 testnet vacuous) |
-| getversion | 5 | 5 | 0 | Shape-only stub (TODO MISMATCH) |
+| getversion | 7 | 7 | 0 | Shape-only stub (TODO MISMATCH) |
 | listoutputs | 144 | 144 | 0 | Real harness, empty-wallet results |
 | listactions | 16 | 15 | 1 | Real harness; listactions.14 demoted |
 | listcertificates | 8 | 7 | 1 | Real harness; listcertificates.5 demoted |
@@ -89,7 +89,7 @@ All dispatchers were inspected. No required vector reaches a path that returns w
 | `wallet.ts` | `getheight.5` | `error` in expected -> `return` | Not-authenticated error requires live auth state. Stub limitation. |
 | `wallet.ts` | `getheaderforheight.6` | `error` in expected -> `return` | Header-not-found requires live chain tracker. Stub limitation. |
 | `wallet.ts` | `getnetwork.2` | `expected.network === 'testnet'` -> containment check (mainnet in array) | Stub always returns mainnet; testnet requires live wallet config. |
-| `wallet.ts` | `getversion.{1-5}` | Shape-only: `version.length >= 7` | Each vector expects a different version string; static stub cannot satisfy all simultaneously. TODO MISMATCH. |
+| `wallet.ts` | `getversion.{1-7}` | Shape-only: `version.length >= 7` | Each vector expects a different version string; static stub cannot satisfy all simultaneously. TODO MISMATCH. |
 | `auth.ts` | (fallback) | `expect(input/expected).toBeDefined()` | Fallback is never reached by any required vector — all 16 auth vectors route to named handlers. |
 | `storage.ts` | (fallback) | `expect(input/expected).toBeDefined()` | Fallback is never reached — all 15 storage vectors route to named handlers. |
 
@@ -133,7 +133,7 @@ These categories are explicitly `parity_class: intended` and will remain skipped
 | `dispatchers/broadcast.ts:261` | `broadcast.merklepath.6` | Genesis BUMP is 81 chars (odd-length); SDK throws `Empty level at height: 0`. Vector expects HTTP 200. Workaround: odd-length check skipped for `blockHeight=0`. | Correct vector BUMP hex in `broadcast/merkle-path-validation.json` vector 6 to 82 chars |
 | `dispatchers/overlay.ts:27` | `overlay.submit.8` | SDK body layout is `varint(len) + BEEF + offChainValues` but vector note says reversed order. No assertion fails (only `outputsToAdmit` shape checked). | Audit overlay-http spec vs SDK implementation; do not change expected values silently |
 | `dispatchers/wallet.ts:15` | `wallet.brc100.encrypt.{1-36}` | Vectors contain fixed ciphertext; `ProtoWallet.encrypt()` uses random IV. Round-trip assertion used. | Vectors could add `expected.plaintext_after_decrypt` pattern for stronger check |
-| `dispatchers/wallet.ts:25` | `wallet.brc100.getversion.{1-5}` | Each vector expects a different version string; static stub cannot satisfy all. Shape assertion used. | Version vectors require a live WalletInterface implementation |
+| `dispatchers/wallet.ts:25` | `wallet.brc100.getversion.{1-7}` | Each vector expects a different version string; static stub cannot satisfy all. Shape assertion used. | Version vectors require a live WalletInterface implementation |
 
 ---
 

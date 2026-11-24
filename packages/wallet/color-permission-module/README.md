@@ -59,8 +59,9 @@ on every operation and keeps no grants; the host decides whether an existing
 grant covers a request and when to prompt the user.
 
 Call `color.dispose()` when the host tears down the wallet. Registered on a
-`WalletPermissionsManager`, the module advertises `brc207-color=4` (BRC-205) in
-the manager's `getVersion` string.
+`WalletPermissionsManager`, the module sets BRC-263 flag 0 (BRC-207 revision 4)
+in the manager's `getVersion` string, for example `bsvwt-1.0.0~J` with the
+built-in BRC-177 flag 3. The manager adds no flag to a legacy version string.
 
 ## Application calls
 
