@@ -53,6 +53,7 @@ const PACKAGE_PATHS = [
   'packages/wallet/btms-permission-module',
   'packages/wallet/color-permission-module',
   'packages/wallet/ecpm-permission-module',
+  'packages/wallet/sigma-permission-module',
   'packages/wallet/ts-wallet-relay',
   'packages/wallet/wallet-toolbox',
   'packages/wallet/wallet-toolbox-examples'
