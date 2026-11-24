@@ -19,13 +19,20 @@ export async function getMedianTimePast(
   services: Pick<WalletServices, 'getHeight' | 'getHeaderForHeight' | 'hashToHeader'>
 ): Promise<number> {
   const tip = deserializeBaseBlockHeader(await services.getHeaderForHeight(await services.getHeight()))
-  const times = [tip.time]
-  let previousHash = tip.previousHash
-  while (times.length < 11 && previousHash !== GENESIS_PREVIOUS_HASH) {
-    const header = await services.hashToHeader(previousHash)
-    times.push(header.time)
-    previousHash = header.previousHash
-  }
+  const times = await collectAncestorTimes(services, tip.previousHash, [tip.time])
   times.sort((a, b) => a - b)
   return times[Math.floor(times.length / 2)]
+}
+
+/**
+ * Each header's hash comes from its successor, so the walk is inherently sequential.
+ */
+async function collectAncestorTimes(
+  services: Pick<WalletServices, 'hashToHeader'>,
+  previousHash: string,
+  times: number[]
+): Promise<number[]> {
+  if (times.length >= 11 || previousHash === GENESIS_PREVIOUS_HASH) return times
+  const header = await services.hashToHeader(previousHash)
+  return await collectAncestorTimes(services, header.previousHash, [...times, header.time])
 }
