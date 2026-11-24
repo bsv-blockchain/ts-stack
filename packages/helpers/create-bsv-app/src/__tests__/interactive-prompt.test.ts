@@ -84,13 +84,27 @@ describe('interactiveConfigPrompt', () => {
       network: 'test' as const,
       stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
       bsvDir: 'src/bsv',
-      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests']
+      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests', 'tx-core']
     }
     const config = await interactiveConfigPrompt({ existing, flags: {} })
 
     expect(multiselect).not.toHaveBeenCalled()
     expect(log.info).toHaveBeenCalledWith('Project already includes all available capabilities')
     expect(config.capabilities).toEqual(existing.capabilities)
+  })
+
+  test('logs the pulled notice after the capabilities multiselect', async () => {
+    const existing = {
+      version: 1 as const,
+      name: 'demo',
+      network: 'test' as const,
+      stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
+      bsvDir: 'src/bsv',
+      capabilities: []
+    }
+    multiselect.mockResolvedValueOnce(['tx-core'])
+    await interactiveConfigPrompt({ existing, flags: {} })
+    expect(log.info).toHaveBeenCalledWith('Also adding wallet-connect (required by tx-core).')
   })
 
   test('reports cancellation and exits without resolving a partial configuration', async () => {

@@ -139,9 +139,9 @@ export interface components {
             extraInfo?: string;
             /**
              * @description Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing
-             *     transaction IDs.
+             *     transaction IDs. ARC sends `null` when no transaction competes.
              */
-            competingTxs?: string[];
+            competingTxs?: string[] | null;
         };
         /**
          * @description Network status of the transaction as reported by ARC.

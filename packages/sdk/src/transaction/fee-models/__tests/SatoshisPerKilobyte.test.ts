@@ -148,6 +148,22 @@ describe('SatoshisPerKilobyte', () => {
         'All inputs must have an unlocking script or an unlocking script template for sat/kb fee computation.'
       )
     })
+
+    it.each([-1, 1.5, Number.NaN])(
+      'names the script whose length (%s) is invalid',
+      async length => {
+        const model = new SatoshisPerKilobyte(1000)
+        const badScript: any = { toBinary: () => ({ length }) }
+        await expect(
+          model.computeFee(makeTx([], [{ lockingScript: badScript, satoshis: 1 }]))
+        ).rejects.toThrow(
+          new RangeError('Locking script length must be a non-negative safe integer.')
+        )
+        await expect(model.computeFee(makeTx([makeTemplateInput(length)], []))).rejects.toThrow(
+          new RangeError('Unlocking script length must be a non-negative safe integer.')
+        )
+      }
+    )
   })
 
   // -------------------------------------------------------------------------

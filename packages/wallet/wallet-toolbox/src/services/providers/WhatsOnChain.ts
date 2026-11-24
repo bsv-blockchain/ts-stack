@@ -522,19 +522,40 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const data = response.data
     requirePlainDataRecord(data, 'WhatsOnChain UTXO status')
     if (data.script !== scriptHash) throw new WERR_INTERNAL('WhatsOnChain UTXO status script hash mismatch')
-    const details = requireDenseWocArray(data.result, 'WhatsOnChain UTXO status result').map((candidate, index) => {
+    const entries = requireDenseWocArray(data.result, 'WhatsOnChain UTXO status result').map((candidate, index) => {
       requirePlainDataRecord(candidate, `WhatsOnChain UTXO status result[${index}]`)
+      if (candidate.isSpentInMempoolTx !== undefined && typeof candidate.isSpentInMempoolTx !== 'boolean') {
+        throw new WERR_INVALID_OPERATION(
+          `WhatsOnChain UTXO status result[${index}].isSpentInMempoolTx must be a boolean`
+        )
+      }
       return {
-        txid: requireHex32(candidate.tx_hash, `WhatsOnChain UTXO status result[${index}].tx_hash`),
-        satoshis: requireInteger(
-          candidate.value,
-          `WhatsOnChain UTXO status result[${index}].value`,
-          Number.MAX_SAFE_INTEGER
-        ),
-        height: requireInteger(candidate.height, `WhatsOnChain UTXO status result[${index}].height`, MAX_BLOCK_HEIGHT),
-        index: requireInteger(candidate.tx_pos, `WhatsOnChain UTXO status result[${index}].tx_pos`, UINT32_MAX)
+        candidate,
+        detail: {
+          txid: requireHex32(candidate.tx_hash, `WhatsOnChain UTXO status result[${index}].tx_hash`),
+          satoshis: requireInteger(
+            candidate.value,
+            `WhatsOnChain UTXO status result[${index}].value`,
+            Number.MAX_SAFE_INTEGER
+          ),
+          // A mempool output has no block height yet; any height that is present must still be valid.
+          height:
+            candidate.status === 'unconfirmed' && candidate.height === undefined
+              ? undefined
+              : requireInteger(candidate.height, `WhatsOnChain UTXO status result[${index}].height`, MAX_BLOCK_HEIGHT),
+          index: requireInteger(candidate.tx_pos, `WhatsOnChain UTXO status result[${index}].tx_pos`, UINT32_MAX)
+        }
       }
     })
+    // Contradictory duplicates must still fail the answer, so check them before filtering.
+    const outpoints = new Set<string>()
+    for (const { detail } of entries) {
+      const key = `${detail.txid}.${detail.index}`
+      if (outpoints.has(key)) throw new WERR_INVALID_OPERATION('WhatsOnChain UTXO status lists an outpoint twice')
+      outpoints.add(key)
+    }
+    // An output already spent by a mempool transaction is no longer unspent, confirmed or not.
+    const details = entries.filter(e => e.candidate.isSpentInMempoolTx !== true).map(e => e.detail)
     const normalizedOutpoint = normalizeWalletOutpoint(outpoint)
     r.status = 'success'
     r.error = undefined
@@ -887,7 +908,8 @@ interface WhatsOnChainTxsStatusData {
 /**
  * GET https://api.whatsonchain.com/v1/bsv/<network>/script/<scriptHash>/unspent/all
  *
- * Response
+ * Response (illustrative: the unconfirmed entry has the shape observed from this endpoint, with no
+ * `height`; its values are taken from WhatsOnChain's `unconfirmed/unspent` documentation example)
 {
   "error":"",
   "status":200,
@@ -903,6 +925,14 @@ interface WhatsOnChainTxsStatusData {
         "value":1005,
         "isSpentInMempoolTx":false,
         "status":"confirmed"
+      },
+      {
+        "tx_pos":0,
+        "tx_hash":"bdcfb99b692a3418f79471ca970a201149d19ba97d0ca5c0b89949bdb627a1c9",
+        "value":85,
+        "isSpentInMempoolTx":false,
+        "hex":"76a91411f074cf02b2c8070c424384493cb5c8548ae20788ac",
+        "status":"unconfirmed"
       }
     ]
   }
@@ -913,11 +943,12 @@ interface WhatsOnChainUtxoStatus {
   script: string
   result: Array<{
     value: number
-    height: number
+    height?: number // absent while status is 'unconfirmed'
     tx_pos: number
     tx_hash: string
     isSpentInMempoolTx: boolean
-    status: string // 'confirmed'
+    hex?: string
+    status: string // 'confirmed' | 'unconfirmed'
   }>
 }
 
