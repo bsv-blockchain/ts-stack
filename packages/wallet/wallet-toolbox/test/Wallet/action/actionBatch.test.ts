@@ -683,6 +683,39 @@ describe('in-memory action batch workspace', () => {
     expect(spent.spendable).toBe(false)
   })
 
+  test('a stored but already spent explicit input carried in inputBEEF fails at plan time', async () => {
+    ctx.wallet.randomVals = randomVals
+    const stored = await ctx.wallet.createAction({
+      description: 'Store an explicit input source',
+      outputs: [
+        { satoshis: 2, lockingScript: '7551', outputDescription: 'stored explicit input', basket: 'held basket' }
+      ],
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+    })
+    const held = `${stored.txid}.0`
+    await ctx.wallet.createAction({
+      inputs: [{ outpoint: held, unlockingScript: '00', inputDescription: 'spend stored explicit input' }],
+      inputBEEF: stored.tx,
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'first spend output' }],
+      description: 'Spend the stored output outside a batch',
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+    })
+    const extend = jest.spyOn(ctx.storage, 'extendActionBatch')
+    const opened = await ctx.wallet.createAction(actionArgs())
+    await expect(
+      ctx.wallet.createAction({
+        inputs: [{ outpoint: held, unlockingScript: '00', inputDescription: 'spend the spent input again' }],
+        inputBEEF: stored.tx,
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'second spend output' }],
+        description: 'Spend a spent stored output inside the batch',
+        options: { noSend: true, noSendChange: opened.noSendChange, randomizeOutputs: false }
+      })
+    ).rejects.toThrow('one or more action batch outputs are no longer spendable')
+    expect(extend).toHaveBeenCalledWith(
+      expect.objectContaining({ explicitOutpoints: [expect.objectContaining({ txid: stored.txid, vout: 0 })] })
+    )
+  })
+
   test('an external input carried in inputBEEF reserves nothing', async () => {
     const other = await _tu.createLegacyWalletSQLiteCopy(`${expect.getState().currentTestName ?? 'actionBatch'}Other`)
     _tu.mockPostServicesAsSuccess([other])

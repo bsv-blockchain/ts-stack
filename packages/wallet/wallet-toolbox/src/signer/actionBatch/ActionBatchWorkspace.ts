@@ -368,14 +368,19 @@ class ActionBatchWorkspace {
     return unclaimed.filter(outpoint => !inBeef(outpoint) || stored.has(`${outpoint.txid}.${outpoint.vout}`))
   }
 
+  /**
+   * Outpoints among `outpoints` that this wallet stores. `findOutputs` is the
+   * user-scoped lookup that every `StorageServer` version serves; the batch
+   * `findOutputsByOutpoints` is not exposed through the manager or remote
+   * storage. Lookups run one at a time so a remote storage sees no burst.
+   */
   private async storedOutpoints(outpoints: Array<{ txid: string; vout: number }>): Promise<Set<string>> {
-    const found = await Promise.all(
-      outpoints.map(async ({ txid, vout }) => {
-        const rows = await this.wallet.storage.findOutputs({ partial: { txid, vout }, noScript: true })
-        return rows.length > 0 ? `${txid}.${vout}` : undefined
-      })
-    )
-    return new Set(found.filter((key): key is string => key != null))
+    const stored = new Set<string>()
+    for (const { txid, vout } of outpoints) {
+      const rows = await this.wallet.storage.findOutputs({ partial: { txid, vout }, noScript: true })
+      if (rows.length > 0) stored.add(`${txid}.${vout}`)
+    }
+    return stored
   }
 
   private extend(
