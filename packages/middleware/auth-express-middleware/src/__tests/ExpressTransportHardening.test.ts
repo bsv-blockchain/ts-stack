@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { PrivateKey, Utils } from '@bsv/sdk'
 import { createAuthMiddleware, ExpressTransport, InMemoryCertificateApprovalStore } from '../index'
 import { MockWallet } from './MockWallet'
+import { observeAuthenticatedResponseCompletion } from './authenticatedResponseCompletion.fixture.js'
 
 const IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const REQUEST_ID = Utils.toBase64(Array(32).fill(0))
@@ -787,7 +788,30 @@ describe('ExpressTransport hardening', () => {
       'ERR_INTERNAL_SERVER_ERROR',
       'Authentication processing failed.'
     ],
-    ['session invalid', 401, 'ERR_AUTH_FAILED', 'Authentication failed.']
+    ['session invalid', 401, 'ERR_AUTH_FAILED', 'Authentication failed.'],
+    [
+      new Error('Unable to verify nonce for general message from: peer'),
+      401,
+      'ERR_AUTH_FAILED',
+      'Authentication failed.'
+    ],
+    [new Error('HMAC is not valid'), 401, 'ERR_AUTH_FAILED', 'Authentication failed.'],
+    [
+      Object.assign(new Error('rejected'), { code: 'ERR_INVALID_HMAC' }),
+      401,
+      'ERR_AUTH_FAILED',
+      'Authentication failed.'
+    ],
+    [
+      new Proxy(new Error('descriptor access denied'), {
+        getOwnPropertyDescriptor() {
+          throw new Error('descriptor access denied')
+        }
+      }),
+      500,
+      'ERR_INTERNAL_SERVER_ERROR',
+      'Authentication processing failed.'
+    ]
   ])(
     'maps peer processing failures to stable public errors',
     async (error, status, code, description) => {
@@ -1003,6 +1027,7 @@ describe('ExpressTransport hardening', () => {
   it('retains invalid-header rejection independently of header capacity', async () => {
     const peer = peerMock()
     const transport = new ExpressTransport()
+    const completed = observeAuthenticatedResponseCompletion(transport)
     transport.peer = peer
     const res = Object.assign(responseMock(), {
       getHeaders: jest.fn(() => ({ 'x-bsv-invalid': 'injected\r\nheader' }))
@@ -1017,6 +1042,7 @@ describe('ExpressTransport hardening', () => {
     )
     res.send('capacity')
     await flushPromises()
+    await completed()
     expect(peer.toPeer).not.toHaveBeenCalled()
     expect(originalJson).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ERR_RESPONSE_SIGNING_FAILED' })
@@ -1470,6 +1496,7 @@ describe('ExpressTransport hardening', () => {
 
   it('reports response-signing failures without exposing internal details', async () => {
     const transport = new ExpressTransport()
+    const completed = observeAuthenticatedResponseCompletion(transport)
     const peer = peerMock({
       toPeer: jest.fn().mockRejectedValue(new Error('wallet signing secret'))
     })
@@ -1489,6 +1516,7 @@ describe('ExpressTransport hardening', () => {
     await flushPromises()
     res.send('response')
     await flushPromises()
+    await completed()
 
     expect(originalStatus).toHaveBeenCalledWith(500)
     expect(originalJson).toHaveBeenCalledWith({

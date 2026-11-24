@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Private working state · Reference workbench</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">BSV · Private application state</p>
+        <h1>Working together.<br />Following live state.</h1>
+        <p class="intro">
+          Author-signed working documents reach their recipients live. Their temporary intent
+          expires independently of Bitcoin admission.
+        </p>
+        <p class="fixture">Synthetic chain · Public test identities · No real funds</p>
+      </header>
+      <section class="connection">
+        <h2>Your local view</h2>
+        <div class="inputs">
+          <label
+            >Participant<select id="account">
+              <option value="alice">Alice</option>
+              <option value="bob">Bob</option>
+            </select></label
+          ><label>Workspace<input id="workspace" value="private-workbench" maxlength="40" /></label>
+        </div>
+        <div class="buttons">
+          <button id="start">Start a new view</button
+          ><button id="resume" class="secondary">Resume saved view</button
+          ><button id="offline" disabled>Go offline</button
+          ><button id="reconnect" disabled>Reconnect</button>
+        </div>
+        <output id="status"
+          >Open Alice and Bob in separate tabs with the same workspace name. Their local views are
+          independent.</output
+        >
+      </section>
+      <section class="producer">
+        <h2>Share a working document</h2>
+        <p>
+          These fixture documents are shared with both participants. Each author intent lasts 15
+          seconds. Creating a document spends nothing.
+        </p>
+        <label>Document<input id="text" value="A shared working document" maxlength="128" /></label>
+        <div class="buttons">
+          <button id="publish" disabled>Publish working document</button
+          ><button id="retry" class="secondary" disabled>Retry saved request</button>
+        </div>
+      </section>
+      <section>
+        <div class="section-heading">
+          <h2>Accepted private source state</h2>
+          <span id="revision">No journal open</span>
+        </div>
+        <div id="records" class="records"></div>
+      </section>
+      <section class="explanation">
+        <h2>Try the recovery boundary</h2>
+        <p>
+          Take Bob offline, publish from Alice, and reconnect Bob or reload his tab and resume the
+          same workspace. He receives missed private state through his original subscription.
+        </p>
+        <p>
+          Leave a tab hidden or offline until the intent expires. On return, it must not display the
+          old intent as active. Provider state and local intent lifetime are shown separately. A
+          provider’s claim of finalization does not prove mining or unspentness.
+        </p>
+        <p>
+          An unanswered submission keeps its exact signed request in local custody. Retry it
+          explicitly; a timeout never creates a replacement document.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="/src/proposalMain.ts"></script>
+  </body>
+</html>

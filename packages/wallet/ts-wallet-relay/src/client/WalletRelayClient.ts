@@ -16,8 +16,10 @@ import { WALLET_METHOD_NAMES } from '../types.js'
 import {
   fetchBoundedJson,
   parseRpcMessage,
+  plainTransportRejection,
   requireBoundedString,
   requireDesktopToken,
+  requireOptionalBoolean,
   requirePairingUri,
   requirePlainRecord,
   requireQrDataUrl,
@@ -27,12 +29,22 @@ import {
 
 export interface WalletRelayClientOptions {
   /**
-   * Base URL for the relay API. Absolute URLs require HTTPS except on loopback;
-   * same-origin root-relative paths are also accepted. The URL can include the
+   * Base URL for the relay API. Absolute URLs require HTTPS except on loopback
+   * (or private-network IP addresses with `allowLocalNetworkHttp`); same-origin
+   * root-relative paths are also accepted. The URL can include the
    * `/api` prefix — `/api` is appended automatically if missing.
    * Default: '/api'
    */
   apiUrl?: string
+  /**
+   * Accept an `http://` apiUrl on a private-network IP address (10.0.0.0/8,
+   * 172.16.0.0/12, 192.168.0.0/16, fc00::/7) and a `ws://` relay URL on one in
+   * session responses, for same-LAN development. Set it whenever the backend
+   * runs with `allowLocalNetworkHttp`. Over HTTP the desktop token and wallet
+   * RPC payloads travel in cleartext; never enable it in production.
+   * Default: false.
+   */
+  allowLocalNetworkHttp?: boolean
   /** Session status polling interval in ms while waiting for mobile to connect. Default: 3000 */
   pollInterval?: number
   /** Session status polling interval in ms once the mobile is connected. Default: 10000 */
@@ -61,7 +73,11 @@ export interface WalletRelayClientOptions {
   onLogChange?: (log: RequestLogEntry[]) => void
   /** Maximum in-memory request-log entries. Set 0 to disable retention. Default: 100. */
   maxLogEntries?: number
-  /** Called when an error occurs during session creation. */
+  /**
+   * Called when session creation fails, or when a resumed or polled session
+   * response fails validation (polling stops). Transient poll network errors
+   * are retried silently.
+   */
   onError?: (error: string) => void
 }
 
@@ -92,23 +108,13 @@ interface PersistedSession {
   savedAt: number
 }
 
-function isLoopbackRelayHost(hostname: string): boolean {
-  const normalized = hostname.toLowerCase()
-  return (
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '[::1]' ||
-    normalized.endsWith('.localhost')
-  )
-}
-
 function trimTrailingSlashes(value: string): string {
   let end = value.length
   while (end > 0 && value.codePointAt(end - 1) === 47) end -= 1
   return value.slice(0, end)
 }
 
-function normalizeRelayApiUrl(apiUrl: string): string {
+function normalizeRelayApiUrl(apiUrl: string, allowLocalNetworkHttp: boolean): string {
   let normalized: string
   if (apiUrl.startsWith('/') && !apiUrl.startsWith('//')) {
     if (apiUrl.includes('\\') || apiUrl.includes('?') || apiUrl.includes('#')) {
@@ -130,12 +136,8 @@ function normalizeRelayApiUrl(apiUrl: string): string {
     ) {
       throw new TypeError('Relay API URL cannot include credentials, query, or fragment.')
     }
-    if (
-      parsed.protocol !== 'https:' &&
-      !(parsed.protocol === 'http:' && isLoopbackRelayHost(parsed.hostname))
-    ) {
-      throw new TypeError('Relay API URL requires HTTPS except on localhost.')
-    }
+    const rejection = plainTransportRejection(parsed, 'https:', allowLocalNetworkHttp, true)
+    if (rejection !== null) throw new TypeError(`Relay API URL requires ${rejection}.`)
     parsed.pathname = trimTrailingSlashes(parsed.pathname)
     normalized = trimTrailingSlashes(parsed.toString())
   }
@@ -169,6 +171,8 @@ function boundedInterval(value: number | undefined, fallback: number, name: stri
  */
 export class WalletRelayClient {
   private readonly _apiUrl: string
+  /** Transport policy for session responses; errors name `allowLocalNetworkHttp`. */
+  private readonly _transport: { allowLocalNetworkHttp: boolean; developerHint: boolean }
   private readonly _pollInterval: number
   private readonly _connectedPollInterval: number
   private readonly _persistSession: boolean
@@ -191,7 +195,12 @@ export class WalletRelayClient {
   private _walletProxy: Pick<WalletInterface, WalletMethodName> | null = null
 
   constructor(options?: WalletRelayClientOptions) {
-    this._apiUrl = normalizeRelayApiUrl(options?.apiUrl ?? '/api')
+    const allowLocalNetworkHttp = requireOptionalBoolean(
+      options?.allowLocalNetworkHttp,
+      'allowLocalNetworkHttp'
+    )
+    this._transport = { allowLocalNetworkHttp, developerHint: true }
+    this._apiUrl = normalizeRelayApiUrl(options?.apiUrl ?? '/api', allowLocalNetworkHttp)
     this._pollInterval = boundedInterval(options?.pollInterval, 3000, 'pollInterval')
     this._connectedPollInterval = boundedInterval(
       options?.connectedPollInterval,
@@ -282,16 +291,28 @@ export class WalletRelayClient {
         { cache: 'no-store' },
         'wallet relay session response'
       )
+      // A newer lifecycle owns the session and its storage; touch neither.
+      if (epoch !== this._lifecycleEpoch) return null
       if (!response.ok) {
         this._clearStorage()
         return null
       }
-      const data = validateSessionInfo(value, { expectedId: stored.sessionId })
+      let data: SessionInfo
+      try {
+        data = validateSessionInfo(value, {
+          ...this._transport,
+          expectedId: stored.sessionId
+        })
+      } catch (err) {
+        // A response this client rejects will not change on retry.
+        this._clearStorage()
+        this._reportError(err)
+        return null
+      }
       if (data.status === 'expired') {
         this._clearStorage()
         return null
       }
-      if (epoch !== this._lifecycleEpoch) return null
 
       this._desktopToken = stored.desktopToken
       // Merge stored QR data (not returned by status polls) back into session
@@ -329,7 +350,10 @@ export class WalletRelayClient {
         'wallet relay session response'
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = validateSessionInfo(value, { requireCreationSecrets: true })
+      const data = validateSessionInfo(value, {
+        ...this._transport,
+        requireCreationSecrets: true
+      })
       if (epoch !== this._lifecycleEpoch) {
         void this._retireCreatedSession(data)
         throw new WalletRelayError('Session creation was cancelled', 'REQUEST_CANCELLED')
@@ -494,7 +518,18 @@ export class WalletRelayClient {
         if (epoch !== this._pollEpoch) return
         if (!response.ok) return
         const prevStatus = this._session?.status
-        const updated = validateSessionInfo(value, { expectedId: sessionId })
+        let updated: SessionInfo
+        try {
+          updated = validateSessionInfo(value, {
+            ...this._transport,
+            expectedId: sessionId
+          })
+        } catch (err) {
+          // A response this client rejects will not change on retry.
+          this._stopPolling()
+          this._reportError(err)
+          return
+        }
         this._setSession({ ...this._session!, ...updated })
         if (updated.status === 'expired') {
           if (++this._expiredCount >= 2) {
@@ -534,6 +569,11 @@ export class WalletRelayClient {
     } catch {
       // Best effort: the server's short pending-session TTL remains the fallback.
     }
+  }
+
+  private _reportError(err: unknown): void {
+    this._error = err instanceof Error ? err.message : 'Invalid session response'
+    this._onError?.(this._error)
   }
 
   private _stopPolling(): void {

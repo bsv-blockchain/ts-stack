@@ -582,6 +582,50 @@ function dispatchBEEF(input: Record<string, unknown>, expected: Record<string, u
   }
 }
 
+// BRC-95 rejection codes used by the vectors, matched against the SDK's messages.
+const ATOMIC_BEEF_ERRORS: Record<string, RegExp> = {
+  'subject-missing':
+    /does not contain transaction for atomic txid|not found in BEEF data|must contain the subject txid/,
+  'unrelated-transaction': /unrelated transaction data/
+}
+
+async function dispatchAtomicBEEF(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Promise<void> {
+  const beefBytes = hexToBytes(getString(input, 'beef_hex'))
+  const wantSubject = getString(expected, 'subject_txid')
+  expect(Beef.fromBinary(beefBytes).atomicTxid).toBe(wantSubject)
+
+  let tx: Transaction | undefined
+  let message = ''
+  try {
+    tx = Transaction.fromAtomicBEEF(beefBytes)
+  } catch (e) {
+    message = e instanceof Error ? e.message : String(e)
+  }
+
+  if (!getBool(expected, 'valid')) {
+    expect(tx).toBeUndefined()
+    const wantError = getString(expected, 'error')
+    const pattern = ATOMIC_BEEF_ERRORS[wantError]
+    if (pattern == null) throw new Error(`atomic-beef: unknown error code '${wantError}'`)
+    expect(message).toMatch(pattern)
+    return
+  }
+
+  expect(message).toBe('')
+  expect(tx!.id('hex')).toBe(wantSubject)
+  // Every BUMP must resolve to the merkle root the vector carries for its height.
+  const headers = input['headers'] as Record<string, string>
+  const chainTracker = {
+    isValidRootForHeight: (root: string, height: number) =>
+      Promise.resolve(headers[String(height)] === root),
+    currentHeight: () => Promise.resolve(Math.max(...Object.keys(headers).map(Number)))
+  }
+  expect(await Beef.fromBinary(beefBytes).verify(chainTracker)).toBe(true)
+}
+
 // ── Serialization op handlers ─────────────────────────────────────────────────
 
 function serOpNewTransaction(expected: Record<string, unknown>): void {
@@ -881,6 +925,8 @@ export function dispatch(
       return dispatchSerialization(input, expected)
     case 'beef-v2-txid-panic':
       return dispatchBEEF(input, expected)
+    case 'atomic-beef':
+      return dispatchAtomicBEEF(input, expected)
     default:
       throw new Error(`sdk dispatcher: unknown category '${category}'`)
   }

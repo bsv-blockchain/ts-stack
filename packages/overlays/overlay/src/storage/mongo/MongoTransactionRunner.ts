@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Binary, type ClientSession, type Db, type Document } from 'mongodb'
+import type { Binary, ClientSession, Db, Document } from 'mongodb'
 import {
   admissionSemanticDigest,
   type AdmissionCommitResult,
@@ -7,6 +7,7 @@ import {
   type AdmissionOperationKey,
   type AdmissionReceipt,
   type AdmissionReconcileResult,
+  type RetainedAdmission,
   type StorageScope
 } from '../AdmissionStorage.js'
 import {
@@ -16,8 +17,17 @@ import {
   mongoNodeKey,
   mongoRecordKey
 } from './MongoSchema.js'
+import {
+  copyReceipt,
+  decodeMongoAdmissionReceipt,
+  encodeMongoAdmissionReceipt,
+  mongoAdmissionAcceptedAt,
+  retainedMongoAdmission
+} from './MongoAdmissionReceipt.js'
 
 export interface MongoTransactionRequest {
+  /** Opt-in provenance for new commits. Existing receipts and default writes are unchanged. */
+  retainIdentity?: boolean
   key: AdmissionOperationKey
   identity: AdmissionIdentity
   receipt: AdmissionReceipt
@@ -62,6 +72,7 @@ interface Attempt {
   session: ClientSession
   phase: 'body' | 'commit' | 'unknown'
   receipt: AdmissionReceipt
+  persistedReceipt: Binary
   busy: boolean
 }
 
@@ -144,31 +155,9 @@ function cloneRequest(request: MongoTransactionRequest): MongoTransactionRequest
       scope: { ...request.identity.scope },
       topics: request.identity.topics.map(topic => ({ ...topic }))
     },
-    receipt: copyReceipt(request.receipt)
+    receipt: copyReceipt(request.receipt),
+    retainIdentity: request.retainIdentity
   }
-}
-
-function copyReceipt(receipt: AdmissionReceipt): AdmissionReceipt {
-  if (
-    receipt.durability !== 'atomic-local' ||
-    typeof receipt.steak !== 'string' ||
-    !receipt.steak.isWellFormed() ||
-    !Array.isArray(receipt.indexes) ||
-    receipt.indexes.some(index => typeof index.target !== 'string' || index.target.length === 0 || !index.target.isWellFormed() || (index.state !== 'visible' && index.state !== 'pending')) ||
-    (receipt.propagation !== 'not-requested' && receipt.propagation !== 'pending')
-  ) throw new Error('Invalid Mongo transaction receipt')
-  JSON.parse(receipt.steak)
-  const copy: AdmissionReceipt = {
-    operationId: receipt.operationId,
-    semanticDigest: receipt.semanticDigest,
-    durability: 'atomic-local',
-    steak: receipt.steak,
-    indexes: receipt.indexes.map(index => ({ target: index.target, state: index.state })),
-    propagation: receipt.propagation
-  }
-  if (Buffer.byteLength(JSON.stringify(copy), 'utf8') > 1048576)
-    throw new Error('Mongo transaction receipt is too large')
-  return copy
 }
 
 /**
@@ -216,8 +205,7 @@ export class MongoTransactionRunner {
   private result(operation: Operation, key: AdmissionOperationKey): AdmissionReconcileResult {
     if (operation.semanticDigest !== key.semanticDigest) return { state: 'rejected', code: 'digest-mismatch' }
     if (operation.state === 'committed') {
-      if (!(operation.receipt instanceof Binary)) throw new Error('Committed Mongo operation has no receipt')
-      const receipt = copyReceipt(JSON.parse(Buffer.from(operation.receipt.value()).toString('utf8')) as AdmissionReceipt)
+      const { receipt } = decodeMongoAdmissionReceipt(operation.receipt)
       if (receipt.operationId !== key.operationId || receipt.semanticDigest !== key.semanticDigest)
         throw new Error('Corrupt Mongo operation receipt identity')
       return { state: 'committed', receipt }
@@ -273,7 +261,7 @@ export class MongoTransactionRunner {
     }
   }
 
-  private async claim(previous: Operation, request: MongoTransactionRequest, receipt: AdmissionReceipt, budget: Budget): Promise<Attempt | null> {
+  private async claim(previous: Operation, request: MongoTransactionRequest, receipt: AdmissionReceipt, persistedReceipt: Binary, budget: Budget): Promise<Attempt | null> {
     if (this.attempts.size + this.reservations >= this.maxRetainedSessions)
       throw new Error('Mongo unresolved transaction capacity reached')
     this.reservations += 1
@@ -282,7 +270,7 @@ export class MongoTransactionRunner {
       const operation = await this.collection().findOneAndUpdate({ _id: previous._id, semanticDigest: request.key.semanticDigest, state: 'aborted', leaseToken: previous.leaseToken }, [{ $set: { state: 'pending', attemptId, leaseOwner: this.owner, leaseToken: encodeMongoUint64((BigInt(decodeMongoUint64(previous.leaseToken)) + BigInt(1)).toString()), guard: randomUUID(), leaseUntil: { $dateAdd: { startDate: '$$NOW', unit: 'millisecond', amount: this.leaseMS } }, updatedAt: '$$NOW' } }], { ...budget.options(), writeConcern: majority, returnDocument: 'after' })
       if (operation === null) return null
       const session = this.db.client.startSession()
-      const attempt: Attempt = { operation, session, phase: 'body', receipt, busy: true }
+      const attempt: Attempt = { operation, session, phase: 'body', receipt, persistedReceipt, busy: true }
       this.attempts.set(attemptId, attempt)
       return attempt
     } finally {
@@ -296,12 +284,14 @@ export class MongoTransactionRunner {
     const receipt = copyReceipt(request.receipt)
     const rejected = this.rejectRun(request, receipt)
     if (rejected !== undefined) return rejected
+    // Bound the complete stored bytes before claiming an operation or running its body.
+    const persistedReceipt = encodeMongoAdmissionReceipt(receipt, request.identity, request.retainIdentity)
     const budget = new Budget(options)
     this.calls += 1
     try {
       for (let bodyIndex = 0; bodyIndex < this.maxBodyAttempts; bodyIndex += 1) {
         try {
-          const completed = await this.runBodyAttempt(id, request, receipt, body, budget, bodyIndex)
+          const completed = await this.runBodyAttempt(id, request, receipt, persistedReceipt, body, budget, bodyIndex)
           if (completed !== undefined) return completed
         } catch (error) {
           if (!isTransientTransactionError(error) || bodyIndex + 1 >= this.maxBodyAttempts) throw error
@@ -359,7 +349,6 @@ export class MongoTransactionRunner {
 
   private async executeTrustedBody(
     attempt: Attempt,
-    receipt: AdmissionReceipt,
     body: (context: MongoTransactionContext) => Promise<void>,
     budget: Budget,
     bodyIndex: number
@@ -377,7 +366,7 @@ export class MongoTransactionRunner {
       // Never end a session while its body is still running. Trusted bodies
       // await every bounded database operation and observe the context gate.
       await body(context)
-      const saved = await this.collection().updateOne(this.fence(operation), { $set: { state: 'committed', receipt: new Binary(Buffer.from(JSON.stringify(receipt), 'utf8')), guard: randomUUID() }, $currentDate: { updatedAt: true } }, context.options())
+      const saved = await this.collection().updateOne(this.fence(operation), { $set: { state: 'committed', receipt: attempt.persistedReceipt, guard: randomUUID() }, $currentDate: { updatedAt: true } }, context.options())
       if (saved.modifiedCount !== 1) throw new Error('Mongo transaction ownership lost')
       bodyActive = false
       return await this.commit(attempt, budget)
@@ -396,6 +385,7 @@ export class MongoTransactionRunner {
     id: string,
     request: MongoTransactionRequest,
     receipt: AdmissionReceipt,
+    persistedReceipt: Binary,
     body: (context: MongoTransactionContext) => Promise<void>,
     budget: Budget,
     bodyIndex: number
@@ -403,9 +393,9 @@ export class MongoTransactionRunner {
     const previous = await this.ensureClaimableRow(id, request, budget)
     const existing = this.result(previous, request.key)
     if (existing.state !== 'aborted') return existing
-    const attempt = await this.claim(previous, request, receipt, budget)
+    const attempt = await this.claim(previous, request, receipt, persistedReceipt, budget)
     if (attempt === null) return await this.observeClaimWinner(id, request, budget)
-    return await this.executeTrustedBody(attempt, receipt, body, budget, bodyIndex)
+    return await this.executeTrustedBody(attempt, body, budget, bodyIndex)
   }
 
   async reconcile(key: AdmissionOperationKey, attemptId?: string, options: MongoTransactionOptions = {}): Promise<AdmissionReconcileResult> {
@@ -435,6 +425,30 @@ export class MongoTransactionRunner {
       if (aborted !== null) return { state: 'aborted' }
       operation = await this.read(id, budget)
       return operation === null ? result : this.result(operation, key)
+    } finally {
+      this.calls -= 1
+      budget.close()
+    }
+  }
+
+  /** Read-only majority observation; absence or an unresolved/legacy operation proves no outcome. */
+  async readRetainedAdmission(operationId: string, options: MongoTransactionOptions = {}): Promise<RetainedAdmission | undefined> {
+    const id = this.id({ scope: this.scope, operationId, semanticDigest: '0'.repeat(64) })
+    const budget = new Budget(options)
+    this.calls += 1
+    try {
+      const operation = await this.read(id, budget)
+      if (operation?.state !== 'committed') return undefined
+      const retained = retainedMongoAdmission(operation.receipt, operationId, operation.semanticDigest, operation.txid)
+      if (retained !== undefined && mongoNodeKey(retained.identity.scope) !== mongoNodeKey(this.scope))
+        throw new Error('Corrupt Mongo admission-history scope')
+      // Committed operations never mutate again. updatedAt was written using
+      // Mongo $currentDate in the same transaction as the original receipt.
+      // Keep it out of ordinary receipt bytes and never substitute Date.now().
+      return retained === undefined ? undefined : {
+        ...retained,
+        acceptedAt: mongoAdmissionAcceptedAt(operation.updatedAt)
+      }
     } finally {
       this.calls -= 1
       budget.close()

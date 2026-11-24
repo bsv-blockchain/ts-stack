@@ -88,6 +88,7 @@ jest.mock('../../out/src/index.js', () => {
     WalletStorageManager,
     createDefaultNoDbChaintracksOptions: (...args: unknown[]) => mockState.createChaintracksOptions(...args),
     doubleSha256BE: (...args: unknown[]) => mockState.doubleSha256BE(...args),
+    numericTotalOutputs: jest.requireActual('../../src/utility/numericTotalOutputs').numericTotalOutputs,
     randomBytesHex: (...args: unknown[]) => mockState.randomBytesHex(...args),
     sdk: {
       Validation: {

@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '2.0.1'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '2.0.4'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: experimental
@@ -15,7 +15,17 @@ tags: ['overlay', 'topics', 'uhrp']
 
 # @bsv/overlay-topics
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+## GlobalKVStore tag-count compatibility patch
+
+The source candidate restores tag sets larger than 32 entries. Client creation,
+tag-filter queries, token decoding, overlay admission and history preserve all
+tags. Upgrade both client and overlay SDKs to 4.1.1 and deploy Overlay Topics
+2.0.4 for the lookup-query fix. Existing token bytes and stored records require
+no migration. Each tag still must be unique, non-empty and at most 256 UTF-8
+bytes; token payload, request and cryptographic checks remain unchanged. Wallet
+output tags, action labels and other overlay protocols' count policies are unchanged.
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -46,6 +56,10 @@ These descriptive registries do not install executable permission modules.
 ```bash
 npm install @bsv/overlay-topics
 ```
+
+The unpublished 1.9.2 candidate refreshes the packed templates range for its
+CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
+unchanged; no API migration is required.
 
 ## Quick start
 
@@ -326,3 +340,7 @@ changes (`mandalaOwners` and `mandalaAuthorities` are new; `mandalaTokens`,
 and key by `tokenId`), so a 2.0.0 Mandala topic starts on a new database with new
 deploys. Use one `MandalaStorageManager` for admission and lookup. The package
 `CHANGELOG.md` lists the replaced API.
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

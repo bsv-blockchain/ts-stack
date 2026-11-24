@@ -18,6 +18,7 @@ import { isValidTopicOrServiceName } from '../utils/isValidTopicOrServiceName.js
 import {
   definedProperties,
   MAX_DISCOVERY_LOOKUP_RESULTS,
+  MAX_QUERY_NAME_BYTES,
   requireLookupQuery,
   validateOptionalBoolean,
   validateOptionalPublicKey,
@@ -107,7 +108,7 @@ export class SLAPLookupService implements LookupService {
     if (findAll) return await this.storage.findAll(limit, skip, sortOrder)
 
     const domain = validateOptionalString(query.domain, 'query.domain')
-    const service = validateOptionalString(query.service, 'query.service', 50)
+    const service = validateOptionalString(query.service, 'query.service', MAX_QUERY_NAME_BYTES)
     if (
       service !== undefined &&
       (!isValidTopicOrServiceName(service) || !service.startsWith('ls_'))

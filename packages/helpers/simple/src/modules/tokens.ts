@@ -285,10 +285,15 @@ function tokenInstructions(
 async function validatedListOutputs(
   client: WalletInterface,
   args: Parameters<WalletInterface['listOutputs']>[0]
-): Promise<Awaited<ReturnType<WalletInterface['listOutputs']>>> {
+): Promise<Awaited<ReturnType<WalletInterface['listOutputs']>> & { totalOutputs: number }> {
   validateWalletArgs('listOutputs', args)
   const bindingRequest = snapshotWalletResultRequest('listOutputs', args)
-  return validateWalletResult('listOutputs', await client.listOutputs(args), bindingRequest)
+  const result = validateWalletResult('listOutputs', await client.listOutputs(args), bindingRequest)
+  const { totalOutputs } = result
+  if (typeof totalOutputs !== 'number') {
+    throw new TypeError('Wallet returned a module balance where an output count was expected')
+  }
+  return { ...result, totalOutputs }
 }
 
 async function validatedCreateAction(

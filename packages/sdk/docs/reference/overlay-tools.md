@@ -281,6 +281,7 @@ export interface LookupQueryOptions {
     holdForUnknownHosts?: boolean;
     waitForAllHosts?: boolean;
     correlationId?: string;
+    wholeBeef?: boolean;
 }
 ```
 
@@ -420,6 +421,42 @@ alias; `waitForAllHosts` takes precedence when both are supplied.
 waitForAllHosts?: boolean
 ```
 
+#### Property wholeBeef
+
+Keep each output's BEEF as the lookup service returned it, rather than
+reducing it to Atomic BEEF.
+
+By default the HTTPS facilitator asks hosts for the aggregated binary answer
+(`X-Aggregation: yes`). That form keeps only each output's SPV closure, which
+ends at its first proven transaction: the host merges it that way and the
+resolver re-extracts each output as Atomic BEEF. History a lookup service
+deliberately returns beyond a proof (for example an overlay Engine `history`
+selector) is therefore dropped. When `true`, the facilitator omits the header
+and reads the per-output JSON answer, so each output carries the BEEF the
+service produced, usually plain BEEF with no `txid` hint. Each output's
+subject is its Atomic BEEF subject or, for plain BEEF, its last transaction.
+A `txid` hint, when a host sends one, must name that same transaction, and an
+output whose hint names another is dropped, so a lookup service returning
+plain BEEF should put each subject last. A host that
+still answers with the aggregated binary form is
+counted as having rejected the query, without a reputation penalty: it
+appears in `rejectedHosts` (`queryDetailed`, `query$`), while `query()`
+returns only the other hosts' outputs (an empty list if every host rejected).
+
+SLAP discovery is unaffected. Outputs from several hosts are still
+deduplicated by outpoint, keeping the first accepted response; `onEvidence`
+receives each host's copy before deduplication, within its evidence limits.
+A caller that wants the longest history from several hosts merges those
+copies itself. The JSON answer is larger on the wire and whole BEEFs carry more
+transactions, so `limits.maxResponseBytes`, `limits.maxTotalBytes` and
+`evidenceLimits` may need raising for long histories. Custom facilitators
+receive the flag in their request options and may ignore it. Defaults to
+`false`.
+
+```ts
+wholeBeef?: boolean
+```
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
@@ -466,6 +503,7 @@ export interface LookupRequestOptions {
     maxResponseBytes?: number;
     maxOutputs?: number;
     consumeBytes?: (bytes: number) => void;
+    wholeBeef?: boolean;
 }
 ```
 
@@ -498,6 +536,7 @@ export interface LookupResolverConfig {
     networkPreset?: LookupNetworkPreset;
     facilitator?: OverlayLookupFacilitator;
     slapTrackers?: string[];
+    trackerTimeoutMs?: number;
     hostOverrides?: Record<string, string[]>;
     additionalHosts?: Record<string, string[]>;
     cache?: CacheOptions;
@@ -598,6 +637,16 @@ Optional privacy-bounded telemetry sink. Query payloads are never emitted.
 
 ```ts
 telemetry?: TelemetryConfig
+```
+
+#### Property trackerTimeoutMs
+
+Per-tracker discovery timeout in milliseconds. Defaults to 5000.
+Must be a positive integer no greater than 60000. The query's independent
+deadlineMs still bounds the whole attempt, including discovery.
+
+```ts
+trackerTimeoutMs?: number
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)

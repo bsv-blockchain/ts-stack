@@ -1,0 +1,153 @@
+{
+  "oldEngine": "9.6.1",
+  "newEngine": "10.1.1",
+  "rows": [
+    {
+      "target": "wallet-recovery-store",
+      "oldCount": 229,
+      "newCount": 230,
+      "oldSitesAbsent": 0,
+      "addedSites": 1
+    },
+    {
+      "target": "wallet-recovery-plan",
+      "oldCount": 131,
+      "newCount": 133,
+      "oldSitesAbsent": 0,
+      "addedSites": 2
+    },
+    {
+      "target": "lch-overlay-covenant-terms",
+      "oldCount": 525,
+      "newCount": 532,
+      "oldSitesAbsent": 0,
+      "addedSites": 7
+    },
+    {
+      "target": "private-purchase-state",
+      "oldCount": 1082,
+      "newCount": 1100,
+      "oldSitesAbsent": 0,
+      "addedSites": 18
+    },
+    {
+      "target": "private-purchase-coordination",
+      "oldCount": 580,
+      "newCount": 645,
+      "oldSitesAbsent": 0,
+      "addedSites": 65
+    },
+    {
+      "target": "private-purchase-native-clock",
+      "oldCount": 1570,
+      "newCount": 1617,
+      "oldSitesAbsent": 0,
+      "addedSites": 47
+    },
+    {
+      "target": "revenue-listing-purchase",
+      "oldCount": 176,
+      "newCount": 179,
+      "oldSitesAbsent": 0,
+      "addedSites": 3
+    },
+    {
+      "target": "wallet-recovery-codec",
+      "oldCount": 264,
+      "newCount": 289,
+      "oldSitesAbsent": 0,
+      "addedSites": 25
+    },
+    {
+      "target": "overlay-proposal-admission",
+      "oldCount": 336,
+      "newCount": 346,
+      "oldSitesAbsent": 0,
+      "addedSites": 10
+    },
+    {
+      "target": "private-publication-coordination",
+      "oldCount": 1164,
+      "newCount": 1199,
+      "oldSitesAbsent": 0,
+      "addedSites": 35
+    },
+    {
+      "target": "root-eviction-records",
+      "oldCount": 484,
+      "newCount": 496,
+      "oldSitesAbsent": 0,
+      "addedSites": 12
+    },
+    {
+      "target": "root-eviction-journal",
+      "oldCount": 463,
+      "newCount": 484,
+      "oldSitesAbsent": 0,
+      "addedSites": 21
+    },
+    {
+      "target": "root-eviction-storage",
+      "oldCount": 357,
+      "newCount": 380,
+      "oldSitesAbsent": 0,
+      "addedSites": 23
+    },
+    {
+      "target": "overlay-private-publication-admission",
+      "oldCount": 374,
+      "newCount": 382,
+      "oldSitesAbsent": 0,
+      "addedSites": 8
+    },
+    {
+      "target": "private-publication-state",
+      "oldCount": 943,
+      "newCount": 948,
+      "oldSitesAbsent": 0,
+      "addedSites": 5
+    },
+    {
+      "target": "private-publication-service",
+      "oldCount": 456,
+      "newCount": 465,
+      "oldSitesAbsent": 0,
+      "addedSites": 9
+    },
+    {
+      "target": "wallet-recovery-encoding",
+      "oldCount": 167,
+      "newCount": 170,
+      "oldSitesAbsent": 0,
+      "addedSites": 3
+    },
+    {
+      "target": "private-purchase-http",
+      "oldCount": 673,
+      "newCount": 695,
+      "oldSitesAbsent": 0,
+      "addedSites": 22
+    },
+    {
+      "target": "sdk-auth-http",
+      "oldCount": 890,
+      "newCount": 939,
+      "oldSitesAbsent": 0,
+      "addedSites": 49
+    },
+    {
+      "target": "protected-ledger",
+      "oldCount": 1023,
+      "newCount": 1063,
+      "oldSitesAbsent": 0,
+      "addedSites": 40
+    },
+    {
+      "target": "sdk-output-json",
+      "oldCount": 2350,
+      "newCount": 2442,
+      "oldSitesAbsent": 0,
+      "addedSites": 92
+    }
+  ]
+}

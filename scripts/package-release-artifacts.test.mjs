@@ -27,6 +27,16 @@ const RELEASE_WORKFLOW = path.join(REPOSITORY_ROOT, '.github/workflows/release.y
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/npm-package-supply-chain.json')
 const PROJECTS_PATH = path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
 
+test('the workspace build uses the governed npm artifact runtime', () => {
+  const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'))
+  // Repository-health runs these contracts before installing dependencies.
+  const workflow = fs.readFileSync(path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8')
+  const build = workflow.split(/(?=^  [\w-]+:\n)/m).find(job => job.startsWith('  build:\n'))
+  assert.ok(build)
+  const versions = [...build.matchAll(/^\s+node-version: (.+)$/gm)].map(match => match[1])
+  assert.deepEqual(versions, [policy.buildRuntime.node])
+})
+
 test('deterministic UUIDs are stable RFC 9562 version 8 identifiers', () => {
   const first = deterministicUuid('release-artifact')
   assert.equal(first, deterministicUuid('release-artifact'))
@@ -403,7 +413,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.equal(policy.releaseEnvironment, 'npm-production')
   assert.deepEqual(policy.buildRuntime, {
     runner: 'ubuntu-24.04',
-    node: '24.18.0',
+    node: '24.22.1',
     npmMinimum: '11.5.1',
     pnpm: '10.33.2'
   })
@@ -425,7 +435,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.deepEqual(policy.scanGate.severities, ['HIGH', 'CRITICAL'])
   assert.equal(policy.scanGate.ignoreUnfixed, false)
   assert.equal(policy.licensePolicy.requireDeclaredLicense, true)
-  assert.equal(policy.licensePolicy.internalLicense, 'Open BSV License Version 6')
+  assert.equal(policy.licensePolicy.internalLicense, 'Apache-2.0')
   assert.deepEqual(policy.attestations.predicates, [
     'https://slsa.dev/provenance/v1',
     'https://cyclonedx.org/bom'
@@ -438,9 +448,10 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.match(workflow, /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/)
   assert.doesNotMatch(workflow, /pnpm\s+-r[\s\S]{0,100}\spublish\b/)
   assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN/)
-  assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 4)
-  assert.equal(workflow.match(/node-version: 24\.18\.0/g)?.length, 3)
-  assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3)
+  // The node-free plan job adds one pinned runner and one credential-free checkout.
+  assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 5)
+  assert.equal(workflow.match(/node-version: 24\.22\.1/g)?.length, 3)
+  assert.equal(workflow.match(/persist-credentials: false/g)?.length, 4)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)
   assert.match(workflow, /name: \$\{\{ needs\.prepare\.outputs\.candidate \}\}/)
   assert.match(

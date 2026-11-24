@@ -452,7 +452,7 @@ export class KeyDeriver implements KeyDeriverApi {
     } else if (counterparty === 'self') {
       return this.rootKey.toPublicKey()
     } else if (counterparty === 'anyone') {
-      return new PrivateKey(1).toPublicKey()
+      return this.#anyone
     } else if (typeof counterparty === 'string') {
       return PublicKey.fromString(counterparty)
     } else {

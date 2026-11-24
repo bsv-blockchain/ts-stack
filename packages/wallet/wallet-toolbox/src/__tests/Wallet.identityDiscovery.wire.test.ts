@@ -72,21 +72,24 @@ describe('identity discovery across BRC-100 caller paths', () => {
       expect(result.certificates[0].decryptedFields).toEqual({ name: 'Alice' })
     })
 
-    it.each([{ name: 'Alice' }, { any: 'alice' }, { name: 'ali' }, { name: 'ali', company: ' ' }])(
-      'returns the verified certificate for attributes %j',
-      async attributes => {
-        const caller = callerFor(managerFor(fixture))
-        const result = await caller.discoverByAttributes({ attributes }, 'app.example')
-        expect(result.totalCertificates).toBe(1)
-        expect(result.certificates[0].subject).toBe(fixture.certificate.subject)
-      }
-    )
+    it.each<Record<string, string>>([
+      { name: 'Alice' },
+      { any: 'alice' },
+      { name: 'ali' },
+      { name: 'ali', company: ' ' }
+    ])('returns the verified certificate for attributes %j', async attributes => {
+      const caller = callerFor(managerFor(fixture))
+      const result = await caller.discoverByAttributes({ attributes }, 'app.example')
+      expect(result.totalCertificates).toBe(1)
+      expect(result.certificates[0].subject).toBe(fixture.certificate.subject)
+    })
 
     it('still drops certificates that do not answer the lookup', async () => {
       const caller = callerFor(managerFor(fixture))
-      await expect(
-        caller.discoverByAttributes({ attributes: { any: 'mallory' } }, 'app.example')
-      ).resolves.toEqual({ totalCertificates: 0, certificates: [] })
+      await expect(caller.discoverByAttributes({ attributes: { any: 'mallory' } }, 'app.example')).resolves.toEqual({
+        totalCertificates: 0,
+        certificates: []
+      })
     })
   })
 })

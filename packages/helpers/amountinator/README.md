@@ -1,5 +1,7 @@
 # @bsv/amountinator
 
+Release candidate `2.1.10`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 
@@ -78,4 +80,11 @@ Supported currencies: `BSV`, `SATS`, `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `INR`, `
 
 ## License
 
-This package is released under the [Open BSV License Version 6](./LICENSE.txt).
+This package is released under the [Apache License 2.0](./LICENSE).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

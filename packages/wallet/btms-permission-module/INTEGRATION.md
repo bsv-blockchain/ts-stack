@@ -175,4 +175,4 @@ approval and transaction commitment are established together.
 
 ## License
 
-Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0. See [LICENSE](./LICENSE).

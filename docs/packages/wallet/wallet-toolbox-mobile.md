@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.15.0'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.18.0'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -14,6 +14,70 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+## nLockTime finality
+
+The 2.18.1 source candidate makes `nLockTimeIsFinal` apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
+
+## Broadcaster service errors
+
+The 2.18.1 source candidate scores broadcaster answers that judge nothing about
+the transaction as service errors: ARC HTTP 401 and 403 (a keyless request to
+the default arc.taal.com, or a refused key), WhatsOnChain 401, 403, 408,
+exhausted 429 and 5xx answers that relay no node refusal, and a Bitails per-
+transaction connection reset. Such a transaction now stays queued for retry or
+fails over instead of being marked invalid with its inputs released. No API,
+wire, configuration or schema migration is required. Source is not publication
+or deployment.
+
+## Certificate pagination
+
+The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
+the size of the matching set at every offset, including full and empty later
+pages in IndexedDB. Non-empty final pages use the skipped rows plus the page;
+other pages count without a page window. User, deletion, type and certifier
+filters and returned certificate fields are unchanged. Upgrade the affected
+local storage package or remote Storage service to receive corrected totals.
+No API, wire or schema migration is required.
+
+## Permission-module spending authorization
+
+Spending authorization accounts for the inputs and outputs that permission
+modules pass to the wallet, including token funding and change. Caller input
+descriptions remain attached to their outpoints when a module reorders inputs.
+Output descriptions follow the metadata retained by copied or reordered outputs,
+including outputs with identical scripts and amounts. New module entries with no
+caller description use the existing description fallback. Requested-output
+verification, exact wallet-spend checks and storage service-charge accounting
+remain enforced. No API, wire or stored-data migration is required.
+
+## Coordinated 2.17.0 version
+
+The 2.17.0 source candidate preserves the required version lockstep with the core
+and browser client distributions. The new setup-factory `actionBatchMode` option
+belongs to those distributions; the mobile entry point exports neither `Setup`
+nor `SetupClient`. Existing mobile `Wallet` construction, its `actionBatchMode`
+option and default `auto` behavior remain unchanged. No mobile consumer or storage
+migration is required. Publication is separate from this source candidate.
+
+The 2.15.3 source candidate restores ordinary import of exactly framed legacy
+AtomicBEEF with surplus unrelated branches. It retains the declared payment and
+its dependencies, reruns strict SDK argument validation, and preserves native
+proof, ownership and receipt checks. Truncated, trailing and incomplete inputs
+remain rejected. No API, wire or schema migration is required. Upgrade the host
+and remote Storage separately; reconcile and retry the original import instead
+of creating or broadcasting a replacement payment. Source is not publication or
+deployment.
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate exports the portable resumable sync API. Remote destinations retain exclusive execution unless a future capability explicitly guarantees safe concurrency; this package does not acquire a local native database. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md).
 
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
@@ -72,22 +136,15 @@ The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
 
-BEEF requests and schema-declared storage response bytes use the existing
-negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
-and identical transaction/proof bytes. Authentication and payload ceilings
-remain unchanged; upgrade both clients and active storage for the savings.
+## Local recovery capability boundary
 
-Internalizing an unproven transaction new to a user attempts broadcast before
-storing recipient outputs, including a sender's no-send transaction already
-known to shared storage. Rejected broadcasts return a review-actions error
-and store no recipient outputs. Transactions backed by a mining proof are
-not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
-
-Confirmed internalization resolves and checks the block header before the
-storage writer opens, including a no-send merge that carries a mining proof.
-A missing or malformed header, or an invalid proof, still rejects and leaves
-no partial proven transaction, transaction, or output. Upgrade the active
-storage implementation; no API, wire or schema migration is required.
+The coordinated 2.15.0 candidate preserves this wrapper's ordinary API and SDK
+peer range. The core package's new SQLite action/funding controllers are separate
+Node deep imports. This wrapper does not expose them or grant IndexedDB, mobile
+or remote storage a durable operation journal. If a host separately adopts core
+recovery, preserve its complete wallet database and keys and reconcile outstanding
+operations before rollback; ordinary entity export/sync omits that auxiliary state.
+See [local action recovery](../../guides/local-action-recovery.md).
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.
@@ -164,8 +221,8 @@ for remote storage setup and supported runtime assumptions.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/mobile/LICENSE).
 
 ## Faucet output authorization
 

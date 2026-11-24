@@ -29,7 +29,7 @@ describe('StorageIdb tests', () => {
     try {
       const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
       const db = storage.db
-      expect(r).toBe('6')
+      expect(r).toBe('7')
       expect(db).toBeTruthy()
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('userId_basketId')).toBe(true)
       expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('txid_vout_userId')).toBe(true)
@@ -60,9 +60,10 @@ describe('StorageIdb tests', () => {
     })
     legacy.close()
 
+    let upgraded: Awaited<ReturnType<StorageIdb['initDB']>> | undefined
     try {
-      const upgraded = await storage.initDB('version 2 upgrade test', '42'.repeat(32))
-      expect(upgraded.version).toBe(6)
+      upgraded = await storage.initDB('version 2 upgrade test', '42'.repeat(32))
+      expect(upgraded.version).toBe(7)
       expect(upgraded.transaction('outputs').objectStore('outputs')
         .indexNames.contains('userId_basketId')).toBe(true)
       expect(upgraded.transaction('outputs').objectStore('outputs')
@@ -71,8 +72,8 @@ describe('StorageIdb tests', () => {
         .indexNames.contains('noSendExpiryState')).toBe(true)
       expect(upgraded.transaction('transactions').objectStore('transactions')
         .indexNames.contains('noSendExpiryReclaimTxid')).toBe(true)
-      upgraded.close()
     } finally {
+      upgraded?.close()
       await resetStorage(storage)
     }
   })

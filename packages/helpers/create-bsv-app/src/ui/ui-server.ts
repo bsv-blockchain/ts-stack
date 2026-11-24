@@ -6,10 +6,10 @@ import { randomBytes } from 'node:crypto'
 import { serializeSchema, buildPage } from './ui-page.js'
 import { openBrowser as defaultOpenBrowser } from './open-browser.js'
 import { applyConfig, type RunResult } from '../pipeline.js'
-import { resolveDraft, seedDraft, type ConfigDraft } from '../config/draft.js'
-import { ConfigError } from '../config/validate.js'
+import { resolveDraft, seedDraft, type ConfigDraft, type SeededDraft } from '../config/draft.js'
+import { ConfigError, formatConfigError } from '../config/validate.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
-import { MANIFEST_FILE } from '../config/project-manifest.js'
+import { MANIFEST_FILE, mergeCapabilityIds } from '../config/project-manifest.js'
 import type { RunCommand } from '../scaffold/base-scaffolder.js'
 import { listCapabilities, resolveCapabilities } from '../registry.js'
 import { planPlacement } from '../engine.js'
@@ -17,6 +17,7 @@ import type { Layout, ProjectConfig } from '../config/model.js'
 import { layoutOf } from '../config/model.js'
 import type { Capability } from '../types.js'
 import { getStarter } from '../starters.js'
+import { formatPulledNotice } from '../config/requires.js'
 
 export interface UiServer {
   url: string
@@ -103,12 +104,17 @@ async function handleGenerate(
   res: ServerResponse,
   existing: ProjectManifest | null,
   targetDir: string,
-  runCommand: RunCommand | undefined,
+  flags: ConfigDraft,
+  run: { runCommand: RunCommand | undefined; upgradeBsvDeps: boolean },
   resolveDone: (r: RunResult) => void
 ): Promise<void> {
+  const { runCommand, upgradeBsvDeps } = run
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
-    const config = resolveDraft(seedDraft(existing, draft))
+    const config = {
+      ...resolveDraft(seedDraft(existing, { ...flags, ...draft })),
+      upgradeBsvDeps
+    }
     // force:false — preserve existing capability files, matching the CLI default (the user re-runs with intent but we never clobber their edits)
     const result = applyConfig(config, targetDir, { runCommand, force: false })
     sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
@@ -116,7 +122,7 @@ async function handleGenerate(
   } catch (err) {
     if (err instanceof UiRequestError) throw err
     if (err instanceof ConfigError) {
-      sendJson(res, 400, { error: 'Invalid project configuration.' })
+      sendJson(res, 400, { error: formatConfigError(err) })
       return
     }
     console.error('Project generation failed:', err)
@@ -151,21 +157,23 @@ async function handlePlan(
   req: IncomingMessage,
   res: ServerResponse,
   existing: ProjectManifest | null,
-  targetDir: string
+  targetDir: string,
+  flags: ConfigDraft
 ): Promise<void> {
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
-    const config = resolveDraft(seedDraft(existing, draft))
-    const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
+    const config = resolveDraft(seedDraft(existing, { ...flags, ...draft }))
+    const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
     const files = planPaths(config, caps).map(p => ({
       path: p,
       status: existsSync(join(targetDir, p)) ? ('edit' as const) : ('new' as const)
     }))
-    sendJson(res, 200, { files })
+    const pulled = config.pulled ?? []
+    sendJson(res, 200, { files, pulled, notice: formatPulledNotice(pulled) })
   } catch (err) {
     if (err instanceof UiRequestError) throw err
     if (err instanceof ConfigError) {
-      sendJson(res, 200, { files: [], error: 'Invalid project configuration.' })
+      sendJson(res, 200, { files: [], error: formatConfigError(err) })
       return
     }
     console.error('Project plan generation failed:', err)
@@ -176,6 +184,10 @@ async function handlePlan(
 export async function startUiServer(opts: {
   existing: ProjectManifest | null
   targetDir: string
+  /** CLI flags given alongside `--ui`. */
+  flags?: ConfigDraft
+  /** `--upgrade-bsv-deps`: raise owned @bsv packages across a major in add mode. */
+  upgradeBsvDeps?: boolean
   deps?: { runCommand?: RunCommand }
 }): Promise<UiServer> {
   const { existing, targetDir } = opts
@@ -187,9 +199,31 @@ export async function startUiServer(opts: {
           .filter(c => c.defaultSelected === true)
           .map(c => ({ label: c.title }))
       : []
+  const schema = serializeSchema(existing)
+  // the page posts only visible fields; CLI flags fill every other key, so a posted value wins
+  const flags = opts.flags ?? {}
+  const offeredInNew =
+    schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.modeOptions?.new ?? []
+  // new mode pre-selects every offered capability, matching the terminal flow
+  const preTick = (d: SeededDraft): ConfigDraft =>
+    d.mode === 'new'
+      ? {
+          ...d,
+          capabilities: mergeCapabilityIds(
+            d.capabilities,
+            offeredInNew.map(o => o.value)
+          )
+        }
+      : d
   const html = buildPage({
-    schema: serializeSchema(existing),
-    seed: seedDraft(existing, {}),
+    schema,
+    seed: preTick(seedDraft(existing, flags)),
+    modeSeeds: {
+      new: preTick(seedDraft(existing, { ...flags, mode: 'new' })),
+      add: seedDraft(existing, { ...flags, mode: 'add' })
+    },
+    flags,
+    targetDir,
     included,
     sessionToken,
     scriptNonce
@@ -224,11 +258,12 @@ export async function startUiServer(opts: {
             res,
             existing,
             targetDir,
-            opts.deps?.runCommand,
+            flags,
+            { runCommand: opts.deps?.runCommand, upgradeBsvDeps: opts.upgradeBsvDeps === true },
             resolveDone
           )
         if (req.method === 'POST' && req.url === '/plan')
-          return await handlePlan(req, res, existing, targetDir)
+          return await handlePlan(req, res, existing, targetDir, flags)
         sendJson(res, 404, { error: 'not found' })
       } catch (error) {
         if (error instanceof UiRequestError) {
@@ -257,7 +292,9 @@ export async function startUiServer(opts: {
 export interface RunUiOpts {
   existing: ProjectManifest | null
   targetDir: string
+  flags?: ConfigDraft
   runCommand?: RunCommand
+  upgradeBsvDeps?: boolean
   openBrowser?: (url: string) => void
 }
 
@@ -265,6 +302,8 @@ export async function runUi(opts: RunUiOpts): Promise<RunResult> {
   const srv = await startUiServer({
     existing: opts.existing,
     targetDir: opts.targetDir,
+    flags: opts.flags,
+    upgradeBsvDeps: opts.upgradeBsvDeps,
     deps: { runCommand: opts.runCommand }
   })
   const open = opts.openBrowser ?? ((url: string) => defaultOpenBrowser(url))

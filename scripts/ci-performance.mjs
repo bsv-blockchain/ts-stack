@@ -81,7 +81,7 @@ export function measureRun(run, jobs) {
     )
     .reduce((sum, step) => sum + (step.durationSeconds ?? 0), 0)
   const prepareJob = measuredJobs.find(job =>
-    /^(?:Build, lint, and policy|Prepare(?:\s*\/|$))/i.test(job.name)
+    /^(?:Build workspace$|Build, lint, and policy|Prepare(?:\s*\/|$))/i.test(job.name)
   )
   const executedJobs = jobs.filter(job => job.conclusion !== 'skipped')
   return {

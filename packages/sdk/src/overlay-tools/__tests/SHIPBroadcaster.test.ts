@@ -1,4 +1,5 @@
 import SHIPCast, { HTTPSOverlayBroadcastFacilitator } from '../../overlay-tools/SHIPBroadcaster'
+import { OverlayBroadcastHTTPError, validateSTEAK } from '../../overlay-tools/index'
 import LookupResolver from '../../overlay-tools/LookupResolver'
 import { PrivateKey, Utils } from '../../primitives/index'
 import { Transaction } from '../../transaction/index'
@@ -264,6 +265,199 @@ describe('SHIPCast', () => {
     ).rejects.toThrow('Failed to facilitate broadcast')
   })
 
+  it('keeps the status and body of a failed HTTP response', async () => {
+    const answer =
+      '{"status":"error","code":"ERR_TOPIC_REJECTED","description":"no admissible outputs"}'
+    const httpClient = jest.fn().mockResolvedValue(new Response(answer, { status: 400 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    const error = await facilitator
+      .send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(OverlayBroadcastHTTPError)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toMatchObject({
+      name: 'OverlayBroadcastHTTPError',
+      message: 'Failed to facilitate broadcast',
+      status: 400,
+      body: answer
+    })
+  })
+
+  it('bounds the kept body of a failed HTTP response and releases the rest', async () => {
+    const cancel = jest.fn()
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(4096)))
+      },
+      cancel
+    })
+    const httpClient = jest.fn().mockResolvedValue(new Response(body, { status: 500 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    const error = (await facilitator
+      .send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+      .catch((e: unknown) => e)) as OverlayBroadcastHTTPError
+    expect(error.status).toBe(500)
+    expect(error.body).toBe('x'.repeat(8192))
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [
+      'a text-only adapter',
+      { ok: false, status: 502, text: async () => 'y'.repeat(9000) },
+      'y'.repeat(8192)
+    ],
+    ['an adapter without a body', { ok: false, status: 404 }, ''],
+    [
+      'an adapter whose body fails',
+      {
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error('socket closed')
+        }
+      },
+      ''
+    ]
+  ])('keeps the status of a failed response from %s', async (_name, response, kept) => {
+    const httpClient = jest.fn().mockResolvedValue(response)
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toMatchObject({ status: response.status, body: kept })
+  })
+
+  it('skips reading a text-only error body that declares more than 8 KiB', async () => {
+    const text = jest.fn(async () => 'z'.repeat(9000))
+    const httpClient = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      headers: new Headers({ 'content-length': '9000' }),
+      text
+    })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toMatchObject({ name: 'OverlayBroadcastHTTPError', status: 502, body: '' })
+    expect(text).not.toHaveBeenCalled()
+  })
+
+  it.each([['5'], [' 5 '], ['8192'], ['not-a-length'], ['']])(
+    'reads a text-only error body whose Content-Length is %p',
+    async contentLength => {
+      const httpClient = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        headers: new Headers({ 'content-length': contentLength }),
+        text: async () => 'small'
+      })
+      const facilitator = new HTTPSOverlayBroadcastFacilitator(
+        httpClient as unknown as typeof fetch
+      )
+
+      await expect(
+        facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+      ).rejects.toMatchObject({ status: 400, body: 'small' })
+    }
+  )
+
+  it('does not hold the process open on the error body timer', async () => {
+    jest.useFakeTimers()
+    const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout')
+    const httpClient = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => await new Promise<string>(() => {})
+    })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({ status: 503, body: '' })
+
+    await jest.advanceTimersByTimeAsync(2_000)
+    await rejection
+    const bodyTimers = setTimeoutSpy.mock.results
+      .filter((_result, index) => setTimeoutSpy.mock.calls[index][1] === 2_000)
+      .map(result => result.value as { hasRef: () => boolean })
+    expect(bodyTimers).toHaveLength(1)
+    expect(bodyTimers[0].hasRef()).toBe(false)
+    setTimeoutSpy.mockRestore()
+  })
+
+  it('keeps the status when a failed response body stalls', async () => {
+    jest.useFakeTimers()
+    const cancel = jest.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('partial'))
+      },
+      cancel
+    })
+    const httpClient = jest.fn().mockResolvedValue(new Response(body, { status: 503 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'OverlayBroadcastHTTPError',
+      status: 503,
+      body: 'partial'
+    })
+
+    await jest.advanceTimersByTimeAsync(5_000)
+    await rejection
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the status when a failed response arrives just before the deadline', async () => {
+    jest.useFakeTimers()
+    const httpClient = jest.fn(
+      async (): Promise<Response> =>
+        await new Promise(resolve => {
+          setTimeout(() => {
+            resolve({
+              ok: false,
+              status: 502,
+              text: async () => await new Promise<string>(() => {})
+            } as unknown as Response)
+          }, 29_500)
+        })
+    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    const rejection = expect(request).rejects.toMatchObject({ status: 502, body: '' })
+
+    await jest.advanceTimersByTimeAsync(30_000)
+    await rejection
+  })
+
+  it('reports status 0 for an adapter that answers a malformed status', async () => {
+    const httpClient = jest.fn().mockResolvedValue({ ok: false, status: '503' })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toMatchObject({ status: 0, body: '' })
+  })
+
+  it('exports the STEAK validation TopicBroadcaster applies to facilitator answers', () => {
+    expect(
+      validateSTEAK({ tm_foo: { outputsToAdmit: [0, 2], coinsToRetain: [], coinsRemoved: [1] } }, [
+        'tm_foo',
+        'tm_bar'
+      ])
+    ).toEqual({ tm_foo: { outputsToAdmit: [0, 2], coinsToRetain: [], coinsRemoved: [1] } })
+    expect(() =>
+      validateSTEAK({ tm_other: { outputsToAdmit: [], coinsToRetain: [] } }, ['tm_foo'])
+    ).toThrow('unexpected topic')
+    expect(() =>
+      validateSTEAK({ tm_foo: { outputsToAdmit: [0, 0], coinsToRetain: [] } }, ['tm_foo'])
+    ).toThrow('outputsToAdmit is invalid')
+    expect(() => validateSTEAK({ STEAK: {} }, ['tm_foo'])).toThrow('unexpected topic')
+    expect(() => validateSTEAK([], ['tm_foo'])).toThrow('not a valid STEAK object')
+  })
+
   it('aborts a facilitator request at its fixed deadline', async () => {
     jest.useFakeTimers()
     const httpClient = jest.fn(
@@ -341,6 +535,28 @@ describe('SHIPCast', () => {
       code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED',
       description: 'Not all hosts acknowledged the required topics.'
     })
+  })
+
+  it('accepts BRC-207 per-asset topic names and keeps rejecting noncanonical ones', () => {
+    const assetTopic = `tm_color_${'0123456789abcdef'.repeat(4)}_0`
+    expect(
+      () =>
+        new SHIPCast([assetTopic, 'tm_uhrp_files'], {
+          requireAcknowledgmentFromAnyHostForTopics: [assetTopic]
+        })
+    ).not.toThrow()
+    for (const topic of [
+      'tm_',
+      'tm__x',
+      'tm_x_',
+      'tm_Color',
+      'tm_' + 'a'.repeat(297),
+      `color_${'0123456789abcdef'.repeat(4)}_0`
+    ]) {
+      expect(() => new SHIPCast([topic])).toThrow(
+        new Error('Broadcast topics must contain unique canonical tm_ topic names.')
+      )
+    }
   })
 
   it('Handles constructor errors', () => {

@@ -716,6 +716,21 @@ describe('Beef tests', () => {
       expect(b.version).toBe(BEEF_V1)
     }
   })
+
+  test('refuses a one-transaction BUMP whose only leaf is not at offset 0', () => {
+    const txid = 'f5eedbcaed2b12685bfc046c04ae7827e47ba6b75cb09342a5ec062ee4c4997f'
+    const offsetOne =
+      '0100beef01fe05350c00010101027f99c4e42e06eca54293b05cb7a67be42778ae046c04fc5b68122bedcadbeef500'
+    expect(() => Beef.fromString(offsetOne)).toThrow('Missing hash for index 1 at height 0')
+
+    const offsetZero =
+      '0100beef01fe05350c00010100027f99c4e42e06eca54293b05cb7a67be42778ae046c04fc5b68122bedcadbeef50101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffff01010000000000000000000000000100'
+    const beef = Beef.fromString(offsetZero)
+    expect(beef.bumps).toHaveLength(1)
+    expect(beef.bumps[0].computeRoot(txid)).toEqual(txid)
+    expect(beef.txs).toHaveLength(1)
+    expect(beef.txs[0].txid).toEqual(txid)
+  })
 })
 
 const b58Beef10 =

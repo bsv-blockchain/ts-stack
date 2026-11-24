@@ -19,22 +19,32 @@ function push(bytesHex: string): string {
   return (len <= 0xffff ? '4d' : '4e') + lengthBytes + bytesHex
 }
 
+const P2PKH = '76a914' + OWNER + '88ac'
+const PAYLOAD = { p: 'bsv-20', op: 'transfer', id: `${'cd'.repeat(32)}_0`, amt: '500' }
+
+/** An ord envelope: `fields` are hex tag/value pairs before the body. */
+function envelopeHex(
+  payload: object,
+  fields = '51' + push(utf8ToHex('application/bsv-20'))
+): string {
+  return (
+    '00' +
+    '63' + // OP_FALSE OP_IF
+    push(utf8ToHex('ord')) +
+    fields +
+    '00' + // OP_0 body tag
+    push(utf8ToHex(JSON.stringify(payload))) +
+    '68' // OP_ENDIF
+  )
+}
+
 // Build a BSV-21 envelope with the given JSON payload + P2PKH owner tail.
 function bsv21Script(
   payload: Record<string, string>,
   owner = OWNER,
   contentType = 'application/bsv-20'
 ): LockingScript {
-  const json = utf8ToHex(JSON.stringify(payload))
-  const envelope =
-    '00' +
-    '63' + // OP_FALSE OP_IF
-    push(utf8ToHex('ord')) +
-    '51' + // OP_1 content-type tag
-    push(utf8ToHex(contentType)) +
-    '00' + // OP_0 separator
-    push(json) +
-    '68' // OP_ENDIF
+  const envelope = envelopeHex(payload, '51' + push(utf8ToHex(contentType)))
   const p2pkh = '76a914' + owner + '88ac'
   return LockingScript.fromHex(envelope + p2pkh)
 }
@@ -95,5 +105,100 @@ describe('Bsv21Token.decode', () => {
     expect(() => Bsv21Token.decode(LockingScript.fromHex('01'.repeat(31)))).toThrow(
       'missing OP_FALSE OP_IF'
     )
+  })
+
+  it('decodes auth and deploy+auth, which carry no amount', () => {
+    const id = `${'cd'.repeat(32)}_0`
+    expect(Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'auth', id }))).toMatchObject({
+      id,
+      amt: '0',
+      op: 'auth',
+      isMint: false
+    })
+    expect(Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'deploy+auth' }))).toMatchObject({
+      id: '',
+      amt: '0',
+      op: 'deploy+auth'
+    })
+    expect(() => Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'auth', id, amt: '1' }))).toThrow(
+      'carries no amount'
+    )
+  })
+
+  it('exposes the op, payload and spend condition', () => {
+    const d = Bsv21Token.decode(bsv21Script(PAYLOAD))
+    expect(d.op).toBe('transfer')
+    expect(d.payload).toEqual(PAYLOAD)
+    expect(d.lockingScript.toHex()).toBe(P2PKH)
+  })
+
+  it('reads the envelope after the locking script', () => {
+    const d = Bsv21Token.decode(LockingScript.fromHex(P2PKH + envelopeHex(PAYLOAD)))
+    expect(d).toMatchObject({ id: PAYLOAD.id, amt: '500', ownerHash160: OWNER })
+    expect(d.lockingScript.toHex()).toBe(P2PKH)
+  })
+
+  it('reads the envelope before OP_CODESEPARATOR and the locking script', () => {
+    const d = Bsv21Token.decode(LockingScript.fromHex(envelopeHex(PAYLOAD) + 'ab' + P2PKH))
+    expect(d.ownerHash160).toBe(OWNER)
+    expect(d.lockingScript.toHex()).toBe(P2PKH)
+  })
+
+  it('reads a non-P2PKH spend condition with no owner hash', () => {
+    const d = Bsv21Token.decode(LockingScript.fromHex(envelopeHex(PAYLOAD) + '51'))
+    expect(d.ownerHash160).toBe('')
+    expect(d.lockingScript.toASM()).toBe('OP_1')
+    expect(
+      Bsv21Token.decode(LockingScript.fromHex(envelopeHex(PAYLOAD))).lockingScript.chunks
+    ).toEqual([])
+  })
+
+  it('takes the last value of a repeated field', () => {
+    const bsv20 = '51' + push(utf8ToHex('application/bsv-20'))
+    const text = '51' + push(utf8ToHex('text/plain'))
+    expect(
+      Bsv21Token.decode(LockingScript.fromHex(envelopeHex(PAYLOAD, text + bsv20) + P2PKH)).amt
+    ).toBe('500')
+    expect(() =>
+      Bsv21Token.decode(LockingScript.fromHex(envelopeHex(PAYLOAD, bsv20 + text) + P2PKH))
+    ).toThrow('wrong content-type')
+  })
+
+  it('accepts single-byte pushes as tag aliases and ignores unknown fields', () => {
+    const fields =
+      '0101' + // push 0x01: the content-type tag
+      push(utf8ToHex('application/bsv-20')) +
+      '55' + // OP_5: an unknown field
+      push('beef') +
+      push(utf8ToHex('key')) + // a multi-byte tag names a field this decoder does not use
+      push('cafe')
+    const aliased =
+      '00' +
+      '63' +
+      push(utf8ToHex('ord')) +
+      fields +
+      '0100' + // push 0x00: the body tag
+      push(utf8ToHex(JSON.stringify(PAYLOAD))) +
+      '68' +
+      P2PKH
+    const script = LockingScript.fromHex(aliased)
+    expect(Bsv21Token.decode(script)).toMatchObject({ amt: '500', ownerHash160: OWNER })
+    const envelope = Bsv21Token.envelope(script)!
+    expect(envelope.contentType).toBe('application/bsv-20')
+    expect(envelope.fields.get(5)).toEqual([0xbe, 0xef])
+  })
+
+  it('rejects a truncated envelope and locates none in plain scripts', () => {
+    const truncated =
+      '00' + '63' + push(utf8ToHex('ord')) + '51' + push(utf8ToHex('application/bsv-20'))
+    expect(() => Bsv21Token.decode(LockingScript.fromHex(truncated))).toThrow(
+      'unterminated ord envelope'
+    )
+    expect(() =>
+      Bsv21Token.decode(LockingScript.fromHex(truncated + '00' + push(utf8ToHex('{}')) + '76'))
+    ).toThrow('missing OP_ENDIF')
+    expect(Bsv21Token.envelope(LockingScript.fromHex(P2PKH))).toBeUndefined()
+    const image = LockingScript.fromHex(envelopeHex(PAYLOAD, '51' + push(utf8ToHex('image/png'))))
+    expect(Bsv21Token.envelope(image)?.contentType).toBe('image/png')
   })
 })

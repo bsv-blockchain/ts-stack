@@ -199,7 +199,7 @@ describe('IndexedDB sync identity lookups', () => {
     for (const row of rows) await old.put('transactions', row)
     old.close()
     try {
-      expect(await writer.migrate('Synthetic version 5 wallet', identity)).toBe('6')
+      expect(await writer.migrate('Synthetic version 5 wallet', identity)).toBe('7')
       expect(await writer.db!.getAll('transactions')).toEqual(rows)
       expect((await writer.findTransactions({
         partial: { userId: 1, txid: targetTxid }, noRawTx: true
@@ -212,4 +212,33 @@ describe('IndexedDB sync identity lookups', () => {
       await deleteDB(writer.dbName)
     }
   })
+  test('upgrades populated version 6 with a key-only minimum-height lookup and unchanged proof bytes', async () => {
+    const writer = storage()
+    const stamp = new Date('2026-01-01')
+    const rows: TableProvenTx[] = [900000, 800000, 850000].map((height, index) => ({
+      provenTxId: index + 1, created_at: stamp, updated_at: stamp, height, index: 0,
+      txid: (index + 1).toString(16).padStart(64, '0'), rawTx: Array(4096).fill(index),
+      merklePath: [1, 2, 3], merkleRoot: 'ab'.repeat(32), blockHash: 'cd'.repeat(32)
+    }))
+    const old = await openDB<StorageIdbSchema>(writer.dbName, 6, {
+      upgrade(db) { idbHelpers.upgradeAllStoresV1(db) }
+    })
+    for (const row of rows) await old.put('proven_txs', row)
+    old.close()
+    try {
+      expect(await writer.migrate('Synthetic version 6 wallet', identity)).toBe('7')
+      expect(await writer.db!.getAll('proven_txs')).toEqual(rows)
+      const scan = jest.spyOn(writer, 'filterProvenTxs').mockRejectedValue(new Error('must not scan proof blobs'))
+      expect(await writer.getProvenTxsReviewStartHeight()).toBe(800000)
+      scan.mockRestore()
+      await writer.destroy()
+      await writer.makeAvailable()
+      expect(await writer.getProvenTxsReviewStartHeight()).toBe(800000)
+      expect(await writer.db!.getAll('proven_txs')).toEqual(rows)
+    } finally {
+      await writer.destroy()
+      await deleteDB(writer.dbName)
+    }
+  })
+
 })

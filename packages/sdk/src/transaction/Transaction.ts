@@ -575,7 +575,7 @@ export default class Transaction {
    * @returns {Transaction} - A new Transaction instance.
    */
   static fromHexBEEF(hex: string, txid?: string): Transaction {
-    return Transaction.fromBEEF(toArray(hex, 'hex'), txid)
+    return Transaction.fromBEEF(toUint8Array(hex, 'hex'), txid)
   }
 
   constructor(
@@ -1931,9 +1931,7 @@ export default class Transaction {
    * @throws Error if there are any missing sourceTransactions unless `allowPartial` is true.
    */
   toBEEF(allowPartial?: boolean): number[] {
-    const writer = new Writer()
-    this.writeSerializedBEEF(writer, allowPartial)
-    return writer.toArray()
+    return toArray(this.toBEEFBytes(allowPartial))
   }
 
   /**

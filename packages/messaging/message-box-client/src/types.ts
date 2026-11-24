@@ -96,6 +96,35 @@ export interface MessageBoxClientOptions {
 }
 
 /**
+ * What the live socket is doing, as the client knows it. Reported rather than
+ * inferred: before this, a consumer could only find out by sending.
+ *
+ * - `connecting` — a socket exists and has not authenticated yet.
+ * - `live` — authenticated; `rooms` are the rooms joined on it (see
+ *   {@link LiveStatus.rooms}).
+ * - `reconnecting` — dropped, and something will restore it: Socket.IO's own
+ *   retry, or a rebuild this client has scheduled.
+ * - `closed` — dropped, and nothing will restore it. A deliberate
+ *   `disconnectWebSocket()`, a drop under `managerOptions.reconnection: false`,
+ *   or a rebuild that was tried and failed. The next call that needs a socket
+ *   still builds one.
+ */
+export type LiveConnectionState = 'connecting' | 'live' | 'reconnecting' | 'closed'
+
+/** A live-socket state and the rooms joined on it, as `onLiveStatus` reports it. */
+export interface LiveStatus {
+  state: LiveConnectionState
+  /**
+   * Rooms joined on the current socket: requested and not refused by the
+   * server. Recorded when requested, before the server answers; a `joinFailed`
+   * removes one. Empty unless `state` is `live`.
+   */
+  rooms: readonly string[]
+  /** Socket.IO's disconnect reason, when the state came from a drop. */
+  reason?: string
+}
+
+/**
  * Represents a decrypted message received from a MessageBox.
  * Includes metadata such as sender identity, timestamps, and optional acknowledgment status.
  *

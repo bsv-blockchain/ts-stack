@@ -15,13 +15,15 @@
 // copies that message into its deployPayload / detailsSchema reasons, so the
 // message and the order the checks run in are both part of the contract. For
 // each header the decoder checks: additional info (indefinite, reserved), then
-// minimality (a float or simple value with a too-small argument is
-// 'non-minimal header'), then the major type; a length or count is compared with
-// the TOTAL input length ('length exceeds input') before any byte is read
-// ('truncated input'); a map's count is checked before its depth; and for each
-// key: its header, that it is text, its UTF-8, then its order. Key rules apply to
-// nested maps exactly as to the top level, and a 64-bit length is bounded before
-// it is ever converted to a machine integer.
+// minimality (an integer argument or a one-byte simple value that has a shorter
+// form is 'non-minimal header'; a float's bits are not an argument), then the
+// major type; a length or count is compared with the TOTAL input length ('length
+// exceeds input') before any byte is read ('truncated input'); a container's
+// count is checked before its depth; and for each key: its header, that it is
+// text, its UTF-8, then its order. Key rules apply to nested maps exactly as to
+// the top level, and a 64-bit length is bounded before it is ever converted to a
+// machine integer. Accepted rows must re-encode to their own bytes, so no accept
+// row carries a float with an integral value (it would re-encode as an integer).
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -36,6 +38,7 @@ import {
   encodeAmountChunk,
   encodeStrictCbor,
   isTokenShaped,
+  STRICT_CBOR_MAX_DEPTH,
   StrictCborError,
   tokenIdToString,
   tryDecodeStrictCbor
@@ -382,21 +385,26 @@ const mapWithBytes = (dataLength: number): string =>
 const NON_MINIMAL = 'non-minimal header'
 const INDEFINITE = 'indefinite length'
 const RESERVED = 'reserved additional info'
-const SIMPLE = 'simple value or float not allowed'
-const majorType = (major: number): string => `major type ${major} not allowed`
+const SIMPLE = 'simple value not allowed'
+const FLOAT_WIDTH = 'float must be 64-bit'
+const NON_FINITE = 'non-finite float'
+const TAG = 'only tag 42 is allowed'
+const BAD_CID = 'invalid CID'
 const TRUNCATED_INPUT = 'truncated input'
 const LENGTH_EXCEEDS = 'length exceeds input'
-const TOO_DEEP = 'map nesting deeper than 4'
+const TOO_DEEP = `nesting deeper than ${STRICT_CBOR_MAX_DEPTH}`
 const KEY_NOT_TEXT = 'map key must be text'
 const UNSORTED = 'map keys unsorted or duplicated'
 const BAD_UTF8 = 'invalid UTF-8'
 const NOT_A_MAP = 'top level must be a map'
 const TRAILING = 'trailing bytes'
-const INPUT_TOO_LARGE = 'input exceeds 4096 bytes'
+
+// {a: [[[...1]]]} with `levels` nested arrays.
+const nestedArrays = (levels: number): string => `a16161${'81'.repeat(levels)}01`
 
 // [id, hex, error]: error null is an accepted map. Hex is written out, never
 // derived from the encoder, so the verdicts stay an independent statement of
-// spec §3.5.
+// strict DAG-CBOR as BRC-162 requires it.
 type CborCase = [id: string, hex: string, error: string | null]
 
 const CBOR_ACCEPTS: CborCase[] = [
@@ -413,7 +421,19 @@ const CBOR_ACCEPTS: CborCase[] = [
   ['uint-4294967295', 'a16161 1affffffff', null],
   ['uint-4294967296', 'a16161 1b0000000100000000', null],
   ['all-value-kinds', 'a5 6162 420102 6166 f4 616d a1 6178 01 616e f6 6174 f5', null],
+  ['negative-int-minus-1', 'a1 6161 20', null],
+  ['negative-int-minimal-one-byte', 'a1 6161 38ff', null],
+  ['negative-int-min-2-64', 'a1 6161 3bffffffffffffffff', null],
+  ['float-1-5', 'a1 6161 fb3ff8000000000000', null],
+  ['float-negative-0-5', 'a1 6161 fbbfe0000000000000', null],
+  ['array', 'a1 6161 8101', null],
+  ['empty-array', 'a1 6161 80', null],
+  ['array-mixed', 'a1 6161 84 01 20 fb3ff8000000000000 80', null],
+  ['tag-42-cid', 'a1 6161 d82a 4100', null],
+  ['icon-text-bytes', 'a1 6469636f6e 82 69696d6167652f706e67 420102', null],
   ['depth-4', 'a1 6161 a1 6162 a1 6163 a1 6164 01', null],
+  ['depth-5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01', null],
+  ['depth-at-bound', nestedArrays(STRICT_CBOR_MAX_DEPTH - 1), null],
   ['keys-length-first', 'a2 6162 01 626161 02', null],
   ['keys-same-length-sorted', 'a2 6161 01 6162 02', null],
   ['key-with-24-bytes', `a1 7818 ${'61'.repeat(24)} 01`, null],
@@ -431,19 +451,22 @@ const CBOR_ACCEPTS: CborCase[] = [
   ['key-utf8', 'a1 63e282ac 63e282ac', null],
   ['key-proto', 'a1 695f5f70726f746f5f5f a1 6161 01', null],
   ['nested-keys-length-first', 'a1 6161 a2 6162 01 626161 02', null],
-  ['size-limit-4096', mapWithBytes(4090), null]
+  ['bytes-4090', mapWithBytes(4090), null],
+  ['bytes-4091-no-size-limit', mapWithBytes(4091), null]
 ]
 
-// Values and headers outside the subset.
+// Values and headers outside strict DAG-CBOR.
 const CBOR_VALUE_REJECTS: CborCase[] = [
-  ['float-1', 'a16161fb3ff0000000000000', SIMPLE],
-  ['float16', 'a1 6161 f93c00', SIMPLE],
-  ['float32', 'a1 6161 fa3f800000', SIMPLE],
-  ['tag-42', 'a1 6161 d82a 4100', majorType(6)],
-  ['negative-int', 'a1 6161 20', majorType(1)],
-  ['array', 'a1 6161 8101', majorType(4)],
+  ['float16', 'a1 6161 f93c00', FLOAT_WIDTH],
+  ['float32', 'a1 6161 fa3f800000', FLOAT_WIDTH],
+  ['float-nan', 'a1 6161 fb7ff8000000000000', NON_FINITE],
+  ['float-infinity', 'a1 6161 fb7ff0000000000000', NON_FINITE],
+  ['tag-41', 'a1 6161 d829 4100', TAG],
+  ['tag-42-not-bytes', 'a1 6161 d82a 6100', BAD_CID],
+  ['tag-42-no-identity-prefix', 'a1 6161 d82a 4101', BAD_CID],
   ['undefined', 'a1 6161 f7', SIMPLE],
   ['simple-32', 'a1 6161 f820', SIMPLE],
+  ['simple-0', 'a1 6161 e0', SIMPLE],
   ['simple-20-two-byte-form', 'a1 6161 f814', NON_MINIMAL],
   ['non-minimal-uint', 'a1 6161 1805', NON_MINIMAL],
   ['non-minimal-uint-16-bit', 'a1 6161 190005', NON_MINIMAL],
@@ -451,7 +474,10 @@ const CBOR_VALUE_REJECTS: CborCase[] = [
   ['non-minimal-uint-64-bit', 'a1 6161 1b00000000ffffffff', NON_MINIMAL],
   ['non-minimal-length', 'b801 6161 01', NON_MINIMAL],
   ['non-minimal-key-header', 'a1 7801 61 01', NON_MINIMAL],
+  ['non-minimal-array-count', 'a1 6161 9801 01', NON_MINIMAL],
+  ['non-minimal-tag', 'a1 6161 d9002a 4100', NON_MINIMAL],
   ['indefinite-map', 'bf 6161 01 ff', INDEFINITE],
+  ['indefinite-array', 'a1 6161 9f 01 ff', INDEFINITE],
   ['indefinite-text', 'a1 6161 7f6161ff', INDEFINITE],
   ['indefinite-bytes', 'a1 6161 5f4100ff', INDEFINITE],
   ['break-byte-as-value', 'a1 6161 ff', INDEFINITE],
@@ -461,11 +487,12 @@ const CBOR_VALUE_REJECTS: CborCase[] = [
   ['top-level-array', '8101', NOT_A_MAP],
   ['empty-input', '', TRUNCATED_INPUT],
   ['trailing-byte', 'a1 6161 01 00', TRAILING],
-  ['depth-5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01', TOO_DEEP],
+  ['depth-over-bound', nestedArrays(STRICT_CBOR_MAX_DEPTH), TOO_DEEP],
   ['truncated-value', 'a1 6161', TRUNCATED_INPUT],
   ['truncated-key', 'a1 61', TRUNCATED_INPUT],
   ['truncated-header', 'a1 6161 19 01', TRUNCATED_INPUT],
-  ['size-over-4096', mapWithBytes(4091), INPUT_TOO_LARGE]
+  ['truncated-float', 'a1 6161 fb00', TRUNCATED_INPUT],
+  ['truncated-array', 'a1 6161 82 01', TRUNCATED_INPUT]
 ]
 
 // Key rules, at the top level and inside a nested map.
@@ -492,6 +519,7 @@ const CBOR_LENGTH_REJECTS: CborCase[] = [
   ['text-length-2-64-1', 'a1 6161 7b ffffffffffffffff', LENGTH_EXCEEDS],
   ['key-length-2-64-1', 'a1 7b ffffffffffffffff', LENGTH_EXCEEDS],
   ['map-count-2-64-1', 'bb ffffffffffffffff', LENGTH_EXCEEDS],
+  ['array-count-2-64-1', 'a1 6161 9b ffffffffffffffff', LENGTH_EXCEEDS],
   ['nested-map-count-longer-than-input', 'a1 6161 b8ff', LENGTH_EXCEEDS]
 ]
 
@@ -515,15 +543,15 @@ const CBOR_UTF8_REJECTS: CborCase[] = [
 
 // Which check wins when one input breaks two rules.
 const CBOR_ORDER_REJECTS: CborCase[] = [
-  // minimality is checked before the major type
-  ['order-minimal-before-float64', 'a16161fb0000000000000000', NON_MINIMAL],
-  ['order-minimal-before-float32', 'a16161fa00000000', NON_MINIMAL],
-  ['order-minimal-before-float16', 'a16161f90000', NON_MINIMAL],
+  // minimality is checked before the major type; a float's bits are not an argument
   ['order-minimal-before-negative-int', 'a161613800', NON_MINIMAL],
-  ['order-negative-int-minimal-header', 'a1616138ff', majorType(1)],
-  // the map count, then the depth, then the key
+  ['order-simple-two-byte-form-before-value', 'a16161f814', NON_MINIMAL],
+  ['order-float-width-before-value', 'a16161fa00000000', FLOAT_WIDTH],
+  ['order-float-width-before-value-16', 'a16161f90000', FLOAT_WIDTH],
+  // the container count, then the depth, then the key
   ['order-count-before-depth', 'a1 6161 a1 6162 a1 6163 a1 6164 b8ff', LENGTH_EXCEEDS],
-  ['order-depth-before-key', 'a1 6161 a1 6162 a1 6163 a1 6164 a1 4161', TOO_DEEP],
+  ['order-depth-before-key', `a16161${'81'.repeat(STRICT_CBOR_MAX_DEPTH - 1)}a14161`, TOO_DEEP],
+  ['order-nested-key-text', 'a1 6161 a1 6162 a1 6163 a1 6164 a1 4161', KEY_NOT_TEXT],
   // a key must be text, and valid UTF-8, before its order is judged
   ['order-key-text-before-key-order', 'a2 6162 01 4161 01', KEY_NOT_TEXT],
   ['order-key-utf8-before-key-order', 'a2 6162 01 61ff 01', BAD_UTF8],
@@ -782,9 +810,10 @@ describe('BRC-162 templates vectors', () => {
         INDEFINITE,
         RESERVED,
         SIMPLE,
-        majorType(1),
-        majorType(4),
-        majorType(6),
+        FLOAT_WIDTH,
+        NON_FINITE,
+        TAG,
+        BAD_CID,
         TRUNCATED_INPUT,
         LENGTH_EXCEEDS,
         TOO_DEEP,
@@ -792,8 +821,7 @@ describe('BRC-162 templates vectors', () => {
         UNSORTED,
         BAD_UTF8,
         NOT_A_MAP,
-        TRAILING,
-        INPUT_TOO_LARGE
+        TRAILING
       ])
     )
   })

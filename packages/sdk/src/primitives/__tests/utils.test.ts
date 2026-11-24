@@ -484,3 +484,19 @@ describe('constantTimeEquals', () => {
     expect(constantTimeEquals(new Uint8Array([5,6,7]), new Uint8Array([5,6,7]))).toBe(true)
   })
 })
+
+describe('toArray from Uint8Array', () => {
+  it('returns a dense plain array with the same bytes', () => {
+    const bytes = new Uint8Array([0, 1, 127, 128, 255])
+    const result = toArray(bytes)
+    expect(Array.isArray(result)).toBe(true)
+    expect(result).toEqual([0, 1, 127, 128, 255])
+    expect(Object.keys(result)).toHaveLength(bytes.length)
+    expect(toArray(new Uint8Array(0))).toEqual([])
+  })
+
+  it('matches Array.from for hex input', () => {
+    const hex = '00ff10a0'
+    expect(toArray(hex, 'hex')).toEqual([0, 255, 16, 160])
+  })
+})

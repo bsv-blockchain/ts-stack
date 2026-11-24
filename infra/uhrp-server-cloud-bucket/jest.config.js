@@ -1,6 +1,9 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  // Keep this environment's real intrinsics directly available to SDK byte checks.
+  // The complete 4 MiB authentication fixture retains its original 30 s bound.
+  sandboxInjectedGlobals: ['Object', 'Number'],
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests/**/*.test.js', '**/*.test.ts'],
   transform: {

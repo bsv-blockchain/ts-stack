@@ -26,6 +26,8 @@ describe('expressSkeletonScaffolder', () => {
     expect(pkg.dependencies).toHaveProperty('express')
     expect(readFileSync(join(dir, 'src/index.ts'), 'utf8')).toContain("from 'express'")
     expect(existsSync(join(dir, 'tsconfig.json'))).toBe(true)
+    const ignored = readFileSync(join(dir, '.gitignore'), 'utf8').split('\n')
+    expect(ignored).toEqual(expect.arrayContaining(['node_modules', 'dist', '.env']))
   })
 })
 

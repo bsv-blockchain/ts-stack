@@ -1,3 +1,18 @@
+import { registerUMPActionReceiptReader, umpUpdateActionLabel } from './utility/umpActionReceipt'
+import { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
+import { validateInternalizeActionArgs } from './utility/validateInternalizeActionArgs'
+import { promiseFromSync } from './utility/promiseFromSync'
+export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
+import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
+import {
+  BRC197_INTERNALIZATION_PROFILE,
+  assertBrc197Recipient,
+  brc197ChildPublicKey,
+  ownBrc197InternalizeActionArgs,
+  validateBrc197InternalizeActionArgs,
+  type Brc197InternalizeActionArgs,
+  type Brc197InternalizationCapabilities
+} from './sdk/Brc197Internalization'
 import {
   type ValidAcquireIssuanceCertificateArgs,
   type ValidCreateActionArgs,
@@ -8,7 +23,6 @@ import {
   validateCreateActionArgs,
   validateDiscoverByAttributesArgs,
   validateDiscoverByIdentityKeyArgs,
-  validateInternalizeActionArgs,
   validateListActionsArgs,
   validateListCertificatesArgs,
   validateListOutputsArgs as validateSDKListOutputsArgs,
@@ -43,7 +57,6 @@ import {
   GetPublicKeyResult,
   GetVersionResult,
   InternalizeActionArgs,
-  InternalizeActionResult,
   ListActionsArgs,
   ListActionsResult,
   ListCertificatesArgs,
@@ -93,7 +106,7 @@ import {
   TelemetryConfig,
   createPublicHTTPSFetch
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { fromBase58, toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
 import { proveCertificate } from './signer/methods/proveCertificate'
@@ -132,7 +145,15 @@ import {
 } from './sdk/types'
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_REVIEW_ACTIONS
+} from './sdk/WERR_errors'
+import type { AdminValidCreateActionArgs } from './utility/adminOriginator'
+import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
@@ -305,7 +326,7 @@ export interface WalletArgs {
    * internal transaction checks. This is an implementation extension and does
    * not change the BRC-100 wallet interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /**
    * Optional provider-neutral tracing shared by wallet, lookup, storage, and
    * permission layers. Disabled unless an enabled sink is supplied.
@@ -363,8 +384,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
-  readonly scriptVerifier?: SpendVerifierInterface
+  readonly scriptVerifier?: WalletScriptVerifier
   readonly telemetry: Telemetry
+  private adminOriginatorValue?: string
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -428,6 +450,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.services != null) {
       this.storage.setServices(this.services)
     }
+    registerUMPActionReceiptReader(this, (operationId, originator) =>
+      this.readStoredUMPActionReceipt(operationId, originator)
+    )
   }
 
   async destroy(): Promise<void> {
@@ -635,6 +660,33 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // List Methods
   /// ///////////////
 
+  /** Read the signed request only after binding its transaction ID to the authorized account and operation label. */
+  private async readStoredUMPActionReceipt(operationId: string, originator: string): Promise<number[] | undefined> {
+    if (!this.storage.isActiveStorageProvider()) return undefined
+    const label = umpUpdateActionLabel(operationId)
+    const { totalActions, actions } = await this.listActions(
+      { labels: [label], includeLabels: true, limit: 2 },
+      originator
+    )
+    if (totalActions === 0 && actions.length === 0) return undefined
+    const [action] = actions
+    if (totalActions !== 1 || actions.length !== 1 || !action.isOutgoing || action.labels?.includes(label) !== true)
+      throw new Error('Could not bind the retained wallet action to its UMP update.')
+    if (action.status === 'unsigned') return undefined
+
+    return await this.storage.runAsStorageProvider(async storage => {
+      const requests = await storage.findProvenTxReqs({ partial: { txid: action.txid }, paged: { limit: 2 } })
+      if (requests.length !== 1) return undefined
+      const [request] = requests
+      if (request.inputBEEF == null || request.status === 'invalid' || request.status === 'doubleSpend')
+        return undefined
+      const beef = new Beef()
+      await storage.mergeReqToBeefToShareExternally(request, beef, [])
+      await verifyUnlockScripts(action.txid, beef, this.scriptVerifier)
+      return beef.toBinaryAtomic(action.txid)
+    })
+  }
+
   async listActions(
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -644,14 +696,53 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const storageArgs = this.actionBatch.hasWorkspace ? { ...vargs, limit: 10000, offset: 0 } : vargs
     const r = this.actionBatch.overlayListActions(await this.storage.listActions(storageArgs), vargs)
     // Implement security policy to block customInstructions from output results.
-    for (const action of r.actions) {
-      if (action.outputs != null) {
-        for (const output of action.outputs) {
-          output.customInstructions = undefined
+    // The host's own admin originator keeps them: its customInstructions are its
+    // own wallet-private metadata.
+    if (!this.isAdminOriginator(originator)) {
+      for (const action of r.actions) {
+        if (action.outputs != null) {
+          for (const output of action.outputs) {
+            output.customInstructions = undefined
+          }
         }
       }
     }
     return r
+  }
+
+  /**
+   * The host's own originator (the domain its WalletPermissionsManager uses as
+   * adminOriginator), if the host set one. Undefined by default.
+   */
+  get adminOriginator(): string | undefined {
+    return this.adminOriginatorValue
+  }
+
+  /**
+   * Names the host's own originator. Trusted host code calls this once, where
+   * it builds the wallet; it cannot be changed afterwards. For calls from this
+   * originator only:
+   * - listActions returns output customInstructions (redacted for every other
+   *   originator, as before);
+   * - createAction tells storage the action is the admin's
+   *   (AdminValidCreateActionArgs.isAdminOriginator), which keeps its funding
+   *   plan minimal and lets a storage validateResolvedActionInput hook allow
+   *   inputs that other originators may not spend.
+   * The flag is derived from the originator argument, never from action fields.
+   */
+  setAdminOriginator(originator: OriginatorDomainNameStringUnder250Bytes): void {
+    validateOriginator(originator)
+    if (typeof originator !== 'string' || originator === '') {
+      throw new WERR_INVALID_PARAMETER('originator', 'a non-empty originator domain')
+    }
+    if (this.adminOriginatorValue !== undefined) {
+      throw new WERR_INVALID_OPERATION('The admin originator is already set')
+    }
+    this.adminOriginatorValue = originator
+  }
+
+  private isAdminOriginator(originator?: OriginatorDomainNameStringUnder250Bytes): boolean {
+    return this.adminOriginatorValue !== undefined && originator === this.adminOriginatorValue
   }
 
   get storageParty(): string {
@@ -1154,6 +1245,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
       const { auth, vargs } = this.validateAuthAndArgs(args, validateCreateActionArgs, logger)
       logger?.log('validated args')
 
+      // Decided from the originator argument only, never from action fields.
+      ;(vargs as AdminValidCreateActionArgs).isAdminOriginator = this.isAdminOriginator(originator)
       vargs.includeAllSourceTransactions = this.includeAllSourceTransactions
       if (this.randomVals != null && this.randomVals.length > 1) {
         vargs.randomVals = [...this.randomVals]
@@ -1240,7 +1333,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<InternalizeActionResult> {
+  ): Promise<StorageInternalizeActionResult> {
     validateOriginator(originator)
     const { auth, vargs } = this.validateAuthAndArgs(args, validateInternalizeActionArgs)
 
@@ -1254,6 +1347,51 @@ export class Wallet implements WalletInterface, ProtoWallet {
     throwIfUnsuccessfulInternalizeAction(r)
 
     return r
+  }
+
+  /** Before locking listing value, callers must obtain this explicit local capability.
+   * It verifies protected public derivation and the currently authorized writer.
+   * It does not establish target miner policy, listing lineage or chain currentness. */
+  async getBrc197InternalizationCapabilities(): Promise<Brc197InternalizationCapabilities> {
+    const capability = this.storage.getBrc197InternalizationCapabilities
+    if (typeof capability !== 'function')
+      throw new WERR_NOT_IMPLEMENTED('Local BRC-197 fixed-child internalization is unsupported.')
+    const result = await capability.call(this.storage)
+    const root = await this.getPublicKey({ identityKey: true })
+    const child = await this.getPublicKey({
+      protocolID: [2, '3241645161d8'],
+      keyID: 'brc197 authority',
+      counterparty: 'anyone',
+      forSelf: true
+    })
+    if (
+      result.profile !== BRC197_INTERNALIZATION_PROFILE ||
+      result.recipientIdentityKey !== root.publicKey ||
+      result.childPublicKey !== child.publicKey ||
+      child.publicKey !== brc197ChildPublicKey(root.publicKey)
+    ) {
+      throw new WERR_INVALID_PARAMETER('storage', 'the authenticated protected BRC-197 child owner')
+    }
+    return { ...result }
+  }
+
+  /** Separate local profile. Ordinary internalizeAction and remote wire schemas are unchanged. */
+  async internalizeBrc197Action(
+    args: Brc197InternalizeActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<StorageInternalizeActionResult> {
+    validateOriginator(originator)
+    const owned = ownBrc197InternalizeActionArgs(args)
+    const { auth, vargs } = this.validateAuthAndArgs(owned, validateBrc197InternalizeActionArgs)
+    assertBrc197Recipient(owned, auth.identityKey)
+    if (vargs.labels.includes(specOpThrowReviewActions)) throwDummyReviewActions()
+    if (hasBrc177NoSendExpiryLabel(vargs.labels)) {
+      throw new WERR_INVALID_PARAMETER('labels', 'BRC-177 noSend expiry labels only on outgoing createAction requests')
+    }
+    await this.getBrc197InternalizationCapabilities()
+    const result = await internalizeBrc197Action(this, auth, owned)
+    throwIfUnsuccessfulInternalizeAction(result)
+    return result
   }
 
   async abortAction(
@@ -1282,20 +1420,21 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { relinquished: true }
   }
 
-  async isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    const r: { authenticated: true } = {
-      authenticated: true
-    }
-    return r
+  isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      const r: { authenticated: true } = {
+        authenticated: true
+      }
+      return r
+    })
   }
 
-  async waitForAuthentication(
-    args: {},
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    return { authenticated: true }
+  waitForAuthentication(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { authenticated: true }
+    })
   }
 
   async getHeight(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
@@ -1313,14 +1452,18 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { header: toHex(serializedHeader) }
   }
 
-  async getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    validateOriginator(originator)
-    return { network: toWalletNetwork(this.chain) }
+  getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { network: toWalletNetwork(this.chain) }
+    })
   }
 
-  async getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    validateOriginator(originator)
-    return { version: 'wallet-brc100-1.0.0' }
+  getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { version: 'wallet-brc100-1.0.0' }
+    })
   }
 
   /**
@@ -1410,7 +1553,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
         r.utxos.push({ satoshis: o.satoshis, outpoint: o.outpoint })
       }
       offset += change.outputs.length
-      if (offset >= change.totalOutputs) break
+      if (offset >= numericTotalOutputs(change)) break
     }
     return r
   }
@@ -1426,8 +1569,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (args.basket !== specOpWalletBalance) {
       args.tags = [...(args.tags || []), specOpWalletBalance]
     }
-    const r = await this.listOutputs(args)
-    return r.totalOutputs
+    return numericTotalOutputs(await this.listOutputs(args))
   }
 
   /**
@@ -1591,6 +1733,14 @@ function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
   const balancePrefix = 'balance '
   if (vargs.basket.startsWith(balancePrefix)) {
     vargs.basket = vargs.basket.slice(balancePrefix.length)
+    // BRC-112: `balance p <module> <basket>` is never allowed; a module may offer
+    // `p <module> balance <basket>` instead.
+    if (vargs.basket.startsWith('p ')) {
+      throw new WERR_INVALID_PARAMETER(
+        'basket',
+        `not a BRC-99 module basket: BRC-112 rejects \`balance p <module> <basket>\`; use \`p <module> balance <basket>\` if the module offers it.`
+      )
+    }
     vargs.tags = [...vargs.tags, specOpWalletBalance]
   }
   return vargs

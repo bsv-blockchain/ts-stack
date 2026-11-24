@@ -1,6 +1,6 @@
 # Build stage
-# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
+# Base version 24.22.3-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 WORKDIR /app
 
@@ -50,7 +50,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 COPY --from=builder /app/dist ./dist
 
 # Keep first-party and incorporated-material terms with the deployed image.
-COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
 COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
 RUN chmod -R a=rX /usr/share/licenses/ts-stack
 LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"

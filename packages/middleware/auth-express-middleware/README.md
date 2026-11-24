@@ -1,9 +1,26 @@
 # @bsv/auth-express-middleware
 
+The unpublished candidate ships receiver-owned payload decoding and multipart
+format checks, preserving its previous SDK2 peer floor without importing new
+SDK3-only helper modules. Strict packed SDK2.8.11 and SDK3 installations use their
+actual original wallet, peer and cryptographic classes. Authentication, fatal
+UTF8 decoding, exact signed content types, resource bounds and payment/replay
+checks remain unchanged. Optional new AuthFetch payment APIs require the SDK3.3.0
+candidate; supported SDK2 receivers do not require an unpublished SDK2.9 release.
+The original large numeric-array requests above legacy structural limits still
+refuse; this fix does not claim a complete compatibility or platform gate.
+
 Express middleware for BRC-103 peer-to-peer mutual authentication over the
 BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
+
+The unpublished 2.3.0 candidate adds optional final response admission after
+BRC-104 signing. Existing routes retain their transport behavior, peer ranges and
+wire format. Routes needing a durable send fence explicitly install
+`guardAuthenticatedResponse`; no consumer migration is required for ordinary
+responses. The candidate also retains the development-only rate limiter used by
+bounded local HTTP integration fixtures.
 
 The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
@@ -34,6 +51,32 @@ and replay protection remain separate. Clients consuming larger signed responses
 need matching capacity; SDK 2.8.5 raises its header limits by 4x. No BRC100 call,
 wire or wallet-data migration is required. Source publication is a separate
 protected release step.
+
+## Exact-byte multipart authentication
+
+Set `captureRawBody: true` and install this middleware **before body parsers**
+when composing BRC-118 payments. It collects bounded raw bytes, authenticates the
+whole body and exact multipart Content-Type (including boundary), then exposes
+`req.rawBody` and the verified `req.auth.supportsMultipart` marker. Existing
+nonempty non-multipart signature preimages and the default parsed-body integration remain
+compatible. Pair with payment middleware `enableMultipart: true`; raw auth alone
+does not advertise payment support. Collection enforces request size, aggregate
+memory, pending-request and timeout limits before authentication. See the
+[BRC-118 guide](../../../docs/guides/brc118-payments.md) for limits, CORS and migration.
+
+## Empty binary request bodies
+
+Auth middleware 2.3.0 signs zero-length dense byte arrays and `Uint8Array`/`Buffer`
+values with BRC-104's `-1` body-length sentinel, matching the SDK AuthFetch 3.3.0 candidate.
+This includes `express.raw({ type: 'application/octet-stream' })` mounted before
+authentication without `captureRawBody`: Express may expose an empty Buffer even
+when HTTP carries no body. Nonempty byte bodies keep their existing preimages.
+Typed-array framing uses the same copied bytes for the length prefix and payload,
+so a shadowed view-length property cannot produce an inconsistent frame.
+For empty binary requests, upgrade the SDK client and auth receiver together;
+older clients that sign length `0` or receivers that reconstruct length `0`
+require the paired correction. No application payload or persisted-data migration
+is required.
 
 ## Requirements
 
@@ -145,6 +188,64 @@ const auth = createAuthMiddleware({
 
 Invalid option types fail during startup.
 
+## Final authenticated response admission
+
+`guardAuthenticatedResponse(res, guard)` is an opt-in boundary for services that
+must recheck authorization or output eligibility after asynchronous response
+signing. Install it in an authenticated handler before sending the response. It
+rejects unauthenticated requests, repeated registration and late registration.
+
+The guard receives an owned candidate containing the authenticated caller,
+BRC-104 transport request ID, attempt number, status, response headers and body
+bytes. Logical application operation IDs remain separate. Headers include the
+BRC-104 authentication metadata and normalized content length; Node may add its
+ordinary Date/connection metadata. Signature coverage remains BRC-104's existing
+status/body and selected-header rules; ordinary CORS/cache headers do not become
+cryptographically signed merely because they appear in this snapshot. It may await
+acquisition of the application's durable send fence. While holding that fence,
+recheck current authorization and every disclosed target, then call `enqueue()`
+synchronously. The callback queues the already signed bytes through Node's native
+HTTP response methods. It never signs, waits for a database, or authorizes the
+caller itself. A handler-level lock around `res.send()` is insufficient because
+signing happens later. The application's writers must use the paired fence,
+including writers in other processes.
+
+If the candidate became stale, return a complete replacement with `statusCode`,
+`headers` and `body: Uint8Array` without calling `enqueue()`. The middleware
+discards the first signed candidate and signs the replacement for the same
+request and session. The guard runs again with `attempt: 1`; it must recheck
+current access and enqueue this response or fail closed. Only one replacement is
+allowed. Its body plus UTF-8 header names and values may total at most 64 KiB, and
+its body must also fit the configured response-body limit. Include required CORS,
+service capability and error-profile headers explicitly: discarded candidate
+headers are not inherited. Never copy confidential candidate headers into a
+public error.
+
+Both signing attempts and guard acquisition share the configured response
+timeout. Disconnect or timeout aborts the supplied signal, closes the response
+and invalidates retained enqueue callbacks. A guard must honor cancellation and
+release its own acquired resources. Calling enqueue twice, calling it after the
+guard returns, returning without a decision, or failing after bytes were queued
+cannot append an unsigned fallback. Failure may close the connection without an
+HTTP error; clients should recover through their durable operation protocol.
+
+This mode supports native Node HTTP/1 responses, including HTTPS, with no
+compression, deferred encoding, or replacement response/header methods before
+or after authentication. Unsupported composition is rejected. Configure the
+route outside such middleware and qualify the complete transport stack.
+`content-encoding` may be absent or `identity`; transfer framing and exact
+content length belong to the native transport. Guarded responses send their
+explicit bytes and status without Express's automatic ETag, conditional-response
+or body transformations. HEAD, 204, 205 and 304 responses must already have empty
+signed bodies. In particular, [HTTP 205 Reset Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-205-reset-content)
+prohibits response content; the guard rejects it before signing rather than
+letting a client discard signed bytes. Ordinary routes keep their existing Express behavior.
+
+The guard provides the transport boundary, not a root-eviction policy, shared
+database, access policy, or index projection adapter. Those components must be
+installed and tested together. See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+and the [compiled interface example](../../../docs/guides/compiled-package-examples.md).
+
 ## Horizontally scaled services
 
 The default `SessionManager` is process-local. Use a shared
@@ -243,15 +344,15 @@ Do not hard-code a deployment-specific domain list in this middleware.
 Public errors are deliberately stable and do not include internal exception
 messages:
 
-| Status | Code                               | Meaning                                         |
-| ------ | ---------------------------------- | ----------------------------------------------- |
-| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers               |
-| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied         |
-| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent or failed             |
-| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out               |
-| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                 |
-| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed  |
-| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit |
+| Status | Code                               | Meaning                                                                              |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers                                                    |
+| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied                                              |
+| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent, or nonce, signature, session, or HMAC verification failed |
+| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out                                                    |
+| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                                                      |
+| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed                                       |
+| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit                                      |
 
 ## Security notes
 
@@ -327,8 +428,29 @@ legacy and current SDK clients. Tests do not rebuild the package as a side effec
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+Guarded responses and replacements own their byte snapshots, including Node
+`Buffer` inputs. Subsequent caller mutation does not change the bytes selected for
+signing or enqueue. Durable guard callbacks still must check current application
+authorization and enqueue synchronously; owned bytes do not supply that authority.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.
+
+
+## 2.4.0 integration candidate
+
+Combines the published 2.3.0 behavior with opt-in bounded raw request capture for
+BRC-118. Mount raw capture before body parsers, authenticate the exact body and
+multipart Content-Type, then extract the application payload. This source build
+is unpublished; existing authentication defaults and SDK2/3 peer alternatives
+remain. SDK4 consumers retain the 4.0.1 hotfix floor.

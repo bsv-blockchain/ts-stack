@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.2.1'
+version: '4.1.2'
 npm: '@bsv/sdk'
-last_updated: '2026-10-07'
-last_verified: '2026-10-07'
+last_updated: '2026-11-22'
+last_verified: '2026-11-22'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,11 +15,219 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+## Opt-in whole-BEEF overlay lookups
+
+An unreleased source change after 4.1.2 adds `LookupQueryOptions.wholeBeef`
+(default `false`), forwarded to facilitators as
+`LookupRequestOptions.wholeBeef`. When `true`, `HTTPSOverlayLookupFacilitator`
+omits `X-Aggregation: yes` and reads the host's per-output JSON answer, so each
+output's BEEF is returned as the lookup service produced it, including history
+beyond the first proven transaction that the aggregated answer drops. A binary
+answer to such a request counts as a rejection (`rejectedHosts`) with no
+reputation penalty. Raise `limits.maxResponseBytes`, `limits.maxTotalBytes` and
+`evidenceLimits` for long histories. Default lookups, SLAP discovery and
+outpoint deduplication are unchanged; no API, wire or data migration is
+required.
+
+## Zero-field initial certificate proofs
+
+An unreleased source change after 4.1.2 lets a `Peer` that initiates a
+handshake accept an initial response proving a certificate with zero revealed
+fields, when its retained request lists that certifier and type with an empty
+field list. The signed core is checked, the keyring must be empty, null or
+omitted, and nothing is decrypted. `validateCertificates` takes an optional
+`allowZeroFields` argument, default `false`, so existing callers keep the
+nonempty path. Responder sessions and standalone responses keep the nonempty
+path. No wire or stored-data change. Source is not publication.
+
+Only the initiator can use zero-field requests. A server behind
+`auth-express-middleware` is the responder: a request such as
+`types: { T: [] }` still receives the client's answer as a standalone
+certificate response, which stays refused for an empty keyring. Certificates
+accepted on the zero-field path reach `onCertificatesReceived` listeners with
+encrypted `fields` and no keyring, so do not call `decryptFields` on them.
+
+## Teranode and ARC broadcast status
+
+`Teranode.broadcast` reads an ARC-style JSON body that carries a string
+`txStatus`, with the rules `ARC` uses. A 2xx body reporting `REJECTED`,
+`DOUBLE_SPEND_ATTEMPTED`, `INVALID`, `MALFORMED`, `MINED_IN_STALE_BLOCK`, a
+`txStatus` naming an orphan (free-text `extraInfo` is not matched) or another
+well-formed txid is now a failure, and a well-formed `competingTxs` list is
+carried as `ARC` carries it. A malformed `extraInfo`, `competingTxs` or echoed
+txid on a 2xx is dropped rather than refused. A non-2xx keeps its HTTP `code` and
+`description` and adds the body's `status`, `txStatus` and `detail` under `more`.
+`BroadcastResponse` gains optional `txStatus` and `arcStatus`, set by `Teranode`
+and `ARC` and kept by `validateBroadcastResult`. `RECEIVED` stays a success but
+means received, not yet validated; callers that need certainty check `txStatus`
+or poll the service. A bare 2xx, `OK` or any other body is unchanged. `ARC`
+reads `competingTxs: null`, which ARC sends when no transaction competes, as no
+competing transactions; it used to refuse that response with
+`ERR_INVALID_RESPONSE`. No code migration is required.
+
+## Script ASM for data outputs
+
+The 4.1.2 source candidate prints the top-level `OP_RETURN` when a script read
+from bytes is converted to ASM. Plain hex tokens still encode data pushes.
+If ordinary instruction tokens would change suffix bytes, the printer places
+one final `0x<hex>` token immediately after the top-level `OP_RETURN`.
+The raw token supplies the whole suffix verbatim and requires nonempty,
+even-length hex. For example, `OP_0 OP_RETURN 02ab` encodes as `006a0202ab`,
+and `OP_0 OP_RETURN 0x02ab` encodes as `006a02ab`.
+
+## LocalKVStore removal patch
+
+The SDK makes `LocalKVStore.remove` reject a wallet response
+with a positive `totalOutputs` and an empty page instead of repeatedly querying
+offset zero. The error identifies the key and reported total; rejection releases
+the per-key operation lock. An absent key still returns `[]`, and ordinary
+removal, `set` and `get` are unchanged. No API, wire or stored-data migration is
+required.
+
+## GlobalKVStore tag-count compatibility patch
+
+The source candidate restores tag sets larger than 32 entries. Client creation,
+tag-filter queries, token decoding, overlay admission and history preserve all
+tags. Upgrade both client and overlay SDKs to 4.1.1 and deploy Overlay Topics
+2.0.4 for the lookup-query fix. Existing token bytes and stored records require
+no migration. Each tag still must be unique, non-empty and at most 256 UTF-8
+bytes; token payload, request and cryptographic checks remain unchanged. Wallet
+output tags, action labels and other overlay protocols' count policies are unchanged.
+A non-array tag container raises `TypeError` (still an `Error` subclass) with the
+existing diagnostic; valid arrays and other validation errors are unchanged.
+
+The 4.1.0 release adds bounded BRC-118 payment transport to `AuthFetch` and retains recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+Ordinary HTTP fallback retains native text, URLSearchParams, typed Blob and
+FormData serialization and inferred Content-Type, including cached peers.
+Mutable inputs are copied before asynchronous work; explicit headers prevail.
+Authenticated payment retries retain their owned-byte snapshots.
+
+The 4.0.1 source candidate types `ListOutputsResult.totalOutputs` as a number
+again, `PositiveInteger64OrZero` (a finite nonnegative integer summary; below 2^64 on the binary wire). A BRC-112 balance query (`balance <basket>` or
+`p <module> balance <basket>`) returns the balance as a nonnegative integer
+with no outputs and no BEEF; it may exceed the 2^32 - 1 bound of a count, and a
+JavaScript number is exact to 2^53 and rounded above. The binary `listOutputs`
+default encoding preserves deployed SDK2/3 bytes and numeric balances. The
+explicitly selected and acknowledged spendability extension from #674 remains
+available. No separate profile for the defective 4.0.0 layout is introduced.
+This candidate is not publication.
+
+The integrated SDK4 candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+Retained versioned candidate notes below are historical source records; publication is a separate action.
+
+The SDK3.3 source candidate adds explicitly selected BRC-192–194 output observation,
+lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
+verification. Existing lookup, submit and wallet interfaces retain their behavior.
+Stateful orchestration is provided by the separate
+[output-knowledge package](../application/output-knowledge.md). The candidate is
+not a package publication.
+
+The optional `OutputRootEvictionProtocol` entry adds BRC-199 signed request/result
+bindings, status parsing, exact root-local decision identities and a separate
+new-request clock check. An authenticated request does not authorize suppression;
+durable serving guards, evidence/currentness and local policy remain separate.
+See [root coordination](../../guides/root-eviction-coordination.md).
+
+Proposal endpoint parsers preserve the author-signed envelope separately from the
+provider's lifecycle state. They validate closed schemas and intrinsic proposal
+constraints, including predecessor shape and selected critical extensions. Signature,
+installed-policy, current authorization and evidence verification remain required
+before any storage, admission or application effect.
+
+`inspectOutputJSONEncoding(input, limits)` returns a freshly parsed, independently
+owned value and whether the incoming encoding is canonical. It retains duplicate,
+Unicode, structural and original/canonical byte bounds. The flag describes that
+input, not later mutations, and supplies no schema or authority decision. Ordinary
+`parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
+an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
+null-prototype data records, including special property names. One bounded pass
+stages validated children in fresh Maps with decoded-key membership and
+collection counts, constructs native owned containers, and exposes the graph only
+after complete validation. Arrays receive
+ordinary data properties without invoking inherited indexed setters. Strict native string
+parsing and every original duplicate, Unicode and resource check still run. No
+encoding, schema or authorization verdict is retained between calls. An indexed
+scan of fresh primitive names selects the same UTF-16 sort at the first inversion.
+Ownership captures each validated child into an independent data graph during
+canonical traversal; generated text needs no second parse or normalization walk.
+Caller values still receive every original validation check. Canonical
+serialization uses closed module functions with a fresh explicit per-call record,
+retaining no state between calls and exposing no frame to caller callbacks.
+
+`retainOutputCapability` captures a verified selection as bounded local replay
+material to persist atomically with an operation. `restoreOutputCapability`
+revalidates that signed manifest at its original selection time and requires the
+same endpoint, provider identity, chain, service/profile and installed rules.
+Recovery can outlive manifest expiry, but current authorization and the operation's
+recovery deadline still govern access. Never accept this local record from a remote
+caller or use it to initiate a new operation with an expired manifest. These pure
+helpers do not persist, fetch, pay or submit anything.
+
+`OutputLookupTransport` composes that retained contract with bounded BRC-193
+HTTP open/read/close. It pins the selected BRC-103 peer, validates signed selection
+headers, refuses automatic payments and redirects, and preserves the advertised
+base path. Public unauthenticated profiles remain explicitly selected. Request
+and response bodies, observable HTTP headers, negotiated limits, session scope,
+fixed deadlines and snapshot/live continuity are checked. Signed bodies are
+strictly decoded as UTF-8 JSON independently of the unsigned MIME label, including
+the existing middleware's `application/octet-stream` responses. Browser-hidden or
+runtime-added headers still require the server/proxy's complete wire-header limit.
+
+Save the fresh contract and high-entropy opening ID with the normalized request
+before first use. Supply only a durably committed prior batch to `read`, then
+commit its whole returned groups and cursor atomically before requesting more.
+The transport cannot enforce that local storage obligation and does not advance
+cursors itself. Original operations can recover after manifest expiry while
+their session remains usable; expired contracts cannot initiate new operations.
+Verified `OutputLookupServiceError` values retain bounded retry/limit hints.
+Errors and unknown continuity never become empty successful batches.
+
+For compact recovery, `outputLookupCheckpoint(batch)` copies the complete core
+continuity metadata without duplicating evidence. Save it atomically with the
+received groups, validate it with `parseOutputLookupCheckpoint` on recovery, then
+call `readCheckpoint`. Parsing never proves authentication or persistence; retain
+any extension-specific local state alongside the core boundary.
+The separate 64 KiB checkpoint allowance includes worst-case JSON escaping of
+all valid bounded scope, session and cursor strings. Wire response limits remain
+unchanged.
+
+Cancellation and the configurable total deadline cover authentication and body
+consumption. One call, including late non-cancellable work, occupies each instance.
+Authenticated calls use isolated sessions so cancellation cannot affect a different
+call; no existing AuthFetch default changes. Nine actual local signed-HTTP tests
+cover snapshot/live/close, identity pinning, payment refusal, altered bytes,
+contract echoes, independent error bounds and cancelled-poll recovery. The fixture
+is not a durable provider or client journal; full service integration remains open.
+
+`parseOutputServiceError` validates bounded common error bodies, including capacity
+details within the BRC-193 hard maxima. `outputServiceErrorHTTPStatus` provides the
+specified status mapping. Verify authenticated errors before changing trusted
+state; errors never contain a successful cursor or authorize automatic payment.
+The independent 4,096-byte error allowance still applies when a requested page
+budget is too small for a successful response.
+
+Unpaid authenticated requests can set `AuthFetch.fetch`'s `allowPayments: false`.
+Authenticated 402 responses then reach the caller without creating payment; the
+decision survives authentication recovery and later caller option changes. Existing
+calls still allow automatic BRC-105 handling, and ordinary HTTP fallback failures
+keep their previous behavior.
+
+Set `requireMutualAuth: true` to disable ordinary HTTP fallback. An
+`expectedIdentityKey` (a canonical compressed public key) implies this requirement,
+pins the BRC-103 handshake before dispatching application data, and checks the
+matched request's authenticated response sender. A conflicting cached identity is
+rejected without replacing it. These restrictions are captured before asynchronous
+work and survive session recovery and subsequent caller option changes. Combine
+the pin with `allowPayments: false` for private, unpaid service requests. Omitted
+options preserve existing behavior. Use HTTPS for confidentiality; BRC-103/104
+mutual authentication does not encrypt the body. Applications must separately
+verify selected capability/profile bindings and authorize operations.
 
 The 3.2.0 source candidate fixes saved-contact `any` searches and retains
 contact-only matches in parallel public searches. Both identity-resolution
@@ -41,6 +249,14 @@ of being read from its first eight bytes, and `OP_SPLIT` also rejects a
 position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
 no API, wire or wallet-data migration is required. This candidate is not
 publication.
+
+The 4.0.0 source candidate refuses a one-level Merkle proof whose only leaf
+is not at offset 0. A block of one transaction contains only its coinbase, at
+index 0, so any other offset is a missing sibling. Parsing, construction, and
+root computation throw `Missing hash for index <offset> at height 0`, and
+`combine()` leaves the receiver unchanged when the merged root differs.
+Offset 0, including `fromCoinbaseTxidAndHeight`, is unchanged. This candidate
+is not publication.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
@@ -128,13 +344,13 @@ clients share the same regression coverage and a portable conformance vector.
 No API, wire or account-data migration is required; only clients already bundling
 the affected hardened SDK need a dependency update for this defect.
 
-The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
 It restores signed `listActions` net amounts with the historical wire encoding,
 matching JSON validation; count, length and individual output bounds stay intact.
 Apps affected by these client defects can update the SDK without changing calls.
 Wallets retain the existing BRC100 contract; an ecosystem-wide application
-migration is not required. The candidate is not published until the protected
+migration is not required. The 3.0.0 candidate remains unpublished until its protected
 release workflow completes.
 
 The action-history compatibility regression affects signed `listActions` values
@@ -435,7 +651,7 @@ const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 - **BRC-62** — BEEF (transaction envelope format)
 - **BRC-100** — Wallet interface standard
 - **SPV** — Full merkle proof verification support
-- **Bitcoin Script** — Full consensus-rule-compliant interpreter
+- **Bitcoin Script** — Script construction and configurable evaluation
 
 ## Common pitfalls
 
@@ -514,6 +730,18 @@ bind application approval to the exact validated exchange; existing two-argument
 callbacks remain compatible. Apply the requested certificate policy and
 explicit application authorization before performing protected work.
 
+When a peer's `initialResponse` requests certificates, `Peer` answers after it
+has validated the peer's certificates and run these listeners, so a listener
+that throws prevents that disclosure. Until the answer has been sent or has
+ended without one, `toPeer` on that session waits, at most 30 seconds. While
+the session's certificates-received listeners run, its sends are not held, as
+before, so a listener can send without waiting for the answer that follows it;
+such a message precedes the answer. When the wallet holds
+no requested certificate, nothing is sent unless the `Peer` options or the
+`AuthFetch` options set `sendEmptyCertificateResponses: true`. Enable it only
+for servers that accept an empty answer: `@bsv/auth-express-middleware` replies
+400 `ERR_CERTIFICATES_REQUIRED`.
+
 Custom `AsyncSessionManager` implementations must retain the complete
 `PeerSession`, including the optional local `certificatePolicy` and
 `pendingCertificateRequests` fields. They are never serialized into AuthMessage.
@@ -538,6 +766,30 @@ response validation and origin checks are unchanged. No API or wire migration
 is needed. Applications affected by the timeout defect can update their bundled
 SDK; a wallet release alone cannot replace code served by a web application.
 
+### Root coordination source candidate
+
+The optional `OutputRootEvictionTransport` executes authenticated submit/status
+requests for one retained BRC-199 operation. It preserves the original signed
+request, capability and independently retained evaluation policy, with finite
+header/body/deadline limits and physical I/O ownership after cancellation.
+`OutputRootEvictionServiceError` exposes only a validated service error. Existing
+lookup transport behavior remains unchanged. See the [root coordination
+guide](../../guides/root-eviction-coordination.md) for durable ownership, authority
+and currentness boundaries; these helpers do not activate root policy or serving
+adapters automatically.
+
+### Retained proposal client
+
+The optional `OutputProposalTransport` owns one saved BRC-194 put/get/finalize
+request and retained capability. Each explicit `send` repeats those original
+bytes through bounded mutually authenticated HTTPS with payment disabled.
+Acknowledgements bind the original publication; retrieved author data retains
+signature, policy/channel and active-expiry checks. Finalization exposes
+`matchesRequest` to distinguish an already-reserved operation or transaction.
+`OutputProposalServiceError` represents only authenticated validated provider
+errors; local transport failures remain distinct. Follow the [proposal guide](../../guides/non-final-proposals.md)
+for persistence, freshness, recovery and independent application/evidence checks.
+
 ## Faucet output authorization
 
 The source candidate adds exact completed-action binding for independently
@@ -548,3 +800,20 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+The bounded parser owns a fresh private cursor frame for each input. Complete
+syntax, duplicate, Unicode, integer and resource checks precede exposure. Proven
+ASCII text has one UTF-8 byte per code unit; non-ASCII text retains native encoding.
+Byte-view inspection counts decoded bytes independently of an overridable
+byteLength property. These per-call calculations retain no input or validation
+result between operations.
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

@@ -52,6 +52,17 @@ export interface paths {
          * @description Inserts a message into each recipient's named message box. If the box
          *     does not exist it is created automatically.
          *
+         *     **Live announcement** A stored message is announced to the recipient's
+         *     joined sockets on `sendMessage-<roomId>`, the same event a WebSocket
+         *     send broadcasts on. The announcement is best effort: it reaches only
+         *     the sockets held by the process that served this request, and a
+         *     request carrying `payment` is never announced, because the
+         *     announcement carries this request body rather than the stored row and
+         *     a recipient that acknowledged on it would discard the row before its
+         *     wallet internalized the output. Recipients must still poll
+         *     `/listMessages`, which is the only path that internalizes a recipient
+         *     payment. See `specs/messaging/authsocket-asyncapi.yaml`.
+         *
          *     **Payment logic**
          *     - If `deliveryFee > 0` (set by server policy) a payment is required
          *       with output[0] assigned to the server.

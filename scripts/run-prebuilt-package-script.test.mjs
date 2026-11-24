@@ -5,7 +5,10 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
+  jestCommand,
   parseArguments,
+  parseJestSequencer,
+  parseJestShard,
   resolvePackageScript,
   stripLeadingBuildCommand
 } from './run-prebuilt-package-script.mjs'
@@ -29,10 +32,70 @@ test('prebuilt package scripts remove only an exact leading standard build comma
 
 test('prebuilt package script arguments require one named script', () => {
   assert.deepEqual(parseArguments(['--script', 'test:coverage']), {
-    scriptName: 'test:coverage'
+    scriptName: 'test:coverage',
+    ifPresent: false,
+    jestShard: undefined,
+    jestSequencer: undefined
+  })
+  assert.deepEqual(parseArguments(['--if-present', '--script', 'pack:check']), {
+    scriptName: 'pack:check',
+    ifPresent: true,
+    jestShard: undefined,
+    jestSequencer: undefined
+  })
+  assert.deepEqual(parseArguments(['--script', 'test', '--jest-shard', '2/4']), {
+    scriptName: 'test',
+    ifPresent: false,
+    jestShard: '2/4',
+    jestSequencer: undefined
   })
   assert.throws(() => parseArguments([]), /--script is required/)
   assert.throws(() => parseArguments(['--package', 'example']), /Unknown argument/)
+})
+
+test('prebuilt package script Jest shards accept only k/n with 1 <= k <= n', () => {
+  assert.equal(parseJestShard('1/4'), '1/4')
+  assert.equal(parseJestShard('4/4'), '4/4')
+  for (const value of [undefined, '', '0/4', '5/4', '1/0', '01/4', '1/4 && true', '1/4;', 'a/b'])
+    assert.throws(() => parseJestShard(value), /--jest-shard must be k\/n/)
+  assert.throws(() => parseArguments(['--script', 'test', '--jest-shard']), /--jest-shard/)
+})
+
+test('prebuilt package script Jest sequencers accept only an absolute .cjs path beside a shard', () => {
+  const sequencer = '/work/ts-stack/scripts/jest-duration-sequencer.cjs'
+  assert.equal(parseJestSequencer(sequencer), sequencer)
+  for (const value of [
+    undefined,
+    '',
+    'scripts/jest-duration-sequencer.cjs',
+    '/work/scripts/sequencer.js',
+    '/work/../etc/sequencer.cjs',
+    '/work/sequencer.cjs; true',
+    '/work/$(id).cjs',
+    '/work/my sequencer.cjs'
+  ])
+    assert.throws(
+      () => parseJestSequencer(value),
+      /--jest-sequencer must be an absolute \.cjs path/
+    )
+  assert.deepEqual(
+    parseArguments(['--script', 'test', '--jest-shard', '2/6', '--jest-sequencer', sequencer]),
+    { scriptName: 'test', ifPresent: false, jestShard: '2/6', jestSequencer: sequencer }
+  )
+  assert.throws(
+    () => parseArguments(['--script', 'test', '--jest-sequencer', sequencer]),
+    /--jest-sequencer requires --jest-shard/
+  )
+})
+
+test('prebuilt package Jest commands append the shard and then the sequencer', () => {
+  const sequencer = '/work/scripts/jest-duration-sequencer.cjs'
+  assert.equal(jestCommand('jest --runInBand', undefined, undefined), 'jest --runInBand')
+  assert.equal(jestCommand('jest --runInBand', '2/6', undefined), 'jest --runInBand --shard=2/6')
+  assert.equal(
+    jestCommand('jest --runInBand', '2/6', sequencer),
+    `jest --runInBand --shard=2/6 --testSequencer=${sequencer}`
+  )
 })
 
 test('prebuilt package script resolution reads the current package manifest', async () => {
@@ -50,6 +113,11 @@ test('prebuilt package script resolution reads the current package manifest', as
       command: 'jest --coverage'
     })
     await assert.rejects(() => resolvePackageScript(directory, 'test:browser'), /does not define/)
+    // --if-present skips only a missing script, never an empty one.
+    assert.equal(
+      await resolvePackageScript(directory, 'test:browser', { ifPresent: true }),
+      undefined
+    )
   } finally {
     await rm(directory, { recursive: true })
   }

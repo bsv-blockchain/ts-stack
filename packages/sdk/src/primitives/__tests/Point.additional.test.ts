@@ -1,6 +1,7 @@
 import Point from '../../primitives/Point'
 import BigNumber from '../../primitives/BigNumber'
 import Curve from '../../primitives/Curve'
+import PrivateKey from '../../primitives/PrivateKey'
 
 const G_COMPRESSED = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
@@ -576,5 +577,56 @@ describe('Point – additional coverage', () => {
       expect(terminal).toEqual({ index: -1, doubles: 2 })
       expect(active).toEqual({ index: 0, doubles: 1 })
     })
+  })
+})
+
+const wnafTableCacheTest = (
+  globalThis as typeof globalThis & {
+    __bsvSdkWnafTableCacheTest?: { limit: number; keys: () => string[] }
+  }
+).__bsvSdkWnafTableCacheTest
+
+if (wnafTableCacheTest === undefined) {
+  throw new Error('Point windowed-table cache test hook is missing')
+}
+
+const WNAF_TABLE_CACHE_LIMIT = wnafTableCacheTest.limit
+const wnafTableCacheKeys = wnafTableCacheTest.keys
+
+describe('Point windowed table cache', () => {
+  const scalar = new BigNumber(12345)
+  const keyFor = (point: Point): string => `:${BigInt('0x' + point.getX().toString(16)).toString(16)}:`
+  const cached = (point: Point): boolean => wnafTableCacheKeys().some(key => key.includes(keyFor(point)))
+  const multiply = (point: Point): void => {
+    expect(point.mul(scalar).eq(point.mulCT(scalar))).toBe(true)
+  }
+  const randomPoint = (): Point => PrivateKey.fromRandom().toPublicKey()
+
+  it('fills to its limit and stays there however many points are multiplied', () => {
+    for (let i = 0; i < WNAF_TABLE_CACHE_LIMIT * 3; i++) multiply(randomPoint())
+    expect(wnafTableCacheKeys()).toHaveLength(WNAF_TABLE_CACHE_LIMIT)
+  })
+
+  it('evicts the least recently used point and keeps a recently reused one', () => {
+    const reused = randomPoint()
+    const oldest = randomPoint()
+    multiply(reused)
+    multiply(oldest)
+    for (let i = 0; i < WNAF_TABLE_CACHE_LIMIT - 2; i++) multiply(randomPoint())
+    expect(cached(reused)).toBe(true)
+    expect(cached(oldest)).toBe(true)
+    multiply(reused) // refresh: now the most recently used
+    multiply(randomPoint()) // one over the limit evicts the least recently used
+    expect(cached(oldest)).toBe(false)
+    expect(cached(reused)).toBe(true)
+    expect(wnafTableCacheKeys()).toHaveLength(WNAF_TABLE_CACHE_LIMIT)
+  })
+
+  it('keeps generator tables out of the bounded cache', () => {
+    for (let i = 0; i < WNAF_TABLE_CACHE_LIMIT; i++) multiply(randomPoint())
+    const g = new Curve().g as Point
+    multiply(g)
+    expect(cached(g)).toBe(false)
+    expect(wnafTableCacheKeys()).toHaveLength(WNAF_TABLE_CACHE_LIMIT)
   })
 })

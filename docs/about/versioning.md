@@ -3,8 +3,8 @@ id: about-versioning
 title: 'Versioning Policy'
 kind: meta
 version: '2.0.0'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: [about, versioning, semver, releases]
@@ -25,11 +25,12 @@ into hand-maintained pages.
 
 - **PATCH** fixes a defect without changing the supported public contract.
 - **MINOR** adds backward-compatible behavior or public API.
-- **MAJOR** removes, renames, or incompatibly changes supported behavior,
-  types, entry points, wire formats, persistence, or runtime requirements.
+- **MAJOR** identifies a package-level compatibility generation. It never
+  authorizes breaking an established compatibility contract or the BRC-100
+  application-wallet boundary. See the [compatibility contract](./compatibility.md).
 
-For a package below 1.0, an incompatible public change may use a minor bump,
-but it still requires explicit migration notes and cannot be hidden in a patch.
+Packages below 1.0 follow the same compatibility invariant. Neither a minor
+bump below 1.0 nor a major bump permits breaking established contracts.
 Changing an internal implementation without changing its packed or runtime
 contract does not automatically require bumping unrelated packages.
 
@@ -44,8 +45,9 @@ Then inspect its first-party dependents:
 2. A dependent package does not need a bump merely because a compatible
    workspace implementation changed while its own packed bytes and declared
    contract remain identical.
-3. Breaking first-party changes require one coordinated migration across all
-   affected dependents before publication.
+3. First-party coordination must preserve compatibility with independently
+   deployed consumers. A coordinated monorepo upgrade does not prove ecosystem
+   compatibility and cannot authorize a breaking application-wallet change.
 4. Infrastructure manifests and locks are reconciled after a successful
    cascade release, including the separately deployed UHRP notifier function.
    Service images and the notifier function are promoted separately.
@@ -58,7 +60,9 @@ incoherent first-party references before release.
 
 The latest published release of each package is the supported default. Older
 versions remain available from npm but do not receive a blanket maintenance or
-security-backport promise. When a serious vulnerability affects a previous
+security-backport promise. That maintenance policy does not permit new wallets
+or clients to break existing application-wallet contracts. When a serious
+vulnerability affects a previous
 major, maintainers decide whether a safe backport is practical based on
 exploitability, dependency constraints, and deployment exposure, and record
 that decision in the private advisory.
@@ -69,7 +73,8 @@ authoritative; contributor CI currently uses the stricter root toolchain.
 
 ## Breaking changes and deprecation
 
-A breaking release must include:
+An additive replacement or deprecation must preserve the existing contract and
+include:
 
 - an explicit compatibility and deployment-impact review;
 - migration instructions with before/after examples;
@@ -95,20 +100,99 @@ additional historical `CHANGELOG.md`.
 A package change updates:
 
 - its README and API/reference docs when the consumer contract changes;
-- its exact entry in `governance/package-release-notes.json`, including the
-  source-versus-published boundary, SemVer impact, summary, and migration
-  decision;
-- a migration note with before/after examples for incompatible behavior;
-- a package-local changelog when that package already maintains one; and
+- one new change file under `changes/` with the SemVer impact, summary, and
+  migration decision (`pnpm change`; see `changes/README.md`);
+- a migration note with before/after examples for incompatible behavior; and
 - the pull request and release evidence needed to explain the change.
+
+A feature pull request does not edit the package version, its entry in
+`governance/package-release-notes.json`, a package-local changelog, the
+baseline package versions, or the generated ledgers. The `Version packages`
+workflow folds every pending change file into those files in one generated
+`chore: version packages` pull request. It computes each next version from the
+published baseline: the strongest pending impact wins, nested packages such as
+the wallet-toolbox client and mobile builds follow their enclosing package, and
+an unpublished candidate that already satisfies the impact is not bumped again.
+For a breaking change in a `0.y.z` package, choose `minor`; `major` moves the
+package to `1.0.0`.
 
 `pnpm docs:packages:check` rejects missing packages, version/release-type
 disagreement, missing API pages, and stale generated output. After an authorized
 publication, the release-sync change advances the recorded published baseline;
 merging a candidate record never publishes it.
 
+A new, unpublished package uses `publishedVersion: null` and
+`releaseType: initial`, with an exact source version and substantive API and
+migration documentation. Registry verification must confirm an explicit npm
+not-found response; authentication, network and server failures are not proof of
+absence. If the package already exists, reconcile its actual published baseline
+before the release gate can pass. Never invent a `0.0.0` publication to register a
+new package. An initial candidate still requires the protected publication workflow
+and explicit publication authorization.
+
 Do not promise a GitHub Release, npm dist-tag, changelog format, cadence, or
 support window that the workflow does not actually enforce.
+
+### Pull request release note
+
+Every PR targeting `main` contains exactly one visible fenced block with the
+language `release-note` and a JSON object with these four fields:
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": { "@bsv/sdk": "patch", "@bsv/paymail": "minor" },
+  "summary": "Preserve upload headers and add optional address lookup.",
+  "migration": "none"
+}
+```
+
+`packages` maps names from `governance/repository-health/projects.json` with the
+`npm-oidc` release route to `patch`, `minor`, `major` or `initial`. Each package
+can have its own impact. Use `initial` for a first publication; a major impact
+does not waive the compatibility contract. `summary` is plain-language text
+describing the consumer-visible change. `migration` contains steps, identifying
+the relevant packages when necessary, or the exact string `none` when no
+consumer action is needed. Both text fields must be nonempty; template
+placeholders and unknown fields are rejected.
+
+For a PR with no npm release impact, use this explicit form:
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": "none",
+  "summary": "Validate release-note structure in pull request descriptions.",
+  "migration": "none"
+}
+```
+
+This form also covers service-only changes whose deployment evidence remains in
+the PR's operations section. Do not use it to omit a package whose published
+bytes or manifest change. `node scripts/ci-local-feedback.mjs --base origin/main`
+helps identify affected packages and dependents; reviewers determine the actual
+release impact. To validate a saved description locally, run:
+
+```sh
+node scripts/pr-release-note.mjs --body-file /tmp/pr-description.md
+```
+
+The required repository health job checks structure, known package names and
+impact values. It does not infer whether a summary is useful or whether SemVer
+and migration decisions are correct; those remain review responsibilities.
+Automated PRs follow the same contract; a maintainer supplies the note if the
+bot cannot. Description edits trigger CI, and reruns fetch the current body
+from GitHub instead of trusting a stale event payload. A run for an obsolete
+head fails and must be replaced by CI for the current head. Push, manual and
+merge-group runs have no single PR description and do not apply this check.
+
+The PR block is the editorial record for the change. The existing release
+ledger, package changelogs, generated documentation and protected publication
+workflow remain authoritative under the rules above. Reuse summary/migration
+text where appropriate; do not invent separate prose for the same change.
+Making PR descriptions the sole changelog, archiving existing files, importing
+notes into a version PR, or adding per-release PR links to generated GitHub
+Release notes requires a separately approved release-policy migration.
 
 ## Publication
 
@@ -129,3 +213,17 @@ See [Dependency and Release Policy](../reference/dependency-policy.md),
 [npm Package Supply Chain](../reference/npm-package-supply-chain.md), and
 [Release and Operations Guide](../reference/release-operations.md) for the
 complete gates, failure handling, and rollback path.
+
+### Held first publication during registry verification
+
+A governed `publishedVersion: "0.0.0"` identifies a candidate awaiting its first
+publication. The verifier records an explicit initial-release hold only when
+the public npm registry returns a completed `E404`. It retains that package in
+the complete report and creates no fictional published consumer for it.
+Authentication, transport, timeout and malformed responses remain errors; a
+missing package with any previously published baseline remains an error.
+Every actually published package still requires its integrity, provenance and
+isolated consumer install. The hold does not authorize npm publication.
+
+Release and CI interpreters use patched Node24.22.1; historical resource-profile
+measurements retain their original runtime identities.

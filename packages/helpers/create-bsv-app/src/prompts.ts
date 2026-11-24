@@ -4,16 +4,45 @@ import type { ProjectManifest } from './config/project-manifest.js'
 import { configSchema, isFieldVisible } from './config/schema.js'
 import type { ConfigField, FieldOption } from './config/schema.js'
 import { seedDraft, resolveDraft } from './config/draft.js'
-import type { ConfigDraft } from './config/draft.js'
+import { formatPulledNotice } from './config/requires.js'
+import type { ConfigDraft, SeededDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
+import type { DependencyChange } from './scaffold/package-json.js'
 
-export type Ask = (field: ConfigField, options: FieldOption[]) => Promise<unknown>
-export type ConfigProvider = (ctx: {
+/** Shown instead of an empty capabilities list (terminal and `--ui`). */
+export const ALL_CAPABILITIES_INCLUDED = 'Project already includes all available capabilities'
+
+/** `initial` is the pre-selected value: cursor for select/toggle, ticked boxes for multiselect. */
+export type Ask = (
+  field: ConfigField,
+  options: FieldOption[],
+  initial: string | boolean | string[] | undefined
+) => Promise<unknown>
+export interface PromptContext {
   existing: ProjectManifest | null
   flags: ConfigDraft
-}) => Promise<ProjectConfig>
+  /**
+   * Owned packages the resolved config would leave below a capability's major; when it returns
+   * any, the user is asked whether to raise them. Unset when `--upgrade-bsv-deps` already decided.
+   */
+  majorUpgrades?: (config: ProjectConfig) => DependencyChange[]
+}
+export type ConfigProvider = (ctx: PromptContext) => Promise<ProjectConfig>
 
-function optionsFor(
+/** Prints one notice line; the terminal uses `p.log.info`. */
+export type Info = (message: string) => void
+
+// the hint names what the option brings along, from the schema's requires; a role-scoped one names
+// its role, so the hint holds whatever the layout
+function withRequiresHint(option: FieldOption): FieldOption {
+  if (option.requires === undefined || option.requires.length === 0) return option
+  const names = option.requires.map(r => (typeof r === 'string' ? r : `${r.id} (${r.role})`))
+  const requires = `Requires ${names.join(', ')}.`
+  return { ...option, hint: option.hint === undefined ? requires : `${option.hint} ${requires}` }
+}
+
+/** Options offered for `field` in `mode`; the `--ui` page offers the same per mode. */
+export function optionsFor(
   field: ConfigField,
   existing: ProjectManifest | null,
   mode: 'new' | 'add'
@@ -33,44 +62,69 @@ function optionsFor(
       // new mode: defaultSelected base capabilities are always included (floor) → don't offer them as toggles
       ids = all.filter(c => c.defaultSelected !== true).map(c => c.id)
     }
-    return all
-      .filter(c => ids.includes(c.id))
-      .map(c => ({ value: c.id, label: c.title, hint: c.description }))
+    return (field.options ?? []).filter(o => ids.includes(o.value)).map(withRequiresHint)
   }
   return field.options ?? []
 }
 
-export async function runPrompts(
-  ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
+async function promptField(
+  field: ConfigField,
+  draft: SeededDraft,
+  existing: ProjectManifest | null,
   ask: Ask
-): Promise<ProjectConfig> {
-  const draft: ConfigDraft = seedDraft(ctx.existing, ctx.flags)
-  for (const section of configSchema) {
-    for (const field of section.fields) {
-      if (
-        field.key !== 'capabilities' &&
-        (draft as Record<string, unknown>)[field.key] !== undefined
-      )
-        continue // set by flags/seed
-      if (!isFieldVisible(field, draft as Record<string, unknown>)) continue
-      const value = await ask(field, optionsFor(field, ctx.existing, draft.mode ?? 'new'))
-      if (field.key === 'capabilities') {
-        ;(draft as Record<string, unknown>).capabilities = mergeCapabilityIds(
-          (draft.capabilities as string[]) ?? [],
-          value as string[]
-        )
-      } else {
-        ;(draft as Record<string, unknown>)[field.key] = value
-      }
-    }
+): Promise<void> {
+  const values: Record<string, unknown> = draft
+  if (field.key !== 'capabilities' && values[field.key] !== undefined) return // set by flags/seed
+  if (!isFieldVisible(field, values)) return
+  const mode = draft.mode
+  const options = optionsFor(field, existing, mode)
+  if (field.key !== 'capabilities') {
+    values[field.key] = await ask(field, options, field.default)
+    return
   }
-  return resolveDraft(draft)
+  // new mode pre-ticks every offered capability; add mode never pre-ticks onto an existing project
+  const initial = mode === 'new' ? options.map(o => o.value) : []
+  const value = (await ask(field, options, initial)) as string[]
+  draft.capabilities = mergeCapabilityIds(draft.capabilities, value)
+}
+
+// a yes/no asked after the schema fields, once the config says which packages are behind
+function upgradeField(upgrades: DependencyChange[]): ConfigField {
+  const list = upgrades.map(c => `${c.name} ${c.from} → ${c.to} (${c.target})`).join(', ')
+  return {
+    key: 'upgradeBsvDeps',
+    label: `The generated code needs newer majors: ${list}. Upgrade them? A major upgrade can break your existing code.`,
+    type: 'toggle',
+    default: false
+  }
+}
+
+export async function runPrompts(
+  ctx: PromptContext,
+  ask: Ask,
+  info: Info = () => {}
+): Promise<ProjectConfig> {
+  const draft = seedDraft(ctx.existing, ctx.flags)
+  // one prompt at a time, in schema order: later fields' visibility depends on earlier answers
+  await configSchema
+    .flatMap(section => section.fields)
+    .reduce<Promise<void>>(
+      (previous, field) => previous.then(() => promptField(field, draft, ctx.existing, ask)),
+      Promise.resolve()
+    )
+  const config = resolveDraft(draft)
+  // only a run that resolved announces what it adds
+  for (const line of formatPulledNotice(config.pulled ?? [])) info(line)
+  const upgrades = ctx.majorUpgrades?.(config) ?? []
+  if (upgrades.length > 0)
+    config.upgradeBsvDeps = (await ask(upgradeField(upgrades), [], false)) === true
+  return config
 }
 
 export const interactiveConfigPrompt: ConfigProvider = async ctx => {
   const p = await import('@clack/prompts') // lazy: keep clack out of the Jest transform
   p.intro('create-bsv-app')
-  const ask: Ask = async (field, options) => {
+  const ask: Ask = async (field, options, initial) => {
     let res: unknown
     if (field.type === 'text')
       res = await p.text({
@@ -78,17 +132,30 @@ export const interactiveConfigPrompt: ConfigProvider = async ctx => {
         placeholder: typeof field.default === 'string' ? field.default : undefined
       })
     else if (field.type === 'toggle')
-      res = await p.confirm({ message: field.label, initialValue: field.default === true })
-    else if (field.type === 'multiselect')
-      res = await p.multiselect({ message: field.label, options, required: false })
-    else res = await p.select({ message: field.label, options })
+      res = await p.confirm({ message: field.label, initialValue: initial === true })
+    else if (field.type === 'multiselect' && options.length === 0) {
+      p.log.info(ALL_CAPABILITIES_INCLUDED)
+      res = []
+    } else if (field.type === 'multiselect')
+      res = await p.multiselect({
+        message: field.label,
+        options,
+        initialValues: Array.isArray(initial) ? initial : [],
+        required: false
+      })
+    else
+      res = await p.select({
+        message: field.label,
+        options,
+        initialValue: typeof initial === 'string' ? initial : undefined
+      })
     if (p.isCancel(res)) {
       p.cancel('Cancelled')
       process.exit(1)
     }
     return res
   }
-  const config = await runPrompts(ctx, ask)
+  const config = await runPrompts(ctx, ask, message => p.log.info(message))
   p.outro('Done')
   return config
 }

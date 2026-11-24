@@ -4,13 +4,12 @@ import { WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 export const BRC177_NO_SEND_EXPIRY_PREFIX = 'p nosend expiry '
 export const BRC177_NO_SEND_MODULE_PREFIX = 'p nosend '
 
-export type Brc177NoSendExpiryMode = 'seconds' | 'timestamp' | 'blockheight'
+export type Brc177NoSendExpiryMode = 'seconds' | 'timestamp' | 'blockheight' | 'never'
 
-export interface Brc177NoSendExpiry {
-  mode: Brc177NoSendExpiryMode
-  value: number
-  label: string
-}
+/** A parsed `p nosend expiry` label; `never` carries no value and has no deadline or reclaim. */
+export type Brc177NoSendExpiry =
+  | { mode: 'seconds' | 'timestamp' | 'blockheight'; value: number; label: string }
+  | { mode: 'never'; value: null; label: string }
 
 export type Brc177NoSendExpiryState =
   | 'preparing'
@@ -67,7 +66,8 @@ export interface Brc177FundingCreateActionMetadata {
 export interface Brc177ProtectedCreateActionMetadata {
   kind: 'protected'
   expiry: Brc177NoSendExpiry
-  deadline: number
+  /** Absolute deadline in the expiry mode's units; null for `never`. */
+  deadline: number | null
   anchorTxid: string
   anchorVout: number
 }
@@ -99,6 +99,7 @@ export function parseBrc177NoSendExpiryLabels(labels: string[] | undefined): Brc
 
   const label = matching[0]
   const remainder = label.slice(BRC177_NO_SEND_EXPIRY_PREFIX.length)
+  if (remainder === 'never') return { mode: 'never', value: null, label }
   const separator = remainder.indexOf(' ')
   if (separator <= 0 || separator === remainder.length - 1 || remainder.includes(' ', separator + 1)) {
     throw new WERR_INVALID_PARAMETER('labels', 'a valid BRC-177 noSend expiry label')

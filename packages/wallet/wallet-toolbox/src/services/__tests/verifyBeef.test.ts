@@ -2,6 +2,9 @@ import { Beef } from '@bsv/sdk'
 import { Services } from '../Services'
 import { _tu, logger } from '../../../test/utils/TestUtilsWalletStorage'
 import { verifyTruthy } from '../../utility/utilityHelpers'
+import { publicArcadeUrl } from '../networkConfig'
+
+const pinnedDefaultHeaderURL = `${publicArcadeUrl('main')}/chaintracks/v2/header/height/885628`
 
 // Header fixture captured from a healthy chaintracks endpoint
 // (https://chaintracks-us-1.bsvb.tech/findHeaderHexForHeight?height=885628). This is the
@@ -21,8 +24,12 @@ const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : (input?.url ?? '')
+    if (url === pinnedDefaultHeaderURL) return jsonResponse(HEADER_885628)
     if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
       return jsonResponse({ status: 'success', value: 950000 })
+    }
+    if (url.includes('chaintracks.babbage.systems/findChainTipHashHex')) {
+      return jsonResponse({ status: 'success', value: HEADER_885628.hash })
     }
     if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
       const height = Number(new URL(url).searchParams.get('height'))
@@ -51,6 +58,16 @@ describe('verifyBeef tests', () => {
 
     const ok = await beef.verify(chaintracker, true)
     expect(ok).toBe(true)
+  })
+
+  test('current Node header transport verifies the pinned root and freshly rejects another root', async () => {
+    const tracker = await new Services('main').getChainTracker()
+    const calls = () =>
+      jest.mocked(global.fetch).mock.calls.filter(([input]) => input === pinnedDefaultHeaderURL).length
+    const before = calls()
+    await expect(tracker.isValidRootForHeight(HEADER_885628.merkleRoot, 885628)).resolves.toBe(true)
+    await expect(tracker.isValidRootForHeight('01'.repeat(32), 885628)).resolves.toBe(false)
+    expect(calls() - before).toBe(2)
   })
 
   test('returns an explicitly composed SDK chain tracker without wrapping it', async () => {
@@ -115,6 +132,10 @@ describe('verifyBeef tests', () => {
   })
 })
 
-function jsonResponse(body: unknown): any {
-  return { ok: true, status: 200, json: async () => body }
+function jsonResponse(body: unknown): Response {
+  // Exercise the production bounded stream reader, including headers and UTF-8.
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
 }

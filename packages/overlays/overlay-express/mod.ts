@@ -8,6 +8,8 @@ export {
   type HealthConfig,
   type HealthReport,
   type HealthStatus,
+  type RegisteredRouterContext,
+  type RegisteredRouterFactory,
   type TopicAnchorHeaderResolver
 } from './src/OverlayExpress.js'
 export { BanService, type BannedRecord } from './src/BanService.js'
@@ -48,3 +50,9 @@ export {
   type ChaintracksHeader,
   type ChaintracksProviderConfig
 } from './src/ChaintracksProvider.js'
+export type {
+  OutputLookupCompanion,
+  OutputLookupCaller,
+  OutputLookupHTTPResponse,
+  OutputLookupRouteOptions
+} from './src/OutputLookupRoutes.js'

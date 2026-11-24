@@ -7,6 +7,7 @@ import { SLAPTopicManager } from '../SLAP/SLAPTopicManager.js'
 import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
 
 const validIdentityKey = '02fe8d1eb1bcb3432b1db5833ff5f2226d9cb5e65cee430558c18ed3a3c86ce1af'
+const assetId = `${'0123456789abcdef'.repeat(4)}_0`
 
 async function makeCustomAdvertisementScript(
   protocol: 'SHIP' | 'SLAP',
@@ -74,6 +75,29 @@ describe('discovery topic managers', () => {
       expect(console.warn).not.toHaveBeenCalled()
     }
   )
+
+  it.each([
+    ['SHIP', `tm_color_${assetId}`, SHIPTopicManager],
+    ['SHIP', 'tm_uhrp_files', SHIPTopicManager],
+    ['SLAP', `ls_color_${assetId}`, SLAPTopicManager],
+    ['SLAP', 'ls_uhrp_files', SLAPTopicManager]
+  ] as const)('admits %s advertisements for %s', async (protocol, name, Manager) => {
+    const script = await makeAdvertisementScript(protocol, name)
+    const result = await new Manager().identifyAdmissibleOutputs(makeBEEF(script), [])
+    expect(result).toEqual({ outputsToAdmit: [0], coinsToRetain: [] })
+  })
+
+  it.each([
+    ['SHIP', ['tm_', 'tm__x', 'tm_x_', 'tm_Color', 'tm_' + 'a'.repeat(297), `color_${assetId}`]],
+    ['SLAP', ['ls_', 'ls__x', 'ls_x_', 'ls_Color', 'ls_' + 'a'.repeat(297), `color_${assetId}`]]
+  ] as const)('refuses noncanonical %s advertisement names', async (protocol, names) => {
+    const scripts = await Promise.all(
+      names.map(async name => await makeAdvertisementScript(protocol, name))
+    )
+    await expect(
+      Promise.all(scripts.map(async script => await isAdmissibleDiscoveryOutput(script, protocol)))
+    ).resolves.toEqual(names.map(() => false))
+  })
 
   it.each([
     ['SHIP', SHIPTopicManager],
@@ -211,12 +235,33 @@ describe('SHIP lookup service', () => {
     [{ service: 'ls_ship', query: { topics: ['tm_a', 2] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { topics: ['tm_a', 'tm_a'] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { topics: ['ls_wrong'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm__x'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_x_'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_Color'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_' + 'a'.repeat(297)] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: [`color_${assetId}`] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { identityKey: 1 } }, 'query.identityKey'],
     [{ service: 'ls_ship', query: { identityKey: '02'.padEnd(66, '0') } }, 'query.identityKey'],
     [{ service: 'ls_ship', query: { unexpected: true } }, 'unexpected field']
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
+  })
+
+  it('accepts BRC-207 per-asset topic names in topic filters', async () => {
+    const { service, storage } = makeService()
+    const topics = [`tm_color_${assetId}`, 'tm_uhrp_files', 'tm_' + 'a'.repeat(253)]
+
+    await service.lookup({ service: 'ls_ship', query: { topics } } as never)
+    expect(storage.findRecord).toHaveBeenLastCalledWith({
+      domain: undefined,
+      topics,
+      identityKey: undefined,
+      limit: 1000,
+      skip: 0,
+      sortOrder: 'desc'
+    })
   })
 
   it('treats a zero limit as an empty page instead of MongoDB no-limit', async () => {
@@ -384,12 +429,32 @@ describe('SLAP lookup service', () => {
     [{ service: 'ls_slap', query: { domain: 1 } }, 'query.domain'],
     [{ service: 'ls_slap', query: { service: 1 } }, 'query.service'],
     [{ service: 'ls_slap', query: { service: 'tm_wrong' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls__x' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_x_' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_Color' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_' + 'a'.repeat(297) } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: `color_${assetId}` } }, 'query.service'],
     [{ service: 'ls_slap', query: { identityKey: 1 } }, 'query.identityKey'],
     [{ service: 'ls_slap', query: { unexpected: true } }, 'unexpected field']
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
   })
+
+  it.each([`ls_color_${assetId}`, 'ls_uhrp_files', 'ls_' + 'a'.repeat(253)])(
+    'accepts lookup service name %s in service filters',
+    async name => {
+      const { service, storage } = makeService()
+      await service.lookup({ service: 'ls_slap', query: { service: name } } as never)
+      expect(storage.findRecord).toHaveBeenLastCalledWith({
+        service: name,
+        limit: 1000,
+        skip: 0,
+        sortOrder: 'desc'
+      })
+    }
+  )
 
   it('preserves the plain Error contract for a non-object query', async () => {
     const { service } = makeService()

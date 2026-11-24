@@ -1,5 +1,7 @@
 # @bsv/simple
 
+Release candidate `0.7.3`. Refreshes packed Apache-2.0 license, notice, patent and incorporated-material attribution files. No API, wire or data migration is required. Redistributors must retain the included license and notice files.
+
 A high-level TypeScript library that makes BSV blockchain development simple. Build wallets, send payments, create tokens, issue credentials, and more — in just a few lines of code.
 
 ## Install
@@ -139,6 +141,13 @@ const did = wallet.getDID()
 
 ## License
 
-TS Stack first-party changes are under the [Open BSV License Version 6](./LICENSE.txt).
+TS Stack first-party changes are under the [Apache License 2.0](./LICENSE).
 The identified pre-monorepo source remains MIT-licensed; see
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

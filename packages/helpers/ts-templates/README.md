@@ -1,5 +1,7 @@
 # BSV Script Templates
 
+Candidate `2.2.0` adds the 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`), `OneColor.lockRemainder` and the 36-byte-aware `oneColorTokenId*` helpers on top of published `2.1.1` (the `OneColor` BRC-162 template and SDK4 peer support). Existing templates, wire formats and defaults remain supported. The additive APIs and migration guidance are documented below.
+
 BSV BLOCKCHAIN | Script Templates
 
 A collection of script templates for use with the official BSV TypeScript SDK
@@ -25,16 +27,34 @@ tx.addOutput({
 })
 ```
 
+## Module compatibility
+
+Published 1.10.3 repairs CommonJS SDK import interop reported
+in [stack#571](https://github.com/bsv-blockchain/ts-stack/issues/571). Both
+`require('@bsv/templates')` and ESM imports construct and sign the same scripts;
+root and `@bsv/templates/MandalaToken.ts` exports retain their public shape.
+No API or script-encoding migration is required.
+
+The unpublished 1.10.4 candidate retains that runtime repair and adds the packed
+consumer-check command. `pnpm pack:check` runs synthetic signed spends from exact packed artifacts in
+clean CJS and ESM consumers with published SDK 2.8.0 and the candidate SDK.
+For offline qualification, `TEMPLATES_PUBLISHED_SDK_TARBALL` may name a local
+SDK 2.8.0 tarball. The check verifies the reviewed registry SHA-512 digest and
+installed version for either the downloaded or supplied artifact; resolver age
+policy and lifecycle-script restrictions stay unchanged.
+
 ## Current Templates
 
 | Name                                    | Description                                           |
 | --------------------------------------- | ----------------------------------------------------- |
 | [Bsv21Binary](./src/Bsv21Binary.ts)     | Lock and decode BRC-162 (BSV-21 binary) token outputs |
+| [OneColor](./src/OneColor.ts)           | Lock, decode and read BRC-162 1Color token outputs    |
 | [OpReturn](./src/OpReturn.ts)           | Tag data in a non-spendable script                    |
 | [Metant](./src/Metanet.ts)              | Create transactions that follow the Metanet protocol  |
 | [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners       |
 | [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold             |
 | [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key     |
+| [R1Comb](./src/R1Comb.ts)               | Let any one of 1..5 P-256 hardware keys open a vault  |
 
 ### Signing trust boundary
 
@@ -56,6 +76,11 @@ an address, key list, or partial unlocking script from an untrusted party is
 validated but is not itself proof that the intended payment policy is safe.
 
 ### BRC-162 tokens: `Bsv21Binary`
+
+`OneColor` is the BRC-162 1Color template. It reads and writes the same outputs
+as `Bsv21Binary` and also the 36-byte token id of an asset first deployed under
+BRC-161 at a nonzero output (`<txid>_<vout>`); a 36-byte id with vout 0 is
+rejected. `Bsv21Binary` is unchanged and still accepts only 32-byte ids.
 
 `Bsv21Binary` builds and reads [BRC-162](https://brc.dev/162) (BSV-21 binary)
 token outputs. A token output is a fixed prefix on an ordinary locking script:
@@ -102,6 +127,79 @@ same bytes reads the same token output:
   throws `Bsv21BinaryError` for a token-shaped script that is not canonical
   (for example amount `5` pushed as `01 05`), so it is never silently read as
   "not a token".
+
+### 1Color payload attributes
+
+`readOneColorAttributes(payload)` reads the payload of a 1Color output under
+the BRC-207 wallet rules. It is pure and never throws, whatever it is given.
+`payload` says what the output carries:
+
+- `'absent'`: no payload push;
+- `'empty'`: a zero-byte payload (`OP_0 OP_DROP`);
+- `'opaque'`: nonzero bytes that are not a strictly valid DAG-CBOR map
+  (trailing bytes, unsorted or duplicate keys, a non-map, bytes outside
+  0..255). Nothing is recovered from it;
+- `'map'`: a strictly valid DAG-CBOR map, also returned as `map`.
+
+Each reserved field (`dec`, `sym`, `icon`, `req`, `ext`) is
+`{ status: 'absent' }`, `{ status: 'valid', value }` or
+`{ status: 'malformed', reason }`. Every field is `'absent'` unless `payload`
+is `'map'`. In a map, a reserved key that is present but ill-shaped is
+`'malformed'`, never `'absent'`:
+
+- `dec`: a CBOR unsigned integer `0` to `18`. A float, even `2.0`, is malformed;
+- `sym`: text;
+- `icon`: exactly `[mediaType text, bytes]`. A display treats a malformed icon
+  as absent;
+- `req`: a map from processing-profile ids (`isProfileId`) to exactly
+  `{ params, version }`, `version` a CBOR unsigned integer `1` to `2^32 - 1`
+  and `params` any value, including `null`. `reqBytes` is the exact wire span
+  of the `req` value, set only when `req` is valid;
+- `ext`: a map from processing-profile ids to any value.
+
+`reqMatchesDeploy(deploy, later)` checks that a later output repeats the
+deploy's `req`. It fails closed, in this order: a malformed deploy `req` gives
+`false` for every later output; a later output without `req` gives `true`; a
+malformed later `req` gives `false`; otherwise the canonical DAG-CBOR bytes
+must be equal, and a deploy without `req` counts as the empty map `a0`. Bytes
+are compared as written, so `params: 1.0` never matches `params: 1`.
+
+`OneColor.lockRemainder(tokenId, amount, remainder, payload?)` puts the 1Color
+prefix in front of any locking script. With no payload and a remainder that
+starts with `<push> OP_DROP`, it writes the empty-payload marker
+`OP_0 OP_DROP` first (BRC-162), so the remainder's first push is never read as
+a payload. A push here is `OP_0`, `OP_1NEGATE`, `OP_1` to `OP_16` or any data
+push. `needsEmptyPayloadMarker(remainder.chunks)` tells whether it will.
+
+New 1Color code should prefer `oneColorTokenIdFromString` and
+`oneColorTokenIdToString`, which accept 32- and 36-byte ids.
+`tokenIdFromString` and `tokenIdToString` accept 32-byte (`_0`) ids only.
+
+```ts
+import { PrivateKey } from '@bsv/sdk'
+import {
+  OneColor,
+  encodeStrictCbor,
+  oneColorTokenIdFromString,
+  readOneColorAttributes,
+  reqMatchesDeploy
+} from '@bsv/templates'
+
+const pubKeyHash = PrivateKey.fromRandom().toPublicKey().toHash() as number[]
+const template = new OneColor()
+
+const deployScript = template.lock(null, 0n, pubKeyHash, encodeStrictCbor({ sym: 'USD', dec: 2n }))
+const deploy = readOneColorAttributes(OneColor.decode(deployScript).payload)
+if (deploy.dec.status === 'valid') console.log(deploy.dec.value) // 2
+
+const tokenId = `${'ab'.repeat(32)}_1` // a BRC-161 asset deployed at output 1
+console.log(oneColorTokenIdFromString(tokenId).length) // 36
+const later = readOneColorAttributes(
+  OneColor.decode(template.lock(tokenId, 5n, pubKeyHash)).payload
+)
+console.log(later.payload) // 'absent'
+console.log(reqMatchesDeploy(deploy, later)) // true: the later output omits req
+```
 
 ### Strict CBOR payloads
 
@@ -180,6 +278,50 @@ does not display or independently validate the Bitcoin transaction. A PIN or
 touch policy protects key use, not transaction intent; review transactions on
 a trusted host before approving them.
 
+### R1C vault: `R1Comb`
+
+`R1Comb` (subpath `@bsv/templates/R1Comb.ts`, not in the root entry) is a
+1-of-N lock (N = 1..5) that any one committed P-256 key opens
+alone. It is the script of the BSV Wallet Vault, made for keys that sign P-256
+only, such as a YubiKey PIV slot. No key appears on the chain until it spends:
+the lock holds `HASH160(salt || combTable(key))` for each key, and the unlock
+reveals one comb table, the salt and a P-256 signature that the script checks
+in full over an OP_PUSH_TX sighash preimage.
+
+```ts
+import type { Transaction } from '@bsv/sdk'
+import * as R1Comb from '@bsv/templates/R1Comb.ts'
+
+declare const p256PublicKeysHex: string[] // 1..5 keys, 33- or 65-byte SEC1
+declare const saltHex64: string // 32 random bytes per output; keep it with the wallet
+declare const signWithYubiKeyPiv: (digestHex: string) => Promise<number[]> // DER ECDSA
+declare const tx: Transaction // version 1; input 0 spends the locked output
+declare const sourceSatoshis: number
+
+const keys = p256PublicKeysHex.map(k => R1Comb.compressPubkey(k))
+const lockingScript = R1Comb.buildLock({
+  commitments: keys.map(k => R1Comb.commitment(k, saltHex64)),
+  saltHex64
+})
+
+const preimage = R1Comb.sighashPreimage(tx, 0, sourceSatoshis)
+// Sign this 32-byte digest unchanged (PIV GENERAL AUTHENTICATE). Either DER S form is accepted.
+const derSig = await signWithYubiKeyPiv(R1Comb.signerDigest(preimage))
+const unlockingScript = R1Comb.buildUnlock({ preimage, derSig, pubkeyHex33: keys[0], saltHex64 })
+R1Comb.verifyVaultInput({ tx, inputIndex: 0, sourceSatoshis, lockingScript, unlockingScript })
+```
+
+- A lock is 45,199 bytes for one key and 45,175 + 25·N bytes for N = 2..5
+  (`R1C_LOCK_LEN`). An unlock is at most 2,560 bytes (`R1C_UNLOCK_LEN`).
+- The spending transaction must be version 1, and the signature scope is
+  `SIGHASH_ALL | FORKID`. `buildUnlock` refuses anything else.
+- Losing the salt makes the output unspendable: every key's commitment
+  includes it.
+- `verifyVaultInput` runs the SDK interpreter with `R1C_VERIFY_FLAGS`. Run it
+  on every input before broadcast.
+- The locks and unlocks are byte-identical to the Vault's. See
+  `test/vectors/r1comb/README.md`.
+
 ## Contribution Guidelines
 
 We're always looking for contributors to add the coolest new templates. Whatever kinds of scripts you come up with - all contributions are welcome.
@@ -205,10 +347,17 @@ For questions, bug reports, or feature requests, please open an issue on GitHub 
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain Script Templates Project. Let's build the future of BSV Blockchain together!
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

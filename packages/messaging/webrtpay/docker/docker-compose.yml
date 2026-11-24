@@ -1,0 +1,36 @@
+# Local STUN/TURN (coturn), for development and `pnpm test:turn`; the relay runs on the host
+# from the build (see "Running the local STUN/TURN stack" in the README):
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   pnpm build && HOST=127.0.0.1 STUN_URLS=stun:127.0.0.1:3478 TURN_SECRET=webrtpay-dev-secret \
+#     TURN_URLS=turn:127.0.0.1:3478 TURN_PER_IP_PER_HOUR=600 node dist/server/cli.js
+#   pnpm test:turn
+#   docker compose -f docker/docker-compose.yml down
+#
+# Everything is published on 127.0.0.1 only. The TURN secret is public: never deploy this.
+name: webrtpay
+
+services:
+  coturn:
+    image: coturn/coturn:4.18.0-alpine3.24
+    command: ['-c', '/etc/coturn/turnserver.conf']
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    ports:
+      - '127.0.0.1:3478:3478/udp'
+      - '127.0.0.1:3478:3478/tcp'
+      # Relayed addresses, advertised as 127.0.0.1 (external-ip). Two relay-only peers
+      # never use them from outside: coturn relays between its allocations internally.
+      - '127.0.0.1:49160-49200:49160-49200/udp'
+    networks:
+      turn:
+        # relay-ip, external-ip and allowed-peer-ip in turnserver.conf name this address
+        ipv4_address: 172.30.78.10
+
+networks:
+  turn:
+    ipam:
+      config:
+        # Change it (and the address above and in turnserver.conf) if it clashes with a
+        # network on this machine.
+        - subnet: 172.30.78.0/24

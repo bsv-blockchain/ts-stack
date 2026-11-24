@@ -1,5 +1,38 @@
 # Performance Benchmarks
 
+## Public-key reuse, verifier memory and legacy byte paths (October 2026)
+
+Three low-risk changes from a library-wide performance review. Measured on
+Node 26.9, Apple Silicon, `BENCH_SAMPLES=5`, same machine before and after:
+
+| Benchmark                                     | Before   | After      |
+| --------------------------------------------- | -------- | ---------- |
+| `PrivateKey.toPublicKey` (same key)           | 1.03 ms  | about 4 µs |
+| `Transaction.sign`, 200 P2PKH inputs, one key | 587 ms   | 345 ms     |
+| Heap growth verifying 2,000 distinct keys     | 6.19 MiB | none       |
+| `Transaction.toBEEF`, 1,000 txs / 4.2 MB      | 151 ms   | 10.8 ms    |
+| `Transaction.toHexBEEF`                       | 154 ms   | 18.9 ms    |
+| `Transaction.fromHexBEEF`                     | 106 ms   | 15.4 ms    |
+| `Beef.toBinary`                               | 85.5 ms  | 8.4 ms     |
+| `Beef.mergeBeef(Beef)`                        | 101 ms   | 11.1 ms    |
+
+- The windowed table cache for point multiplication kept one table per
+  distinct point forever. Long-running verifiers grew without bound, and
+  attacker-chosen keys could drive that growth. The generator's tables stay
+  cached; other points use a 64-entry least-recently-used cache, since a table
+  costs only one doubling and a few additions to build.
+- `PrivateKey.toPublicKey()` is cached, because P2PKH asks for it once per
+  input. The cache checks a SHA-256 fingerprint of the key's current value
+  (about 4 µs), so it never holds a copy of the secret and an in-place change
+  to the key recomputes. Results are returned as independent objects.
+  Signature verification itself is unchanged (1.03 ms per op).
+- Byte-to-`number[]` conversion uses a presized indexed loop, about ten times
+  faster than `Array.from` or spreading. The legacy BEEF methods now serialize
+  to contiguous bytes first and convert once. Output bytes are identical.
+
+Reproduce with `node --expose-gc benchmarks/key-cache-bench.js` and
+`node benchmarks/beef-conversion-bench.js`.
+
 ## Batched proven-transaction BEEF assembly (August 2026)
 
 Wallets with fragmented funding can require more than one hundred independent

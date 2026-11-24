@@ -13,6 +13,7 @@ import {
   PrivateKey,
   ProtoWallet,
   PushDrop,
+  type MerklePath,
   type WalletInterface
 } from '@bsv/sdk'
 import { Output } from '../Output'
@@ -632,6 +633,80 @@ describe('BSV Overlay Services Engine', () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('invalid applied-transaction verdict')
     )
+  })
+
+  describe('onTopicFailed', () => {
+    it('reports a per-topic validation failure without changing the STEAK', async () => {
+      const failure = new Error('manager rejected the transaction')
+      mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
+        throw failure
+      })
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        { Hello: mockLookupService },
+        mockStorageEngine,
+        mockChainTracker
+      )
+      engine.logger = { ...console, error: jest.fn() }
+      const onTopicFailed = jest.fn()
+      engine.onTopicFailed = onTopicFailed
+
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(onTopicFailed).toHaveBeenCalledTimes(1)
+      expect(onTopicFailed).toHaveBeenCalledWith('Hello', failure, {
+        txid: exampleTXID,
+        mode: 'current-tx'
+      })
+      expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+    })
+
+    it('is not invoked for a duplicate or a successful admission', async () => {
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
+      const onTopicFailed = jest.fn()
+      engine.onTopicFailed = onTopicFailed
+
+      await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+      expect(mockStorageEngine.insertOutput).toHaveBeenCalled()
+
+      mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => true)
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(onTopicFailed).not.toHaveBeenCalled()
+    })
+
+    it('contains a throwing reporter so submit still resolves', async () => {
+      mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
+        throw new Error('manager rejected the transaction')
+      })
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
+      const logger = { ...console, error: jest.fn() }
+      engine.logger = logger
+      engine.onTopicFailed = jest.fn(() => {
+        throw new Error('reporter exploded')
+      })
+
+      await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(engine.onTopicFailed).toHaveBeenCalledTimes(1)
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error in onTopicFailed reporter')
+      )
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('reporter exploded'))
+    })
   })
 
   it('deduplicates stored consumer relations by outpoint value', async () => {
@@ -1823,6 +1898,293 @@ describe('BSV Overlay Services Engine', () => {
       expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
     })
 
+    describe('a transaction a topic applied without storing outputs', () => {
+      let proven: Transaction
+      let txid: string
+      let proof: MerklePath
+      let leaf: { offset: number }
+      let appliedProof: Record<string, unknown>
+      let updateAppliedTransactionProof: jest.Mock
+      let upsertTransactionRecord: jest.Mock
+
+      beforeEach(() => {
+        proven = Transaction.fromHexBEEF(beef37abad0)
+        txid = proven.id('hex')
+        if (proven.merklePath === undefined) throw new Error('improper test setup')
+        proof = proven.merklePath
+        const found = proof.path[0].find(node => node.hash === txid)
+        if (found === undefined) throw new Error('improper test setup')
+        leaf = found
+        appliedProof = {
+          txid,
+          blockHeight: proof.blockHeight,
+          blockHash: undefined,
+          blockIndex: leaf.offset,
+          merkleRoot: proof.computeRoot(txid)
+        }
+        updateAppliedTransactionProof = jest.fn(async () => undefined)
+        upsertTransactionRecord = jest.fn(async () => undefined)
+        mockStorageEngine.updateAppliedTransactionProof = updateAppliedTransactionProof
+        mockStorageEngine.upsertTransactionRecord = upsertTransactionRecord
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(
+          async ({ topic }: { txid: string; topic: string }) => topic === 'Hello'
+        )
+      })
+
+      it('marks the applied row proven and stores the proof on the transaction record', async () => {
+        const unproven = new Transaction(proven.version, proven.inputs, proven.outputs)
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [
+          { txid, rawTx: unproven.toHex() }
+        ])
+        const engine = new Engine(
+          { Hello: mockTopicManager, Other: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof, proof.blockHeight)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledTimes(1)
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+        expect(upsertTransactionRecord).toHaveBeenCalledTimes(1)
+        expect(upsertTransactionRecord).toHaveBeenCalledWith(
+          expect.objectContaining({
+            txid,
+            rawTx: Array.from(unproven.toBinary()),
+            merklePath: proof.toBinary(),
+            blockHeight: proof.blockHeight,
+            blockIndex: leaf.offset
+          })
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('keeps the proof when the transaction record is no longer stored', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+        expect(upsertTransactionRecord).toHaveBeenCalledWith({
+          txid,
+          merklePath: proof.toBinary(),
+          blockHeight: proof.blockHeight,
+          blockHash: undefined,
+          blockIndex: leaf.offset,
+          merkleRoot: appliedProof.merkleRoot
+        })
+      })
+
+      it('marks a consume-only topic proven alongside a topic that kept outputs', async () => {
+        const output: Output = {
+          txid,
+          outputIndex: 0,
+          outputScript: proven.outputs[0].lockingScript.toBinary(),
+          topic: 'Other',
+          satoshis: proven.outputs[0].satoshis,
+          beef: proven.toBEEF(),
+          spent: false,
+          outputsConsumed: [],
+          consumedBy: [],
+          score: 1
+        }
+        mockStorageEngine.findOutputsForTransaction = jest.fn(async () => [output])
+        const engine = new Engine(
+          { Hello: mockTopicManager, Other: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(mockStorageEngine.doesAppliedTransactionExist).toHaveBeenCalledTimes(1)
+        expect(mockStorageEngine.doesAppliedTransactionExist).toHaveBeenCalledWith({
+          txid,
+          topic: 'Hello'
+        })
+        expect(updateAppliedTransactionProof.mock.calls.map(([record]) => record.topic)).toEqual([
+          'Other',
+          'Hello'
+        ])
+        // The output's own transaction record is written once, by the existing output path.
+        expect(upsertTransactionRecord).toHaveBeenCalledTimes(1)
+      })
+
+      it('still refuses a proof for a transaction no topic applied', async () => {
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => false)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a malformed applied-transaction verdict from storage', async () => {
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => 1 as unknown as boolean)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'invalid applied-transaction verdict'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+
+      it('recomputes the BRC-136 anchor for the applied topic once the block hash resolves', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+        const blockHash = 'aa'.repeat(32)
+        engine.topicAnchorHeaderResolver = jest.fn(async blockHeight => ({
+          blockHeight,
+          blockHash,
+          merkleRoot: proof.computeRoot(txid)
+        }))
+        const recompute = jest
+          .spyOn(engine as any, 'recomputeTopicBlockAnchor')
+          .mockResolvedValue(undefined)
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          blockHash,
+          topic: 'Hello'
+        })
+        expect(recompute).toHaveBeenCalledWith('Hello', proof.blockHeight, blockHash)
+      })
+
+      it('keeps refusing on a storage that cannot record an applied proof', async () => {
+        delete mockStorageEngine.updateAppliedTransactionProof
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(mockStorageEngine.doesAppliedTransactionExist).not.toHaveBeenCalled()
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a malformed output set from storage', async () => {
+        mockStorageEngine.findOutputsForTransaction = jest.fn(
+          async () => null as unknown as Output[]
+        )
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+
+      it('marks the applied row proven on a storage that cannot upsert transaction records', async () => {
+        delete mockStorageEngine.upsertTransactionRecord
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(mockStorageEngine.findRawTransactions).not.toHaveBeenCalled()
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+      })
+
+      it('keeps the proof on a storage that cannot list raw transactions', async () => {
+        delete mockStorageEngine.findRawTransactions
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(upsertTransactionRecord).toHaveBeenCalledWith(
+          expect.objectContaining({ txid, merklePath: proof.toBinary() })
+        )
+      })
+
+      it('refuses a malformed raw-transaction set from storage', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => ({}) as unknown as [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Storage returned an invalid raw-transaction set'
+        )
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a stored raw transaction that does not match the proven txid', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [
+          { txid, rawTx: Transaction.fromHexBEEF(beef27c8f1).toHex() }
+        ])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Stored raw transaction does not match its transaction ID'
+        )
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+    })
+
     it('0 simple proof', async () => {
       const beef = beef27c8f1
       const txid = txid27c8f
@@ -2035,6 +2397,40 @@ describe('BSV Overlay Services Engine', () => {
         'bb6f640cc4ee56bf38eb5a1969ac0c16caa2d3d202b22bf3735d10eec0ca6e00',
         814435
       )
+    })
+    it('Passes the configured script verifier to SPV verification', async () => {
+      const scriptVerifier = { verifyScripts: jest.fn(async () => true) }
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          ...Array(16).fill(undefined),
+          scriptVerifier
+        )
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, scriptVerifier)
+      } finally {
+        verify.mockRestore()
+      }
+    })
+    it('Verifies with the SDK interpreter when no script verifier is configured', async () => {
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+        expect(engine.scriptVerifier).toBeUndefined()
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, undefined)
+      } finally {
+        verify.mockRestore()
+      }
     })
     it('Throws an error if an invalid envelope is provided', async () => {
       const engine = new Engine(

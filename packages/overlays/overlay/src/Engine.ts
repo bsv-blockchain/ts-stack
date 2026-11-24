@@ -25,6 +25,7 @@ import {
   BroadcastResponse,
   BroadcastFailure
 } from '@bsv/sdk'
+import type { BdkVerifierInterface } from '@bsv/sdk'
 import { AdvertisementData, Advertiser } from './Advertiser.js'
 import type { Advertisement } from './Advertisement.js'
 import { GASP, GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/gasp'
@@ -44,6 +45,7 @@ import {
   type TopicAnchorRangeResponse,
   type TopicAnchorTip,
   type TopicBlockAnchor,
+  type MerkleProofMetadata,
   computeBasmRoot,
   computeTac,
   extractMerkleProofMetadata
@@ -306,6 +308,22 @@ type StaleOutput = {
 
 type SubmissionMode = 'historical-tx' | 'current-tx' | 'historical-tx-no-spv'
 
+/**
+ * Receives each per-topic validation failure that `Engine.submit` records in
+ * `failedTopics`. The Engine swallows those errors by design and reports the
+ * topic as `{ outputsToAdmit: [], coinsToRetain: [] }`, which is the same STEAK
+ * shape as a duplicate or an empty admission. This callback lets a host tell
+ * the three apart without parsing log output.
+ *
+ * The Engine invokes it inside its own try/catch, so a throwing reporter
+ * cannot turn a per-topic rejection into a whole-submission failure.
+ */
+export type TopicFailureReporter = (
+  topic: string,
+  error: unknown,
+  context: { txid: string; mode: SubmissionMode }
+) => void
+
 type TopicSubmissionContext = {
   tx: Transaction
   txid: string
@@ -366,6 +384,14 @@ function requireBASMDefined<T>(value: T | undefined, aligned: boolean, message: 
  * An engine for running BSV Overlay Services (topic managers and lookup services).
  */
 export class Engine {
+  /**
+   * Optional reporter for per-topic validation failures during `submit`.
+   * Unset by default; the Engine's behavior is unchanged when it is unset.
+   * A field rather than a constructor parameter, so the positional constructor
+   * signature stays as it is.
+   */
+  onTopicFailed?: TopicFailureReporter
+
   private submissionTail: Promise<void> = Promise.resolve()
   private basmFetchImpl?: typeof fetch
 
@@ -391,6 +417,7 @@ export class Engine {
    * @param {boolean} basmSyncEnabled - Whether BASM sync should run automatically.
    * @param {number} unprovenEvictionBlocks - Default block age for opt-in unproven state eviction.
    * @param {number} maxLookupResults - Maximum lookup formulas hydrated per request. Use -1 to opt out.
+   * @param {BdkVerifierInterface} [scriptVerifier] - Optional script backend for SPV verification of submitted and GASP-synced transactions, for example a preloaded `BdkVerifier` from `@bsv/verifast`. When omitted, the SDK's JavaScript interpreter verifies scripts.
    */
   constructor(
     public managers: { [key: string]: TopicManager },
@@ -412,7 +439,8 @@ export class Engine {
     public topicAnchorHeaderResolver?: TopicAnchorHeaderResolver,
     public basmSyncEnabled = false,
     public unprovenEvictionBlocks = 144,
-    public maxLookupResults = 1000
+    public maxLookupResults = 1000,
+    public scriptVerifier?: BdkVerifierInterface
   ) {
     if (
       maxLookupResults !== -1 &&
@@ -1134,6 +1162,7 @@ export class Engine {
         `Error validating topic during submit: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(error)}`
       )
       failedTopics.add(topic)
+      this.reportTopicFailure(topic, error, { txid, mode })
       return {
         topic,
         isDupe: false,
@@ -1141,6 +1170,22 @@ export class Engine {
         previousOutputs: [],
         admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
       }
+    }
+  }
+
+  private reportTopicFailure(
+    topic: string,
+    error: unknown,
+    context: { txid: string; mode: SubmissionMode }
+  ): void {
+    if (this.onTopicFailed === undefined) return
+    try {
+      this.onTopicFailed(topic, error, context)
+    } catch (reporterError) {
+      // An observability hook must never change admission behavior.
+      this.logger.error(
+        `Error in onTopicFailed reporter: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(reporterError)}`
+      )
     }
   }
 
@@ -1718,7 +1763,7 @@ export class Engine {
     // public submission mode, so it keeps the full SPV check.
     if (mode !== 'historical-tx-no-spv') {
       this.startTime(`chainTracker_${txid.substring(0, 10)}`)
-      const txValid = await tx.verify(this.chainTracker)
+      const txValid = await tx.verify(this.chainTracker, undefined, undefined, this.scriptVerifier)
       if (!txValid) throw new Error('Unable to verify SPV information.')
       this.endTime(`chainTracker_${txid.substring(0, 10)}`)
     }
@@ -4131,11 +4176,7 @@ export class Engine {
       MAX_PROOF_UPDATE_OUTPUTS + 1
     )
 
-    if (
-      !Array.isArray(outputs) ||
-      outputs.length === 0 ||
-      outputs.length > MAX_PROOF_UPDATE_OUTPUTS
-    ) {
+    if (!Array.isArray(outputs) || outputs.length > MAX_PROOF_UPDATE_OUTPUTS) {
       throw new Error('Could not find matching transaction outputs for proof ingest!')
     }
     for (const output of outputs) {
@@ -4143,6 +4184,13 @@ export class Engine {
       if (output.txid.toLowerCase() !== txid.toLowerCase()) {
         throw new TypeError('Storage returned an unbound Merkle-proof root output')
       }
+    }
+    const appliedTopicsWithoutOutputs = await this.findAppliedTopicsWithoutOutputs(
+      txid,
+      new Set(outputs.map(output => output.topic))
+    )
+    if (outputs.length === 0 && appliedTopicsWithoutOutputs.length === 0) {
+      throw new Error('Could not find matching transaction outputs for proof ingest!')
     }
 
     const graphOutputs = await this.collectMerkleProofOutputs(outputs)
@@ -4193,6 +4241,85 @@ export class Engine {
         await this.recomputeTopicBlockAnchor(output.topic, resolvedBlockHeight, resolvedBlockHash)
       }
     }
+
+    if (appliedTopicsWithoutOutputs.length === 0) return
+    if (outputs.length === 0) {
+      await this.recordProofForTransactionWithoutOutputs(
+        txid,
+        proof,
+        proofMetadata,
+        resolvedBlockHash
+      )
+    }
+    await Promise.all(
+      appliedTopicsWithoutOutputs.map(async topic => {
+        await this.storage.updateAppliedTransactionProof?.({
+          txid,
+          topic,
+          blockHeight: resolvedBlockHeight,
+          blockHash: resolvedBlockHash,
+          blockIndex: proofMetadata.blockIndex,
+          merkleRoot: proofMetadata.merkleRoot
+        })
+        if (resolvedBlockHash !== undefined) {
+          await this.recomputeTopicBlockAnchor(topic, resolvedBlockHeight, resolvedBlockHash)
+        }
+      })
+    )
+  }
+
+  /**
+   * Topics that applied the transaction but hold none of its outputs: the topic accepted it
+   * only for the coins it consumed, or its outputs were spent and not retained. BRC-136
+   * counts these applied rows, so a proof must still mark them proven.
+   */
+  private async findAppliedTopicsWithoutOutputs(
+    txid: string,
+    outputTopics: Set<string>
+  ): Promise<string[]> {
+    // A storage that cannot record an applied proof keeps the previous refusal.
+    if (typeof this.storage.updateAppliedTransactionProof !== 'function') return []
+    const candidates = Object.keys(this.managers).filter(topic => !outputTopics.has(topic))
+    const verdicts = await Promise.all(
+      candidates.map(async topic => await this.storage.doesAppliedTransactionExist({ txid, topic }))
+    )
+    if (verdicts.some(applied => typeof applied !== 'boolean')) {
+      throw new TypeError('Storage returned an invalid applied-transaction verdict')
+    }
+    return candidates.filter((_, index) => verdicts[index])
+  }
+
+  /** Stores the proof on the transaction record so BASM can serve it for the applied rows. */
+  private async recordProofForTransactionWithoutOutputs(
+    txid: string,
+    proof: MerklePath,
+    metadata: MerkleProofMetadata,
+    blockHash?: string
+  ): Promise<void> {
+    if (typeof this.storage.upsertTransactionRecord !== 'function') return
+    const stored = await this.storage.findRawTransactions?.([txid])
+    if (stored !== undefined && !Array.isArray(stored)) {
+      throw new TypeError('Storage returned an invalid raw-transaction set')
+    }
+    const rawTx = stored?.find(record => record.txid.toLowerCase() === txid.toLowerCase())?.rawTx
+    if (rawTx !== undefined) {
+      const tx = Transaction.fromHex(rawTx)
+      if (tx.id('hex') !== txid.toLowerCase()) {
+        throw new TypeError('Stored raw transaction does not match its transaction ID')
+      }
+      tx.merklePath = proof
+      await this.recordTransactionData(tx, tx.toBEEF(), blockHash)
+      return
+    }
+    // The transaction record went with its last output; keep the proof for BASM.
+    await this.storage.upsertTransactionRecord({
+      txid,
+      merklePath: proof.toBinary(),
+      blockHeight: metadata.blockHeight,
+      blockHash,
+      blockIndex: metadata.blockIndex,
+      merkleRoot: metadata.merkleRoot
+    })
   }
 
   /**

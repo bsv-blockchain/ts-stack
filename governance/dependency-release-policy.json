@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-03",
+  "lastReviewed": "2026-11-19",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -156,11 +156,11 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-10-03",
-    "method": "Rechecked every registered substitution after the workspace brace-expansion floor moved from 5.0.9 to 5.0.11 and engine.io 6.6.10 was added. Jest and Stryker minimatch still admit brace-expansion below 5.0.11, and socket.io in authsocket still admits engine.io below 6.6.10. Both substitutions stay on the first release that clears the current high advisories. The other 23 selectors, including the Metro-scoped image-size 2.0.4 substitution, remain necessary against the frozen graph. On 2026-10-02 the lodash-es 4.18.1 selector was added because Mermaid 12 brings chevrotain 11.1.2, which pins vulnerable lodash-es 4.17.23. The yamux-scoped @libp2p/utils 7.4.1 selector was added so YamuxStream satisfies @libp2p/interface 3.3 readableEnded. Metro 0.87.1 replaced its image-size dependency with an in-tree parser, so the Metro-scoped image-size substitution was retired on 2026-10-02. On 2026-10-03, retain all existing 26 registrations unchanged and add only the exact Metro-file-map 0.87.1 micromatch removal, paired source/distribution patch and exact Picomatch 2.3.2 package extension. The unmodified installed published watcher independently reproduces all 1,120 frozen compatibility cases; qualify the new graph and native platform before merge.",
+    "reviewedAt": "2026-11-19",
+    "method": "Rehearsed removal of the metro-file-map repair after Dependabot could not update the root workspace: its exact metro-file-map@0.87.1 patch stopped every Metro update with ERR_PNPM_UNUSED_PATCH. Metro-file-map 0.87.2 and later match watched files without micromatch, so the official Metro 0.87.3 patch release removes the affected braces path. Moved the mobile Metro and Metro config pins to 0.87.3 and removed the scoped micromatch removal, the Picomatch package extension and the paired patch together. Replaced the watcher oracle, which tested the removed glob matcher, with a platform-gate assertion that metro-file-map resolves neither micromatch nor braces. The other 27 selector/value registrations remain unchanged with their existing removal evidence.",
     "retainedCount": 27,
-    "result": "All 26 retained overrides prevent a reproduced vulnerable transitive version, keep a stream type assignable, or preserve an isolated reproducible toolchain closure. The workspace brace-expansion selector is now 5.0.11, covering GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7. The engine.io 6.6.10 selector closes GHSA-2gc4-cqfq-p2gv on the authsocket socket.io path without an advisory exclusion. The lodash-es 4.18.1 selector closes GHSA-r5fr-rjxr-66jc on the Mermaid/chevrotain path. The yamux-scoped @libp2p/utils 7.4.1 selector supplies readableEnded for interface 3.3. The new 27th selector removes the unused micromatch/braces closure from Metro while preserving the existing matcher; it adds no advisory exclusion.",
-    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch/brace-expansion/js-yaml, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO/engine.io, Vite/PostCSS, remark-mdx-frontmatter/TOML, Metro, image-size, or Mermaid/chevrotain/lodash-es dependency changes."
+    "result": "One temporary repair retired with no advisory exclusion, threshold change, provenance exception or public application-wallet API change. The packed Metro/Hermes platform gate, frozen graph and unexcluded audit qualify the retirement. The Puppeteer/Chromium-BiDi and Zod 4 repairs from the 2026-10-23 rehearsal remain open.",
+    "nextReview": "Rehearse removal monthly and after changes to the governed upstream dependencies; recheck Puppeteer/Chromium-BiDi provenance and the mutation-server-protocol/Zod security floor by 2026-12-01."
   },
   "overrideRegistry": [
     {
@@ -171,8 +171,8 @@
     },
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "brace-expansion@<5.0.11",
-      "value": "5.0.11",
+      "selector": "brace-expansion@<5.0.12",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -186,12 +186,6 @@
       "selector": "nanoid@<3.3.18",
       "value": "3.3.18",
       "exceptionId": "nanoid-postcss-advisory-override"
-    },
-    {
-      "source": "pnpm-workspace.yaml",
-      "selector": "toml@<4.2.0",
-      "value": "4.2.0",
-      "exceptionId": "toml-frontmatter-advisory-override"
     },
     {
       "source": "pnpm-workspace.yaml",
@@ -326,9 +320,15 @@
     },
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "metro-file-map@0.87.1>micromatch",
+      "selector": "puppeteer-core@25.11.0>chromium-bidi",
       "value": "'-'",
-      "exceptionId": "metro-file-map-picomatch-advisory-repair"
+      "exceptionId": "verifast-cdp-only-browser-tooling"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "zod@>=4.0.0 <4.6.6",
+      "value": "4.6.7",
+      "exceptionId": "zod4-mutation-protocol-security-floor"
     }
   ],
   "scheduledVerification": {

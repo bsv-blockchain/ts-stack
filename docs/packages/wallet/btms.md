@@ -4,9 +4,9 @@ title: '@bsv/btms'
 kind: package
 domain: wallet
 npm: '@bsv/btms'
-version: '1.2.4'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.2.7'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 status: stable
 tags: ['tokens', 'protocol']
@@ -15,7 +15,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms
 
 # @bsv/btms
 
-This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -197,3 +197,7 @@ if (verified.valid) {
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/btms/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack)
 - [npm](https://www.npmjs.com/package/@bsv/btms)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

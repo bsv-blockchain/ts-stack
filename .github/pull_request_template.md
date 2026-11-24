@@ -19,13 +19,34 @@
 - [ ] Security-sensitive boundary changed
 - [ ] Documentation or examples changed
 
-Affected packages/services and intended patch versions (publication occurs only
-through the release workflow after approval):
+Affected services (if any; package release impact is recorded once below):
+
+## Release note
+
+<!-- Required for every PR, including automation. Replace the placeholders.
+Map each affected npm package to patch, minor, major or initial. For no npm
+release impact, use "packages": "none" and "migration": "none", with a summary
+explaining the repository/service change. See docs/about/versioning.md.
+CI checks structure; reviewers assess content. Existing release-ledger and
+changelog requirements still apply. Reuse this prose there where appropriate. -->
+
+```release-note
+{
+  "schemaVersion": 1,
+  "packages": { "<package name>": "<patch|minor|major|initial>" },
+  "summary": "<plain-language consumer summary>",
+  "migration": "<steps or the exact word none>"
+}
+```
 
 ## Verification
 
 - Local commands and results:
 - Hosted CI run:
+- Compatibility evidence (published client/wallet versions, both old/new
+  directions, transports, legacy wire fixtures, and unchanged validation):
+- [ ] Established compatibility contracts and the BRC-100 application-wallet
+      boundary remain compatible, including across major versions
 - Conformance evidence:
 - Coverage delta:
 - Lint/typecheck delta:
@@ -45,7 +66,13 @@ through the release workflow after approval):
 - [ ] The exact-head CodeQL analysis has no new alert
 - [ ] The exact-head repository quality gate reports zero new Sonar findings
       (including accepted or false-positive issue states) and zero unreviewed hotspots;
-      Sonar's aggregate `Quality Gate passed` verdict alone is not merge evidence
+      Sonar's aggregate `Quality Gate passed` verdict alone is not merge evidence.
+      Only the exact, unexpired [approved PR569 budget](../docs/reviews/sonar-pr569-budget.md)
+      may instead retain visible maintainability-only findings with maintainability A
+      and duplication ≤6%; attach complete inventories and both verdicts.
+      Bugs, vulnerabilities, reliability/security impacts and unreviewed hotspots
+      remain blocking, including accepted/false-positive states; all other PRs
+      retain the original zero-findings gate
 - [ ] No new override, advisory dismissal, quality suppression, or skipped test
 - [ ] Any temporary exception is registered with owner, evidence, review date,
       and removal condition
@@ -79,8 +106,9 @@ compatibility, and security metadata remains the review starting point.
 - [ ] The linked tracker is updated only for work fully proved by merged code,
       passing checks, resolved alerts, measurements, or an approved exception
 - [ ] Review conversations are resolved
-- [ ] Documentation, changelog, migration notes, release notes, and operator
-      guidance are current or concretely not applicable
+- [ ] Documentation, migration notes, a `changes/` file for each public
+      package release impact, and operator guidance are current or concretely
+      not applicable (no direct version, changelog, or release-notes edits)
 - [ ] No pending, failed, stale, cancelled, or unexpectedly skipped check is
       being handed to another contributor as “complete”
 - [ ] One qualified maintainer approval is sufficient; no last-pusher

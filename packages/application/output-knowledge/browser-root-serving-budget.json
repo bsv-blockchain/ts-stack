@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": "./root-eviction/serving",
+  "requiredExports": [
+    "RootAdvertisementServing",
+    "RootLookupServingDisclosure",
+    "rootAdvertisementServingTarget",
+    "rootLookupAdvertisementTargets"
+  ],
+  "prohibitedExports": [
+    "SQLiteRootEvictionStore",
+    "SQLiteRootEvictionMaintenance",
+    "SQLiteRootEvictionLocalRules",
+    "SDKRootEvictionEvidence",
+    "OutputKnowledge",
+    "RootEvictionService",
+    "RootEvictionScheduler",
+    "PrivateAcquisitionCoordinator"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 415000,
+      "gzip": 112000,
+      "brotli": 94000
+    },
+    "esbuild": {
+      "raw": 315000,
+      "gzip": 102000,
+      "brotli": 88000
+    }
+  }
+}

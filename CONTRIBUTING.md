@@ -69,16 +69,22 @@ Other contributors do not need a BotBoard handle.
 
 ## Design and compatibility rules
 
-The default expectation is no consumer breakage.
+Backward compatibility is a project-wide invariant: no change may break an
+established compatibility contract or any BRC-100 application-wallet boundary,
+even in a new major version. Read the [compatibility contract](./docs/about/compatibility.md).
 
 - Preserve public exports, declaration shapes, import conditions, supported
   runtime targets, documented inputs, defaults, errors, wire formats,
   serialization, persistence, browser/mobile behavior, and operational
   contracts.
-- Prefer additive changes and deprecation over removal. A breaking change
-  requires explicit maintainer approval, the appropriate SemVer release,
-  before/after migration instructions, cross-package coordination, and a
-  rollback or forward-fix plan.
+- Use additive changes and retain established contracts. Major versions,
+  deprecation notices, maintainer approval, and migration plans do not authorize
+  breaking those contracts. Independently deployed applications and wallets
+  cannot be required to upgrade together.
+- For application-wallet changes, prove old client/new wallet and new client/old
+  wallet interoperability using published clients and representative transports.
+  Retain regression tests for legacy encodings and validation. Record exact
+  versions, commands, results, and limitations before merge or publication.
 - Treat specifications and conformance vectors as implementation-independent
   contracts. A TypeScript-only convenience must not accidentally make the
   reference behavior incompatible with another conforming implementation.
@@ -140,7 +146,8 @@ The commands validate working-tree bytes; align the index and working tree befor
 treating their results as evidence for the next push. Directly
 changed packages run coverage; affected dependents run regressions and their
 declared consumer/platform checks; prerequisites build without duplicate tests.
-Critical boundaries retain property/mutation and compatibility requirements.
+Critical boundaries retain relevant property, native, conformance and compatibility checks.
+Mutation audit candidates are advisory background work only.
 The printed commands are advisory: review the changed contract and applicable
 service/platform profile, especially for new or unknown boundaries. The plan
 does not grant a remote scope skip or qualification.
@@ -148,8 +155,9 @@ does not grant a remote scope skip or qualification.
 Reuse a frozen install and exact-input build outputs during the edit loop. On a
 cold checkout, install with `pnpm install --frozen-lockfile --ignore-scripts`,
 rebuild only audited tools as documented by CI, and build the package graph
-before typechecking consumers that require workspace declarations. Invariant
-checks run once for the completed batch before opening/updating the PR:
+before typechecking consumers that require workspace declarations. Shared CI, governance and toolchain changes run the root invariant
+checks once for the completed batch. Ordinary package edits use affected-package
+checks; documentation edits use the relevant documentation checks:
 
 ```sh
 pnpm health:check
@@ -179,14 +187,14 @@ pnpm docs:build
 
 # Governed high-risk boundaries
 pnpm test:property
-pnpm test:mutation --target <target>
 ```
 
 Use the package’s declared `test:browser`, `test:mobile`, `test:consumers`, or
 other profile command when applicable. Root toolchain, SDK, CI, or governance
-changes may select the full workspace test scope. Mutation testing does not run
-on pull requests; the full registry runs on a manual `CI` dispatch, the
-scheduled `Mutation quality` workflow, and release qualification. Infrastructure or
+changes may select the full workspace test scope. Mutation campaigns never block development, PRs, publication or deployment.
+They run only as separately budgeted background audits and raise triage findings.
+Use the independent background workflow for an explicitly selected target and
+partition; do not run a campaign to qualify an ordinary change or release. Infrastructure or
 container changes require their root CI matrix and runtime-contract evidence;
 do not substitute a macOS image build for hosted Linux/amd64 validation.
 
@@ -200,9 +208,9 @@ contention rather than assuming every developer machine is faster. Avoid
 nested worker pools or concurrent heavy campaigns that starve another agent.
 Hosted CI verifies the resulting exact head and platform-specific requirements;
 retain its complete required gate and investigate failures without automatic
-rerun loops. Full workspace/campaign checks belong at shared-control changes,
-affected critical boundaries and the existing scheduled/release qualification,
-rather than every edit. Do not use stale local reports as current-head evidence.
+rerun loops. Full workspace deterministic checks apply when shared controls or dependent
+contracts require them. Mutation campaigns remain background-only for every
+change, including critical code and release machinery. Do not use stale local reports as current-head evidence.
 
 ## Dependencies and automation
 
@@ -238,13 +246,21 @@ Follow [`docs/about/versioning.md`](./docs/about/versioning.md).
 
 When a public package’s published bytes or manifest change:
 
-1. choose the SemVer impact from the consumer-visible contract;
-2. bump only affected packages and dependents whose packed contract changes;
-3. update the exact entry in `governance/package-release-notes.json`;
-4. regenerate the package API and migration ledger with
-   `pnpm docs:packages`;
-5. update the package README, API docs, and examples as needed; and
-6. update a package-local `CHANGELOG.md` when that package already has one.
+1. choose the SemVer impact from the consumer-visible contract for each
+   affected package and each dependent whose packed contract changes;
+2. add one new change file that records the impact, a summary, and the
+   migration decision, for example
+   `pnpm change @bsv/sdk:minor --summary "…" --migration "…"`
+   (see [`changes/README.md`](./changes/README.md)); and
+3. update the package README, API docs, and examples as needed.
+
+Do not edit the package `version`, `governance/package-release-notes.json`, a
+package `CHANGELOG.md`, the baseline package versions, or the generated
+ledgers. Each change file has a unique name, so pull requests that each add
+one never conflict. The `Version packages` workflow folds every pending change
+file on `main` into those shared files in one generated `chore: version
+packages` pull request. CI rejects a direct public version change in any other
+pull request.
 
 Every release-note entry includes a migration decision. Say explicitly that no
 consumer migration is required when behavior is unchanged. An incompatible
@@ -260,6 +276,41 @@ artifact does not require a cosmetic version bump.
 Use the root pull request template and keep the PR draft while work or evidence
 is incomplete.
 
+Every PR, including automated dependency PRs, needs exactly one visible
+`release-note` JSON fence in its description. Record affected npm packages and
+their SemVer impacts, a plain-language consumer summary, and migration steps or
+the exact string `none`. For repository-only, documentation-only or service-only
+changes with no npm release impact, use `"packages": "none"` and
+`"migration": "none"`, and explain the change in the summary. See the
+[schema and examples](./docs/about/versioning.md#pull-request-release-note).
+Maintainers add the block to automated PRs when the bot cannot supply it.
+
+[`.github/workflows/label-pull-requests.yml`](./.github/workflows/label-pull-requests.yml)
+adds area labels on a schedule of every 30 minutes (minute 0 and minute 30, UTC)
+and on `workflow_dispatch`. The label is the package or infra folder name, with
+no prefix. Group directories under `packages/` are not labels: a file in
+`packages/wallet/wallet-toolbox`, including its nested `client` and `mobile`
+workspaces, is `wallet-toolbox`. Infra labels are the top-level service
+directories under `infra/` that contain a `package.json` (`infra/wab` is `wab`).
+`infra/local` and loose files in `infra/` are not components. The pre-existing
+`wab` label is reused and is not recolored. Missing labels are created in color
+`c5def5` with a description `Touches <path>`.
+
+The workflow only adds labels. It does not remove labels, comment, review,
+merge, or close. An open pull request is skipped, and its files are not read,
+when it already has any current area label or any label described as
+`Touches packages/<path>` or `Touches infra/<path>`. Drafts and fork pull
+requests follow the same rule. Pull requests with none of those labels are
+scanned again on later runs. After the first area label is present, a later
+commit that touches another package is not labeled automatically.
+
+CI validates presence and structure on PR creation, updates, description edits
+and reruns. Reviewers assess package completeness, SemVer correctness, consumer
+usefulness and migration accuracy. Use the existing affected-work plan above to
+identify packages and dependents; path detection alone does not decide release
+impact. Reuse the note's prose in the existing release ledger/changelog when
+appropriate; the description does not replace those publication contracts.
+
 Before pushing, self-review the complete diff for:
 
 - correctness and root cause;
@@ -273,11 +324,11 @@ Before pushing, self-review the complete diff for:
 
 After every push, remain responsible for the exact head:
 
-1. wait for all applicable GitHub checks to reach a terminal state;
+1. wait for all applicable required foreground checks to reach a terminal state;
 2. fix every failure or unexpected skip and rerun it;
 3. resolve all review conversations;
 4. require zero new Sonar findings, zero unreviewed Sonar hotspots, and zero new
-   CodeQL alerts; and
+   CodeQL alerts (subject only to the approved PR569 Sonar budget below); and
 5. verify that the reviewed SHA is still the PR head.
 
 SonarCloud’s aggregate “Quality Gate passed” result is not sufficient. The
@@ -285,7 +336,23 @@ repository-owned exact-head zero-finding job and complete merge gate are the
 authority. Reclassifying a new issue as accepted or false-positive does not
 make it mergeable.
 
-Do not call a PR complete or hand it off with pending or failed CI. If a check
+The only approved Sonar budget is
+[PR569's scoped policy](./docs/reviews/sonar-pr569-budget.md), registered in
+[`governance/sonar-pr569-budget.json`](./governance/sonar-pr569-budget.json).
+For that exact repository/PR/head branch/base, until `2026-11-19T23:59:59Z`,
+maintainability A and duplication ≤6% replace the zero-maintainability-findings
+requirement. All findings and both original/scoped verdicts remain visible.
+Bugs, vulnerabilities, reliability/security impacts (including mixed CODE_SMELL
+impacts), unknown findings and unreviewed hotspots remain blocking even if
+accepted or marked false-positive. The gate collects live GitHub and complete,
+revision-bracketed Sonar evidence itself; a supplied snapshot cannot activate
+this exception. Other PRs, local invocations and expired approval retain the
+original gate. This authorization window returns to the strict policy at expiry;
+it is not an extension of advisory review dates or permission to merge PR569.
+All other implementation, qualification, security and review requirements remain.
+
+Do not call a PR complete or hand it off with pending or failed required foreground CI. Background mutation audits and
+findings are excluded from this readiness rule. If a check
 is transient, rerun and continue monitoring. If work must genuinely transfer
 to another person, describe the unresolved state explicitly instead of
 presenting it as finished.
@@ -305,3 +372,16 @@ reconcile registry state.
 For a release or deployed change, retain source SHA, workflow, artifact digest,
 version, migration/rollback evidence, and live validation as applicable. Never
 claim availability from a local build.
+
+## Background mutation findings
+
+Mutation scores, raw reports and historical receipts are audit evidence, never
+release authorization. Audit failure, timeout, absence or an open mutation finding
+cannot block a merge or publication. Triage missing oracles and equivalent mutants
+without hiding raw results. Confirm actual product defects with focused regression
+and contract tests; apply the normal security process to sensitive findings.
+
+The background workflow is manual and main-only, runs one explicit target/partition
+with a 30-minute audit job cap, retains available reports, and opens or updates a
+metadata-only triage issue on unsuccessful execution. It has no workflow-call or
+qualified-source output. No full-registry schedule is enabled by this change.

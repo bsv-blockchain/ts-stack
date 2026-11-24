@@ -972,7 +972,7 @@ export class Beef {
     // A Beef instance is caller-owned just as serialized bytes are. Snapshot
     // it before merging so later mutation of its transactions or paths cannot
     // change this graph through shared object references.
-    const b: Beef = Beef.fromBinaryStrict(beef instanceof Beef ? beef.toBinary() : beef)
+    const b: Beef = Beef.fromBinaryStrict(beef instanceof Beef ? beef.toUint8Array() : beef)
     this.synchronizeNestedTransactionMutations()
     this.#synchronizeNestedBumpMutations()
     this.#markMutated(true)
@@ -1186,7 +1186,7 @@ export class Beef {
    * @returns An array of byte values containing binary serialization of the BEEF
    */
   toBinary(): number[] {
-    return Array.from(this.#getSerializedBytes())
+    return toArray(this.#getSerializedBytes())
   }
 
   /**

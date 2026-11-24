@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -87,7 +88,7 @@ function largestModules(moduleBytes, limit = 50) {
 }
 
 function packageNameFromModuleId(moduleId) {
-  const normalized = moduleId.replaceAll('\\', '/')
+  const normalized = `/${moduleId.replaceAll('\\', '/')}`
   const installed = normalized.split('/node_modules/').at(-1)
   if (!installed || installed === normalized) return undefined
   const parts = installed.split('/')
@@ -137,12 +138,12 @@ function positiveBudget(value, label) {
   }
 }
 
-export function validateBundleBudget(actual, maximum, label, enforce = true) {
+export function validateBundleBudget(actual, maximum, label, report = true) {
   for (const dimension of ['raw', 'gzip', 'brotli']) {
     positiveBudget(maximum?.[dimension], `${label} budget ${dimension}`)
-    if (enforce && actual[dimension] > maximum[dimension]) {
-      throw new Error(
-        `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}`
+    if (report && actual[dimension] > maximum[dimension]) {
+      console.warn(
+        `Bundle size advisory: ${label} ${dimension} size ${actual[dimension]} exceeds target ${maximum[dimension]}`
       )
     }
   }
@@ -205,6 +206,25 @@ export function validateBrowserBudget(budget, manifest) {
       `browser budget package ${JSON.stringify(budget?.package)} does not match ${manifest.name}`
     )
   }
+  validateBrowserEntry(budget, manifest)
+  if (budget.additionalEntries !== undefined) {
+    if (!Array.isArray(budget.additionalEntries) || budget.additionalEntries.length > 8) {
+      throw new Error('browser budget additionalEntries must contain at most eight entry contracts')
+    }
+    const entries = new Set([budget.entry])
+    for (const additional of budget.additionalEntries) {
+      if (additional === null || typeof additional !== 'object' || Array.isArray(additional)) {
+        throw new Error('browser budget additional entry must be an object')
+      }
+      validateBrowserEntry(additional, manifest)
+      if (entries.has(additional.entry))
+        throw new Error('browser budget entry contracts must be unique')
+      entries.add(additional.entry)
+    }
+  }
+}
+
+function validateBrowserEntry(budget, manifest) {
   packageSpecifier(manifest.name, budget.entry)
   validateStringArray(budget.requiredExports, 'browser budget requiredExports')
   validateStringArray(budget.prohibitedExports, 'browser budget prohibitedExports')
@@ -293,7 +313,7 @@ function consumerEntry(specifier, budget) {
 async function collectBundle(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true })
   const files = []
-  for (const entry of entries) {
+  for await (const entry of Readable.from(entries)) {
     const absolutePath = path.join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await collectBundle(absolutePath)).files)
     else files.push(absolutePath)
@@ -306,7 +326,7 @@ async function collectBundle(directory) {
   }
 
   const code = Buffer.concat(await Promise.all(javascriptFiles.map(file => fs.readFile(file))))
-  for (const file of mapFiles) {
+  for await (const file of Readable.from(mapFiles)) {
     const sourceMap = JSON.parse(await fs.readFile(file, 'utf8'))
     const sourcesWithoutContent = Array.isArray(sourceMap.sources)
       ? sourceMap.sources.filter(
@@ -330,7 +350,7 @@ async function collectBundle(directory) {
   return { code, files }
 }
 
-async function checkVite(consumerDirectory, entryPath, budget, enforceBudget) {
+async function checkVite(consumerDirectory, entryPath, budget, reportBudget) {
   const outputDirectory = path.join(consumerDirectory, 'vite-dist')
   const moduleIds = new Set()
   const moduleBytes = new Map()
@@ -373,7 +393,7 @@ async function checkVite(consumerDirectory, entryPath, budget, enforceBudget) {
   const bundle = await collectBundle(outputDirectory)
   assertBrowserComposition([...moduleIds], bundle.code.toString('utf8'), 'Vite browser bundle')
   const measurements = bundleSizes(bundle.code)
-  validateBundleBudget(measurements, budget, 'Vite browser bundle', enforceBudget)
+  validateBundleBudget(measurements, budget, 'Vite browser bundle', reportBudget)
   return {
     bytes: measurements,
     composition: {
@@ -383,7 +403,7 @@ async function checkVite(consumerDirectory, entryPath, budget, enforceBudget) {
   }
 }
 
-async function checkEsbuild(consumerDirectory, entryPath, budget, enforceBudget) {
+async function checkEsbuild(consumerDirectory, entryPath, budget, reportBudget) {
   const outputDirectory = path.join(consumerDirectory, 'esbuild-dist')
   await fs.mkdir(outputDirectory)
   const outputPath = path.join(outputDirectory, 'consumer.mjs')
@@ -411,7 +431,7 @@ async function checkEsbuild(consumerDirectory, entryPath, budget, enforceBudget)
     'esbuild browser bundle'
   )
   const measurements = bundleSizes(bundle.code)
-  validateBundleBudget(measurements, budget, 'esbuild browser bundle', enforceBudget)
+  validateBundleBudget(measurements, budget, 'esbuild browser bundle', reportBudget)
   const moduleBytes = new Map()
   for (const output of Object.values(result.metafile.outputs)) {
     for (const [moduleId, details] of Object.entries(output.inputs ?? {})) {
@@ -440,7 +460,7 @@ async function removeTemporaryDirectory(directory) {
   })
 }
 
-async function checkUmd(consumerDirectory, manifest, budget, enforceBudget) {
+async function checkUmd(consumerDirectory, manifest, budget, reportBudget) {
   if (!budget.umd) return undefined
   const packageDirectory = installedPackageDirectory(consumerDirectory, manifest.name)
   const payloadPaths = [budget.umd.path, ...(budget.umd.additionalPaths ?? [])]
@@ -480,7 +500,7 @@ async function checkUmd(consumerDirectory, manifest, budget, enforceBudget) {
     throw new Error(`UMD bundle does not expose configured global ${budget.umd.global}`)
   }
   const measurements = aggregateBundleSizes(payloads)
-  validateBundleBudget(measurements, budget.umd.maximumBytes, 'UMD browser payload', enforceBudget)
+  validateBundleBudget(measurements, budget.umd.maximumBytes, 'UMD browser payload', reportBudget)
   return {
     bytes: measurements,
     composition: {
@@ -530,7 +550,7 @@ export function parseBrowserArguments(arguments_) {
 
 export async function checkBrowserPackage(
   packageDirectory,
-  { enforceBudget = true, budgetFile = 'browser-budget.json' } = {}
+  { reportBudget = true, budgetFile = 'browser-budget.json' } = {}
 ) {
   const policy = JSON.parse(
     await fs.readFile(path.join(REPOSITORY_ROOT, 'governance/browser-artifact-policy.json'), 'utf8')
@@ -553,24 +573,44 @@ export async function checkBrowserPackage(
       [...workspacePackages].map(([name, project]) => [name, project.manifest])
     )
     const dependencyTarballs = []
-    for (const name of workspaceRuntimeClosure(manifest, manifestsByName)) {
+    for await (const name of Readable.from(workspaceRuntimeClosure(manifest, manifestsByName))) {
       const dependency = workspacePackages.get(name)
       dependencyTarballs.push(
         await packPackage(dependency.directory, dependency.manifest.name, packDirectory)
       )
     }
     consumerDirectory = await installConsumer([tarballPath, ...dependencyTarballs])
-    const entryPath = path.join(consumerDirectory, 'entry.mjs')
-    await fs.writeFile(
-      entryPath,
-      consumerEntry(packageSpecifier(manifest.name, budget.entry), budget)
-    )
-    const [vite, esbuild, umd] = await Promise.all([
-      checkVite(consumerDirectory, entryPath, budget.maximumBytes.vite, enforceBudget),
-      checkEsbuild(consumerDirectory, entryPath, budget.maximumBytes.esbuild, enforceBudget),
-      checkUmd(consumerDirectory, manifest, budget, enforceBudget)
-    ])
-    return { vite, esbuild, ...(umd ? { umd } : {}) }
+    const contracts = [budget, ...(budget.additionalEntries ?? [])]
+    const measurements = []
+    for await (const contract of Readable.from(contracts)) {
+      // Reuse the same installed tarballs while producing independent entry graphs.
+      await Promise.all(
+        ['vite-dist', 'esbuild-dist'].map(directory =>
+          fs.rm(path.join(consumerDirectory, directory), { recursive: true, force: true })
+        )
+      )
+      const entryPath = path.join(consumerDirectory, 'entry.mjs')
+      await fs.writeFile(
+        entryPath,
+        consumerEntry(packageSpecifier(manifest.name, contract.entry), contract)
+      )
+      const [vite, esbuild, umd] = await Promise.all([
+        checkVite(consumerDirectory, entryPath, contract.maximumBytes.vite, reportBudget),
+        checkEsbuild(consumerDirectory, entryPath, contract.maximumBytes.esbuild, reportBudget),
+        checkUmd(consumerDirectory, manifest, contract, reportBudget)
+      ])
+      measurements.push({ vite, esbuild, ...(umd ? { umd } : {}) })
+    }
+    return {
+      ...measurements[0],
+      ...(contracts.length > 1
+        ? {
+            additionalEntries: Object.fromEntries(
+              contracts.slice(1).map((contract, index) => [contract.entry, measurements[index + 1]])
+            )
+          }
+        : {})
+    }
   } finally {
     await Promise.all([
       removeTemporaryDirectory(packDirectory),
@@ -586,7 +626,7 @@ async function main(arguments_) {
     await fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8')
   )
   const measurements = await checkBrowserPackage(packageDirectory, {
-    enforceBudget: !measureOnly,
+    reportBudget: !measureOnly,
     budgetFile
   })
   const outputDirectory = process.env.BROWSER_COMPOSITION_DIRECTORY

@@ -80,6 +80,18 @@ export const toUint8Array = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): Uint8Ar
   return new Uint8Array(toArray(msg, enc))
 }
 
+const MAX_ARRAY_LENGTH = 2 ** 32 - 1
+
+const bytesToNumbers = (bytes: Uint8Array): number[] => {
+  // A JavaScript array holds at most 2^32 - 1 elements; Array.from threw the
+  // same RangeError beyond that.
+  if (bytes.length > MAX_ARRAY_LENGTH) throw new RangeError('Invalid array length')
+  const out: number[] = []
+  out.length = bytes.length
+  for (let i = 0; i < bytes.length; i++) out[i] = bytes[i]
+  return out
+}
+
 /**
  * Converts various message formats into an array of numbers.
  * Supports arrays, hexadecimal strings, base64 strings, and UTF-8 strings.
@@ -92,6 +104,7 @@ export const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   if (Array.isArray(msg)) return msg.slice()
   if (msg === undefined) return []
 
+  if (msg instanceof Uint8Array) return bytesToNumbers(msg)
   if (typeof msg !== 'string') {
     return Array.from(msg, (item: any) => Math.trunc(item))
   }
@@ -116,7 +129,7 @@ for (let i = 0; i < 6; i++) {
 }
 
 const hexToArray = (msg: string): number[] => {
-  return Array.from(hexToUint8Array(msg))
+  return bytesToNumbers(hexToUint8Array(msg))
 }
 
 /**
@@ -430,7 +443,8 @@ export class Writer {
 
   toArray(): number[] {
     const totalLength = this.length
-    const ret = Array.from({ length: totalLength }, () => 0)
+    const ret: number[] = []
+    ret.length = totalLength
     let offset = 0
     for (const buf of this.bufs) {
       if (buf instanceof Uint8Array) {

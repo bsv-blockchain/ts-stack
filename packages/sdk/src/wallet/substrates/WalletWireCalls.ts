@@ -27,8 +27,11 @@ enum calls {
   getHeight = 25,
   getHeaderForHeight = 26,
   getNetwork = 27,
-  getVersion = 28,
+  getVersion = 28
 }
 
 export default calls
 export type CallType = keyof typeof calls
+
+// Wire ID 29 is reserved for the internal certificate compatibility profile
+// (CertificateWireCompatibility.ts). It is not a WalletInterface method.

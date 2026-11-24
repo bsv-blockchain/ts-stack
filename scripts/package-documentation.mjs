@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUTPUT = join(ROOT, 'docs/reference/package-api-migrations.md')
-const RELEASE_TYPES = new Set(['none', 'patch', 'minor', 'major'])
+const RELEASE_TYPES = new Set(['none', 'patch', 'minor', 'major', 'initial'])
 
 const readJson = async (root, path) => JSON.parse(await readFile(join(root, path), 'utf8'))
 const escapeCell = value =>
@@ -17,7 +17,7 @@ const escapeCell = value =>
 
 const markdownFiles = async directory => {
   const files = []
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  for await (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await markdownFiles(path)))
     else if (entry.isFile() && entry.name.endsWith('.md')) files.push(path)
@@ -39,6 +39,7 @@ const parseVersion = version => {
 const releaseTypeBetween = (published, source) => {
   const from = parseVersion(published)
   const to = parseVersion(source)
+  if (published === null && to !== undefined) return 'initial'
   if (from === undefined || to === undefined) return undefined
   if (from.every((part, index) => part === to[index])) return 'none'
   if (to[0] !== from[0]) return 'major'
@@ -127,7 +128,7 @@ export async function loadPackageDocumentation(root = ROOT) {
     .filter(project => project.release === 'npm-oidc')
     .sort((a, b) => a.name.localeCompare(b.name))
   const docsByName = new Map()
-  for (const path of await markdownFiles(join(root, 'docs/packages'))) {
+  for await (const path of await markdownFiles(join(root, 'docs/packages'))) {
     const document = await readFile(path, 'utf8')
     const name = frontmatterValue(document, 'title')
     if (name) docsByName.set(name, relative(root, path))
@@ -146,7 +147,7 @@ export async function loadPackageDocumentation(root = ROOT) {
     errors.push('package-release-notes must exactly cover the public-package inventory')
   }
   const packages = []
-  for (const project of publicProjects) {
+  for await (const project of publicProjects) {
     const manifest = await readJson(root, `${project.path}/package.json`)
     const entry = entriesByName.get(project.name)
     if (entry === undefined) continue
@@ -177,11 +178,13 @@ const binDescription = bin => {
   return `\nCLI entry points: \`${escapeCell(target)}\`.\n`
 }
 
+const publishedVersion = version => (version === null ? 'Unpublished' : codeTargets([version]))
+
 export function renderPackageDocumentation({ lastReviewed, packages }) {
   const summaryRows = packages
     .map(
       pkg =>
-        `| \`${escapeCell(pkg.name)}\` | \`${pkg.publishedVersion}\` | ` +
+        `| \`${escapeCell(pkg.name)}\` | ${publishedVersion(pkg.publishedVersion)} | ` +
         `\`${pkg.sourceVersion}\` | ${pkg.releaseType} | ` +
         `[API and usage](${docsLink(pkg.docsPath)}) | ${escapeCell(pkg.migration)} |`
     )
@@ -236,8 +239,10 @@ ${summaryRows}
 
 \`none\` means the source manifest matches the recorded npm baseline. Any other
 value records source ahead of that baseline; it does not establish the current
-registry state. Publication, tags, releases, registry reconciliation, and
-infrastructure dependency synchronization remain separate,
+registry state. \`initial\` with a null published baseline identifies a new
+package with no recorded published baseline; it does not invent an npm version or
+waive publication checks. Publication, tags, releases, registry reconciliation,
+and infrastructure dependency synchronization remain separate,
 explicitly authorized operations.
 
 ## Package entry points

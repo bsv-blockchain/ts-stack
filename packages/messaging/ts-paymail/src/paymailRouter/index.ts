@@ -11,3 +11,7 @@ export { default as NegotiationCapabilitiesRoute } from './paymailRoutes/negotia
 export { default as TransactionNegotiationCapabilitiesRoute } from './paymailRoutes/transactionNegotiationCapabilities.js'
 export { default as OrdinalP2pPaymentDestinationRoute } from './paymailRoutes/simpleP2pOrdinalDestinationsRoute.js'
 export { default as SimpleP2pOrdinalReceiveRoute } from './paymailRoutes/receiveOrdinalTransaction.js'
+export { default as ProfileLookupRoute } from './paymailRoutes/profileLookupRoute.js'
+export type { ProfileLookupHandler } from './paymailRoutes/profileLookupRoute.js'
+export { default as ProfileReverseLookupRoute } from './paymailRoutes/profileReverseLookupRoute.js'
+export type { ProfileReverseLookupHandler } from './paymailRoutes/profileReverseLookupRoute.js'

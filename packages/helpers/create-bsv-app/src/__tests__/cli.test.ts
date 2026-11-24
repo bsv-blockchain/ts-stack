@@ -1,10 +1,11 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { CLI_HELP, parseArgs, run } from '../cli'
+import { basename, join } from 'node:path'
+import { CLI_HELP, parseArgs, run, summaryNotice } from '../cli'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 import type { RunResult } from '../pipeline'
+import { runPrompts, type Ask, type ConfigProvider } from '../prompts'
 
 let dir: string
 beforeEach(() => {
@@ -57,6 +58,12 @@ describe('parseArgs', () => {
     expect(a.yes).toBe(false)
     expect(a.force).toBe(false)
     expect(a.draft).toEqual({})
+  })
+
+  test('--upgrade-bsv-deps opts in to cross-major raises of owned packages', () => {
+    expect(parseArgs([]).upgradeBsvDeps).toBe(false)
+    expect(parseArgs(['--upgrade-bsv-deps']).upgradeBsvDeps).toBe(true)
+    expect(CLI_HELP).toContain('--upgrade-bsv-deps')
   })
 
   test('--force sets force:true', () => {
@@ -210,8 +217,8 @@ describe('run --yes new (flags)', () => {
     // wallet-login client file
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-    // seedDraft pre-selects defaultSelected caps (wallet-connect), so both end up in manifest
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    // seedDraft pre-selects defaultSelected caps (wallet-connect, tx-core), so all three end up in manifest, in registry order
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 })
 
@@ -289,8 +296,8 @@ describe('run --yes add (existing manifest)', () => {
     expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
   })
 
-  // Item 2: add-mode with wallet-login — expandRequires:false — must NOT pull wallet-connect
-  test('add-mode wallet-login installs exactly wallet-login files; does NOT auto-pull wallet-connect', async () => {
+  // add mode pulls what a requested capability requires, records it, and reports it
+  test('add-mode wallet-login also installs the wallet-connect it requires', async () => {
     // Use a subdirectory within dir so beforeEach/afterEach handles cleanup
     const addDir = join(dir, 'add-only')
     const fake: RunCommand = () => {}
@@ -310,11 +317,31 @@ describe('run --yes add (existing manifest)', () => {
     // wallet-login is placed (its own client file)
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     const manifest = JSON.parse(readFileSync(join(addDir, 'bsv-scaffold.json'), 'utf8'))
-    // ONLY wallet-login in manifest (add-mode does not expand requires)
-    expect(manifest.capabilities).toEqual(['wallet-login'])
-    // wallet-connect's files must NOT be placed (expandRequires:false in add-mode)
-    expect(res.written).not.toContain('src/bsv/walletAcquisition.ts')
-    expect(res.written).not.toContain('src/bsv/WalletContext.tsx')
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    // wallet-connect's files are placed too
+    expect(res.written).toContain('src/bsv/walletAcquisition.ts')
+    expect(res.written).toContain('src/bsv/WalletContext.tsx')
+    expect(res.pulled).toEqual([{ id: 'wallet-connect', requiredBy: ['wallet-login'] }])
+  })
+
+  test('--yes add of tx-core onto a wallet-login project pulls nothing it already has', async () => {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'demo',
+        network: 'test',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        targets: { client: '' },
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-connect', 'wallet-login']
+      }),
+      'utf8'
+    )
+    const res = await run(['--dir', dir, '--capabilities', 'tx-core', '--skip-install', '--yes'])
+    expect(res.pulled).toEqual([])
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 })
 
@@ -341,7 +368,7 @@ describe('run --file (direct manifest door)', () => {
     // new-mode expands requires: wallet-login → wallet-connect + wallet-login, auth.ts from wallet-connect
     expect(res.written).toContain('src/bsv/auth.ts')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 
   test('new-mode config with zero capabilities still scaffolds the wallet-connect baseline', async () => {
@@ -362,7 +389,7 @@ describe('run --file (direct manifest door)', () => {
     expect(res.written).toContain('src/bsv/auth.ts')
     expect(res.written).toContain('src/bsv/WalletContext.tsx')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
   })
 
   test('new-mode scaffolds normally when the dir holds only a manifest (reproduce-from-manifest)', async () => {
@@ -394,7 +421,7 @@ describe('run --file (direct manifest door)', () => {
     expect(res.written).toContain('src/bsv/auth.ts')
     // the existing manifest is rewritten (regenerated from the config)
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 
   test('new-mode still errors when the dir holds non-manifest files', async () => {
@@ -451,14 +478,14 @@ describe('run --file (direct manifest door)', () => {
     const res = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'], undefined, {
       runCommand: fakeAdd
     })
-    // add mode: only wallet-login's own files, no wallet-connect floor pulled in
+    // add mode: no new-mode floor (tx-core), but wallet-login's requirement comes along
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
-    expect(res.written).not.toContain('src/bsv/auth.ts')
+    expect(res.written).toContain('src/bsv/auth.ts')
     const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
   })
 
-  test('add-mode config file places wallet-login files only (no auth.ts, expandRequires:false)', async () => {
+  test('add-mode config file places wallet-login and the wallet-connect it requires', async () => {
     const fakeAdd: RunCommand = () => {
       throw new Error('runCommand should not be called in add mode')
     }
@@ -475,12 +502,120 @@ describe('run --file (direct manifest door)', () => {
       'utf8'
     )
     const res = await run(['--dir', dir, '--file', cfgPath], undefined, { runCommand: fakeAdd })
-    // wallet-login in add-mode: no auth.ts (that's wallet-connect's file)
-    expect(res.written).not.toContain('src/bsv/auth.ts')
+    // wallet-login requires wallet-connect, whose auth.ts is placed too
+    expect(res.written).toContain('src/bsv/auth.ts')
     // wallet-login's own client file is placed
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
     expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
+  })
+})
+
+describe('run --file add mode with an existing manifest', () => {
+  test('keeps the capabilities the manifest records', async () => {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'demo',
+        network: 'test',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        targets: { client: '' },
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-connect', 'wallet-login']
+      }),
+      'utf8'
+    )
+    const cfgPath = join(dir, 'add.json')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'add',
+        name: 'demo',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: ['tx-core'],
+        install: false
+      }),
+      'utf8'
+    )
+    const res = await run(['--dir', dir, '--file', cfgPath])
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
+    expect(res.pulled).toEqual([])
+  })
+
+  const recorded = {
+    version: 2,
+    name: 'chain-app',
+    network: 'main',
+    stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+    targets: { client: 'web' },
+    bsvDir: 'src/chain',
+    capabilities: ['wallet-connect'],
+    starter: { id: 'react', kind: 'generated' }
+  }
+  let result: RunResult
+  const addWith = async (cfg: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify(recorded), 'utf8')
+    const cfgPath = join(dir, 'add.json')
+    writeFileSync(cfgPath, JSON.stringify({ install: false, ...cfg }), 'utf8')
+    result = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'])
+    return JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+  }
+
+  test.each([
+    ['name', 'chain-app'],
+    ['network', 'main'],
+    ['bsvDir', 'src/chain'],
+    ['stack', recorded.stack],
+    ['targets', recorded.targets]
+  ])('seeds %s from the manifest when the file leaves it unset', async (key, value) => {
+    // every other key is set, so only `key` can come from the manifest
+    const full: Record<string, unknown> = {
+      name: 'chain-app',
+      network: 'main',
+      bsvDir: 'src/chain',
+      stack: recorded.stack,
+      targets: recorded.targets
+    }
+    delete full[key]
+    const manifest = await addWith({ ...full, capabilities: ['tx-core'] })
+    expect(manifest[key]).toEqual(value)
+  })
+
+  test('seeds the starter from the manifest when the file leaves it unset', async () => {
+    await addWith({ name: 'chain-app', stack: recorded.stack, capabilities: [] })
+    expect(result.starter).toBe('react')
+  })
+
+  test('keys the file sets win over the manifest', async () => {
+    const manifest = await addWith({
+      name: 'renamed',
+      network: 'ttn',
+      stack: recorded.stack,
+      capabilities: []
+    })
+    expect(manifest.name).toBe('renamed')
+    expect(manifest.network).toBe('ttn')
+    expect(manifest.bsvDir).toBe('src/chain')
+  })
+
+  test('a custom network and bsvDir survive, and new files go under the recorded bsvDir', async () => {
+    const manifest = await addWith({
+      name: 'chain-app',
+      stack: recorded.stack,
+      capabilities: ['tx-core']
+    })
+    expect(manifest.network).toBe('main')
+    expect(manifest.bsvDir).toBe('src/chain')
+    expect(existsSync(join(dir, 'web', 'src', 'chain', 'transactions.ts'))).toBe(true)
+    expect(existsSync(join(dir, 'web', 'src', 'bsv'))).toBe(false)
+    expect(existsSync(join(dir, 'src', 'bsv'))).toBe(false)
+  })
+
+  test('a stackless file adds to a project whose manifest records a stack', async () => {
+    const manifest = await addWith({ capabilities: ['tx-core'] })
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
   })
 })
 
@@ -515,7 +650,115 @@ describe('run interactive (no --yes)', () => {
   })
 })
 
+describe('add mode over an older @bsv/sdk major', () => {
+  // a react project on @bsv/sdk 1.x; tx-core needs ^4.0.1
+  function oldSdkProject(): void {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'demo',
+        network: 'test',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        targets: { client: '' },
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-connect']
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^1.2.0' } }),
+      'utf8'
+    )
+  }
+  const sdk = (): string =>
+    JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies['@bsv/sdk']
+  const add = ['--capabilities', 'tx-core', '--skip-install']
+  const left = { name: '@bsv/sdk', action: 'left', reason: 'majorUpgrade' }
+
+  test('--yes leaves it and reports it', async () => {
+    oldSdkProject()
+    const res = await run(['--dir', dir, ...add, '--yes'])
+    expect(sdk()).toBe('^1.2.0')
+    expect(res.dependencyChanges).toContainEqual(expect.objectContaining(left))
+  })
+
+  test('--yes --upgrade-bsv-deps raises it', async () => {
+    oldSdkProject()
+    const res = await run(['--dir', dir, ...add, '--yes', '--upgrade-bsv-deps'])
+    expect(sdk()).toBe('^4.0.1')
+    expect(res.dependencyChanges).toContainEqual(
+      expect.objectContaining({ name: '@bsv/sdk', from: '^1.2.0', action: 'raised' })
+    )
+  })
+
+  // the real prompt flow, with scripted answers: capabilities, then the upgrade question
+  function scripted(upgrade: boolean, asked: string[]): ConfigProvider {
+    const ask: Ask = async field => {
+      asked.push(field.key)
+      if (field.key === 'capabilities') return ['tx-core']
+      if (field.key === 'upgradeBsvDeps') return upgrade
+      return field.type === 'toggle' ? false : field.default
+    }
+    return async ctx => await runPrompts(ctx, ask)
+  }
+
+  test.each([
+    [true, '^4.0.1'],
+    [false, '^1.2.0']
+  ])(
+    'interactive: answering %s to the upgrade prompt leaves @bsv/sdk at %s',
+    async (yes, range) => {
+      oldSdkProject()
+      const asked: string[] = []
+      await run(['--dir', dir, '--skip-install'], scripted(yes, asked))
+      expect(asked).toContain('upgradeBsvDeps')
+      expect(sdk()).toBe(range)
+    }
+  )
+
+  test('interactive with --upgrade-bsv-deps raises without asking', async () => {
+    oldSdkProject()
+    const asked: string[] = []
+    await run(['--dir', dir, '--skip-install', '--upgrade-bsv-deps'], scripted(false, asked))
+    expect(asked).not.toContain('upgradeBsvDeps')
+    expect(sdk()).toBe('^4.0.1')
+  })
+
+  test('interactive does not ask when nothing would cross a major', async () => {
+    oldSdkProject()
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^4.0.0' } }),
+      'utf8'
+    )
+    const asked: string[] = []
+    await run(['--dir', dir, '--skip-install'], scripted(false, asked))
+    expect(asked).not.toContain('upgradeBsvDeps')
+    expect(sdk()).toBe('^4.0.1')
+  })
+})
+
 describe('run --ui', () => {
+  test('passes --upgrade-bsv-deps through to startUi', async () => {
+    const seen: unknown[] = []
+    const stub = async (o: { targetDir: string; upgradeBsvDeps?: boolean }): Promise<RunResult> => {
+      seen.push(o.upgradeBsvDeps)
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: [],
+        dependencyChanges: [],
+        pulled: []
+      }
+    }
+    await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
+    await run(['--dir', dir, '--ui', '--upgrade-bsv-deps'], undefined, { startUi: stub })
+    expect(seen).toEqual([false, true])
+  })
+
   test('delegates to the injected startUi with existing + targetDir and returns its result', async () => {
     const seen: Array<{ targetDir: string }> = []
     const stub = async (o: {
@@ -528,11 +771,124 @@ describe('run --ui', () => {
         targetDir: o.targetDir,
         deps: { root: {}, client: {}, server: {} },
         written: ['src/bsv/auth.ts'],
-        skipped: []
+        skipped: [],
+        dependencyChanges: [],
+        pulled: []
       }
     }
     const res = await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
     expect(seen).toEqual([{ targetDir: dir }])
     expect(res.written).toContain('src/bsv/auth.ts')
+  })
+
+  test('passes the parsed CLI flags through to startUi', async () => {
+    const seen: unknown[] = []
+    const stub = async (o: { targetDir: string; flags?: unknown }): Promise<RunResult> => {
+      seen.push(o.flags)
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: [],
+        dependencyChanges: [],
+        pulled: []
+      }
+    }
+    await run(['--dir', dir, '--ui', '--bsv-dir', 'lib/bsv', '--network', 'main'], undefined, {
+      startUi: stub
+    })
+    // the name is defaulted from the target directory, as for --yes
+    expect(seen).toEqual([{ bsvDir: 'lib/bsv', network: 'main', name: basename(dir) }])
+  })
+
+  test('rejects flags the form cannot correct before starting the UI, as --yes does', async () => {
+    let started = false
+    const stub = async (o: { targetDir: string }): Promise<RunResult> => {
+      started = true
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: [],
+        dependencyChanges: [],
+        pulled: []
+      }
+    }
+    const yes = ['--dir', dir, '--frontend', 'react', '--yes']
+    for (const flags of [
+      ['--capabilities', 'wallet-login,nope'],
+      ['--bsv-dir', '../outside']
+    ]) {
+      const expected = await run([...yes, ...flags]).catch((e: Error) => e)
+      expect(expected).toHaveProperty('name', 'ConfigError')
+      await expect(
+        run(['--dir', dir, '--ui', ...flags], undefined, { startUi: stub })
+      ).rejects.toThrow((expected as Error).message)
+    }
+    expect(started).toBe(false)
+  })
+})
+
+describe('summaryNotice', () => {
+  const result: RunResult = {
+    targetDir: '.',
+    deps: { root: {}, client: {}, server: {} },
+    written: [],
+    skipped: [],
+    dependencyChanges: [],
+    pulled: [{ id: 'wallet-connect', requiredBy: ['tx-core'] }]
+  }
+
+  test('runs that never prompted print the pulled notice in the summary', () => {
+    const line = 'Also adding wallet-connect (required by tx-core).'
+    expect(summaryNotice(['--capabilities', 'tx-core', '--yes'], result)).toEqual([line])
+    expect(summaryNotice(['--file', 'cfg.json'], result)).toEqual([line])
+  })
+
+  test('prompts and --ui already showed it, so the summary does not repeat it', () => {
+    expect(summaryNotice(['--capabilities', 'tx-core'], result)).toEqual([])
+    expect(summaryNotice(['--ui', '--yes'], result)).toEqual([])
+    expect(summaryNotice(['--yes'], { ...result, pulled: [] })).toEqual([])
+  })
+})
+
+describe('tx-core in a backend-only project', () => {
+  test('add pulls nothing and writes no relay deps, files or wiring', async () => {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'api',
+        network: 'test',
+        stack: { backend: { framework: 'express' } },
+        targets: { server: '' },
+        bsvDir: 'src/bsv',
+        capabilities: []
+      }),
+      'utf8'
+    )
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'api' }), 'utf8')
+    const res = await run(['--dir', dir, '--capabilities', 'tx-core', '--skip-install', '--yes'])
+    expect(res.pulled).toEqual([])
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['tx-core'])
+    const deps = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies
+    expect(Object.keys(deps).sort()).toEqual(['@bsv/sdk', '@bsv/wallet-helper'])
+    expect(res.written).toContain('src/bsv/transactions.ts')
+    expect(existsSync(join(dir, 'src', 'bsv', 'auth.ts'))).toBe(false)
+    expect(existsSync(join(dir, 'src', 'bsv', 'nonceStore.ts'))).toBe(false)
+    const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
+    expect(agents).not.toContain('## wallet-connect')
+    expect(agents).not.toContain('WalletRelayService')
+  })
+
+  test('new pulls nothing: wallet-connect comes only from the default baseline', async () => {
+    const target = join(dir, 'api')
+    const res = await run(
+      ['--dir', target, '--backend', 'express', '--frontend', 'none', '--skip-install', '--yes'],
+      undefined,
+      { runCommand: () => {} }
+    )
+    expect(res.pulled).toEqual([])
   })
 })

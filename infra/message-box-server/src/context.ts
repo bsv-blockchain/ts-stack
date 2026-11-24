@@ -1,6 +1,7 @@
 import type { Knex } from 'knex'
 import type { AsyncSessionManager, AtomicBEEF, SessionManager, WalletInterface } from '@bsv/sdk'
 import type { Request } from 'express'
+import { createLiveDelivery, type LiveDelivery } from './security/liveDelivery.js'
 import type { TransactionalPaymentReplayStore } from './security/TransactionalPaymentReplayStore.js'
 
 export interface MessageBoxContext {
@@ -14,6 +15,8 @@ export interface MessageBoxContext {
   paymentReplayStore?: TransactionalPaymentReplayStore
   paymentTransactionVerifier?: (tx: AtomicBEEF) => Promise<boolean>
   logger: Console
+  /** Shared with the HTTP routes so an HTTP send can notify joined sockets. */
+  liveDelivery: LiveDelivery
 }
 
 export interface CreateMessageBoxContextOptions {
@@ -27,6 +30,7 @@ export interface CreateMessageBoxContextOptions {
   paymentReplayStore?: TransactionalPaymentReplayStore
   paymentTransactionVerifier?: (tx: AtomicBEEF) => Promise<boolean>
   logger?: Console
+  liveDelivery?: LiveDelivery
 }
 
 export function createMessageBoxContext(deps: CreateMessageBoxContextOptions): MessageBoxContext {
@@ -54,6 +58,7 @@ export function createMessageBoxContext(deps: CreateMessageBoxContextOptions): M
     sessionManager: deps.sessionManager,
     paymentReplayStore: deps.paymentReplayStore,
     paymentTransactionVerifier: deps.paymentTransactionVerifier,
-    logger: deps.logger ?? console
+    logger: deps.logger ?? console,
+    liveDelivery: deps.liveDelivery ?? createLiveDelivery()
   }
 }

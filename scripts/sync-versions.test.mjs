@@ -133,6 +133,7 @@ test('direct node checker CLI preserves all policy diagnostics and failure statu
   mkdirSync(scripts)
   for (const file of [
     'check-versions.mjs',
+    'jest-project-coverage.mjs',
     'sync-versions.mjs',
     'file-system.mjs',
     'peer-version-range.mjs'

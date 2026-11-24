@@ -17,9 +17,12 @@ export interface VerifiedDiscoveryAdvertisement {
 
 const MAX_DISCOVERY_FIELD_BYTES = 4096
 const MAX_DISCOVERY_PAYLOAD_BYTES = 8192
+// Mirrors OVERLAY_TOPIC_NAME_PATTERN and OVERLAY_LOOKUP_SERVICE_NAME_PATTERN in
+// @bsv/sdk src/overlay-tools/OverlayNames.ts. Kept local because the
+// @bsv/sdk peer range includes releases that do not export them.
 const namePattern: Record<DiscoveryProtocol, RegExp> = {
-  SHIP: /^(?=.{1,50}$)tm_[a-z]+(?:_[a-z]+)*$/,
-  SLAP: /^(?=.{1,50}$)ls_[a-z]+(?:_[a-z]+)*$/
+  SHIP: /^(?=.{1,256}$)tm_[a-z0-9]+(?:_[a-z0-9]+)*$/,
+  SLAP: /^(?=.{1,256}$)ls_[a-z0-9]+(?:_[a-z0-9]+)*$/
 }
 
 function walletProtocol(protocol: DiscoveryProtocol): WalletProtocol {

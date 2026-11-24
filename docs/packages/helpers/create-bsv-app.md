@@ -3,9 +3,9 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.1.2'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.2.1'
+last_updated: '2026-11-20'
+last_verified: '2026-11-20'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/create-bsv-app'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app'
@@ -31,6 +31,22 @@ npm run dev
 The CLI can also create `react`, `express`, or catalogue starters and supports
 interactive, flag, JSON configuration, and local browser-UI inputs. Generated
 projects record the resolved starter and layout in `bsv-scaffold.json`.
+Interactive and browser-UI runs start new projects from React, Express, and
+every capability; deselect what you do not need.
+
+Generated projects use `@bsv/sdk` 4. The `tx-core` capability adds transaction
+building blocks (`TransactionBuilder` from `@bsv/wallet-helper`, script support,
+BRC-29 self-addresses and payment internalization), helpers that parse and
+summarize transactions and BEEF, and a Transactions demo page. Adding a
+capability to an existing project raises an outdated dependency range it needs,
+leaves `devDependencies` and unrecognized ranges unchanged, and prints both.
+A major upgrade is never silent: the interactive terminal asks before raising a
+`@bsv/*` package it pins across a major, and `--yes`, `--file` and `--ui` leave it
+with a warning unless `--upgrade-bsv-deps` is passed. Any other package that would
+need a major upgrade is left and reported for manual review.
+It also adds any capability the selected one requires where the layout uses it
+(for example `wallet-connect` for `tx-core` when the project has a frontend),
+records it in `bsv-scaffold.json`, and says so.
 Select TerraTestNet with `--network ttn` or the browser configurator; the
 choice is preserved in generated configuration and `bsv-scaffold.json`.
 
@@ -46,5 +62,5 @@ for the starter catalogue, modes, flags, merge rules, and security boundaries.
 
 ## License
 
-Open BSV License Version 6. See the
-[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE.txt).
+Apache License 2.0. See the
+[package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/helpers/create-bsv-app/LICENSE).

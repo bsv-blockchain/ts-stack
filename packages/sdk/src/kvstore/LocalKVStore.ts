@@ -172,7 +172,10 @@ export default class LocalKVStore {
     return { protocolID: [2, this.context], keyID: key }
   }
 
-  private async getOutputs(key: string, limit?: number): Promise<ListOutputsResult> {
+  private async getOutputs(
+    key: string,
+    limit?: number
+  ): Promise<ListOutputsResult & { totalOutputs: number }> {
     validateKVStoreKey(key)
     const results = assertSafeWalletValue(
       await this.wallet.listOutputs(
@@ -187,12 +190,14 @@ export default class LocalKVStore {
       ),
       'listOutputs'
     )
+    const totalOutputs = results?.totalOutputs
     if (
       results == null ||
       !Array.isArray(results.outputs) ||
-      !Number.isSafeInteger(results.totalOutputs) ||
-      results.totalOutputs < results.outputs.length ||
-      results.totalOutputs > MAX_LOCAL_OUTPUTS ||
+      typeof totalOutputs !== 'number' ||
+      !Number.isSafeInteger(totalOutputs) ||
+      totalOutputs < results.outputs.length ||
+      totalOutputs > MAX_LOCAL_OUTPUTS ||
       results.outputs.length > MAX_LOCAL_OUTPUTS
     ) {
       throw new Error('Wallet returned an invalid KVStore output list')
@@ -200,7 +205,7 @@ export default class LocalKVStore {
     if (results.outputs.length > 0) {
       boundedBytes(results.BEEF, 'Wallet KVStore BEEF', MAX_LOCAL_BEEF_BYTES)
     }
-    return results
+    return { ...results, totalOutputs }
   }
 
   /**
@@ -560,9 +565,13 @@ export default class LocalKVStore {
    * If multiple outputs exist, they are all spent in the same transaction.
    * If the key does not exist, it does nothing.
    * If signing the removal transaction fails, it relinquishes the original outputs instead of spending.
+   * If the wallet reports a positive totalOutputs and returns an empty page, this rejects
+   * with an error naming that total, page, and key instead of repeating the same request.
+   * Setting a key and looking one up are unchanged.
    *
    * @param {string} key - The key to remove.
    * @returns {Promise<string[]>} A promise that resolves to the txids of the removal transactions if successful.
+   * @throws {Error} If listOutputs returns an empty page while totalOutputs is positive.
    */
   async remove(key: string): Promise<string[]> {
     validateKVStoreKey(key)
@@ -583,6 +592,12 @@ export default class LocalKVStore {
             consumed.add(output.outpoint)
           }
           txids.push(await this.#removeOutputs(key, authenticated, inputBEEF, totalOutputs))
+        } else if (totalOutputs > 0) {
+          // The request has no offset, so an empty page cannot be advanced past.
+          // Repeating it leaves remove() pending for as long as the wallet answers this way.
+          throw new Error(
+            `Wallet returned an empty page (offset 0) for key "${key}" while reporting ${totalOutputs} total outputs`
+          )
         }
         if (outputs.length === totalOutputs) {
           break

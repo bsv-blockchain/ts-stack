@@ -950,12 +950,12 @@ New deactivated headers are pushed onto the `deactivatedHeaders` array.
 They must be shifted out as they are processed.
 
 The current implementation ages deactivation notifications by 10 minutes with each retry.
-If a successful proof update confirms original proof data after 3 retries, the original is retained.
+`maxRetries` (default 3) bounds these aged per-header attempts only. With `recentDepth`
+enabled, journaled height recovery remains eligible for canonical retries until resolved.
 
-In normal operation there should rarely be any work for this task to perform.
-The most common result is that there are no matching proven_txs records because
-generating new proven_txs records intentionally lags new block generation to
-minimize this disruption.
+With `recentDepth` enabled, every processed new tip routinely schedules a recent-height
+review. Most normal reviews find no canonical proof mismatch. Generating new proven_txs
+records intentionally lags new block generation to minimize disruptive proof updates.
 
 It is very disruptive to update a proven_txs record because:
 - Sync'ed storage is impacted.
@@ -965,19 +965,44 @@ It is very disruptive to update a proven_txs record because:
 Proper reorg handling also requires repairing invalid beefs for new transactions when
 createAction fails to verify a generated beef against the chaintracker.
 
+Deactivated headers arrive only from chaintracks reorg events, which polling clients
+(`supportsReorgEvents === false`) never raise and which any client can miss while the
+monitor is not running. So once per new block header processed by TaskNewHeader, this task
+also compares the stored merkleRoots of the most recent `recentDepth` heights with the
+chaintracks header at each height, and reproves the transactions under any stale root.
+Recovery ranges are persisted before remote work. Unresolved heights survive restart and
+window aging, and are retried once per minute even if the chain tip does not change.
+The durable last processed height also queues the gap observed after monitor downtime.
+TaskReviewProvenTxs separately audits age-eligible history forward. An arbitrary historical
+reorg below both forward cursors requires separate ancestry reconciliation.
+
 ```ts
 export class TaskReorg extends WalletMonitorTask {
     static readonly taskName = "Reorg";
     process: DeactivedHeader[] = [];
-    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3)
+    override async asyncSetup(): Promise<void> 
+    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3, public recentDepth = 12) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
-    }
-    async runTask(): Promise<string>
+    } 
+    async runTask(): Promise<string> 
 }
 ```
 
 See also: [DeactivedHeader](./monitor.md#interface-deactivedheader), [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+###### Constructor
+
+```ts
+constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3, public recentDepth = 12) 
+```
+See also: [Monitor](./monitor.md#class-monitor)
+
+Argument Details
+
++ **recentDepth**
+  + number of heights, ending at the processed chain tip, whose stored proofs
+are compared with the chaintracks header at that height once per new block. Zero disables.
 
 ###### Method trigger
 
@@ -986,12 +1011,14 @@ Shift aged deactivated headers onto `process` array.
 ```ts
 trigger(nowMsecsSinceEpoch: number): {
     run: boolean;
-}
+} 
 ```
 
 Returns
 
-`run` true iff there are aged deactivated headers to process.
+`run` true iff there are aged deactivated headers to process,
+a new block header has been processed since the last recent-height review,
+or unresolved durable work is due for its one-minute retry.
 
 Argument Details
 

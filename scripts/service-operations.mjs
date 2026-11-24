@@ -552,7 +552,7 @@ tags: [reference, infrastructure, operations, observability, slo, recovery]
 # Service Operations Contract
 
 This page is generated from \`governance/service-operations.json\`. CI verifies
-all seven released services against their configuration, secret, telemetry,
+all eight released services against their configuration, secret, telemetry,
 container, health, lifecycle, recovery, and checked-in workload contracts.
 
 ## Public service boundary

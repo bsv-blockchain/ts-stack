@@ -61,6 +61,7 @@ updates:
       - /infra/uhrp-server-cloud-bucket/notifier
       - /infra/wab
       - /infra/wallet-infra
+      - /infra/webrtpay-relay
     patterns:
       - '*'
     multi-ecosystem-group: stack-maintenance
@@ -106,6 +107,7 @@ updates:
       - /infra/wab/deploy
       - /infra/wallet-infra
       - /infra/wallet-infra/guides/kube_samples
+      - /infra/webrtpay-relay
     patterns:
       - '*'
     multi-ecosystem-group: stack-maintenance

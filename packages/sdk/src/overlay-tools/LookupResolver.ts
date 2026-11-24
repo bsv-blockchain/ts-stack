@@ -144,6 +144,38 @@ export interface LookupQueryOptions {
   waitForAllHosts?: boolean
   /** Correlates resolver and downstream wallet telemetry without logging the query payload. */
   correlationId?: string
+  /**
+   * Keep each output's BEEF as the lookup service returned it, rather than
+   * reducing it to Atomic BEEF.
+   *
+   * By default the HTTPS facilitator asks hosts for the aggregated binary answer
+   * (`X-Aggregation: yes`). That form keeps only each output's SPV closure, which
+   * ends at its first proven transaction: the host merges it that way and the
+   * resolver re-extracts each output as Atomic BEEF. History a lookup service
+   * deliberately returns beyond a proof (for example an overlay Engine `history`
+   * selector) is therefore dropped. When `true`, the facilitator omits the header
+   * and reads the per-output JSON answer, so each output carries the BEEF the
+   * service produced, usually plain BEEF with no `txid` hint. Each output's
+   * subject is its Atomic BEEF subject or, for plain BEEF, its last transaction.
+   * A `txid` hint, when a host sends one, must name that same transaction, and an
+   * output whose hint names another is dropped, so a lookup service returning
+   * plain BEEF should put each subject last. A host that
+   * still answers with the aggregated binary form is
+   * counted as having rejected the query, without a reputation penalty: it
+   * appears in `rejectedHosts` (`queryDetailed`, `query$`), while `query()`
+   * returns only the other hosts' outputs (an empty list if every host rejected).
+   *
+   * SLAP discovery is unaffected. Outputs from several hosts are still
+   * deduplicated by outpoint, keeping the first accepted response; `onEvidence`
+   * receives each host's copy before deduplication, within its evidence limits.
+   * A caller that wants the longest history from several hosts merges those
+   * copies itself. The JSON answer is larger on the wire and whole BEEFs carry more
+   * transactions, so `limits.maxResponseBytes`, `limits.maxTotalBytes` and
+   * `evidenceLimits` may need raising for long histories. Custom facilitators
+   * receive the flag in their request options and may ignore it. Defaults to
+   * `false`.
+   */
+  wholeBeef?: boolean
 }
 
 /** Additive evidence intake, independent of the legacy aggregated answer. */
@@ -675,6 +707,12 @@ export interface LookupResolverConfig {
    * advertisement state and must be selected accordingly.
    */
   slapTrackers?: string[]
+  /**
+   * Per-tracker discovery timeout in milliseconds. Defaults to 5000.
+   * Must be a positive integer no greater than 60000. The query's independent
+   * deadlineMs still bounds the whole attempt, including discovery.
+   */
+  trackerTimeoutMs?: number
   /** Map of lookup service names to arrays of hosts to use in place of resolving via SLAP. */
   hostOverrides?: Record<string, string[]>
   /** Map of lookup service names to arrays of hosts to use in addition to resolving via SLAP. */
@@ -712,6 +750,12 @@ export interface LookupRequestOptions {
   maxResponseBytes?: number
   maxOutputs?: number
   consumeBytes?: (bytes: number) => void
+  /**
+   * Request the per-output JSON answer rather than the aggregated binary one,
+   * so each output's BEEF is returned as the lookup service produced it; a
+   * binary answer is rejected. See {@link LookupQueryOptions.wholeBeef}.
+   */
+  wholeBeef?: boolean
 }
 
 export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
@@ -788,12 +832,14 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     if (utf8ByteLength(body) > MAX_LOOKUP_REQUEST_BYTES) {
       throw new RangeError('Overlay lookup request exceeds the maximum permitted size.')
     }
+    const wholeBeef = options?.wholeBeef === true
     const fco: RequestInit = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Aggregation': 'yes'
-      },
+      // Without the aggregation header a host answers with its per-output JSON
+      // form, whose BEEFs are not cut at the first proven transaction.
+      headers: wholeBeef
+        ? { 'Content-Type': 'application/json' }
+        : { 'Content-Type': 'application/json', 'X-Aggregation': 'yes' },
       body: stringifyBRC100({ service: question.service, query: question.query }),
       // normalizeLookupHost and the https: guard above validate the advertised
       // URL only. A followed 307/308 would carry the serialized query body to
@@ -825,6 +871,26 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
           ? 'availability'
           : 'semantic'
       throw new LookupHTTPError(response.status, kind, response.statusText)
+    }
+    if (
+      wholeBeef &&
+      typeof response.headers?.get === 'function' &&
+      isOctetStream(response.headers.get('content-type'))
+    ) {
+      // The aggregated form keeps only each output's SPV closure, so accepting
+      // it would silently drop the history this request asked to keep.
+      try {
+        void response.body?.cancel().catch(() => {})
+      } catch {
+        /* best-effort body cleanup */
+      }
+      // The host is reachable and answers ordinary lookups, so this is a
+      // rejection of this request's form, not an availability failure.
+      throw new LookupHTTPError(
+        response.status,
+        'semantic',
+        'aggregated binary answer to a whole-BEEF lookup'
+      )
     }
     const maxResponseBytes = options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes
     let answer: unknown
@@ -1235,6 +1301,7 @@ interface LookupDiscoveryPlan {
 export default class LookupResolver {
   private readonly facilitator: OverlayLookupFacilitator
   private readonly slapTrackers: string[]
+  private readonly trackerTimeoutMs: number
   private readonly hostOverrides: Record<string, string[]>
   private readonly additionalHosts: Record<string, string[]>
   private readonly networkPreset: LookupNetworkPreset
@@ -1263,6 +1330,15 @@ export default class LookupResolver {
 
   constructor(config: LookupResolverConfig = {}) {
     this.limits = lookupLimits(config.limits)
+    const { trackerTimeoutMs = MAX_TRACKER_WAIT_TIME } = config
+    if (
+      !Number.isSafeInteger(trackerTimeoutMs) ||
+      trackerTimeoutMs <= 0 ||
+      trackerTimeoutMs > MAX_LOOKUP_TIMEOUT_MS
+    ) {
+      throw new RangeError('trackerTimeoutMs must be an integer between 1 and 60000')
+    }
+    this.trackerTimeoutMs = trackerTimeoutMs
     const networkPreset = config.networkPreset ?? 'mainnet'
     if (!['mainnet', 'testnet', 'teratestnet', 'local'].includes(networkPreset)) {
       throw new TypeError('Lookup network preset is invalid.')
@@ -1792,7 +1868,9 @@ export default class LookupResolver {
       {
         maxResponseBytes: run.limits.maxResponseBytes,
         maxOutputs: run.limits.maxOutputs,
-        consumeBytes: bytes => this.consumeLookupQueryBytes(run, bytes)
+        consumeBytes: bytes => this.consumeLookupQueryBytes(run, bytes),
+        // Only set when requested, so custom facilitators see unchanged options by default.
+        ...(run.options?.wholeBeef === true ? { wholeBeef: true } : {})
       }
     )
     if (this.lookupQueryStopped(run)) return
@@ -1974,7 +2052,7 @@ export default class LookupResolver {
     const answer = await this.lookupHostWithTracking(
       tracker,
       { service: 'ls_slap', query: { service: run.question.service } },
-      MAX_TRACKER_WAIT_TIME,
+      this.trackerTimeoutMs,
       signal,
       {
         maxResponseBytes: run.limits.maxResponseBytes,

@@ -64,6 +64,8 @@ function makeStorageWithReqs(reqApis: any[]): any {
   const sourceTxid = '11'.repeat(32)
   const sp = {
     isStorageProvider: jest.fn().mockReturnValue(true),
+    loadMonitorCheckpoint: jest.fn().mockResolvedValue([]),
+    saveMonitorCheckpoint: jest.fn().mockResolvedValue(undefined),
     updateProvenTxReqDynamics: jest.fn().mockResolvedValue(undefined),
     updateTransactionsStatus: jest.fn().mockResolvedValue(undefined),
     updateOutput: jest.fn().mockResolvedValue(undefined),
@@ -79,6 +81,8 @@ function makeStorageWithReqs(reqApis: any[]): any {
       }
     }),
     transaction: jest.fn(async (fn: any) => await fn(undefined)),
+    // No other pending request spends the failed one: nothing to cascade.
+    findProvenTxReqs: jest.fn().mockResolvedValue([]),
     updateProvenTxReqWithNewProvenTx: jest.fn().mockResolvedValue({
       status: 'completed',
       history: '{}',
@@ -183,6 +187,53 @@ describe('TaskArcadeSSE', () => {
       const task = new TaskArcadeSSE(makeMonitor({ loadLastSSEEventId: async () => '77' }))
       await task.asyncSetup()
       expect(task.sseClient?.lastEventId).toBe('77')
+    })
+
+    test('persists the default feed checkpoint only after committed work and reloads it', async () => {
+      const monitor = makeMonitor()
+      const sp = monitor.storage.sp
+      sp.loadMonitorCheckpoint.mockResolvedValue(['"41"'])
+      const task = new TaskArcadeSSE(monitor)
+      await task.asyncSetup()
+      const key: string = sp.loadMonitorCheckpoint.mock.calls[0][0]
+      expect(key).toMatch(/^ArcadeSSECursor\.[a-f0-9]{40}$/)
+      expect(task.sseClient?.lastEventId).toBe('41')
+      FakeEventSource.instances[0].emit('status', {
+        lastEventId: '42',
+        data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' })
+      })
+      expect(sp.saveMonitorCheckpoint).not.toHaveBeenCalled()
+      sp.saveMonitorCheckpoint.mockRejectedValueOnce(new Error('checkpoint unavailable'))
+      await expect(task.runTask()).rejects.toThrow('checkpoint unavailable')
+      expect(task.sseClient?.lastEventId).toBe('41')
+      await task.runTask()
+      expect(sp.saveMonitorCheckpoint).toHaveBeenLastCalledWith(key, '"42"')
+      sp.loadMonitorCheckpoint.mockResolvedValue(['"42"'])
+      const restarted = new TaskArcadeSSE(monitor)
+      await restarted.asyncSetup()
+      expect(restarted.sseClient?.lastEventId).toBe('42')
+      task.close()
+      restarted.close()
+    })
+
+    test('retries reconnect after the accepted prefix drains and backs off repeated errors', async () => {
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(10000)
+      const task = new TaskArcadeSSE(makeMonitor())
+      await task.asyncSetup()
+      const drain = jest.spyOn(task.sseClient!, 'isDraining', 'get').mockReturnValue(true)
+      FakeEventSource.instances[0].emit('error', {})
+      expect(task.trigger(14999).run).toBe(false)
+      clock.mockReturnValue(15000)
+      await task.runTask()
+      expect(FakeEventSource.instances).toHaveLength(1)
+      expect(task.trigger(15000).run).toBe(true)
+      drain.mockReturnValue(false)
+      await task.runTask()
+      expect(FakeEventSource.instances).toHaveLength(2)
+      FakeEventSource.instances[1].emit('error', {})
+      expect(task.trigger(24999).run).toBe(false)
+      expect(task.trigger(25000).run).toBe(true)
+      task.close()
     })
 
     test('continues setup when loadLastSSEEventId throws', async () => {

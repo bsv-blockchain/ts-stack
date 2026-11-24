@@ -185,7 +185,7 @@ Update the example environment values as needed.
 You may also want to include `env.yaml` in your .gitignore to prevent committing environment secrets. 
 
 - **`NODE_ENV=production`**: Ensures production settings (e.g., mainnet chian).
-- **`ENABLE_NGINX=true`**: By default, GCR limits requests to 32mb. When an nginx proxy is combined with the HTTP/2 passthrough on GCR, it increases the request size allowed.
+- **`ENABLE_NGINX=true`**: Runs the bundled nginx reverse proxy on port 8080 in front of the app. Cloud Run limits HTTP/1 request bodies to 32 MiB; nginx caps them at 30 MiB (`client_max_body_size`).
 - **`HTTP_PORT=8080`**: Cloud Run default.  
 - **`SERVER_PRIVATE_KEY`**: Your server’s private key for authenticating requests (do **not** include quotes).  
 - **`KNEX_DB_CONNECTION`**: Must be a valid JSON string (a string representation of a JSON object). When defined in env.yaml, it should be enclosed in single quotes to ensure YAML treats it as a string.
@@ -200,7 +200,7 @@ gcloud run deploy utxo-management-server \
   --allow-unauthenticated \
   --env-vars-file=env.yaml
 ```
-You can add `--use-http2`, if you want your container to see full HTTP/2 requests (especially relevant if you’re doing streaming gRPC or advanced HTTP/2 features in Nginx).
+Do not add `--use-http2`. The bundled nginx listener has HTTP/2 disabled, so Cloud Run must forward requests to the container over HTTP/1.1.
 
 ---
 
@@ -293,7 +293,6 @@ You can automate Docker builds and GCR deployments using GitHub Actions:
                 --region=us-west1 \
                 --platform=managed \
                 --allow-unauthenticated \
-                --use-http2 \
                 --env-vars-file=env.yaml
    ```
 

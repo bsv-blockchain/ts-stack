@@ -1,5 +1,5 @@
-# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS build
+# Base version 24.22.3-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS build
 
 RUN apk add --no-cache g++ make python3
 
@@ -14,11 +14,12 @@ COPY src ./src
 RUN npm run build \
  && npm prune --omit=dev
 
-FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 # Install the reviewed Alpine libcrypto3/libssl3 3.5.9-r0 pin for
-# CVE-2026-84782 together with nginx.
-RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 nginx \
+# CVE-2026-84782, and nginx 1.30.7-r0 for the HTTP/2 fixes in
+# CVE-2026-123633 and CVE-2026-123007.
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 nginx=1.30.7-r0 \
  && chown -R node:node /var/lib/nginx
 
 COPY ./nginx.conf /etc/nginx/nginx.conf
@@ -30,7 +31,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/out ./out
 
 # Keep first-party and incorporated-material terms with the deployed image.
-COPY LICENSE.txt THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
+COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
 COPY LICENSES /usr/share/licenses/ts-stack/LICENSES
 RUN chmod -R a=rX /usr/share/licenses/ts-stack
 LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"

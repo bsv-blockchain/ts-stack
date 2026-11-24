@@ -4,8 +4,10 @@ import { hmac } from '@noble/hashes/hmac.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { base64urlToBytes } from './encoding.js'
 import {
+  type LocalNetworkHttpOptions,
   normalizeHttpOrigin,
   requireBoundedString,
+  requireOptionalBoolean,
   requireProtocolId,
   requirePublicKey,
   requirePairingTopic,
@@ -48,6 +50,7 @@ function scalar(bytes: Uint8Array): bigint {
  *   - all required fields present
  *   - expiry not passed
  *   - origin is HTTPS, or HTTP on a loopback host for local development
+ *     (private-network IP hosts too, only with `allowLocalNetworkHttp`)
  *   - backendIdentityKey is a compressed secp256k1 public key
  *   - protocolID is a valid [number, string] JSON tuple
  *
@@ -59,11 +62,24 @@ function scalar(bytes: Uint8Array): bigint {
  * @param acceptedSchemas - Set of accepted URI schemes (e.g. `new Set(['my-app:'])`).
  *   Defaults to `DEFAULT_ACCEPTED_SCHEMAS`. Pass your own set to support custom deep-link
  *   schemes used by third-party wallet apps.
+ * @param options - `allowLocalNetworkHttp: true` accepts `http://` origins on
+ *   private-network IP addresses. Development wallet builds only: such origins
+ *   are unauthenticated. Pass the same value to `WalletPairingSession`.
  */
 export function parsePairingUri(
   raw: string,
-  acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS
+  acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS,
+  options: LocalNetworkHttpOptions = {}
 ): ParseResult {
+  let allowLocalNetworkHttp: boolean
+  try {
+    allowLocalNetworkHttp = requireOptionalBoolean(
+      options.allowLocalNetworkHttp,
+      'allowLocalNetworkHttp'
+    )
+  } catch (error) {
+    return { params: null, error: (error as Error).message }
+  }
   try {
     const url = new URL(raw)
     if (!acceptedSchemas.has(url.protocol))
@@ -114,7 +130,7 @@ export function parsePairingUri(
       }
     }
     try {
-      normalizeHttpOrigin(origin)
+      normalizeHttpOrigin(origin, 'origin', { allowLocalNetworkHttp })
     } catch (error) {
       return {
         params: null,
@@ -165,6 +181,8 @@ export function parsePairingUri(
  *
  * Note: the relay URL is intentionally omitted. The mobile fetches it at
  * connect-time from the origin server — see WalletPairingSession.resolveRelay().
+ * `allowLocalNetworkHttp` permits an `http://` origin on a private-network IP
+ * address (development only).
  */
 export function buildPairingUri(params: {
   sessionId: string
@@ -175,19 +193,23 @@ export function buildPairingUri(params: {
   expiry?: number // Unix seconds override — keeps expiry consistent with signature
   sig?: string // base64url DER ECDSA signature
   schema?: string
+  allowLocalNetworkHttp?: boolean
 }): string {
   const expiry = params.expiry ?? Math.floor((Date.now() + (params.pairingTtlMs ?? 120_000)) / 1000)
   if (!/^[a-z][a-z0-9+.-]{0,31}$/iu.test(params.schema ?? 'bsv-browser')) {
     throw new TypeError('Pairing URI scheme is invalid')
   }
-  validatePairingParams({
-    topic: params.sessionId,
-    backendIdentityKey: params.backendIdentityKey,
-    protocolID: params.protocolID,
-    origin: params.origin,
-    expiry: String(expiry),
-    sig: params.sig
-  })
+  validatePairingParams(
+    {
+      topic: params.sessionId,
+      backendIdentityKey: params.backendIdentityKey,
+      protocolID: params.protocolID,
+      origin: params.origin,
+      expiry: String(expiry),
+      sig: params.sig
+    },
+    { allowLocalNetworkHttp: params.allowLocalNetworkHttp, developerHint: true }
+  )
   const p = new URLSearchParams({
     topic: params.sessionId,
     backendIdentityKey: params.backendIdentityKey,
@@ -207,12 +229,26 @@ export function buildPairingUri(params: {
  * Derives the public BRC-42 key for the "anyone" counterparty and verifies the
  * signature over `topic|backendIdentityKey|origin|expiry`. No mobile wallet is needed.
  *
- * Returns `false` when `params.sig` is absent or on any verification failure.
+ * Returns `false` when `params.sig` is absent or on any verification failure,
+ * including an `http://` private-network origin without `allowLocalNetworkHttp`.
  */
-export async function verifyPairingSignature(params: PairingParams): Promise<boolean> {
+export function verifyPairingSignature(
+  params: PairingParams,
+  options: LocalNetworkHttpOptions = {}
+): Promise<boolean> {
+  // The check is synchronous; a throw from bad input still becomes a
+  // rejection, as it was when this function was async.
+  try {
+    return Promise.resolve(checkPairingSignature(params, options))
+  } catch (error) {
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+  }
+}
+
+function checkPairingSignature(params: PairingParams, options: LocalNetworkHttpOptions): boolean {
   if (!params.sig) return false
   try {
-    validatePairingParams(params)
+    validatePairingParams(params, options)
     const parentBytes = hexBytes(params.backendIdentityKey)
     const parent = secp256k1.Point.fromBytes(parentBytes)
     const tweak =

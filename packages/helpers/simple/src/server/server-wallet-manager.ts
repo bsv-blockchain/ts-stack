@@ -141,6 +141,7 @@ async function listWalletOutputs(
     result as unknown as ListOutputsResult,
     bindingRequest
   )
+  if (typeof validated.totalOutputs !== 'number') throw new TypeError('Invalid listOutputs result')
   return {
     totalOutputs: validated.totalOutputs,
     outputs: validated.outputs.map(output => {

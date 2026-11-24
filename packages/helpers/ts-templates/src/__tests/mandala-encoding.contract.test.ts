@@ -19,6 +19,7 @@ import {
 } from '../Bsv21Binary.js'
 import type { Bsv21Role } from '../Bsv21Binary.js'
 import {
+  STRICT_CBOR_MAX_DEPTH,
   StrictCborError,
   decodeStrictCbor,
   encodeStrictCbor,
@@ -137,20 +138,15 @@ describe('strict CBOR guards outside the vectors', () => {
       [0x1a1, 0x61, 0x61, 0x01]
     ]) {
       expect(errorOf(() => decodeStrictCbor(input), StrictCborError).message).toBe(
-        'non-canonical encoding'
+        'input bytes outside 0..255'
       )
     }
   })
 
-  it('refuses inputs and encodings over 4096 bytes', () => {
+  it('has no size ceiling: the spec sets none', () => {
     const big = [0xa1, 0x61, 0x61, 0x59, 0x0f, 0xfb, ...Array.from({ length: 4091 }, () => 0)]
-    expect(errorOf(() => decodeStrictCbor(big), StrictCborError).message).toBe(
-      'input exceeds 4096 bytes'
-    )
-    expect(encodeStrictCbor({ a: new Uint8Array(4090) })).toHaveLength(4096)
-    expect(
-      errorOf(() => encodeStrictCbor({ a: new Uint8Array(4091) }), StrictCborError).message
-    ).toBe('encoding exceeds 4096 bytes')
+    expect(decodeStrictCbor(big)).toEqual({ a: new Uint8Array(4091) })
+    expect(encodeStrictCbor({ a: new Uint8Array(4091) })).toHaveLength(4097)
   })
 
   it('names its error type and leaves programming errors alone', () => {
@@ -171,18 +167,25 @@ describe('strict CBOR guards outside the vectors', () => {
     })
   })
 
-  it('refuses encoder inputs outside the subset with their own messages', () => {
+  it('refuses encoder inputs outside strict DAG-CBOR with their own messages', () => {
     const encodeError = (map: unknown): string =>
       errorOf(() => encodeStrictCbor(map as never), StrictCborError).message
-    expect(encodeError({ a: -1n })).toBe('integer outside 0..2^64-1')
-    expect(encodeError({ a: 1n << 64n })).toBe('integer outside 0..2^64-1')
-    expect(encodeError({ a: 1.5 })).toBe('number must be a safe non-negative integer')
-    expect(encodeError({ a: -1 })).toBe('number must be a safe non-negative integer')
+    expect(encodeError({ a: 1n << 64n })).toBe('integer outside -2^64..2^64-1')
+    expect(encodeError({ a: -(1n << 64n) - 1n })).toBe('integer outside -2^64..2^64-1')
+    expect(encodeError({ a: Number.NaN })).toBe('number must be a safe integer or a finite float')
+    expect(encodeError({ a: Number.MAX_SAFE_INTEGER + 1 })).toBe(
+      'number must be a safe integer or a finite float'
+    )
     expect(encodeError({ a: undefined })).toBe('unsupported value type')
-    expect(encodeError({ a: [1] })).toBe('unsupported value type')
+    expect(encodeError({ a: new Map() })).toBe('unsupported value type')
     expect(encodeError([])).toBe('top level must be a map')
     expect(encodeError({ a: '\ud800' })).toBe('text contains a lone surrogate')
-    expect(encodeError({ a: { b: { c: { d: { e: 1n } } } } })).toBe('map nesting deeper than 4')
+    let nested: unknown = 1n
+    for (let i = 0; i < STRICT_CBOR_MAX_DEPTH; i++) nested = [nested]
+    expect(encodeError({ a: nested })).toBe(`nesting deeper than ${STRICT_CBOR_MAX_DEPTH}`)
+    expect(hexOf(encodeStrictCbor({ a: -1n, b: 1.5, c: [1] }))).toBe(
+      'a3 6161 20 6162 fb3ff8000000000000 6163 8101'.replace(/\s/g, '')
+    )
     expect(hexOf(encodeStrictCbor({ a: 0 }))).toBe('a1616100')
     expect(hexOf(encodeStrictCbor({ a: 23, b: Number.MAX_SAFE_INTEGER }))).toBe(
       'a2616117 6162 1b001fffffffffffff'.replace(/\s/g, '')

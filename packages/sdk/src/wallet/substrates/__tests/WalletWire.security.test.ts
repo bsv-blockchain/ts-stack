@@ -4,6 +4,7 @@ import calls from '../WalletWireCalls.js'
 import WalletWireProcessor from '../WalletWireProcessor.js'
 import WalletWireTransceiver from '../WalletWireTransceiver.js'
 import * as Utils from '../../../primitives/utils.js'
+import BigNumber from '../../../primitives/BigNumber.js'
 import { MAXIMUM_SEND_WITH_TRANSACTIONS } from '../../validationHelpers.js'
 import { MAX_WALLET_WIRE_FRAME_BYTES } from '../WalletWire.js'
 
@@ -398,6 +399,58 @@ describe('WalletWire strict binary framing', () => {
     await expect(
       client.listOutputs({ basket: 'default', includeTags: true, limit: 1 })
     ).rejects.toThrow('maximum collection size of 100000')
+  })
+
+  it('reads a balance frame as the full varint, converted to a number', async () => {
+    const frame = (total: bigint, trailing: number[] = []): number[] => {
+      const writer = new Utils.WriterUint8Array()
+      writer.writeUInt8(0) // success
+      writer.writeVarIntBn(new BigNumber(total.toString())) // totalOutputs
+      writer.writeVarIntNum(-1) // BEEF
+      writer.write(trailing)
+      return Array.from(writer.toUint8Array())
+    }
+    const read = async (bytes: number[], basket = 'p color balance aa') =>
+      await new WalletWireTransceiver({ transmitToWallet: async () => bytes }).listOutputs({
+        basket
+      })
+
+    await expect(read(frame(180n))).resolves.toEqual({ totalOutputs: 180, outputs: [] })
+    await expect(read(frame(2n ** 40n), 'balance default')).resolves.toEqual({
+      totalOutputs: 2 ** 40,
+      outputs: []
+    })
+    // The largest double below 2^64 is exact; 2^64 - 1 is read in full and rounds to 2^64.
+    await expect(read(frame(2n ** 64n - 2048n))).resolves.toEqual({
+      totalOutputs: 2 ** 64 - 2048,
+      outputs: []
+    })
+    await expect(read(frame(2n ** 64n - 1n))).resolves.toEqual({
+      totalOutputs: 2 ** 64,
+      outputs: []
+    })
+    // A count frame keeps its 2^32 - 1 bound.
+    await expect(read(frame(2n ** 40n), 'savings')).rejects.toThrow('listOutputs totalOutputs')
+  })
+
+  it('keeps canonical CompactSize framing for a balance frame', async () => {
+    const read = async (bytes: number[]) =>
+      await new WalletWireTransceiver({ transmitToWallet: async () => bytes }).listOutputs({
+        basket: 'p color balance aa'
+      })
+    const beefAbsent = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+    // 1 encoded with a 3-, 5- and 9-byte prefix.
+    for (const total of [
+      [0xfd, 0x01, 0x00],
+      [0xfe, 0x01, 0x00, 0x00, 0x00],
+      [0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+    ]) {
+      await expect(read([0, ...total, ...beefAbsent])).rejects.toThrow('non-canonical varInt')
+    }
+    // Truncated varints.
+    for (const total of [[0xfd, 0x01], [0xfe, 0x01, 0x00, 0x01], [0xff, 0x01, 0x00, 0x00, 0x00, 0x01]]) {
+      await expect(read([0, ...total])).rejects.toThrow('exceeds available data')
+    }
   })
 
   it('frames Unicode discovery attributes by UTF-8 byte length', async () => {

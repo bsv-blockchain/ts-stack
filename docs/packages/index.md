@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: 'n/a'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['packages']
@@ -32,6 +32,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/wallet-toolbox-mobile](./wallet/wallet-toolbox-mobile.md) — React Native and mobile distribution
 - [@bsv/btms](./wallet/btms.md) — Basic Token Management System for token issuance, transfer, receiving, burning, and ownership proofs
 - [@bsv/btms-permission-module](./wallet/btms-permission-module.md) — Token permission checking
+- [@bsv/sigma-permission-module](./wallet/sigma-permission-module.md) — Wallet-held keys and deterministic zero-knowledge proofs that Bitcoin Script can verify
 - [@bsv/wallet-relay](./wallet/wallet-relay.md) — Mobile-to-desktop wallet pairing via QR codes + encrypted WebSocket relay
 
 ### Network
@@ -55,6 +56,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/overlay-express](./overlays/overlay-express.md) — HTTP server for the Overlay spec
 - [@bsv/overlay-topics](./overlays/overlay-topics.md) — Topic managers (UHRP, BTMS, custom)
 - [@bsv/overlay-discovery-services](./overlays/overlay-discovery-services.md) — Discover overlays by service type
+- [@bsv/eqc](./overlays/eqc.md) — Pay the fastest agreeing overlay and message box hosts (BRC-178)
 - [@bsv/gasp](./overlays/gasp.md) — Graph Aware Sync Protocol (GASP) for incremental ancestry/descendancy graph sync
 - [@bsv/btms-backend](./overlays/btms-backend.md) — Backend for running a token overlay
 
@@ -65,7 +67,9 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/message-box-client](./messaging/message-box-client.md) — Send and retrieve messages from a message box service
 - [@bsv/authsocket](./messaging/authsocket.md) — WebSocket protocol for authenticated messaging
 - [@bsv/authsocket-client](./messaging/authsocket-client.md) — Client library for Authsocket
+- [@bsv/group-messaging](./messaging/group-messaging.md) — Experimental end-to-end encrypted group messaging (MLS, RFC 9420) for BRC-100 wallets
 - [@bsv/paymail](./messaging/paymail.md) — Paymail protocol (payment address discovery)
+- [@bsv/webrtpay](./messaging/webrtpay.md) — Direct wallet-to-wallet payments over WebRTC data channels, authenticated with BRC-100 identity keys
 
 ### Middleware
 

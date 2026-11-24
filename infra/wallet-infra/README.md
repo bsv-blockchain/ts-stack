@@ -193,4 +193,4 @@ If you prefer a serverless, production-grade setup, follow the [**Google Cloud D
 
 ## License
 
-The license for the code in this repository is the Open BSV License. Refer to [LICENSE.txt](./LICENSE.txt) for the license text.
+The license for the code in this repository is the Apache License 2.0. Refer to [LICENSE](./LICENSE) for the license text.

@@ -77,8 +77,11 @@ Generated starters can include these composable capabilities:
 | `wallet-connect`  | Default baseline: connect a BRC-100 desktop or relay wallet, expose app-wide wallet state, and provide the shared BRC-103 proof primitive. |
 | `wallet-login`    | Passwordless login using a proof bound to the server identity and `action: "login"`.                                                       |
 | `signed-requests` | Per-request authentication using a proof bound to the route and request body.                                                              |
+| `tx-core`         | Default: `TransactionBuilder` and `getAddress` (documented with examples), `dataScript`, `internalizePayment`, tx/BEEF parsing, demo page. |
 
-New generated projects include `wallet-connect` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
+New generated projects include `wallet-connect` and `tx-core` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
+
+Generated projects use `@bsv/sdk` ^4.0.1 and `@bsv/auth` ^0.1.8. In add mode, the CLI raises an existing project's outdated `dependencies` ranges for the packages a capability needs and reports what it changed or could not change. A raise within the same major version applies to any package (for example `qrcode` ^1.4.0 to ^1.5.0). A raise across a major version (for a `0.x` range, across a minor version) can break your own code, so it is never applied silently. For the `@bsv/*` packages whose ranges create-bsv-app pins, the interactive terminal asks before raising them; `--yes`, `--file` and `--ui` leave them unless `--upgrade-bsv-deps` is passed. A pinned package left below the major the generated code needs is reported with a warning naming the package, the range found, the range needed and the `--upgrade-bsv-deps` opt-in. Any other package, such as `express` ^4 where a capability needs ^5 or `react-router-dom` ^6 where it needs ^7, is always left and reported as a major upgrade to check manually. `devDependencies` and unrecognised ranges are never changed and are listed for manual review.
 
 The generated development server uses a bounded, expiring, single-use nonce store for replay protection. Replace it with an atomic Redis or database implementation before running multiple server processes. Generated API calls reject redirects, remain on the configured origin, enforce a whole-response deadline and byte ceilings, and strictly decode JSON. Automatic server-key discovery trusts that configured HTTPS origin; pass an independently validated key to the generated hooks when the application needs identity pinning.
 
@@ -123,6 +126,8 @@ Every input method resolves the same `ProjectConfig` and runs the same pipeline.
 npx create-bsv-app
 ```
 
+New projects default to the full custom stack: React frontend, Express backend, and every capability selected. Deselect what you do not need. The `--ui` form starts from the same defaults. These defaults apply to the interactive terminal and `--ui` flows only; `--yes` resolves from flags alone, so it still needs `--frontend` or `--backend`. In add mode, no new capabilities are pre-selected; a capability you select brings the capabilities it requires (for example `tx-core` brings `wallet-connect` when the project has a frontend, since only its demo page uses it; a backend-only project gets `tx-core` alone), and the CLI says which it added.
+
 ### Non-interactive flags
 
 ```bash
@@ -159,7 +164,7 @@ npx create-bsv-app new my-app \
 npx create-bsv-app --dir my-app --file config.json
 ```
 
-The file is authoritative except that an explicit `--mode` flag overrides its mode.
+The file is authoritative except that an explicit `--mode` flag overrides its mode. In add mode, keys the file leaves out (such as `network`, `bsvDir`, `stack` or `targets`) come from the project's `bsv-scaffold.json`, and the file's capabilities are added to the recorded ones. A new single-target project with an explicit non-root target folder (for example `"targets": { "client": "web" }` for a frontend-only project) scaffolds the framework into that folder, next to its capability files.
 
 ### Local browser UI
 
@@ -167,7 +172,7 @@ The file is authoritative except that an explicit `--mode` flag overrides its mo
 npx create-bsv-app --ui --dir my-app
 ```
 
-The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline. Its generated page carries a per-process, cryptographically random session token. The server accepts generation and planning requests only from its exact loopback origin with that token, a JSON content type, and a body of at most 64 KiB. It also rejects DNS-rebinding Host values and does not expose manifest-derived values as executable HTML. These checks are part of the local security boundary: do not proxy or embed the UI in another site.
+The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline. The project name defaults to the target directory's name, as with `--yes`. Other flags given with `--ui` pre-fill the form; flags for settings the form does not show, such as `--bsv-dir` or `--skip-install` in add mode, still apply. Its generated page carries a per-process, cryptographically random session token. The server accepts generation and planning requests only from its exact loopback origin with that token, a JSON content type, and a body of at most 64 KiB. It also rejects DNS-rebinding Host values and does not expose manifest-derived values as executable HTML. These checks are part of the local security boundary: do not proxy or embed the UI in another site.
 
 ## Flags
 
@@ -187,6 +192,7 @@ The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and 
 | `--install` / `--skip-install`             | Enable or skip dependency installation; enabled by default.                 |
 | `--glue` / `--no-glue`                     | Enable or skip automatic generated app wiring.                              |
 | `--force`                                  | In add mode, overwrite existing capability utility files.                   |
+| `--upgrade-bsv-deps`                       | In add mode, raise pinned `@bsv/*` ranges across a major without asking.    |
 | `--file <path>`                            | Read a complete JSON configuration.                                         |
 | `--ui`                                     | Use the local browser interface.                                            |
 | `--yes`                                    | Resolve from flags without prompting.                                       |
@@ -205,7 +211,7 @@ npm run install:apps # install both packages again
 
 Use the selected package manager in place of `npm` when applicable.
 
-The generated client reads `VITE_API_URL` and `VITE_BSV_NETWORK`. The generated server reads `SERVER_PRIVATE_KEY`, `PORT`, `CLIENT_ORIGIN`, and `BSV_NETWORK`. Local development defaults work only outside production. Production startup requires an explicit HTTPS `VITE_API_URL`, a stable canonical `SERVER_PRIVATE_KEY`, and an explicit HTTPS `CLIENT_ORIGIN`; the generated configuration rejects malformed ports, origins, networks, and keys rather than silently changing security authority. `CLIENT_ORIGIN` controls browser sharing through CORS—it is not authentication or authorization.
+The generated client reads `VITE_API_URL` and `VITE_BSV_NETWORK`. The generated server reads `SERVER_PRIVATE_KEY`, `PORT`, `CLIENT_ORIGIN`, `SERVER_ORIGIN`, and `BSV_NETWORK`. Local development defaults work only outside production. Production startup requires an explicit HTTPS `VITE_API_URL`, a stable canonical `SERVER_PRIVATE_KEY`, and explicit HTTPS `CLIENT_ORIGIN` and `SERVER_ORIGIN`; the generated configuration rejects malformed ports, origins, networks, and keys rather than silently changing security authority. `CLIENT_ORIGIN` controls browser sharing through CORS—it is not authentication or authorization. `SERVER_ORIGIN` is the address a phone uses to reach the server for wallet pairing (default `http://localhost:<PORT>`); set `SERVER_ORIGIN=http://<your LAN IP>:<your server port>` to pair a phone on the same network. Plain HTTP is accepted only for `localhost` / `*.localhost` names and loopback or private-network IP addresses, and LAN HTTP pairing works in development only (`NODE_ENV` not `production` on the server, the Vite dev build on the client); the phone wallet must also enable local-network HTTP (for example a developer setting) or it rejects the QR. `SERVER_ORIGIN` is also the origin the wallet shows the user at connect, so in production set it to the app's public HTTPS origin users recognise; with separate app and API hosts the wallet shows the API host.
 
 ## Manifest and provenance
 
@@ -250,8 +256,8 @@ The package is maintained in the [`bsv-blockchain/ts-stack`](https://github.com/
 
 ## License
 
-Current TS Stack changes are licensed under the Open BSV License Version 6; see
-[LICENSE.txt](./LICENSE.txt). This package also retains pre-uniformization code
+Current TS Stack changes are licensed under the Apache License 2.0; see
+[LICENSE](./LICENSE). This package also retains pre-uniformization code
 under its package-specific Open BSV License Version 4 grant. Redistributors
 must preserve [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
 applicable text in [`LICENSES/`](./LICENSES/).

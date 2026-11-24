@@ -25,9 +25,8 @@ test('one up-front approval gates npm and image publication without a late human
   assert.equal(infra.uses, './.github/workflows/infra-release.yaml')
   assert.ok(infra.needs.includes('approve'))
   assert.match(infra.if, /needs\.approve\.result == 'success'/)
-  assert.match(infra.if, /needs\.full-mutation\.outputs\.qualified-sha == github\.sha/)
   assert.match(infra.if, /needs\.prepare\.outputs\.mode == 'cascade'/)
-  assert.equal(infra.with['qualified-sha'], '${{ needs.full-mutation.outputs.qualified-sha }}')
+  assert.equal(infra.with['release-sha'], '${{ github.sha }}')
 
   const sync = release.jobs['sync-versions']
   assert.ok(!sync.steps.some(step => /sleep 300/.test(step.run ?? '')))
@@ -37,35 +36,10 @@ test('one up-front approval gates npm and image publication without a late human
 
   const infraRelease = await workflow('infra-release.yaml')
   assert.deepEqual(Object.keys(infraRelease.on.workflow_call.inputs).sort(), [
-    'qualified-sha',
+    'release-sha',
     'source-sha'
   ])
   assert.match(infraRelease.jobs['post-release-verification'].if, /called == 'false'/)
-})
-
-test('jobs downstream of a deliberately skipped campaign opt out of implicit success()', async () => {
-  // GitHub's implicit success() treats any skipped upstream job as blocking.
-  // A release.yaml call skips infra-release's own full-mutation campaign, so
-  // every job below it must use always() and check its direct needs itself.
-  const infraRelease = await workflow('infra-release.yaml')
-  const needs = job => [infraRelease.jobs[job].needs ?? []].flat()
-  const downstream = new Set()
-  const visit = job => {
-    for (const [name] of Object.entries(infraRelease.jobs)) {
-      if (needs(name).includes(job) && !downstream.has(name)) {
-        downstream.add(name)
-        visit(name)
-      }
-    }
-  }
-  visit('full-mutation')
-  assert.ok(downstream.has('release'))
-  for (const job of downstream) {
-    const condition = String(infraRelease.jobs[job].if ?? '')
-    assert.match(condition, /always\(\)/, `${job} must not inherit implicit success()`)
-  }
-  assert.match(infraRelease.jobs.release.if, /needs\.discover\.result == 'success'/)
-  assert.match(infraRelease.jobs.release.if, /needs\.qualification\.result == 'success'/)
 })
 
 function git(cwd, ...arguments_) {
@@ -122,7 +96,7 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
           GITHUB_SHA: release,
           GITHUB_OUTPUT: output,
           SOURCE_SHA: sourceSha,
-          QUALIFIED_SHA: release,
+          RELEASE_SHA: release,
           ...overrides
         }
       })
@@ -137,7 +111,7 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
     assert.notEqual(run(grandchild).status, 0)
     assert.notEqual(run(tampered).status, 0)
     assert.notEqual(run(product).status, 0)
-    assert.notEqual(run(sync, { QUALIFIED_SHA: sync }).status, 0)
+    assert.notEqual(run(sync, { RELEASE_SHA: sync }).status, 0)
     assert.notEqual(
       run(sync, {
         GITHUB_WORKFLOW_REF: 'bsv-blockchain/ts-stack/.github/workflows/other.yml@refs/heads/main'

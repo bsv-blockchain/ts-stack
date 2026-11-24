@@ -1,3 +1,6 @@
+import { RawRequestBodyReader, RawRequestBodyError } from './rawRequestBody.js'
+import { isMultipartPaymentType } from './receiverPaymentPayload.js'
+import { decodePaymentPayload } from './receiverPaymentPayload.js'
 import { Reader, Writer, toArray, toBase64, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -31,6 +34,13 @@ import {
   convertValueToArray,
   makeDebugLogger
 } from './authMiddlewareHelpers.js'
+
+import {
+  authenticatedResponseQueue,
+  bindAuthenticatedResponseQueue,
+  type AuthenticatedResponseQueue,
+  type AuthenticatedResponseReplacement
+} from './authenticatedResponseQueue.js'
 
 export type { LogLevel } from './authMiddlewareHelpers.js'
 export { isLogLevelEnabled, getLogMethod } from './authMiddlewareHelpers.js'
@@ -90,7 +100,11 @@ export interface AuthTransportLimits {
 export interface AuthRequest extends Request {
   auth?: {
     identityKey: PubKeyHex
+    /** Raw-byte receiver support; set only after successful mutual authentication. */
+    supportsMultipart?: boolean
   }
+  /** Exact authenticated application body. Payment middleware replaces this with the inner body. */
+  rawBody?: Uint8Array
 }
 
 export interface CertificateApprovalStore {
@@ -131,6 +145,8 @@ export class InMemoryCertificateApprovalStore implements CertificateApprovalStor
 // Developers may optionally provide a handler for incoming certificates.
 export interface AuthMiddlewareOptions {
   wallet: WalletInterface
+  /** Collect bounded raw bytes before auth. Install before any body parser. Required for BRC-118. */
+  captureRawBody?: boolean
   // Optional session store. Default is in-process synchronous `SessionManager`.
   // Pass an `AsyncSessionManager` (Redis/SQL-backed, etc.) to share state
   // across load-balanced instances; Peer awaits internally so both work.
@@ -416,6 +432,28 @@ function safeOwnErrorMessage(error: unknown): string {
   }
 }
 
+function safeOwnErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+    return descriptor !== undefined && typeof descriptor.value === 'string'
+      ? descriptor.value.slice(0, 64)
+      : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * General-message failures that mean the presented session cannot be used.
+ * AuthFetch drops its cached peer and re-handshakes only after a 401.
+ */
+function isGeneralAuthenticationFailure(error: unknown): boolean {
+  if (safeOwnErrorCode(error) === 'ERR_INVALID_HMAC') return true
+  const message = safeOwnErrorMessage(error)
+  return /nonce|signature|session|auth version/i.test(message) || message === 'HMAC is not valid'
+}
+
 function canWriteResponse(res: Response): boolean {
   return !res.headersSent && !res.writableEnded && !res.destroyed
 }
@@ -690,7 +728,15 @@ export class ExpressTransport implements Transport {
   peer?: Peer
   allowUnauthenticated: boolean
   openNonGeneralHandles = new Map<string, PendingHandle[]>()
-  openGeneralHandles = new Map<string, { next: Function; res: Response }>()
+  openGeneralHandles = new Map<
+    string,
+    {
+      next: Function
+      res: Response
+      queue?: AuthenticatedResponseQueue
+      replacement?: AuthenticatedResponseReplacement
+    }
+  >()
   openNextHandlers = new Map<string, NextFunction>()
   openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly activeGeneralRequests = new Map<string, ActiveGeneralRequest>()
@@ -926,10 +972,7 @@ export class ExpressTransport implements Transport {
       throw new Error('No response handle for this requestId!')
     }
     let { res, next } = handle
-    this.clearOpenGeneralHandle(requestId)
-
     const statusCode = reader.readVarIntNumStrict(false)
-    ;(res as any).__status(statusCode)
 
     const responseHeaders = this.readResponseHeaders(reader)
     responseHeaders['x-bsv-auth-version'] = message.version
@@ -945,14 +988,26 @@ export class ExpressTransport implements Transport {
       )
     }
 
-    for (const [k, v] of Object.entries(responseHeaders)) {
-      ;(res as any).__set(k, v)
-    }
-
     let responseBody: number[] | undefined
     const responseBodyBytes = reader.readVarIntNumStrict()
-    if (responseBodyBytes > 0) {
-      responseBody = reader.read(responseBodyBytes)
+    if (responseBodyBytes > 0) responseBody = reader.read(responseBodyBytes)
+
+    if (handle.queue !== undefined) {
+      handle.replacement = await handle.queue.deliver(
+        statusCode,
+        responseHeaders,
+        new Uint8Array(responseBody ?? []),
+        () => {
+          this.resetRes(res, next)
+        }
+      )
+      return
+    }
+
+    this.clearOpenGeneralHandle(requestId)
+    ;(res as any).__status(statusCode)
+    for (const [k, v] of Object.entries(responseHeaders)) {
+      ;(res as any).__set(k, v)
     }
 
     res = this.resetRes(res, next)
@@ -1379,8 +1434,7 @@ export class ExpressTransport implements Transport {
         .then(async () => await messageCallback(message))
         .catch(err => {
           this.clearActiveGeneralRequest(expectedRequestId)
-          const msg = safeOwnErrorMessage(err)
-          const isAuthError = /nonce|signature|session|auth version/i.test(msg)
+          const isAuthError = isGeneralAuthenticationFailure(err)
           this.log('error', 'Error in messageCallback (general message)', {
             ...safeErrorDetails(err),
             isAuthError
@@ -1417,8 +1471,22 @@ export class ExpressTransport implements Transport {
     const buildAndSendResponse = async (): Promise<void> => {
       if (responseSent) return
       responseSent = true
+      const queue = authenticatedResponseQueue(res)
       try {
         this.captureNativeResponseState(res, wrapper)
+        if (queue !== undefined) {
+          try {
+            await this.sendGuardedResponse(queue, res, next, requestId, sessionNonce, wrapper)
+          } catch (error) {
+            queue.close()
+            this.log(
+              'error',
+              'Unable to queue guarded authenticated response',
+              safeErrorDetails(error)
+            )
+          }
+          return
+        }
         const responsePayload = buildResponsePayload(
           requestId,
           wrapper.getStatusCode(),
@@ -1446,6 +1514,15 @@ export class ExpressTransport implements Transport {
         // on.
         await this.peer.toPeer(responsePayload, sessionNonce)
       } catch (err) {
+        if (queue !== undefined) {
+          queue.close()
+          this.log(
+            'error',
+            'Failed to prepare guarded authenticated response',
+            safeErrorDetails(err)
+          )
+          return
+        }
         this.clearOpenGeneralHandle(requestId)
         this.log('error', 'Failed to build and send authenticated response', safeErrorDetails(err))
         try {
@@ -1466,6 +1543,7 @@ export class ExpressTransport implements Transport {
     }
 
     this.hijackResponse(res, next, wrapper, buildAndSendResponse)
+    bindAuthenticatedResponseQueue(res, senderPublicKey, requestId, this.limits.maxResponseBytes)
     void this.scheduleNextOrCertificateWait(
       next,
       senderPublicKey,
@@ -1474,6 +1552,57 @@ export class ExpressTransport implements Transport {
       requestId,
       sessionNonce
     ).catch(next)
+  }
+
+  private async sendGuardedResponse(
+    queue: AuthenticatedResponseQueue,
+    res: Response,
+    next: NextFunction,
+    requestId: string,
+    sessionNonce: string,
+    wrapper: ResponseWriterWrapper
+  ): Promise<void> {
+    // One deadline bounds both signatures and both final admission attempts.
+    const timeout = setTimeout(() => {
+      this.clearOpenGeneralHandle(requestId)
+      queue.close()
+    }, this.limits.requestTimeoutMs)
+    timeout.unref?.()
+    let response: AuthenticatedResponseReplacement = {
+      statusCode: wrapper.getStatusCode(),
+      headers: wrapper.getHeaders(),
+      body: new Uint8Array(wrapper.getBody())
+    }
+    try {
+      for (const attempt of [0, 1] as const) {
+        const owned = queue.prepare(response, attempt)
+        const payload = buildResponsePayload(
+          requestId,
+          owned.statusCode,
+          owned.headers,
+          Array.from(owned.body),
+          this.logger,
+          this.logLevel
+        )
+        const handle: {
+          res: Response
+          next: NextFunction
+          queue: AuthenticatedResponseQueue
+          replacement?: AuthenticatedResponseReplacement
+        } = { res, next, queue }
+        this.openGeneralHandles.set(requestId, handle)
+        if (this.peer === undefined) throw new Error('Authentication peer is unavailable.')
+        await queue.wait(this.peer.toPeer(payload, sessionNonce))
+        if (queue.queued) return
+        if (handle.replacement === undefined)
+          throw new Error('The response guard did not complete admission.')
+        response = handle.replacement
+      }
+      throw new Error('The response guard exhausted its replacement attempt.')
+    } finally {
+      clearTimeout(timeout)
+      this.clearOpenGeneralHandle(requestId)
+    }
   }
 
   private captureNativeResponseState(res: Response, wrapper: ResponseWriterWrapper): void {
@@ -1522,21 +1651,21 @@ export class ExpressTransport implements Transport {
         wrapper.set('content-type', 'application/json')
       }
       wrapper.send(val)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
     ;(res as any).__json = res.json
     ;(res as any).json = (obj: any) => {
       wrapper.json(obj)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
     ;(res as any).__text = (res as any).text
     ;(res as any).text = (str: string) => {
       wrapper.text(str)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
@@ -1765,7 +1894,7 @@ export class ExpressTransport implements Transport {
           code: 'CERTIFICATE_TIMEOUT',
           message: 'Certificate request timed out'
         })
-        buildAndSendResponse()
+        buildAndSendResponse().catch(next)
       }
     }, this.limits.requestTimeoutMs)
     timeoutHandle.unref?.()
@@ -1990,6 +2119,22 @@ function buildResponsePayload(
   return writer.toArray()
 }
 
+function validateAuthMiddlewareSettings(options: AuthMiddlewareOptions): void {
+  const { allowUnauthenticated, logLevel, onCertificatesReceived } = options
+  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
+    throw new TypeError('allowUnauthenticated must be a boolean.')
+  }
+  if (options.captureRawBody !== undefined && typeof options.captureRawBody !== 'boolean') {
+    throw new TypeError('captureRawBody must be a boolean.')
+  }
+  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
+    throw new TypeError('logLevel must be debug, info, warn, or error.')
+  }
+  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
+    throw new TypeError('onCertificatesReceived must be a function.')
+  }
+}
+
 /**
  * Creates an Express middleware that handles authentication via BSV-SDK.
  *
@@ -2022,15 +2167,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     }
     throw new TypeError('You must configure the auth middleware with a wallet.')
   }
-  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
-    throw new TypeError('allowUnauthenticated must be a boolean.')
-  }
-  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
-    throw new TypeError('logLevel must be debug, info, warn, or error.')
-  }
-  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
-    throw new TypeError('onCertificatesReceived must be a function.')
-  }
+  validateAuthMiddlewareSettings(options)
 
   const transport = new ExpressTransport(
     allowUnauthenticated ?? false,
@@ -2069,6 +2206,60 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
   transport.setPeer(peer)
   const telemetry = new Telemetry(telemetryConfig)
 
+  const rawReader =
+    options.captureRawBody === true
+      ? new RawRequestBodyReader(
+          transportLimits?.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES,
+          transportLimits?.requestTimeoutMs ?? 30_000,
+          transportLimits?.maxPendingRequests ?? 1_000
+        )
+      : undefined
+  const dispatch = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (rawReader !== undefined) {
+        await rawReader.capture(req, res)
+        if (req.path === WELL_KNOWN_AUTH_PATH) {
+          req.body = decodePaymentPayload(req.body, 'application/json')
+        }
+      }
+      const verifiedNext: NextFunction = (error?: unknown): void => {
+        if (error !== undefined) {
+          next(error)
+          return
+        }
+        if (rawReader?.hasCaptured(req) === true && req.path !== WELL_KNOWN_AUTH_PATH) {
+          if (req.auth !== undefined && req.auth.identityKey !== 'unknown')
+            req.auth.supportsMultipart = true
+          req.rawBody = req.body
+          const contentType = req.headers['content-type']
+          if (typeof contentType !== 'string' || !isMultipartPaymentType(contentType)) {
+            try {
+              req.body = decodePaymentPayload(req.rawBody, contentType)
+            } catch {
+              res.status(400).json({
+                status: 'error',
+                code: 'ERR_AUTH_MALFORMED',
+                description: 'Invalid authenticated application body.'
+              })
+              return
+            }
+          }
+        }
+        next()
+      }
+      await transport.handleIncomingRequest(req, res, verifiedNext, onCertificatesReceived)
+    } catch (error) {
+      if (error instanceof RawRequestBodyError && !res.headersSent && !res.destroyed) {
+        res.setHeader('Connection', 'close')
+        res.status(error.status).json({
+          status: 'error',
+          code: 'ERR_AUTH_BODY',
+          description: 'The request body could not be accepted.'
+        })
+      } else throw error
+    }
+  }
+
   return (req, res, next) => {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
       getLogMethod(logger, 'debug')('[createAuthMiddleware] Incoming request to auth middleware', {
@@ -2078,7 +2269,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
       })
     }
     if (!telemetry.enabled) {
-      void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)
+      void dispatch(req, res, next).catch(next)
       return
     }
 
@@ -2125,11 +2316,9 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
       end(res.writableEnded ? 'ok' : 'cancelled', undefined, 'connection_closed')
     })
 
-    void transport
-      .handleIncomingRequest(req, res, tracedNext, onCertificatesReceived)
-      .catch(error => {
-        end('error', error, 'middleware_error')
-        next(error)
-      })
+    void dispatch(req, res, tracedNext).catch(error => {
+      end('error', error, 'middleware_error')
+      next(error)
+    })
   }
 }

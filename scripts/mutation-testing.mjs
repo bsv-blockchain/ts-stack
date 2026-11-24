@@ -1,24 +1,51 @@
-#!/usr/bin/env node
-
 import { execFileSync, spawn } from 'node:child_process'
+
 import fs from 'node:fs'
+
 import { createHash } from 'node:crypto'
+
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 import { selectedMutationPartition } from './mutation-partitions.mjs'
+
 import { changedLockfileImporters } from './ci-affected-scope.mjs'
 
+import { needsNativeBrowserDelivery } from './provision-wallet-native-browser.mjs'
+
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
 const CONFIG_PATH = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/stryker.config.mjs')
+
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json')
+
 const CONTROL_PATH_PREFIXES = [
   '.github/workflows/mutation-tests.yml',
   'governance/mutation-testing/stryker.config.mjs'
 ]
-const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
+
+const CONTROL_PATHS = new Set([
+  'package.json',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+  'scripts/mutation-build.mjs',
+  'scripts/mutation-execution-batches.mjs',
+  'governance/mutation-testing/stop-on-kill-environment.cjs',
+  'governance/mutation-testing/durations.json',
+  'governance/mutation-testing/execution-partitions.json',
+  'scripts/mutation-partitions.mjs'
+])
+
+const NATIVE_BROWSER_CONTROLS = new Set([
+  'scripts/provision-wallet-native-browser.mjs',
+  'scripts/wallet-native-browser.json'
+])
+
 const REGEXP_META = new Set('.*+?^$(){}|[]\\')
+
 const OPTION_REQUIREMENTS = new Map([
   ['--target', 'an exact target ID'],
   ['--base', 'an exact revision'],
@@ -30,11 +57,23 @@ function normalized(value) {
   return value.split(path.sep).join('/').replace(/^\.\//, '')
 }
 
+export function mutationRunnerLimit(mutant) {
+  if (mutant.status !== 'Killed') return undefined
+  const reason = mutant.statusReason ?? ''
+  if (/^(?:Error: )?Property interrupted after \d+ tests/m.test(reason))
+    return 'property-exploration-limit'
+  if (/^Error:(?: thrown:)? ["']?Exceeded timeout of \d+ ms for a (?:test|hook)/m.test(reason))
+    return 'jest-deadline'
+  return undefined
+}
+
 export function calculateMutationMetrics(mutants) {
   const counts = {}
   let unexecuted = 0
+  let runnerLimitedKills = 0
   for (const mutant of mutants) {
     counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
+    if (mutationRunnerLimit(mutant)) runnerLimitedKills += 1
     // A survivor that ran zero tests was never judged. Stryker always runs at
     // least one covering test (or the whole suite for static mutants), so this
     // means the runner silently selected nothing (stryker-js#6210, Vitest 5).
@@ -49,6 +88,7 @@ export function calculateMutationMetrics(mutants) {
     undetected,
     valid,
     unexecuted,
+    runnerLimitedKills,
     score: valid === 0 ? 100 : (detected / valid) * 100
   }
 }
@@ -69,10 +109,20 @@ function globPattern(pattern) {
 
 function targetInputPatterns(target) {
   const packageDirectory = normalized(target.packageDirectory)
-  const patterns = []
+  const patterns = (target.additionalInputs ?? []).map(input =>
+    path.posix.normalize(`${packageDirectory}/${input}`)
+  )
   for (const mutate of target.mutate ?? []) {
     patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
   }
+  for (const input of [
+    ...(target.additionalInputs ?? []),
+    ...(target.requiredFunctionalTests ?? []),
+    ...(target.componentTestUniverse ?? [])
+  ]) {
+    patterns.push(`${packageDirectory}/${normalized(input)}`)
+  }
+  for (const input of target.configurationInputs ?? []) patterns.push(normalized(input))
   if (typeof target.propertyTest === 'string') patterns.push(normalized(target.propertyTest))
   const jest = target.runnerOptions?.jest
   const vitest = target.runnerOptions?.vitest
@@ -109,6 +159,11 @@ export function selectAffectedMutationTargets(
   return Object.entries(targets)
     .filter(([id, target]) => {
       if (
+        files.some(file => NATIVE_BROWSER_CONTROLS.has(file)) &&
+        needsNativeBrowserDelivery(target)
+      )
+        return true
+      if (
         changedTargetIds.includes(id) ||
         changedImporters.includes(normalized(target.packageDirectory))
       ) {
@@ -140,11 +195,20 @@ function changedPolicyTargets(base) {
   )
 }
 
+export async function mutationTargetModule(source, root) {
+  const registryUrl = pathToFileURL(path.join(root, 'governance/mutation-testing/targets.mjs')).href
+  const located = source
+    .replaceAll('import.meta.url', JSON.stringify(registryUrl))
+    .replace(
+      /from (['"])(\.\.?\/[^'"]+)\1/g,
+      (_match, _quote, specifier) => 'from ' + JSON.stringify(new URL(specifier, registryUrl).href)
+    )
+  return import(`data:text/javascript;base64,${Buffer.from(located).toString('base64')}`)
+}
+
 async function changedConfiguredTargets(base, currentTargets) {
   const source = gitShow(base, 'governance/mutation-testing/targets.mjs')
-  const module = await import(
-    `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
-  )
+  const module = await mutationTargetModule(source, REPOSITORY_ROOT)
   let baseTargets
   try {
     baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
@@ -216,6 +280,11 @@ export function evaluateMutationReport(targetName, metrics, policy, { requireSco
       `${targetName} has ${unexecuted} survived mutants that ran no tests; the test runner selected nothing, so the score is not evidence`
     )
   }
+  if ((metrics.runnerLimitedKills ?? 0) > 0) {
+    errors.push(
+      `${targetName} has ${metrics.runnerLimitedKills} reported kills caused by a property or Jest runner limit; incomplete exploration is not assertion evidence`
+    )
+  }
   const invalid = (metrics.counts.RuntimeError ?? 0) + (metrics.counts.CompileError ?? 0)
   if (invalid > targetPolicy.maximumInvalid) {
     errors.push(
@@ -259,7 +328,8 @@ async function runTarget(targetName, target, policy, partition = 'whole') {
     force: true
   })
   const stryker = path.join(REPOSITORY_ROOT, 'node_modules/.bin/stryker')
-  const reporters = process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'json'
+  const reporters =
+    process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'progress-append-only,json'
   const propertyEnvironment = {
     FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
     FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),
@@ -411,6 +481,7 @@ const isMain =
   process.argv[1] !== undefined &&
   fs.existsSync(process.argv[1]) &&
   fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+
 if (isMain) {
   try {
     await main()

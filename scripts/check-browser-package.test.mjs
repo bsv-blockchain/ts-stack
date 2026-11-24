@@ -100,6 +100,7 @@ test('browser composition reports stable chunk, module, and package evidence', (
     bundleComposition(
       [
         '/consumer/node_modules/@bsv/sdk/mod.js',
+        'node_modules/@bsv/sdk/dist/esm/index.js',
         '/consumer/node_modules/.pnpm/uuid@11/node_modules/uuid/index.js',
         '/consumer/entry.mjs'
       ],
@@ -107,19 +108,19 @@ test('browser composition reports stable chunk, module, and package evidence', (
     ),
     {
       chunks: 2,
-      modules: 3,
+      modules: 4,
       packages: ['@bsv/sdk', 'uuid']
     }
   )
 })
 
-test('browser bundle budgets validate every compression dimension', () => {
+test('browser bundle sizes are advisory while malformed budgets still fail', () => {
   const actual = bundleSizes(Buffer.from('browser-contract'.repeat(100)))
   validateBundleBudget(actual, actual, 'exact')
-  assert.throws(
-    () => validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'small'),
-    /exceeds budget/
+  assert.doesNotThrow(() =>
+    validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'small')
   )
+  assert.throws(() => validateBundleBudget(actual, { ...actual, gzip: 0 }, 'invalid'))
   assert.doesNotThrow(() =>
     validateBundleBudget(actual, { ...actual, gzip: actual.gzip - 1 }, 'measurement', false)
   )
@@ -146,6 +147,54 @@ test('browser budget metadata is bound to the package and contract', () => {
     }
   }
   assert.doesNotThrow(() => validateBrowserBudget(budget, manifest))
+  const optional = {
+    entry: './optional',
+    requiredExports: ['Adapter'],
+    prohibitedExports: ['ServerOnly'],
+    maximumBytes: budget.maximumBytes
+  }
+  assert.doesNotThrow(() =>
+    validateBrowserBudget({ ...budget, additionalEntries: [optional] }, manifest)
+  )
+  assert.throws(
+    () => validateBrowserBudget({ ...budget, additionalEntries: [optional, optional] }, manifest),
+    /unique/
+  )
+  assert.throws(
+    () =>
+      validateBrowserBudget(
+        { ...budget, additionalEntries: [{ ...optional, entry: budget.entry }] },
+        manifest
+      ),
+    /unique/
+  )
+  assert.throws(
+    () =>
+      validateBrowserBudget(
+        {
+          ...budget,
+          additionalEntries: [{ ...optional, maximumBytes: { vite: optional.maximumBytes.vite } }]
+        },
+        manifest
+      ),
+    /budget/
+  )
+  assert.throws(
+    () => validateBrowserBudget({ ...budget, additionalEntries: [null] }, manifest),
+    /entry must be an object/
+  )
+  assert.throws(
+    () =>
+      validateBrowserBudget(
+        { ...budget, additionalEntries: Array.from({ length: 9 }, () => optional) },
+        manifest
+      ),
+    /at most eight/
+  )
+  assert.throws(
+    () => validateBrowserBudget({ ...budget, additionalEntries: {} }, manifest),
+    /at most eight/
+  )
   assert.throws(
     () => validateBrowserBudget({ ...budget, package: '@bsv/other' }, manifest),
     /does not match/

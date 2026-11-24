@@ -25,6 +25,7 @@ Infrastructure components are deployed services — not npm packages, but applic
 | [UHRP Server (Cloud Bucket)](uhrp-server-cloud-bucket.md) | Production UHRP storage via Google Cloud Storage                      | Optional Cloud SQL          | stable | Google Cloud Run                |
 | [Wallet Abstraction Backend (WAB)](wab.md)                | Multi-factor user authentication (SMS, ID verification, OTP)          | SQLite (dev) / MySQL (prod) | stable | Docker / Kubernetes / Cloud Run |
 | [Wallet Infrastructure](wallet-infra.md)                  | JSON-RPC wallet UTXO storage and management                           | MySQL 8.0                   | stable | Docker / Kubernetes             |
+| [WebRTPay Signalling Relay](webrtpay-relay.md)            | WebSocket rendezvous and TURN credentials for direct WebRTC payments  | None (stateless)            | beta   | Docker / Kubernetes             |
 
 ## Decision Matrix: Which Services to Deploy
 

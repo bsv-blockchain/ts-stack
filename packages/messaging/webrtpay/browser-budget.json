@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/webrtpay",
+  "entry": ".",
+  "requiredExports": [
+    "DirectPayClient",
+    "PeerLink",
+    "authenticate",
+    "decodeCode",
+    "acceptDirectPayment",
+    "RelaySignaler",
+    "MessageBoxSignaler"
+  ],
+  "prohibitedExports": ["createRelayServer", "turnCredentials", "DEFAULT_RELAY_LIMITS"],
+  "maximumBytes": {
+    "vite": {
+      "raw": 490000,
+      "gzip": 133000,
+      "brotli": 112000
+    },
+    "esbuild": {
+      "raw": 375000,
+      "gzip": 120000,
+      "brotli": 104000
+    }
+  }
+}

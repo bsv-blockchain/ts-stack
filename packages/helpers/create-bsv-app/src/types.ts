@@ -30,15 +30,28 @@ export interface BaseBuilder {
   app: { imports: string[]; routes: RouteDef[] }
   // server.routes: express handlers on `app`. server.setup: code needing the raw
   // `http.Server` (e.g. a WebSocket upgrade) — runs after `const server = http.createServer(app)`.
-  server: { imports: string[]; routes: string[]; setup: string[] }
+  // server.config: values the glued entry imports from the generated bsv/config.ts; manual
+  // wiring (add mode / --no-glue) never writes that file, so it pastes `inline` instead.
+  server: {
+    imports: string[]
+    config: Array<{ import: string; inline: string }>
+    routes: string[]
+    setup: string[]
+  }
 }
+
+/**
+ * A capability another one needs: a plain id always applies; `{ id, role }` applies only when the
+ * layout places `role` (e.g. a dependency only the client files import).
+ */
+export type CapabilityRequirement = string | { id: string; role: Role }
 
 export interface Capability {
   id: string
   title: string
   description: string
-  /** ids of other capabilities that must also be installed */
-  requires?: string[]
+  /** Other capabilities that must also be installed, per layout. */
+  requires?: CapabilityRequirement[]
   roles: Role[]
   /** Pre-selected in NEW-project mode (not auto-selected in add mode). */
   defaultSelected?: boolean

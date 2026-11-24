@@ -11,6 +11,32 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.9.0`: Adds optional script verifier configuration and accepts Arcade SEEN_MULTIPLE_NODES and STUMP_PROCESSING as successful rebroadcast states. Existing deployments retain JavaScript verification. Operators may configure a preloaded verifier; no wire or data migration is required.
+
+
+- `ArcadeProvider` counts `SEEN_MULTIPLE_NODES` and `STUMP_PROCESSING` as a successful broadcast. Arcade (bsv-blockchain/broadcaster) answers a re-submit of a transaction it already holds with the stored state, so an overlay that receives a transaction after the wallet broadcast it could see these states and report a failure for a propagated or mined transaction. `PENDING_RETRY` and `UNKNOWN` still fall through to the next broadcaster. No migration.
+- Add `configureScriptVerifier(verifier)` and `EngineConfig.scriptVerifier` to pass a script backend, such as a preloaded `BdkVerifier` from `@bsv/verifast`, to the engine's SPV verification. Off by default; `@bsv/verifast` is not a dependency. Additive; no migration.
+
+- Prepare `2.8.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+- Added `registerRouter(path, factory)`. Registered routers mount during `start()` after the BRC-103 authentication middleware and before the admin routes and 404 handler, inheriting CORS, body parsing, response limits, and `req.auth`. Additive; no consumer migration is required.
+
+### 2.8.0 candidate — optional durable live lookup
+
+- Add `configureOutputLookup` and `@bsv/overlay-express/output-lookup` for explicitly
+  negotiated BRC-193 companions. Authenticate raw requests before strict framing,
+  retain capability/profile binding, apply current disclosure checks, and bound
+  request/response bytes, long polls and physical work.
+- Share host authentication and request capacity, require matching wallet identity,
+  and mount private routes before generic parsers and payload logging. Existing
+  finite routes and default startup behavior remain unchanged.
+- Preserve legacy ESM/CJS root loading and strict consumer declarations with SDK
+  2.8.9 by loading the optional adapter lazily. The new feature requires SDK 3.3.0.
+- Document SQLite provider composition, explicit recovery, retention and ownership;
+  include packed public-interface examples and actual authenticated HTTP tests.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 - Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening

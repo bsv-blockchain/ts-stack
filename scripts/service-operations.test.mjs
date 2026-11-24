@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { renderServiceOperations, ROOT, validateServiceOperations } from './service-operations.mjs'
 
-test('service operations registry renders all seven public services', async () => {
+test('service operations registry renders all eight public services', async () => {
   const registry = JSON.parse(
     await readFile(join(ROOT, 'governance/service-operations.json'), 'utf8')
   )
   const rendered = renderServiceOperations(registry)
-  assert.equal(registry.services.length, 7)
+  assert.equal(registry.services.length, 8)
   assert.equal(registry.applicationWorkloads.length, 3)
   assert.equal(registry.statefulExamples.length, 4)
   assert.equal(registry.manifestRoots.length, 3)

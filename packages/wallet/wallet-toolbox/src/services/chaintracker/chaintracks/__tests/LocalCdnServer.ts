@@ -5,7 +5,7 @@ import cors from 'cors'
 import http from 'node:http'
 
 export class LocalCdnServer {
-  app: express.Application
+  app?: express.Application
   server?: http.Server
 
   constructor(

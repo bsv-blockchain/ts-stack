@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node", "jest"]
+  },
+  "files": [],
+  "include": [
+    "src/__tests/ProposalAdmission*.ts",
+    "src/__tests/mongo/ProposalAdmission.mongo.test.ts",
+    "src/__tests/PrivatePublicationAdmission*.ts",
+    "src/__tests/PurchaseAdmission*.ts",
+    "src/__tests/mongo/PrivatePublicationAdmission.mongo.test.ts"
+  ],
+  "exclude": []
+}

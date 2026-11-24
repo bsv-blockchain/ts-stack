@@ -1,5 +1,7 @@
 # @bsv/overlay-topics
 
+Patch candidate `2.0.3` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 
@@ -7,11 +9,27 @@ Canonical topic managers and lookup services for the BSV overlay network. Bundle
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This dependency addition does not enable history retention automatically or migrate data. The separately approved DID retirement below has its own migration requirements.
+
 UMP lookup requests the full retained token-update lineage for presentation,
 recovery and outpoint queries. The engine owns traversal and byte limits.
 Use `@bsv/overlay` 2.6.4 or later to preserve explicitly selected history past
 confirmation. Wallet Toolbox 2.14.6 links that history so an older WAB support
 pin can remain a lineage anchor while a password or token update takes precedence.
+
+## KVStore tag compatibility (2.0.4 patch candidate)
+
+`tm_kvstore` admission and history verification accept signed tokens with more
+than 32 tags when paired with the SDK tag-count compatibility fix. `ls_kvstore`
+accepts complete tag-filter arrays without a fixed count cap for both `all` and
+`any` matching. Tags remain unique, non-empty strings of at most 256 UTF-8 bytes;
+existing token payload, request and pagination bounds remain in force. Other
+topics' query limits are unchanged.
+
+Upgrade the overlay's SDK and this package together, and upgrade client SDKs that
+create or decode these tokens. Installing only one side can leave an older
+32-tag validator in the path. No token re-signing, retagging or database migration
+is needed, and larger historical tag sets retain their full index metadata.
 
 ## DID overlay retirement (2.0 candidate)
 
@@ -43,6 +61,10 @@ npm install @bsv/overlay-topics
 Requires Node.js 22 or newer. Install `@bsv/sdk` alongside this package to
 satisfy its peer dependency. The overlay engine, templates, and MongoDB driver
 are direct runtime dependencies.
+
+The unpublished 1.9.2 candidate refreshes the packed templates range for its
+CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
+unchanged; no API migration is required.
 
 ## Quick start
 
@@ -346,7 +368,7 @@ ESM consumer.
 
 ## License
 
-Open BSV License — see [LICENSE.txt](./LICENSE.txt).
+Apache License 2.0 — see [LICENSE](./LICENSE).
 
 ## UORA v3 reader compatibility
 
@@ -362,3 +384,10 @@ older readers may have admitted inputs that the format does not permit.
 Repository fixtures establish format compatibility; they do not establish an
 inventory of every deployed or historical anchor. Other topics, lookup query
 shapes and persisted schemas are unchanged.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

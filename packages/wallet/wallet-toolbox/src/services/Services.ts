@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../utility/promiseFromSync'
 import {
   Transaction as BsvTransaction,
   Beef,
@@ -53,6 +54,7 @@ import {
   validateMerklePathResult,
   ValidatedMerklePathResult
 } from './validateMerklePathResult'
+import { getMedianTimePast } from './getMedianTimePast'
 import { validateStatusForTxidsResult } from './validateStatusForTxidsResult'
 import { MAX_RAW_TRANSACTION_BYTES, validateRawTxResult } from './validateRawTxResult'
 import { normalizeWalletOutpoint, validateUtxoStatusResult } from './validateUtxoStatusResult'
@@ -614,10 +616,14 @@ export class Services implements WalletServices {
         break
       case 'PromiseAll':
         rs = await Promise.all(
-          stcs.map(async stc => {
-            const r = await callService(stc)
-            return r
-          })
+          stcs.map(stc =>
+            mapAwaitFromSync(
+              () => callService(stc),
+              r => {
+                return r
+              }
+            )
+          )
         )
         break
     }
@@ -626,7 +632,7 @@ export class Services implements WalletServices {
 
     async function callService(stc: ServiceToCall<PostBeefService>, timeoutMs?: number): Promise<PostBeefResult> {
       const callPromise = Promise.resolve()
-        .then(async () => await stc.service(Beef.fromBinaryStrict(request.beefBytes), [...request.txids]))
+        .then(() => awaitFromSync(() => stc.service(Beef.fromBinaryStrict(request.beefBytes), [...request.txids])))
         .then(result => validatePostBeefResult(result, request.txids, stc.providerName))
         .catch(() => makePostBeefServiceError(stc.providerName, request.txids, 'postBeefServiceError'))
       let r: PostBeefResult
@@ -744,7 +750,7 @@ export class Services implements WalletServices {
           'chaintracks.operation': operation
         }
       },
-      async span => await this.invokeChaintracksWithRetryCore(method, span)
+      span => awaitFromSync(() => this.invokeChaintracksWithRetryCore(method, span))
     )
   }
 
@@ -775,22 +781,25 @@ export class Services implements WalletServices {
     throw new WERR_INVALID_OPERATION('hashToHeader service unavailable')
   }
 
-  async getHeaderForHeight(height: number): Promise<number[]> {
-    const method = async (): Promise<number[]> => {
-      const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
-      const header = await chaintracks.findHeaderForHeight(height)
-      if (header == null)
-        throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
-      return toBinaryBaseBlockHeader(header)
-    }
-    return await this.invokeChaintracksWithRetry(method, 'find_header_for_height')
+  getHeaderForHeight(height: number): Promise<number[]> {
+    return awaitFromSync(() => {
+      const method = async (): Promise<number[]> => {
+        const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
+        const header = await chaintracks.findHeaderForHeight(height)
+        if (header == null)
+          throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
+        return toBinaryBaseBlockHeader(header)
+      }
+      return this.invokeChaintracksWithRetry(method, 'find_header_for_height')
+    })
   }
 
   async getHeight(): Promise<number> {
-    const method = async (): Promise<number> => {
-      const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
-      return await chaintracks.currentHeight()
-    }
+    const method = (): Promise<number> =>
+      awaitFromSync(() => {
+        const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
+        return chaintracks.currentHeight()
+      })
     try {
       return await this.invokeChaintracksWithRetry(method, 'current_height')
     } catch (error_: unknown) {
@@ -1094,7 +1103,7 @@ export class Services implements WalletServices {
       }
 
       if (tx instanceof BsvTransaction) {
-        if (tx.inputs.every(i => i.sequence === MAXINT)) {
+        if (tx.inputs.every(i => (i.sequence ?? MAXINT) === MAXINT)) {
           return true
         }
         nLockTime = tx.lockTime
@@ -1103,18 +1112,25 @@ export class Services implements WalletServices {
       }
     }
 
+    if (nLockTime === 0) return true
+
     if (nLockTime >= BLOCK_LIMIT) {
-      const limit = Math.floor(Date.now() / 1000)
-      return nLockTime < limit
+      // The network compares time locks with median time past, not the wall clock.
+      return nLockTime < (await getMedianTimePast(this))
     }
 
+    // The transaction can be mined once nLockTime is below the next block's height.
     const height = await this.getHeight()
-    return nLockTime < height
+    return nLockTime < height + 1
   }
 
-  async getBeefForTxid(txid: string): Promise<Beef> {
-    const beef = await getBeefForTxid(this, txid)
-    return beef
+  getBeefForTxid(txid: string): Promise<Beef> {
+    return mapAwaitFromSync(
+      () => getBeefForTxid(this, txid),
+      beef => {
+        return beef
+      }
+    )
   }
 }
 

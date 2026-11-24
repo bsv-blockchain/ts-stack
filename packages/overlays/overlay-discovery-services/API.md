@@ -951,6 +951,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | --- |
 | [MAX_DISCOVERY_LOOKUP_RESULTS](#variable-max_discovery_lookup_results) |
 | [MAX_DISCOVERY_LOOKUP_SKIP](#variable-max_discovery_lookup_skip) |
+| [MAX_QUERY_NAME_BYTES](#variable-max_query_name_bytes) |
 | [isAdvertisableURI](#variable-isadvertisableuri) |
 | [isTokenSignatureCorrectlyLinked](#variable-istokensignaturecorrectlylinked) |
 | [isValidTopicOrServiceName](#variable-isvalidtopicorservicename) |
@@ -972,6 +973,15 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 MAX_DISCOVERY_LOOKUP_SKIP = 1000000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Variable: MAX_QUERY_NAME_BYTES
+
+```ts
+MAX_QUERY_NAME_BYTES = 256
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1059,7 +1069,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 isValidTopicOrServiceName = (service: string): boolean => {
-    const serviceRegex = /^(?=.{1,50}$)(?:tm_|ls_)[a-z]+(?:_[a-z]+)*$/;
+    const serviceRegex = /^(?=.{1,256}$)(?:tm_|ls_)[a-z0-9]+(?:_[a-z0-9]+)*$/;
     return serviceRegex.test(service);
 }
 ```
