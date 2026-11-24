@@ -363,65 +363,74 @@ export class ARC {
 
     // Since postRawTx only returns results for a single txid,
     // replicate the basic results any additional txids.
-    for (const txid of txids) {
-      if (prtr.txid === txid) continue
-      const tr: PostTxResultForTxid = {
-        txid,
-        status: 'success',
-        notes: []
-      }
-      // For the extra txids, go back to the service for confirmation...
-      let dr: ArcMinerGetTxData
-      try {
-        dr = await this.getTxData(txid)
-      } catch (error_: unknown) {
-        // A failed status read (a refused key, an outage) is no verdict on this txid.
-        const e = WalletError.fromUnknown(error_)
-        tr.status = 'error'
-        tr.serviceError = true
-        tr.notes!.push({ ...nn(), what: 'postBeefGetTxDataCatch', txid, code: e.code, description: e.description })
+    // Status reads run one at a time, in txid order, exactly as a sequential loop would.
+    await txids
+      .filter(txid => prtr.txid !== txid)
+      .reduce(async (previous, txid) => {
+        await previous
+        const tr = await this.postBeefExtraTxidResult(txid)
         r.txidResults.push(tr)
-        r.status = 'error'
-        continue
-      }
-      if (dr.txid !== txid) {
-        tr.status = 'error'
-        tr.data = 'internal error'
-        tr.notes!.push({
-          ...nn(),
-          what: 'postBeefGetTxDataInternal',
-          txid,
-          returnedTxid: dr.txid
-        })
-      } else if (isArcAcceptedTxStatus(dr.txStatus)) {
-        tr.data = dr.txStatus
-        tr.notes!.push({
-          ...nn(),
-          what: 'postBeefGetTxDataSuccess',
-          txid,
-          txStatus: dr.txStatus
-        })
-      } else {
-        tr.status = 'error'
-        tr.data = dr
-        tr.serviceError = !isArcInvalidTxStatus(dr.txStatus)
-        if (isArcDoubleSpendTxStatus(dr.txStatus)) {
-          tr.doubleSpend = true
-          tr.competingTxs = dr.competingTxs ?? undefined
-          tr.serviceError = undefined
-        }
-        tr.notes!.push({
-          ...nn(),
-          what: 'postBeefGetTxDataError',
-          txid,
-          txStatus: dr.txStatus
-        })
-      }
-      r.txidResults.push(tr)
-      if (r.status === 'success' && tr.status === 'error') r.status = 'error'
-    }
+        if (r.status === 'success' && tr.status === 'error') r.status = 'error'
+      }, Promise.resolve())
 
     return validatePostBeefResultOrServiceError(r, txids, this.name)
+  }
+
+  /**
+   * For an extra txid in a Beef, go back to the service for confirmation of its status.
+   * A failed status read (a refused key, an outage) is no verdict on the txid and is scored as a service error.
+   */
+  private async postBeefExtraTxidResult(txid: string): Promise<PostTxResultForTxid> {
+    const nn = () => ({ name: this.name, when: new Date().toISOString() })
+    const tr: PostTxResultForTxid = {
+      txid,
+      status: 'success',
+      notes: []
+    }
+    let dr: ArcMinerGetTxData
+    try {
+      dr = await this.getTxData(txid)
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
+      tr.status = 'error'
+      tr.serviceError = true
+      tr.notes!.push({ ...nn(), what: 'postBeefGetTxDataCatch', txid, code: e.code, description: e.description })
+      return tr
+    }
+    if (dr.txid !== txid) {
+      tr.status = 'error'
+      tr.data = 'internal error'
+      tr.notes!.push({
+        ...nn(),
+        what: 'postBeefGetTxDataInternal',
+        txid,
+        returnedTxid: dr.txid
+      })
+    } else if (isArcAcceptedTxStatus(dr.txStatus)) {
+      tr.data = dr.txStatus
+      tr.notes!.push({
+        ...nn(),
+        what: 'postBeefGetTxDataSuccess',
+        txid,
+        txStatus: dr.txStatus
+      })
+    } else {
+      tr.status = 'error'
+      tr.data = dr
+      tr.serviceError = !isArcInvalidTxStatus(dr.txStatus)
+      if (isArcDoubleSpendTxStatus(dr.txStatus)) {
+        tr.doubleSpend = true
+        tr.competingTxs = dr.competingTxs ?? undefined
+        tr.serviceError = undefined
+      }
+      tr.notes!.push({
+        ...nn(),
+        what: 'postBeefGetTxDataError',
+        txid,
+        txStatus: dr.txStatus
+      })
+    }
+    return tr
   }
 
   /**
