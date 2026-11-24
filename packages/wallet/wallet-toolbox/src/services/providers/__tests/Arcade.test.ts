@@ -636,6 +636,66 @@ describe('Arcade broadcaster', () => {
       expect(extra?.status).toBe('error')
       expect(extra?.serviceError).toBe(true)
     })
+
+    async function postBeefWithExtraTxStatus(extraData: (extraTxid: string) => Record<string, unknown>) {
+      const { beef, primaryTxid, extraTxid } = twoTransactionBeef()
+      const http = mockHttpClientSequence(
+        [
+          {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            data: { txid: primaryTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' }
+          }
+        ],
+        []
+      )
+      const arc = new ARC('https://arc.example', { httpClient: http, apiKey: 'test-key' })
+      jest.spyOn(arc, 'getTxData').mockResolvedValue(extraData(extraTxid) as never)
+      const r = await arc.postBeef(beef, [extraTxid, primaryTxid])
+      return { extra: r.txidResults.find(t => t.txid === extraTxid), primaryTxid }
+    }
+
+    test('standard ARC postBeef scores an invalid extra-txid status as a verdict, not a service error', async () => {
+      const { extra } = await postBeefWithExtraTxStatus(txid => ({ txid, txStatus: 'REJECTED' }))
+      expect(extra?.status).toBe('error')
+      expect(extra?.serviceError).toBe(false)
+      expect(extra?.doubleSpend).toBeFalsy()
+      expect(extra?.notes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ what: 'postBeefGetTxDataError', txStatus: 'REJECTED' })])
+      )
+    })
+
+    test('standard ARC postBeef reports a double-spent extra txid with its competing txids', async () => {
+      const competing = ['ab'.repeat(32)]
+      const { extra } = await postBeefWithExtraTxStatus(txid => ({
+        txid,
+        txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+        competingTxs: competing
+      }))
+      expect(extra?.status).toBe('error')
+      expect(extra?.doubleSpend).toBe(true)
+      expect(extra?.competingTxs).toEqual(competing)
+      expect(extra?.serviceError).toBeUndefined()
+    })
+
+    test('standard ARC postBeef scores an unknown extra-txid status as a service error', async () => {
+      const { extra } = await postBeefWithExtraTxStatus(txid => ({ txid, txStatus: 'QUEUED' }))
+      expect(extra?.status).toBe('error')
+      expect(extra?.serviceError).toBe(true)
+      expect(extra?.doubleSpend).toBeFalsy()
+    })
+
+    test('standard ARC postBeef flags status data bound to a different txid as an internal error', async () => {
+      const { extra } = await postBeefWithExtraTxStatus(() => ({ txid: 'cd'.repeat(32), txStatus: 'MINED' }))
+      expect(extra?.status).toBe('error')
+      expect(extra?.data).toBe('internal error')
+      expect(extra?.notes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ what: 'postBeefGetTxDataInternal', returnedTxid: 'cd'.repeat(32) })
+        ])
+      )
+    })
   })
 
   describe('request headers', () => {
