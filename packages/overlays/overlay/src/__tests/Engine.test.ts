@@ -3,7 +3,10 @@ import { LookupService } from '../LookupService'
 import { TopicManager } from '../TopicManager'
 import { Storage } from '../storage/Storage'
 import {
+  Beef,
   Transaction,
+  MerklePath,
+  Script,
   Utils,
   TaggedBEEF,
   AdmittanceInstructions,
@@ -662,7 +665,12 @@ describe('BSV Overlay Services Engine', () => {
     })
 
     it('is not invoked for a duplicate or a successful admission', async () => {
-      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
       const onTopicFailed = jest.fn()
       engine.onTopicFailed = onTopicFailed
 
@@ -680,7 +688,12 @@ describe('BSV Overlay Services Engine', () => {
       mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
         throw new Error('manager rejected the transaction')
       })
-      const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
       const logger = { ...console, error: jest.fn() }
       engine.logger = logger
       engine.onTopicFailed = jest.fn(() => {
@@ -1887,6 +1900,293 @@ describe('BSV Overlay Services Engine', () => {
       expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
     })
 
+    describe('a transaction a topic applied without storing outputs', () => {
+      let proven: Transaction
+      let txid: string
+      let proof: MerklePath
+      let leaf: { offset: number }
+      let appliedProof: Record<string, unknown>
+      let updateAppliedTransactionProof: jest.Mock
+      let upsertTransactionRecord: jest.Mock
+
+      beforeEach(() => {
+        proven = Transaction.fromHexBEEF(beef37abad0)
+        txid = proven.id('hex')
+        if (proven.merklePath === undefined) throw new Error('improper test setup')
+        proof = proven.merklePath
+        const found = proof.path[0].find(node => node.hash === txid)
+        if (found === undefined) throw new Error('improper test setup')
+        leaf = found
+        appliedProof = {
+          txid,
+          blockHeight: proof.blockHeight,
+          blockHash: undefined,
+          blockIndex: leaf.offset,
+          merkleRoot: proof.computeRoot(txid)
+        }
+        updateAppliedTransactionProof = jest.fn(async () => undefined)
+        upsertTransactionRecord = jest.fn(async () => undefined)
+        mockStorageEngine.updateAppliedTransactionProof = updateAppliedTransactionProof
+        mockStorageEngine.upsertTransactionRecord = upsertTransactionRecord
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(
+          async ({ topic }: { txid: string; topic: string }) => topic === 'Hello'
+        )
+      })
+
+      it('marks the applied row proven and stores the proof on the transaction record', async () => {
+        const unproven = new Transaction(proven.version, proven.inputs, proven.outputs)
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [
+          { txid, rawTx: unproven.toHex() }
+        ])
+        const engine = new Engine(
+          { Hello: mockTopicManager, Other: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof, proof.blockHeight)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledTimes(1)
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+        expect(upsertTransactionRecord).toHaveBeenCalledTimes(1)
+        expect(upsertTransactionRecord).toHaveBeenCalledWith(
+          expect.objectContaining({
+            txid,
+            rawTx: Array.from(unproven.toBinary()),
+            merklePath: proof.toBinary(),
+            blockHeight: proof.blockHeight,
+            blockIndex: leaf.offset
+          })
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('keeps the proof when the transaction record is no longer stored', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+        expect(upsertTransactionRecord).toHaveBeenCalledWith({
+          txid,
+          merklePath: proof.toBinary(),
+          blockHeight: proof.blockHeight,
+          blockHash: undefined,
+          blockIndex: leaf.offset,
+          merkleRoot: appliedProof.merkleRoot
+        })
+      })
+
+      it('marks a consume-only topic proven alongside a topic that kept outputs', async () => {
+        const output: Output = {
+          txid,
+          outputIndex: 0,
+          outputScript: proven.outputs[0].lockingScript.toBinary(),
+          topic: 'Other',
+          satoshis: proven.outputs[0].satoshis,
+          beef: proven.toBEEF(),
+          spent: false,
+          outputsConsumed: [],
+          consumedBy: [],
+          score: 1
+        }
+        mockStorageEngine.findOutputsForTransaction = jest.fn(async () => [output])
+        const engine = new Engine(
+          { Hello: mockTopicManager, Other: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(mockStorageEngine.doesAppliedTransactionExist).toHaveBeenCalledTimes(1)
+        expect(mockStorageEngine.doesAppliedTransactionExist).toHaveBeenCalledWith({
+          txid,
+          topic: 'Hello'
+        })
+        expect(updateAppliedTransactionProof.mock.calls.map(([record]) => record.topic)).toEqual([
+          'Other',
+          'Hello'
+        ])
+        // The output's own transaction record is written once, by the existing output path.
+        expect(upsertTransactionRecord).toHaveBeenCalledTimes(1)
+      })
+
+      it('still refuses a proof for a transaction no topic applied', async () => {
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => false)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a malformed applied-transaction verdict from storage', async () => {
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => 1 as unknown as boolean)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'invalid applied-transaction verdict'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+
+      it('recomputes the BRC-136 anchor for the applied topic once the block hash resolves', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+        const blockHash = 'aa'.repeat(32)
+        engine.topicAnchorHeaderResolver = jest.fn(async blockHeight => ({
+          blockHeight,
+          blockHash,
+          merkleRoot: proof.computeRoot(txid)
+        }))
+        const recompute = jest
+          .spyOn(engine as any, 'recomputeTopicBlockAnchor')
+          .mockResolvedValue(undefined)
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          blockHash,
+          topic: 'Hello'
+        })
+        expect(recompute).toHaveBeenCalledWith('Hello', proof.blockHeight, blockHash)
+      })
+
+      it('keeps refusing on a storage that cannot record an applied proof', async () => {
+        delete mockStorageEngine.updateAppliedTransactionProof
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(mockStorageEngine.doesAppliedTransactionExist).not.toHaveBeenCalled()
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a malformed output set from storage', async () => {
+        mockStorageEngine.findOutputsForTransaction = jest.fn(
+          async () => null as unknown as Output[]
+        )
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Could not find matching transaction outputs for proof ingest!'
+        )
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+
+      it('marks the applied row proven on a storage that cannot upsert transaction records', async () => {
+        delete mockStorageEngine.upsertTransactionRecord
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(mockStorageEngine.findRawTransactions).not.toHaveBeenCalled()
+        expect(updateAppliedTransactionProof).toHaveBeenCalledWith({
+          ...appliedProof,
+          topic: 'Hello'
+        })
+      })
+
+      it('keeps the proof on a storage that cannot list raw transactions', async () => {
+        delete mockStorageEngine.findRawTransactions
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await engine.handleNewMerkleProof(txid, proof)
+
+        expect(upsertTransactionRecord).toHaveBeenCalledWith(
+          expect.objectContaining({ txid, merklePath: proof.toBinary() })
+        )
+      })
+
+      it('refuses a malformed raw-transaction set from storage', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => ({}) as unknown as [])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Storage returned an invalid raw-transaction set'
+        )
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+      })
+
+      it('refuses a stored raw transaction that does not match the proven txid', async () => {
+        mockStorageEngine.findRawTransactions = jest.fn(async () => [
+          { txid, rawTx: Transaction.fromHexBEEF(beef27c8f1).toHex() }
+        ])
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
+
+        await expect(engine.handleNewMerkleProof(txid, proof)).rejects.toThrow(
+          'Stored raw transaction does not match its transaction ID'
+        )
+        expect(upsertTransactionRecord).not.toHaveBeenCalled()
+        expect(updateAppliedTransactionProof).not.toHaveBeenCalled()
+      })
+    })
+
     it('0 simple proof', async () => {
       const beef = beef27c8f1
       const txid = txid27c8f
@@ -2063,6 +2363,533 @@ describe('BSV Overlay Services Engine', () => {
       expect(newBEEF[`${txid17d182}`]).toBe(beef17d1820)
       expect(Object.keys(newBEEF)).toHaveLength(5)
     })
+
+    describe('descendants whose BEEF already ends at a proof', () => {
+      const leafPath = (txid: string): MerklePath =>
+        new MerklePath(700_000, [
+          [
+            { offset: 0, hash: '42'.repeat(32) },
+            { offset: 1, hash: txid, txid: true }
+          ]
+        ])
+      const opTrue = (): Script => Script.fromASM('OP_TRUE')
+      const spend = (
+        sources: Array<Transaction | { txid: string; outputIndex: number }>,
+        outputs: number[],
+        proven = false
+      ): Transaction => {
+        const tx = new Transaction()
+        for (const source of sources) {
+          if (source instanceof Transaction) {
+            tx.addInput({
+              sourceTransaction: source,
+              sourceOutputIndex: 0,
+              unlockingScript: opTrue()
+            })
+          } else {
+            tx.addInput({
+              sourceTXID: source.txid,
+              sourceOutputIndex: source.outputIndex,
+              unlockingScript: opTrue()
+            })
+          }
+        }
+        for (const satoshis of outputs) tx.addOutput({ satoshis, lockingScript: opTrue() })
+        if (proven) tx.merklePath = leafPath(tx.id('hex'))
+        return tx
+      }
+      const outputOf = (tx: Transaction, beef: number[], outputIndex = 0): Output => ({
+        txid: tx.id('hex'),
+        outputIndex,
+        outputScript: tx.outputs[outputIndex].lockingScript.toBinary(),
+        topic: 'hello',
+        satoshis: tx.outputs[outputIndex].satoshis as number,
+        beef,
+        spent: false,
+        outputsConsumed: [],
+        consumedBy: [],
+        score: Date.now()
+      })
+      const link = (parent: Output, child: Output): void => {
+        parent.consumedBy.push({ txid: child.txid, outputIndex: child.outputIndex })
+        child.outputsConsumed.push({ txid: parent.txid, outputIndex: parent.outputIndex })
+      }
+      const engineOver = (
+        outputs: Output[]
+      ): { engine: Engine; updates: Record<string, number[]> } => {
+        const updates: Record<string, number[]> = {}
+        mockStorageEngine.findOutputsForTransaction = jest.fn(async (txid: string) =>
+          outputs.filter(o => o.txid === txid)
+        )
+        mockStorageEngine.updateTransactionBEEF = jest.fn(async (txid: string, beef: number[]) => {
+          updates[txid] = beef
+        })
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          { Hello: mockLookupService },
+          mockStorageEngine,
+          mockChainTracker
+        )
+        return { engine, updates }
+      }
+      const root = (): Transaction => spend([{ txid: '00'.repeat(32), outputIndex: 0 }], [2, 3])
+
+      it('stores the ancestor proof and skips a proven child that spends it', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        // The child's stored BEEF ends at its own proof and no longer carries the ancestor.
+        expect(Transaction.fromBEEF(child.toBEEF()).inputs[0].sourceTransaction).toBeUndefined()
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const c = outputOf(child, child.toBEEF())
+        link(a, c)
+        const { engine, updates } = engineOver([a, c])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+        expect(Transaction.fromBEEF(updates[a.txid]).merklePath?.toHex()).toBe(proof.toHex())
+      })
+
+      it('skips an unproven grandchild whose BEEF ends at a proven child that spends the ancestor', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        const grandchild = spend([child], [1])
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        const { engine, updates } = engineOver([a, b, c])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+      })
+
+      it.each([
+        ['proven branch first', false],
+        ['carrying branch first', true]
+      ])(
+        'still updates a descendant that carries the ancestor beside a proven spender (%s)',
+        async (_label, carryingFirst) => {
+          const ancestor = root()
+          const proven = spend([ancestor], [1], true)
+          const descendant = new Transaction()
+          const viaProof = {
+            sourceTransaction: proven,
+            sourceOutputIndex: 0,
+            unlockingScript: opTrue()
+          }
+          const direct = {
+            sourceTransaction: ancestor,
+            sourceOutputIndex: 1,
+            unlockingScript: opTrue()
+          }
+          descendant.addInput(carryingFirst ? direct : viaProof)
+          descendant.addInput(carryingFirst ? viaProof : direct)
+          descendant.addOutput({ satoshis: 1, lockingScript: opTrue() })
+          const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+          const d = outputOf(descendant, descendant.toBEEF())
+          link(a, d)
+          const { engine, updates } = engineOver([a, d])
+
+          const proof = leafPath(a.txid)
+          await engine.handleNewMerkleProof(a.txid, proof)
+
+          expect(Object.keys(updates).sort()).toEqual([a.txid, d.txid].sort())
+          const carried = Transaction.fromBEEF(updates[d.txid]).inputs[carryingFirst ? 0 : 1]
+          expect(carried.sourceTransaction?.merklePath?.toHex()).toBe(proof.toHex())
+        }
+      )
+
+      it('refuses a descendant that references the ancestor without carrying it, beside a proven spender', async () => {
+        const ancestor = root()
+        const proven = spend([ancestor], [1], true)
+        const ancestorTxid = ancestor.id('hex')
+        const descendant = spend([proven, { txid: ancestorTxid, outputIndex: 1 }], [1])
+        const beef = new Beef()
+        beef.mergeTransaction(proven)
+        const subject = beef.mergeRawTx(descendant.toBinary())
+        beef.sortTxs()
+        // As stored, the output's transaction is last.
+        beef.txs = [...beef.txs.filter(tx => tx !== subject), subject]
+        const incomplete = beef.toBinary()
+        const parsed = Transaction.fromBEEF(incomplete)
+        expect(parsed.id('hex')).toBe(descendant.id('hex'))
+        expect(parsed.inputs[1].sourceTransaction).toBeUndefined()
+        expect(parsed.inputs[0].sourceTransaction?.merklePath).toBeDefined()
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const d = outputOf(descendant, incomplete)
+        link(a, d)
+        const { engine } = engineOver([a, d])
+
+        await expect(
+          engine.handleNewMerkleProof(ancestorTxid, leafPath(ancestorTxid))
+        ).rejects.toThrow('does not contain the proven transaction')
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('skips a proven child that spends the ancestor through a later input', async () => {
+        const ancestor = root()
+        const other = spend([{ txid: '22'.repeat(32), outputIndex: 0 }], [4])
+        const child = new Transaction()
+        child.addInput({
+          sourceTransaction: other,
+          sourceOutputIndex: 0,
+          unlockingScript: opTrue()
+        })
+        child.addInput({
+          sourceTransaction: ancestor,
+          sourceOutputIndex: 0,
+          unlockingScript: opTrue()
+        })
+        child.addOutput({ satoshis: 1, lockingScript: opTrue() })
+        child.merklePath = leafPath(child.id('hex'))
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const c = outputOf(child, child.toBEEF())
+        link(a, c)
+        const { engine, updates } = engineOver([a, c])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+      })
+
+      it('refuses an unresolved reference on an unproven intermediate, beside a proven spender', async () => {
+        const ancestor = root()
+        const ancestorTxid = ancestor.id('hex')
+        const proven = spend([ancestor], [1], true)
+        const middle = spend([{ txid: ancestorTxid, outputIndex: 1 }], [1])
+        const descendant = spend([proven, middle], [1])
+        const beef = new Beef()
+        beef.mergeTransaction(proven)
+        beef.mergeRawTx(middle.toBinary())
+        const subject = beef.mergeRawTx(descendant.toBinary())
+        beef.sortTxs()
+        beef.txs = [...beef.txs.filter(tx => tx !== subject), subject]
+        const incomplete = beef.toBinary()
+        const parsed = Transaction.fromBEEF(incomplete)
+        expect(parsed.id('hex')).toBe(descendant.id('hex'))
+        expect(parsed.inputs[1].sourceTransaction).toBeDefined()
+        expect(parsed.inputs[1].sourceTransaction?.inputs[0].sourceTransaction).toBeUndefined()
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const d = outputOf(descendant, incomplete)
+        link(a, d)
+        const { engine } = engineOver([a, d])
+
+        await expect(
+          engine.handleNewMerkleProof(ancestorTxid, leafPath(ancestorTxid))
+        ).rejects.toThrow('does not contain the proven transaction')
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('updates an unproven child and skips a proven grandchild that spends it', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const grandchild = spend([child], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        const { engine, updates } = engineOver([a, b, c])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, b.txid].sort())
+        const carried = Transaction.fromBEEF(updates[b.txid]).inputs[0].sourceTransaction
+        expect(carried?.merklePath?.toHex()).toBe(proof.toHex())
+      })
+
+      it('skips proven descendants that spend the ancestor only through each other', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        const grandchild = spend([child], [1], true)
+        const greatGrandchild = spend([grandchild], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        const d = outputOf(greatGrandchild, greatGrandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+      })
+
+      it('refuses a proven grandchild that spends no transaction already checked', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const unrelated = spend([{ txid: '33'.repeat(32), outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const u = outputOf(unrelated, unrelated.toBEEF())
+        link(a, b)
+        link(b, u)
+        const { engine } = engineOver([a, b, u])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses a grandchild that references a checked child without carrying it, beside a proven spender', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1, 1], true)
+        const proven = spend([ancestor, { txid: '33'.repeat(32), outputIndex: 0 }], [1], true)
+        const grandchild = spend([{ txid: child.id('hex'), outputIndex: 0 }, proven], [1])
+        const beef = new Beef()
+        beef.mergeTransaction(proven)
+        const subject = beef.mergeRawTx(grandchild.toBinary())
+        beef.sortTxs()
+        beef.txs = [...beef.txs.filter(tx => tx !== subject), subject]
+        const incomplete = beef.toBinary()
+        expect(Transaction.fromBEEF(incomplete).inputs[0].sourceTransaction).toBeUndefined()
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, incomplete)
+        link(a, b)
+        link(b, c)
+        const { engine } = engineOver([a, b, c])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      const incompleteBeef = (
+        carried: Transaction[],
+        subject: Transaction,
+        raws: Transaction[] = []
+      ): number[] => {
+        const beef = new Beef()
+        for (const tx of carried) beef.mergeTransaction(tx)
+        for (const tx of raws) beef.mergeRawTx(tx.toBinary())
+        const last = beef.mergeRawTx(subject.toBinary())
+        beef.sortTxs()
+        beef.txs = [...beef.txs.filter(tx => tx !== last), last]
+        return beef.toBinary()
+      }
+
+      it('refuses a proven spender of a transaction that only a storage relation names', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const named = '44'.repeat(32)
+        const spender = spend([{ txid: named, outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const d = outputOf(spender, spender.toBEEF())
+        link(a, b)
+        // Storage claims the child was spent by `named`, which it holds no output for.
+        b.consumedBy.push({ txid: named, outputIndex: 0 })
+        link(b, d)
+        const { engine } = engineOver([a, b, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('binds a descendant stored under an uppercase transaction ID', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const grandchild = spend([child], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = { ...outputOf(child, child.toBEEF()), txid: child.id('hex').toUpperCase() }
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        link(a, b)
+        link(b, c)
+        const { engine, updates } = engineOver([a, b, c])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, b.txid].sort())
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(2)
+      })
+
+      it('skips proven descendants that storage returns before the proven ones that bind them', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1], true)
+        const grandchild = spend([child], [1], true)
+        const greatGrandchild = spend([grandchild], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(child, child.toBEEF())
+        const c = outputOf(grandchild, grandchild.toBEEF())
+        const d = outputOf(greatGrandchild, greatGrandchild.toBEEF())
+        // These relations come first, so the descendants are checked deepest first.
+        a.consumedBy.push({ txid: d.txid, outputIndex: 0 }, { txid: c.txid, outputIndex: 0 })
+        link(a, b)
+        link(b, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        await engine.handleNewMerkleProof(a.txid, leafPath(a.txid))
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(1)
+      })
+
+      it('binds a second proven spender of the ancestor and the proven descendant behind it', async () => {
+        // B and C are proven and spend different outputs of A; D is proven and spends C.
+        // Storage returns B before C, so C waits on A behind B and must still be bound.
+        const ancestor = root()
+        const ancestorId = ancestor.id('hex')
+        const b1 = spend([{ txid: ancestorId, outputIndex: 0 }], [1], true)
+        const c1 = spend([{ txid: ancestorId, outputIndex: 1 }], [1], true)
+        const d1 = spend([{ txid: c1.id('hex'), outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const b = outputOf(b1, b1.toBEEF())
+        const c = outputOf(c1, c1.toBEEF())
+        const d = outputOf(d1, d1.toBEEF())
+        link(a, b)
+        link(a, c)
+        link(c, d)
+        const { engine, updates } = engineOver([a, b, c, d])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates)).toEqual([a.txid])
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(1)
+        expect(Transaction.fromBEEF(updates[a.txid]).merklePath?.toHex()).toBe(proof.toHex())
+      })
+
+      it('refuses a stored output whose BEEF does not match its transaction ID before it can bind anything', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const claimed = '55'.repeat(32)
+        const spender = spend([{ txid: claimed, outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        // Storage files the child's BEEF, which carries the ancestor, under another ID.
+        const mislabelled = { ...outputOf(child, child.toBEEF()), txid: claimed }
+        const d = outputOf(spender, spender.toBEEF())
+        link(a, mislabelled)
+        link(mislabelled, d)
+        const { engine } = engineOver([a, mislabelled, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not match its transaction ID'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses an unresolved reference to a descendant that is bound only after it is checked', async () => {
+        // A -> X -> P -> D and A -> Y -> Z -> B -> D, P and B proven. D's BEEF
+        // carries P but only names B, which is collected after D.
+        const ancestor = root()
+        const x = spend([ancestor], [1])
+        const p = spend([x], [1], true)
+        const y = spend([{ txid: ancestor.id('hex'), outputIndex: 1 }], [1])
+        y.inputs[0].sourceTransaction = ancestor
+        const z = spend([y], [1])
+        const b = spend([z], [1], true)
+        const d = spend([p, { txid: b.id('hex'), outputIndex: 0 }], [1])
+        const stored = (tx: Transaction, beef: number[] = tx.toBEEF()): Output => outputOf(tx, beef)
+        const [sa, sx, sp, sy, sz, sb] = [ancestor, x, p, y, z, b].map(tx => stored(tx))
+        const sd = stored(d, incompleteBeef([p], d))
+        expect(
+          Transaction.fromBEEF(sd.beef as number[]).inputs[1].sourceTransaction
+        ).toBeUndefined()
+        link(sa, sx)
+        link(sa, sy)
+        link(sx, sp)
+        link(sy, sz)
+        link(sp, sd)
+        link(sz, sb)
+        link(sb, sd)
+        const { engine } = engineOver([sa, sx, sp, sy, sz, sb, sd])
+
+        await expect(engine.handleNewMerkleProof(sa.txid, leafPath(sa.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses a descendant whose unproven transaction lacks an unrelated source, beside a proven spender', async () => {
+        const ancestor = root()
+        const proven = spend([ancestor], [1], true)
+        const descendant = spend([proven, { txid: '66'.repeat(32), outputIndex: 0 }], [1])
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const d = outputOf(descendant, incompleteBeef([proven], descendant))
+        expect(Transaction.fromBEEF(d.beef as number[]).inputs[1].sourceTransaction).toBeUndefined()
+        link(a, d)
+        const { engine } = engineOver([a, d])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('still updates a descendant that carries the ancestor beside an unresolved reference to a bound one', async () => {
+        const ancestor = root()
+        const proven = spend([ancestor], [1], true)
+        const descendant = new Transaction()
+        descendant.addInput({
+          sourceTransaction: ancestor,
+          sourceOutputIndex: 1,
+          unlockingScript: opTrue()
+        })
+        descendant.addInput({
+          sourceTXID: proven.id('hex'),
+          sourceOutputIndex: 0,
+          unlockingScript: opTrue()
+        })
+        descendant.addOutput({ satoshis: 1, lockingScript: opTrue() })
+        const a = outputOf(ancestor, ancestor.toBEEF(), 1)
+        const b = outputOf(proven, proven.toBEEF())
+        const d = outputOf(descendant, incompleteBeef([ancestor], descendant))
+        expect(Transaction.fromBEEF(d.beef as number[]).inputs[1].sourceTransaction).toBeUndefined()
+        link(a, b)
+        link(a, d)
+        link(b, d)
+        const { engine, updates } = engineOver([a, b, d])
+
+        const proof = leafPath(a.txid)
+        await engine.handleNewMerkleProof(a.txid, proof)
+
+        expect(Object.keys(updates).sort()).toEqual([a.txid, d.txid].sort())
+        expect(mockStorageEngine.updateTransactionBEEF).toHaveBeenCalledTimes(2)
+      })
+
+      it('refuses when one of two stored rows of a descendant does not carry the ancestor', async () => {
+        const ancestor = root()
+        const child = spend([ancestor], [1])
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const complete = outputOf(child, child.toBEEF())
+        const partial = { ...outputOf(child, incompleteBeef([], child)), topic: 'world' }
+        // One relation reaches both rows: storage returns every output of the child.
+        link(a, complete)
+        const { engine } = engineOver([a, complete, partial])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+
+      it('refuses a proven descendant BEEF that neither carries nor spends the proven transaction', async () => {
+        const ancestor = root()
+        const other = spend([{ txid: '11'.repeat(32), outputIndex: 0 }], [1], true)
+        const a = outputOf(ancestor, ancestor.toBEEF())
+        const o = outputOf(other, other.toBEEF())
+        link(a, o)
+        const { engine } = engineOver([a, o])
+
+        await expect(engine.handleNewMerkleProof(a.txid, leafPath(a.txid))).rejects.toThrow(
+          'does not contain the proven transaction'
+        )
+        expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+      })
+    })
   })
 
   describe('submit', () => {
@@ -2121,7 +2948,12 @@ describe('BSV Overlay Services Engine', () => {
     it('Verifies with the SDK interpreter when no script verifier is configured', async () => {
       const verify = jest.spyOn(Transaction.prototype, 'verify')
       try {
-        const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker
+        )
         expect(engine.scriptVerifier).toBeUndefined()
         await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
         expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, undefined)

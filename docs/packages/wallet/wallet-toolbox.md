@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.18.0'
-last_updated: '2026-11-13'
-last_verified: '2026-11-13'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -14,6 +14,32 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 ---
 
 # @bsv/wallet-toolbox
+
+## nLockTime finality
+
+The 2.18.1 source candidate makes `nLockTimeIsFinal` apply the node's rule for the
+next block: a height lock time below tip + 1 and a time lock time below the
+median time past of the last eleven headers (BIP113), instead of the tip height
+and the wall clock. Inputs with an omitted sequence count as final. No API, wire
+or schema migration is required. Source is not publication or deployment.
+
+## Broadcaster service errors
+
+The 2.18.1 source candidate scores broadcaster answers that judge nothing about
+the transaction as service errors: ARC HTTP 401 and 403 (a keyless request to
+the default arc.taal.com, or a refused key), WhatsOnChain 401, 403, 408,
+exhausted 429 and 5xx answers that relay no node refusal, and a Bitails per-
+transaction connection reset. Such a transaction now stays queued for retry or
+fails over instead of being marked invalid with its inputs released. No API,
+wire, configuration or schema migration is required. Source is not publication
+or deployment.
+
+## sendMax from unproven change
+
+The 2.18.1 source candidate lets a sendMax (`maxPossibleSatoshis`) `createAction`
+be funded from unproven change when the wallet holds no confirmed coins, instead
+of failing with an invalid output amount. No API, wire or schema migration is
+required. Source is not publication or deployment.
 
 ## Certificate pagination
 
@@ -428,6 +454,9 @@ if it needs the underlying wallet operation, `next` is guarded to one call.
 The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
 this hook to implement point multiplication under `p ecpm` while keeping
 `getPublicKey` as the public wallet method.
+[@bsv/sigma-permission-module](./sigma-permission-module.md) uses it to
+return statement points and zero-knowledge proofs under `p sigma` through
+`encrypt`.
 
 ## Action Flow
 

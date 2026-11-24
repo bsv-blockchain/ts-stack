@@ -5,6 +5,12 @@ export type {
 } from './BdkVerifierInterface.js'
 export * from './ScriptVerificationBackend.js'
 export { default as MerklePath } from './MerklePath.js'
+export {
+  transactionSize,
+  transactionInputSize,
+  transactionOutputSize,
+  varUintSize
+} from './transactionSize.js'
 export type { default as TransactionInput } from './TransactionInput.js'
 export type { default as TransactionOutput } from './TransactionOutput.js'
 export type { Broadcaster, BroadcastFailure, BroadcastResponse } from './Broadcaster.js'

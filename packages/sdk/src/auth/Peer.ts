@@ -5,7 +5,7 @@ import { getVerifiableCertificates } from './utils/getVerifiableCertificates.js'
 import { validateCertificates } from './utils/validateCertificates.js'
 import {
   AuthMessage,
-  AuthMessageValidationOptions,
+  PeerOptions,
   PeerSession,
   RequestedCertificateSet,
   Transport
@@ -31,6 +31,9 @@ import {
 
 const AUTH_VERSION = '0.1'
 const INITIAL_RESPONSE_TIMEOUT_MS = 30_000
+// Upper bound on how long a general message waits for this Peer's own answer to a certificate
+// request embedded in an initialResponse; after it the message is sent and the peer decides.
+const INITIAL_CERTIFICATE_ANSWER_WAIT_MS = 30_000
 const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
 /**
@@ -86,6 +89,12 @@ export class Peer {
     { callback: (sessionNonce: string) => void; sessionNonce: string }
   > = new Map()
   readonly #initialResponseTimeouts = new Map<number, ReturnType<typeof setTimeout>>()
+  // Per session nonce: settles when this Peer's answer to a certificate request embedded in
+  // that session's initialResponse has been sent or has ended without one.
+  readonly #initialCertificateAnswers = new Map<string, Promise<void>>()
+  // Per session nonce: how many certificates-received observer runs are in progress.
+  readonly #certificateObserversRunning = new Map<string, number>()
+  readonly #sendEmptyCertificateResponses: boolean
 
   // Promise-based mechanism for waiting on certificate validation
   private readonly certificateValidationPromises: Map<
@@ -130,11 +139,11 @@ export class Peer {
    *
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
    * @param {Transport} transport - The transport mechanism used for sending and receiving messages.
-   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization.
+   * @param {RequestedCertificateSet} [certificatesToRequest] - Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization. A type listed with an empty field array asks for a zero-field proof, which only a Peer that initiated the handshake can accept, in the initial response. A responder, such as a server behind auth-express-middleware requesting `types: { T: [] }`, receives the client's answer as a standalone certificate response, and a zero-field proof there stays refused.
    * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} with atomic `claimMessageNonce` and `claimInitialRequestNonce` for shared/durable storage in load-balanced deployments; otherwise the bounded default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
-   * @param {AuthMessageValidationOptions} [messageValidation] - Local policy; set maxGeneralPayloadBytes to null to delegate capacity to the transport. Omission preserves existing limits.
+   * @param {PeerOptions} [options] - Local policy; set maxGeneralPayloadBytes to null to delegate capacity to the transport, and sendEmptyCertificateResponses to answer an embedded certificate request when no certificate matches. Omission preserves existing behaviour.
    */
   constructor(
     wallet: WalletInterface,
@@ -143,11 +152,12 @@ export class Peer {
     sessionManager?: SessionManager | AsyncSessionManager,
     autoPersistLastSession?: boolean,
     originator?: OriginatorDomainNameStringUnder250Bytes,
-    messageValidation: AuthMessageValidationOptions = {}
+    options: PeerOptions = {}
   ) {
-    const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes
+    const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
     assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
     this.#maxGeneralPayloadBytes = maxGeneralPayloadBytes
+    this.#sendEmptyCertificateResponses = options.sendEmptyCertificateResponses === true
     this.#wallet = wallet
     this.#originator = originator
     this.#transport = transport
@@ -196,6 +206,7 @@ export class Peer {
     }
 
     const peerSession = await this.getAuthenticatedSession(identityKey)
+    await this.#afterInitialCertificateAnswer(peerSession.sessionNonce as string)
 
     if (peerSession.peerIdentityKey == null) {
       throw new Error('Peer identity is not established')
@@ -240,6 +251,53 @@ export class Peer {
     } catch (error: unknown) {
       this.propagateTransportError(peerSession.peerIdentityKey, error)
     }
+  }
+
+  /**
+   * A peer that requested certificates in its initialResponse may refuse a general message
+   * that arrives before the answer, and the handshake releases its waiters first. Waits until
+   * the answer has been sent or has ended without one, bounded.
+   */
+  async #afterInitialCertificateAnswer(sessionNonce: string): Promise<void> {
+    const answer = this.#initialCertificateAnswers.get(sessionNonce)
+    if (answer == null) return
+    // While this session's certificates-received observers run, the answer waits for them, so
+    // their own sends must not wait for it. Without async context in every runtime, a send from
+    // elsewhere in that window is not held either, as before.
+    if (this.#certificateObserversRunning.has(sessionNonce)) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        answer,
+        new Promise<void>(resolve => {
+          timer = setTimeout(resolve, INITIAL_CERTIFICATE_ANSWER_WAIT_MS)
+          if (typeof timer === 'object' && 'unref' in timer) timer.unref()
+        })
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /**
+   * Holds general messages of a session until its embedded certificate request is answered.
+   * Taken before the session is marked authenticated, so any sender that can see the
+   * authenticated session also finds the hold. Returns the release.
+   */
+  #holdForInitialCertificateAnswer(sessionNonce: string): () => void {
+    let release!: () => void
+    const answered = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const pending = Promise.all([this.#initialCertificateAnswers.get(sessionNonce), answered]).then(
+      () => {
+        if (this.#initialCertificateAnswers.get(sessionNonce) === pending) {
+          this.#initialCertificateAnswers.delete(sessionNonce)
+        }
+      }
+    )
+    this.#initialCertificateAnswers.set(sessionNonce, pending)
+    return release
   }
 
   async #touchSession(sessionNonce: string): Promise<void> {
@@ -558,6 +616,9 @@ export class Peer {
    * run. Throwing rejects message handling and stops subsequent observers; it does not
    * roll back validation or revoke the session. Apply acceptance policy through the locally
    * requested certificate set and explicit application authorization before protected work.
+   *
+   * A certificate accepted as a zero-field proof reaches observers with its fields still
+   * encrypted and no keyring, so do not call `decryptFields` on it.
    *
    * @param {(senderPublicKey: string, certs: VerifiableCertificate[], sessionNonce: string, peerNonce?: string) => void | Promise<void>} callback - The function to call when certificates are received. The local and peer session nonces identify the exact validated exchange; callbacks that do not need them remain compatible.
    * @returns {number} The ID of the callback listener.
@@ -883,9 +944,13 @@ export class Peer {
    *
    * @private
    * @param {AuthMessage} message - The incoming initial response message.
+   * @returns The session, and whether this Peer initiated it.
    * @throws Will throw an error if nonce or signature verification fails.
    */
-  private async authenticateInitialResponse(message: AuthMessage): Promise<PeerSession> {
+  private async authenticateInitialResponse(
+    message: AuthMessage,
+    onHold?: (release: () => void) => void
+  ): Promise<[peerSession: PeerSession, locallyInitiated: boolean]> {
     const validNonce = await verifyNonce(
       message.yourNonce as string,
       this.#wallet,
@@ -940,25 +1005,39 @@ export class Peer {
       message.messageType
     )
 
+    // Nothing below awaits before the session becomes observable as authenticated, so a
+    // sender that sees it authenticated also finds the hold.
+    if (Peer.#requestsCertificates(message)) {
+      onHold?.(this.#holdForInitialCertificateAnswer(peerSession.sessionNonce as string))
+    }
+
     // --- Transport authentication complete ---
+    // Only a session this Peer initiated and has not yet authenticated has no
+    // peer nonce: a responder session holds the initiator's nonce from
+    // creation, and authentication below sets it.
+    const locallyInitiated = peerSession.peerNonce == null
     peerSession.peerNonce = message.initialNonce
     peerSession.peerIdentityKey = message.identityKey
     peerSession.isAuthenticated = true
 
-    peerSession.certificatePolicy ??= this.#snapshotCertificatePolicy(this.certificatesToRequest)
-    peerSession.certificatesRequired = peerSession.certificatePolicy.certifiers.length > 0
+    // Do not backfill a lost snapshot: its absence is what keeps zero-field
+    // validation from being authorized by the mutable default below.
+    const certificatePolicy =
+      peerSession.certificatePolicy ?? this.#snapshotCertificatePolicy(this.certificatesToRequest)
+    peerSession.certificatesRequired = certificatePolicy.certifiers.length > 0
 
     // IMPORTANT: validation defaults to false if certs are required
     peerSession.certificatesValidated = !peerSession.certificatesRequired
 
     peerSession.lastUpdate = Date.now()
     await this.sessionManager.updateSession(peerSession)
-    return peerSession
+    return [peerSession, locallyInitiated]
   }
 
   private async validateInitialResponseCertificates(
     message: AuthMessage,
-    peerSession: PeerSession
+    peerSession: PeerSession,
+    locallyInitiated = false
   ): Promise<void> {
     if (
       !peerSession.certificatesRequired ||
@@ -969,24 +1048,41 @@ export class Peer {
     }
     const sessionNonce = peerSession.sessionNonce as string
     await this.updateCertificateSession(sessionNonce, async session => {
+      // Zero fields answer only the request this Peer sent as initiator, from
+      // the snapshot its session retained; a store that drops the snapshot
+      // keeps the nonempty path rather than using the mutable default.
       await validateCertificates(
         this.#wallet,
         message,
         session.certificatePolicy ?? this.certificatesToRequest,
-        this.#originator
+        this.#originator,
+        locallyInitiated && session.certificatePolicy != null
       )
       session.certificatesValidated = true
       session.lastUpdate = Date.now()
     })
     this.#resolveCertificateValidation(sessionNonce)
 
-    for (const callback of this.onCertificatesReceivedCallbacks.values()) {
-      await callback(
-        message.identityKey,
-        message.certificates as VerifiableCertificate[],
-        sessionNonce,
-        peerSession.peerNonce
-      )
+    // Observers run before the automatic answer so that one which throws still prevents our
+    // disclosure. While they run, sends on this session skip the hold, which would otherwise
+    // wait for an answer that comes only after they return.
+    this.#certificateObserversRunning.set(
+      sessionNonce,
+      (this.#certificateObserversRunning.get(sessionNonce) ?? 0) + 1
+    )
+    try {
+      for (const callback of this.onCertificatesReceivedCallbacks.values()) {
+        await callback(
+          message.identityKey,
+          message.certificates as VerifiableCertificate[],
+          sessionNonce,
+          peerSession.peerNonce
+        )
+      }
+    } finally {
+      const running = (this.#certificateObserversRunning.get(sessionNonce) ?? 1) - 1
+      if (running > 0) this.#certificateObserversRunning.set(sessionNonce, running)
+      else this.#certificateObserversRunning.delete(sessionNonce)
     }
   }
 
@@ -998,15 +1094,24 @@ export class Peer {
     })
   }
 
-  async #answerInitialCertificateRequest(message: AuthMessage): Promise<void> {
-    if (
-      message.requestedCertificates == null ||
-      !Array.isArray(message.requestedCertificates.certifiers) ||
-      message.requestedCertificates.certifiers.length === 0
-    ) {
-      return
-    }
+  static #requestsCertificates(
+    message: AuthMessage
+  ): message is AuthMessage & { requestedCertificates: RequestedCertificateSet } {
+    return (
+      message.requestedCertificates != null &&
+      Array.isArray(message.requestedCertificates.certifiers) &&
+      message.requestedCertificates.certifiers.length > 0
+    )
+  }
+
+  async #answerInitialCertificateRequest(
+    message: AuthMessage,
+    releaseHold?: () => void
+  ): Promise<void> {
+    if (!Peer.#requestsCertificates(message)) return
     if (this.onCertificateRequestReceivedCallbacks.size > 0) {
+      // Application listeners run outside the hold: they may send on this session themselves.
+      releaseHold?.()
       for (const callback of this.onCertificateRequestReceivedCallbacks.values()) {
         await callback(
           message.identityKey,
@@ -1021,19 +1126,30 @@ export class Peer {
       message.identityKey,
       this.#originator
     )
-    // An empty response has no value and can race with a subsequent request
-    // that shares the same initial nonce.
-    if (verifiableCertificates.length > 0) {
+    // An empty answer is opt-in: some servers refuse one (auth-express-middleware replies
+    // 400). A wallet error or declined disclosure throws above and sends nothing.
+    if (verifiableCertificates.length > 0 || this.#sendEmptyCertificateResponses) {
       await this.sendCertificateResponse(message.identityKey, verifiableCertificates)
     }
   }
 
   async #processInitialResponse(message: AuthMessage): Promise<void> {
-    const peerSession = await this.authenticateInitialResponse(message)
-    await this.validateInitialResponseCertificates(message, peerSession)
-    this.lastInteractedWithPeer = message.identityKey
-    this.#releaseInitialResponseWaiters(peerSession)
-    await this.#answerInitialCertificateRequest(message)
+    let releaseHold: (() => void) | undefined
+    try {
+      const [peerSession, locallyInitiated] = await this.authenticateInitialResponse(
+        message,
+        release => {
+          releaseHold = release
+        }
+      )
+      await this.validateInitialResponseCertificates(message, peerSession, locallyInitiated)
+      this.lastInteractedWithPeer = message.identityKey
+      this.#releaseInitialResponseWaiters(peerSession)
+      await this.#answerInitialCertificateRequest(message, releaseHold)
+    } finally {
+      // Sent, failed, declined, or never reached: held general messages go out either way.
+      releaseHold?.()
+    }
   }
 
   /**
@@ -1241,7 +1357,10 @@ export class Peer {
         if (policy == null) {
           throw new Error('Certificates do not match a locally requested set for this session.')
         }
-        await validateCertificates(this.#wallet, message, policy, this.#originator)
+        // Zero fields are an initial-response proof only. The matcher above
+        // already refuses an empty keyring; false keeps this call on the
+        // nonempty path if that ever changes.
+        await validateCertificates(this.#wallet, message, policy, this.#originator, false)
         if (requested != null) delete session.pendingCertificateRequests?.[requested[0]]
         // A separate dynamic request cannot satisfy a different handshake requirement.
         if (matchesHandshake) session.certificatesValidated = true
