@@ -2438,7 +2438,7 @@ describe('OverlayExpress', () => {
       })
 
       it('accepts a callback with no status and no Merkle proof', async () => {
-        instance.configureArcade('https://arcade.example')
+        instance.configureBsvBroadcaster('https://arcade.example')
         instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
         const handler = await captureArcIngestHandler()
         const res = mockRes()
@@ -2463,7 +2463,7 @@ describe('OverlayExpress', () => {
       it.each(['MINED', 'IMMUTABLE', 'mined'])(
         'answers 503 to a %s callback without a Merkle proof so the provider retries',
         async txStatus => {
-          instance.configureArcade('https://arcade.example')
+          instance.configureBsvBroadcaster('https://arcade.example')
           instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
           const handler = await captureArcIngestHandler()
           const res = mockRes()
@@ -2493,7 +2493,7 @@ describe('OverlayExpress', () => {
       )
 
       it('ingests the proof when the retried MINED callback carries it', async () => {
-        instance.configureArcade('https://arcade.example')
+        instance.configureBsvBroadcaster('https://arcade.example')
         instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
         const handler = await captureArcIngestHandler()
         const headers = { authorization: 'Bearer test-callback-token-0123456789abcdef' }

@@ -1,19 +1,3 @@
-# Unreleased
-
-- Arcade was renamed to BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster),
-  so its client is now `BsvBroadcaster` in `services/providers/BsvBroadcaster`, and
-  `TaskArcadeSSE` is now `TaskBsvBroadcasterSSE`. `ARCADE_POST_BEEF_CONCURRENCY` and
-  `validateArcadeTxData` gain `BSV_BROADCASTER_POST_BEEF_CONCURRENCY` and
-  `validateBsvBroadcasterTxData` equivalents. Every old name, and the
-  `services/providers/Arcade` import path, remains as a deprecated alias of the new one, so
-  existing code compiles and behaves identically. Nothing on the wire or in storage changes:
-  the `arcadeUrl`, `arcadeApiKey` and `arcadeConfig` options, the `*_ARCADE_URL` environment
-  variables, the public `arcade-*` hostnames, the `arcade` provider name, history-note
-  `what` values and the `ArcadeSSE` monitor task name stay as they were. No configuration
-  or consumer migration is required. Every alias site is tagged `remove-arcade-alias`; if
-  the aliases are ever removed, the implementation moves from `providers/Arcade.ts` into
-  `providers/BsvBroadcaster.ts` rather than being deleted with the alias file.
-
 # 2.18.0 source candidate
 
 Host hooks for a wallet's own admin originator, upstreamed from the BSV Wallet
