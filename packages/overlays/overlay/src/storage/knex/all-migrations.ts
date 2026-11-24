@@ -37,6 +37,10 @@ import {
   down as topicalUniquenessDown
 } from './migrations/2026-09-17-001-topical-uniqueness.js'
 import { up as spentByUp, down as spentByDown } from './migrations/2026-09-20-001-spent-by.js'
+import {
+  up as widenSatoshisColumnUp,
+  down as widenSatoshisColumnDown
+} from './migrations/2026-11-22-001-widen-satoshis-column.js'
 
 /**
  * An array of all migrations, in order.
@@ -57,7 +61,8 @@ const allMigrations: Migration[] = [
   { up: utxoLookupIndexUp, down: utxoLookupIndexDown },
   { up: brc136BasmUp, down: brc136BasmDown },
   { up: topicalUniquenessUp, down: topicalUniquenessDown },
-  { up: spentByUp, down: spentByDown }
+  { up: spentByUp, down: spentByDown },
+  { up: widenSatoshisColumnUp, down: widenSatoshisColumnDown }
 ]
 
 export default allMigrations

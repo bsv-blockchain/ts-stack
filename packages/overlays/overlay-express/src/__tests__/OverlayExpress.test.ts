@@ -2437,6 +2437,82 @@ describe('OverlayExpress', () => {
         expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
       })
 
+      it('accepts a callback with no status and no Merkle proof', async () => {
+        instance.configureArcade('https://arcade.example')
+        instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler(
+          {
+            headers: { authorization: 'Bearer test-callback-token-0123456789abcdef' },
+            body: { txid: '11'.repeat(32) }
+          },
+          res
+        )
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(202)
+        expect(res.json).toHaveBeenCalledWith({
+          status: 'success',
+          message: 'Transaction status received without proof'
+        })
+        expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
+      })
+
+      it.each(['MINED', 'IMMUTABLE', 'mined'])(
+        'answers 503 to a %s callback without a Merkle proof so the provider retries',
+        async txStatus => {
+          instance.configureArcade('https://arcade.example')
+          instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
+          const handler = await captureArcIngestHandler()
+          const res = mockRes()
+
+          handler(
+            {
+              headers: { authorization: 'Bearer test-callback-token-0123456789abcdef' },
+              body: {
+                txid: '11'.repeat(32),
+                txStatus,
+                blockHash: '22'.repeat(32),
+                blockHeight: 800000
+              }
+            },
+            res
+          )
+          await flush()
+
+          expect(res.status).toHaveBeenCalledWith(503)
+          expect(res.json).toHaveBeenCalledWith({
+            status: 'error',
+            message: 'Mined transaction status received without proof'
+          })
+          expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
+          expect(mockEngine.evictAppliedTransaction).not.toHaveBeenCalled()
+        }
+      )
+
+      it('ingests the proof when the retried MINED callback carries it', async () => {
+        instance.configureArcade('https://arcade.example')
+        instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
+        const handler = await captureArcIngestHandler()
+        const headers = { authorization: 'Bearer test-callback-token-0123456789abcdef' }
+        const first = mockRes()
+        const retry = mockRes()
+
+        handler({ headers, body: { txid: '11'.repeat(32), txStatus: 'MINED' } }, first)
+        await flush()
+        handler({ headers, body: { ...proofCallbackBody, txStatus: 'MINED' } }, retry)
+        await flush()
+
+        expect(first.status).toHaveBeenCalledWith(503)
+        expect(retry.status).toHaveBeenCalledWith(200)
+        expect(mockEngine.handleNewMerkleProof).toHaveBeenCalledTimes(1)
+        const [txid, , blockHeight] = mockEngine.handleNewMerkleProof.mock.calls[0]
+        expect(txid).toBe('11'.repeat(32))
+        expect(blockHeight).toBe(800000)
+      })
+
       it('evicts a transaction when a provider reports a terminal double-spend status', async () => {
         instance.configureArcApiKey('test-arc-key')
         instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')

@@ -59,6 +59,20 @@ export interface AuthMessageValidationOptions {
   maxGeneralPayloadBytes?: number | null
 }
 
+/** Local `Peer` configuration; never read from a remote message. */
+export interface PeerOptions extends AuthMessageValidationOptions {
+  /**
+   * Answer a certificate request embedded in a peer's initialResponse with an empty
+   * certificateResponse when the wallet holds no requested certificate. Defaults to false,
+   * which sends nothing in that case. An empty list validates nothing; it lets a peer that
+   * decides on the certificates it receives, including none, act without waiting for its own
+   * deadline. Enable it only for peers that accept an empty answer:
+   * `@bsv/auth-express-middleware` replies 400 ERR_CERTIFICATES_REQUIRED. Does not apply when
+   * a certificate-request listener is registered, which owns the answer.
+   */
+  sendEmptyCertificateResponses?: boolean
+}
+
 export interface PeerSession {
   /**
    * True after the peer has proved control of the session identity key. This is

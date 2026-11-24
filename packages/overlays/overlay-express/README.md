@@ -341,7 +341,11 @@ terminal invalid statuses remove the affected transaction from the admitted
 overlay state so the lookup layer does not keep serving data that the network has
 rejected. Proof callbacks are accepted only when the Merkle path contains the
 claimed transaction, agrees with the claimed height, and verifies affirmatively
-against the configured chain tracker.
+against the configured chain tracker. A `MINED` or `IMMUTABLE` callback that
+arrives without a Merkle path is answered `503` so the provider retries it;
+Arcade re-attaches the stored path, when available, on each retry (10 attempts
+by default). Other non-terminal statuses without a path are acknowledged with
+`202`.
 
 The reorg SSE adapter treats each event as state-critical: a malformed event or
 handler failure closes the stream, reconnects, and runs catch-up revalidation

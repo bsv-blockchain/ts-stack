@@ -903,4 +903,132 @@ describe('WalletPermissionsManager - Permission Checks', () => {
       expect(underlying.listActions).toHaveBeenCalledTimes(1)
     })
   })
+
+  /* ------------------------------------------------------
+   *  BRC-100 seekPermission: false must refuse rather than prompt
+   * ------------------------------------------------------ */
+  describe('Caller seekPermission flag', () => {
+    type Callback = 'onProtocolPermissionRequested' | 'onBasketAccessRequested'
+    const originator = 'external-app.com'
+    const protocolArgs = { protocolID: [1, 'needs-perm'] as [1, string], keyID: '1', counterparty: 'self' }
+    const cases: Array<{ method: string; name?: string; callback: Callback; args: Record<string, unknown> }> = [
+      { method: 'listActions', callback: 'onProtocolPermissionRequested', args: { labels: ['user-label'] } },
+      {
+        method: 'listActions',
+        name: 'listActions (BRC-177 module label)',
+        callback: 'onProtocolPermissionRequested',
+        args: { labels: ['p nosend expiry never'] }
+      },
+      {
+        method: 'internalizeAction',
+        callback: 'onBasketAccessRequested',
+        args: {
+          tx: [],
+          description: 'Internalize into a basket',
+          outputs: [{ outputIndex: 0, protocol: 'basket insertion', insertionRemittance: { basket: 'user-basket' } }]
+        }
+      },
+      {
+        method: 'internalizeAction',
+        callback: 'onProtocolPermissionRequested',
+        args: { tx: [], description: 'Internalize with a label', outputs: [], labels: ['user-label'] }
+      },
+      { method: 'listOutputs', callback: 'onBasketAccessRequested', args: { basket: 'user-basket' } },
+      { method: 'encrypt', callback: 'onProtocolPermissionRequested', args: { ...protocolArgs, plaintext: [1] } },
+      { method: 'decrypt', callback: 'onProtocolPermissionRequested', args: { ...protocolArgs, ciphertext: [1] } },
+      { method: 'createHmac', callback: 'onProtocolPermissionRequested', args: { ...protocolArgs, data: [1] } },
+      {
+        method: 'verifyHmac',
+        callback: 'onProtocolPermissionRequested',
+        args: { ...protocolArgs, data: [1], hmac: [1] }
+      },
+      { method: 'createSignature', callback: 'onProtocolPermissionRequested', args: { ...protocolArgs, data: [1] } },
+      {
+        method: 'verifySignature',
+        callback: 'onProtocolPermissionRequested',
+        args: { ...protocolArgs, data: [1], signature: [1] }
+      },
+      {
+        method: 'discoverByIdentityKey',
+        callback: 'onProtocolPermissionRequested',
+        args: { identityKey: '02'.padEnd(66, 'a') }
+      },
+      {
+        method: 'discoverByAttributes',
+        callback: 'onProtocolPermissionRequested',
+        args: { attributes: { name: 'Bob' } }
+      }
+    ]
+    const label = (c: (typeof cases)[number]): string => c.name ?? `${c.method} (${Object.keys(c.args).join(', ')})`
+
+    it.each(cases.map(c => [label(c), c] as const))(
+      '%s rejects without prompting when seekPermission=false',
+      async (_name, { method, callback, args }) => {
+        manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+        // Deny if prompted, so a regression fails fast with the wrong error instead of hanging.
+        const prompt = jest.fn((request: { requestID: string }) => {
+          void manager.denyPermission(request.requestID)
+        })
+        manager.bindCallback(callback, prompt)
+        const requestArgs = { ...args, seekPermission: false }
+
+        await expect((manager as any)[method](requestArgs, originator)).rejects.toThrow(/seekPermission=false/)
+
+        expect(prompt).not.toHaveBeenCalled()
+        expect(((manager as any).activeRequests as Map<string, any>).size).toBe(0)
+        expect(underlying[method]).not.toHaveBeenCalledWith(requestArgs, originator)
+      }
+    )
+
+    it.each(cases.map(c => [label(c), c] as const))(
+      '%s still prompts when seekPermission is omitted',
+      async (_name, { method, callback, args }) => {
+        manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+        const prompt = jest.fn(async (request: { requestID: string }) => {
+          await manager.grantPermission({ requestID: request.requestID, ephemeral: true })
+        })
+        manager.bindCallback(callback, prompt)
+
+        await (manager as any)[method](args, originator)
+
+        expect(prompt).toHaveBeenCalledTimes(1)
+        expect(underlying[method]).toHaveBeenCalledWith(args, originator)
+      }
+    )
+
+    it.each(cases.map(c => [label(c), c] as const))(
+      '%s still succeeds with seekPermission=false once permission was granted',
+      async (_name, { method, callback, args }) => {
+        manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+        // A persistent grant; an ephemeral one authorizes a single call only.
+        const prompt = jest.fn(async (request: { requestID: string }) => {
+          await manager.grantPermission({ requestID: request.requestID, ephemeral: false })
+        })
+        manager.bindCallback(callback, prompt)
+        await (manager as any)[method](args, originator)
+        expect(prompt).toHaveBeenCalledTimes(1)
+
+        const requestArgs = { ...args, seekPermission: false }
+        await (manager as any)[method](requestArgs, originator)
+
+        expect(prompt).toHaveBeenCalledTimes(1)
+        expect(underlying[method]).toHaveBeenCalledWith(requestArgs, originator)
+      }
+    )
+
+    it.each(cases.map(c => [label(c), c] as const))(
+      '%s still succeeds with seekPermission=false when no prompt is needed (admin originator)',
+      async (_name, { method, callback, args }) => {
+        manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+        const prompt = jest.fn()
+        manager.bindCallback(callback, prompt)
+        const requestArgs = { ...args, seekPermission: false }
+
+        await (manager as any)[method](requestArgs, 'admin.com')
+
+        expect(prompt).not.toHaveBeenCalled()
+        expect(underlying[method]).toHaveBeenCalledWith(requestArgs, 'admin.com')
+      }
+    )
+  })
 })

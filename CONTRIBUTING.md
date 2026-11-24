@@ -246,13 +246,21 @@ Follow [`docs/about/versioning.md`](./docs/about/versioning.md).
 
 When a public package’s published bytes or manifest change:
 
-1. choose the SemVer impact from the consumer-visible contract;
-2. bump only affected packages and dependents whose packed contract changes;
-3. update the exact entry in `governance/package-release-notes.json`;
-4. regenerate the package API and migration ledger with
-   `pnpm docs:packages`;
-5. update the package README, API docs, and examples as needed; and
-6. update a package-local `CHANGELOG.md` when that package already has one.
+1. choose the SemVer impact from the consumer-visible contract for each
+   affected package and each dependent whose packed contract changes;
+2. add one new change file that records the impact, a summary, and the
+   migration decision, for example
+   `pnpm change @bsv/sdk:minor --summary "…" --migration "…"`
+   (see [`changes/README.md`](./changes/README.md)); and
+3. update the package README, API docs, and examples as needed.
+
+Do not edit the package `version`, `governance/package-release-notes.json`, a
+package `CHANGELOG.md`, the baseline package versions, or the generated
+ledgers. Each change file has a unique name, so pull requests that each add
+one never conflict. The `Version packages` workflow folds every pending change
+file on `main` into those shared files in one generated `chore: version
+packages` pull request. CI rejects a direct public version change in any other
+pull request.
 
 Every release-note entry includes a migration decision. Say explicitly that no
 consumer migration is required when behavior is unchanged. An incompatible
@@ -267,6 +275,41 @@ artifact does not require a cosmetic version bump.
 
 Use the root pull request template and keep the PR draft while work or evidence
 is incomplete.
+
+Every PR, including automated dependency PRs, needs exactly one visible
+`release-note` JSON fence in its description. Record affected npm packages and
+their SemVer impacts, a plain-language consumer summary, and migration steps or
+the exact string `none`. For repository-only, documentation-only or service-only
+changes with no npm release impact, use `"packages": "none"` and
+`"migration": "none"`, and explain the change in the summary. See the
+[schema and examples](./docs/about/versioning.md#pull-request-release-note).
+Maintainers add the block to automated PRs when the bot cannot supply it.
+
+[`.github/workflows/label-pull-requests.yml`](./.github/workflows/label-pull-requests.yml)
+adds area labels on a schedule of every 30 minutes (minute 0 and minute 30, UTC)
+and on `workflow_dispatch`. The label is the package or infra folder name, with
+no prefix. Group directories under `packages/` are not labels: a file in
+`packages/wallet/wallet-toolbox`, including its nested `client` and `mobile`
+workspaces, is `wallet-toolbox`. Infra labels are the top-level service
+directories under `infra/` that contain a `package.json` (`infra/wab` is `wab`).
+`infra/local` and loose files in `infra/` are not components. The pre-existing
+`wab` label is reused and is not recolored. Missing labels are created in color
+`c5def5` with a description `Touches <path>`.
+
+The workflow only adds labels. It does not remove labels, comment, review,
+merge, or close. An open pull request is skipped, and its files are not read,
+when it already has any current area label or any label described as
+`Touches packages/<path>` or `Touches infra/<path>`. Drafts and fork pull
+requests follow the same rule. Pull requests with none of those labels are
+scanned again on later runs. After the first area label is present, a later
+commit that touches another package is not labeled automatically.
+
+CI validates presence and structure on PR creation, updates, description edits
+and reruns. Reviewers assess package completeness, SemVer correctness, consumer
+usefulness and migration accuracy. Use the existing affected-work plan above to
+identify packages and dependents; path detection alone does not decide release
+impact. Reuse the note's prose in the existing release ledger/changelog when
+appropriate; the description does not replace those publication contracts.
 
 Before pushing, self-review the complete diff for:
 

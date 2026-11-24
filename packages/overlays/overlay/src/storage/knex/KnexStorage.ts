@@ -52,6 +52,8 @@ export class KnexStorage implements Storage {
       ...row,
       // SQL NULL denotes an unconfirmed output, not a block at height zero.
       blockHeight: row.blockHeight === null ? undefined : row.blockHeight,
+      // Postgres returns a bigint column as a string.
+      satoshis: typeof row.satoshis === 'string' ? Number(row.satoshis) : row.satoshis,
       outputScript: Array.from(row.outputScript),
       beef: (() => {
         if (!includeBEEF) return undefined

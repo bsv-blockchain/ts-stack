@@ -116,6 +116,27 @@ test('PRs require real analysis and dependency review; out-of-scope failures sti
   assert.match(validateCiResults(needs, 'pull_request').join('\n'), /coverage-sdk/)
 })
 
+test('merge groups cannot inherit PR security successes or skipped analysis', () => {
+  const needs = evidence(false)
+  assert.deepEqual(validateCiResults(needs, 'merge_group'), [
+    'sonar-zero-findings: expected success, got skipped',
+    'dependency-review: expected success, got skipped'
+  ])
+  for (const name of ['sonar-zero-findings', 'dependency-review']) {
+    needs[name].result = 'success'
+  }
+  assert.deepEqual(validateCiResults(needs, 'merge_group'), [])
+  for (const name of ['sonar-zero-findings', 'dependency-review']) {
+    for (const result of ['skipped', 'cancelled', 'failure', undefined]) {
+      const incomplete = structuredClone(needs)
+      incomplete[name].result = result
+      assert.ok(validateCiResults(incomplete, 'merge_group').some(error => error.startsWith(name)))
+    }
+  }
+  needs.scope.outputs['local-ci-certified'] = 'true'
+  assert.match(validateCiResults(needs, 'merge_group').join('\n'), /only to pull requests/)
+})
+
 test('a verified PR certificate admits only selected test and coverage skips', () => {
   const needs = evidence()
   needs.scope.outputs['local-ci-certified'] = 'true'

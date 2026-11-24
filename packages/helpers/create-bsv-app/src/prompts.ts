@@ -4,8 +4,10 @@ import type { ProjectManifest } from './config/project-manifest.js'
 import { configSchema, isFieldVisible } from './config/schema.js'
 import type { ConfigField, FieldOption } from './config/schema.js'
 import { seedDraft, resolveDraft } from './config/draft.js'
+import { formatPulledNotice } from './config/requires.js'
 import type { ConfigDraft, SeededDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
+import type { DependencyChange } from './scaffold/package-json.js'
 
 /** Shown instead of an empty capabilities list (terminal and `--ui`). */
 export const ALL_CAPABILITIES_INCLUDED = 'Project already includes all available capabilities'
@@ -16,10 +18,28 @@ export type Ask = (
   options: FieldOption[],
   initial: string | boolean | string[] | undefined
 ) => Promise<unknown>
-export type ConfigProvider = (ctx: {
+export interface PromptContext {
   existing: ProjectManifest | null
   flags: ConfigDraft
-}) => Promise<ProjectConfig>
+  /**
+   * Owned packages the resolved config would leave below a capability's major; when it returns
+   * any, the user is asked whether to raise them. Unset when `--upgrade-bsv-deps` already decided.
+   */
+  majorUpgrades?: (config: ProjectConfig) => DependencyChange[]
+}
+export type ConfigProvider = (ctx: PromptContext) => Promise<ProjectConfig>
+
+/** Prints one notice line; the terminal uses `p.log.info`. */
+export type Info = (message: string) => void
+
+// the hint names what the option brings along, from the schema's requires; a role-scoped one names
+// its role, so the hint holds whatever the layout
+function withRequiresHint(option: FieldOption): FieldOption {
+  if (option.requires === undefined || option.requires.length === 0) return option
+  const names = option.requires.map(r => (typeof r === 'string' ? r : `${r.id} (${r.role})`))
+  const requires = `Requires ${names.join(', ')}.`
+  return { ...option, hint: option.hint === undefined ? requires : `${option.hint} ${requires}` }
+}
 
 /** Options offered for `field` in `mode`; the `--ui` page offers the same per mode. */
 export function optionsFor(
@@ -42,9 +62,7 @@ export function optionsFor(
       // new mode: defaultSelected base capabilities are always included (floor) → don't offer them as toggles
       ids = all.filter(c => c.defaultSelected !== true).map(c => c.id)
     }
-    return all
-      .filter(c => ids.includes(c.id))
-      .map(c => ({ value: c.id, label: c.title, hint: c.description }))
+    return (field.options ?? []).filter(o => ids.includes(o.value)).map(withRequiresHint)
   }
   return field.options ?? []
 }
@@ -70,9 +88,21 @@ async function promptField(
   draft.capabilities = mergeCapabilityIds(draft.capabilities, value)
 }
 
+// a yes/no asked after the schema fields, once the config says which packages are behind
+function upgradeField(upgrades: DependencyChange[]): ConfigField {
+  const list = upgrades.map(c => `${c.name} ${c.from} → ${c.to} (${c.target})`).join(', ')
+  return {
+    key: 'upgradeBsvDeps',
+    label: `The generated code needs newer majors: ${list}. Upgrade them? A major upgrade can break your existing code.`,
+    type: 'toggle',
+    default: false
+  }
+}
+
 export async function runPrompts(
-  ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
-  ask: Ask
+  ctx: PromptContext,
+  ask: Ask,
+  info: Info = () => {}
 ): Promise<ProjectConfig> {
   const draft = seedDraft(ctx.existing, ctx.flags)
   // one prompt at a time, in schema order: later fields' visibility depends on earlier answers
@@ -82,7 +112,13 @@ export async function runPrompts(
       (previous, field) => previous.then(() => promptField(field, draft, ctx.existing, ask)),
       Promise.resolve()
     )
-  return resolveDraft(draft)
+  const config = resolveDraft(draft)
+  // only a run that resolved announces what it adds
+  for (const line of formatPulledNotice(config.pulled ?? [])) info(line)
+  const upgrades = ctx.majorUpgrades?.(config) ?? []
+  if (upgrades.length > 0)
+    config.upgradeBsvDeps = (await ask(upgradeField(upgrades), [], false)) === true
+  return config
 }
 
 export const interactiveConfigPrompt: ConfigProvider = async ctx => {
@@ -119,7 +155,7 @@ export const interactiveConfigPrompt: ConfigProvider = async ctx => {
     }
     return res
   }
-  const config = await runPrompts(ctx, ask)
+  const config = await runPrompts(ctx, ask, message => p.log.info(message))
   p.outro('Done')
   return config
 }

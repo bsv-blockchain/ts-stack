@@ -148,7 +148,8 @@ test('uses the locally stored handshake policy without requiring a new response 
     expect.anything(),
     message,
     policy('initial', 'initial'),
-    'app.example'
+    'app.example',
+    false
   )
   expect(backing.getSession('session')?.certificatesValidated).toBe(true)
   expect(message).not.toHaveProperty('requestedCertificates')
@@ -214,7 +215,8 @@ test('matches otherwise identical pending policies by the exact revealed field s
     expect.anything(),
     expect.anything(),
     second,
-    'app.example'
+    'app.example',
+    false
   )
   expect(Object.values(backing.getSession('session')!.pendingCertificateRequests!)).toEqual([first])
 })

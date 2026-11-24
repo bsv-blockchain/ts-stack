@@ -393,12 +393,12 @@ components:
           type: string
           description: Additional human-readable context about the status.
         competingTxs:
-          type: array
+          type: ["array", "null"]
           items:
             type: string
           description: |
             Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing
-            transaction IDs.
+            transaction IDs. ARC sends `null` when no transaction competes.
 
     ArcTxStatus:
       type: string
