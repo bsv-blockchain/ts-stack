@@ -21,6 +21,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { doubleSha256BE, sha256Hash } from '../utility/utilityHelpers'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 import { toBinaryBaseBlockHeader, validateScriptHash } from '../services/Services'
+import { getMedianTimePast } from '../services/getMedianTimePast'
 import { MockChainStorage } from './MockChainStorage'
 import { MockChainTracker } from './MockChainTracker'
 import { MockMiner } from './MockMiner'
@@ -471,20 +472,21 @@ export class MockServices implements WalletServices {
       }
 
       if (tx instanceof BsvTransaction) {
-        if (tx.inputs.every(i => i.sequence === MAXINT)) return true
+        if (tx.inputs.every(i => (i.sequence ?? MAXINT) === MAXINT)) return true
         nLockTime = tx.lockTime
       } else {
         throw new WERR_INTERNAL('Unsupported transaction format')
       }
     }
 
+    if (nLockTime === 0) return true
+
     if (nLockTime >= BLOCK_LIMIT) {
-      const limit = Math.floor(Date.now() / 1000)
-      return nLockTime < limit
+      return nLockTime < (await getMedianTimePast(this))
     }
 
     const height = await this.getHeight()
-    return nLockTime < height
+    return nLockTime < height + 1
   }
 
   private async addTxToBeef(beef: Beef, tid: string, alreadyAdded: Set<string>): Promise<void> {
