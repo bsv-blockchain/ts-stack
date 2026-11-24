@@ -1,4 +1,6 @@
+import { HttpClient, HttpClientResponse } from '@bsv/sdk'
 import { WERR_UTXO_REVIEW_INCONCLUSIVE } from '../../../sdk/WERR_errors'
+import { WhatsOnChain } from '../../../services/providers/WhatsOnChain'
 import { MAX_UTXO_REVIEW_CANDIDATES, reviewUtxoOutputs, UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS } from '../reviewUtxoOutputs'
 
 function output(outputId: number): any {
@@ -143,5 +145,41 @@ describe('reviewUtxoOutputs', () => {
       'changed state during UTXO review'
     )
     expect(h.storage.updateOutput).not.toHaveBeenCalled()
+  })
+
+  test('treats a confirmed output that WhatsOnChain reports spent in mempool as spent', async () => {
+    const spentInMempool = output(11)
+    const unspent = output(12)
+    const scriptHash = 'aa'.repeat(32)
+    const entry = (candidate: any, isSpentInMempoolTx: boolean) => ({
+      height: 10,
+      tx_pos: candidate.vout,
+      tx_hash: candidate.txid,
+      value: candidate.satoshis,
+      isSpentInMempoolTx,
+      status: 'confirmed'
+    })
+    const httpClient: HttpClient = {
+      async request<T>(): Promise<HttpClientResponse<T>> {
+        const result = [entry(spentInMempool, true), entry(unspent, false)]
+        return { ok: true, status: 200, statusText: 'OK', data: { script: scriptHash, result, error: '' } as T }
+      }
+    }
+    const woc = new WhatsOnChain('main', { httpClient, requestGate: async () => {} }, {} as never)
+    const h = harness(
+      [spentInMempool, unspent],
+      async candidate => await woc.getUtxoStatus(scriptHash, 'hashBE', `${candidate.txid}.${candidate.vout}`)
+    )
+
+    const review = await reviewUtxoOutputs(h.storage as any, auth, [spentInMempool, unspent])
+    expect(review.confirmedSpentOutputs).toEqual([spentInMempool])
+    expect(review.unknownOutputs).toEqual([])
+    expect(review.diagnostics).toMatchObject({ checked: 2, confirmedSpent: 1, confirmedUnspent: 1, unknown: 0 })
+
+    // reviewSpendableOutputs(all, release = true) runs the atomic mode.
+    const released = await reviewUtxoOutputs(h.storage as any, auth, [spentInMempool, unspent], 'atomic')
+    expect(released.diagnostics).toMatchObject({ confirmedSpent: 1, released: 1 })
+    expect(h.current.get(11).spendable).toBe(false)
+    expect(h.current.get(12).spendable).toBe(true)
   })
 })
