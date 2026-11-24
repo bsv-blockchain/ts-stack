@@ -190,7 +190,7 @@ async function readProviderJSON(response: Response): Promise<Record<string, any>
     // and the /upload reply is read after its payment has settled, so refusing
     // a chunked or compressed reply would abandon a paid upload.
     if (typeof response.arrayBuffer !== 'function') {
-      throw new Error('Storage provider returned an empty response.')
+      throw new TypeError('Storage provider returned an empty response.')
     }
     bytes = new Uint8Array(await response.arrayBuffer())
     if (bytes.byteLength > MAX_PROVIDER_RESPONSE_BYTES) {

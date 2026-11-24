@@ -253,46 +253,10 @@ export class StorageDownloader {
       return { url, reason: 'network' }
     }
     try {
-      if (!result.ok || result.status >= 400) {
-        const attempt: StorageDownloadAttempt = { url, reason: 'http' }
-        if (Number.isSafeInteger(result.status)) attempt.status = result.status
-        return attempt
-      }
-
-      const declaredLength = result.headers.get('Content-Length')
-      if (declaredLength !== null) {
-        if (!/^\d+$/.test(declaredLength)) return { url, reason: 'size' }
-        const length = Number(declaredLength)
-        if (!Number.isSafeInteger(length) || length > this.#maxDownloadBytes) {
-          return { url, reason: 'size' }
-        }
-      }
-
-      let data: Uint8Array
-      if (result.body != null) {
-        const reader = result.body.getReader()
-        // Some transports (the default Node one included) stop honouring the
-        // request signal once headers arrive, so the deadline cancels the read.
-        const cancel = (): void => {
-          reader.cancel().catch(() => {})
-        }
-        if (signal?.aborted === true) cancel()
-        signal?.addEventListener('abort', cancel, { once: true })
-        const body = await this.#readBody(reader, this.#maxDownloadBytes)
-        if (body === undefined) return { url, reason: 'size' }
-        data = body
-      } else if (typeof result.arrayBuffer === 'function') {
-        // Compatibility for fetch implementations without a WHATWG body stream
-        // (such as React Native's). arrayBuffer() buffers the whole body before
-        // it can be measured, so only a host that declared a length within
-        // maxDownloadBytes (checked above) is read this way. A transparently
-        // decoded body can still exceed its declared length, hence the re-check.
-        if (declaredLength === null) return { url, reason: 'size' }
-        data = new Uint8Array(await result.arrayBuffer())
-        if (data.byteLength > this.#maxDownloadBytes) return { url, reason: 'size' }
-      } else {
-        return { url, reason: 'empty' }
-      }
+      const rejected = this.#screenResponse(url, result)
+      if (rejected !== undefined) return rejected
+      const data = await this.#readResponseData(url, result, signal)
+      if ('reason' in data) return data
       if (toHex(sha256(data)) !== expected) return { url, reason: 'integrity' }
       return {
         data,
@@ -301,6 +265,53 @@ export class StorageDownloader {
     } catch {
       return { url, reason: signal?.aborted === true ? 'timeout' : 'network' }
     }
+  }
+
+  /** Rejects a response by its status or declared Content-Length, before any body is read. */
+  #screenResponse(url: string, result: Response): StorageDownloadAttempt | undefined {
+    if (!result.ok || result.status >= 400) {
+      const attempt: StorageDownloadAttempt = { url, reason: 'http' }
+      if (Number.isSafeInteger(result.status)) attempt.status = result.status
+      return attempt
+    }
+    const declaredLength = result.headers.get('Content-Length')
+    if (declaredLength === null) return undefined
+    if (!/^\d+$/.test(declaredLength)) return { url, reason: 'size' }
+    const length = Number(declaredLength)
+    if (!Number.isSafeInteger(length) || length > this.#maxDownloadBytes) {
+      return { url, reason: 'size' }
+    }
+    return undefined
+  }
+
+  /** Reads the bounded body, from the stream when there is one, else via arrayBuffer(). */
+  async #readResponseData(
+    url: string,
+    result: Response,
+    signal?: AbortSignal
+  ): Promise<Uint8Array | StorageDownloadAttempt> {
+    if (result.body != null) {
+      const reader = result.body.getReader()
+      // Some transports (the default Node one included) stop honouring the
+      // request signal once headers arrive, so the deadline cancels the read.
+      const cancel = (): void => {
+        reader.cancel().catch(() => {})
+      }
+      if (signal?.aborted === true) cancel()
+      signal?.addEventListener('abort', cancel, { once: true })
+      const body = await this.#readBody(reader, this.#maxDownloadBytes)
+      return body ?? { url, reason: 'size' }
+    }
+    if (typeof result.arrayBuffer !== 'function') return { url, reason: 'empty' }
+    // Compatibility for fetch implementations without a WHATWG body stream
+    // (such as React Native's). arrayBuffer() buffers the whole body before
+    // it can be measured, so only a host that declared a length within
+    // maxDownloadBytes (checked above) is read this way. A transparently
+    // decoded body can still exceed its declared length, hence the re-check.
+    if (result.headers.get('Content-Length') === null) return { url, reason: 'size' }
+    const data = new Uint8Array(await result.arrayBuffer())
+    if (data.byteLength > this.#maxDownloadBytes) return { url, reason: 'size' }
+    return data
   }
 
   async #readBody(
