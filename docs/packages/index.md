@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: 'n/a'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-11-13'
+last_verified: '2026-11-13'
 review_cadence_days: 30
 status: stable
 tags: ['packages']
@@ -32,6 +32,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/wallet-toolbox-mobile](./wallet/wallet-toolbox-mobile.md) — React Native and mobile distribution
 - [@bsv/btms](./wallet/btms.md) — Basic Token Management System for token issuance, transfer, receiving, burning, and ownership proofs
 - [@bsv/btms-permission-module](./wallet/btms-permission-module.md) — Token permission checking
+- [@bsv/sigma-permission-module](./wallet/sigma-permission-module.md) — Wallet-held keys and deterministic zero-knowledge proofs that Bitcoin Script can verify
 - [@bsv/wallet-relay](./wallet/wallet-relay.md) — Mobile-to-desktop wallet pairing via QR codes + encrypted WebSocket relay
 
 ### Network
