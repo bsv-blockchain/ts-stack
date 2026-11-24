@@ -2437,6 +2437,29 @@ describe('OverlayExpress', () => {
         expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
       })
 
+      it('accepts a callback with no status and no Merkle proof', async () => {
+        instance.configureArcade('https://arcade.example')
+        instance.configureArcCallbackToken('test-callback-token-0123456789abcdef')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler(
+          {
+            headers: { authorization: 'Bearer test-callback-token-0123456789abcdef' },
+            body: { txid: '11'.repeat(32) }
+          },
+          res
+        )
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(202)
+        expect(res.json).toHaveBeenCalledWith({
+          status: 'success',
+          message: 'Transaction status received without proof'
+        })
+        expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
+      })
+
       it.each(['MINED', 'IMMUTABLE', 'mined'])(
         'answers 503 to a %s callback without a Merkle proof so the provider retries',
         async txStatus => {
