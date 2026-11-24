@@ -169,6 +169,7 @@ export {
   DEFAULT_UHRP_SERVERS,
   MAX_UHRP_ADVERTISEMENT_URL_BYTES,
   RenewResiliencyError,
+  StorageDownloadError,
   StorageDownloader,
   StorageUploader,
   StorageUtils,
