@@ -59,7 +59,11 @@ export {
   isChainTracker,
   registerScriptVerificationBackend,
   scriptVerificationBackend,
-  unregisterScriptVerificationBackend
+  transactionInputSize,
+  transactionOutputSize,
+  transactionSize,
+  unregisterScriptVerificationBackend,
+  varUintSize
 } from '@bsv/sdk/transaction'
 export { LivePolicy, SatoshisPerKilobyte } from '@bsv/sdk/transaction/fee-models'
 export { ARC, Teranode, WhatsOnChainBroadcaster, defaultBroadcaster } from '@bsv/sdk/transaction/broadcasters'
