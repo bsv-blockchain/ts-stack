@@ -129,6 +129,12 @@ export interface SignedMessageVerifyOptions {
   expectedSigner?: PublicKey | string
 }
 
+const resolveExpectedSigner = (expected?: PublicKey | string): PublicKey | undefined => {
+  if (expected === undefined) return undefined
+  if (typeof expected === 'string') return PublicKey.fromString(expected)
+  return copyPublicKey(expected, 'Expected signer')
+}
+
 /**
  * Verifies a message using the BRC-77 message signing protocol.
  * @param message The message to verify.
@@ -154,13 +160,7 @@ export const verify = (
   recipient?: PrivateKey,
   options?: SignedMessageVerifyOptions
 ): boolean => {
-  const expected = options?.expectedSigner
-  const expectedSigner =
-    expected === undefined
-      ? undefined
-      : typeof expected === 'string'
-        ? PublicKey.fromString(expected)
-        : copyPublicKey(expected, 'Expected signer')
+  const expectedSigner = resolveExpectedSigner(options?.expectedSigner)
   const plaintext = copyMessageBytes(message, 'Message')
   const signatureBytes = copyMessageBytes(
     sig,
