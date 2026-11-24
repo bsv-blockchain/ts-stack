@@ -196,6 +196,14 @@ pnpm docs:build
 pnpm docs:preview
 ```
 
+In a Pane terminal or a git worktree, use `node scripts/pane-run-script.js [target]` instead
+of `pnpm docs:dev`. The target is `docs-site` (the default), `lch-reference`, or
+`output-knowledge-reference`. The script takes its port from the 10-port block at `PANE_PORT`.
+Without `PANE_PORT`, it uses a hash of the checkout path. It reinstalls dependencies when
+`pnpm-lock.yaml` changed, rebuilds the docs manifest and stale workspace packages, and stops a
+dev server that an earlier killed run of the same target left behind. It does not stop unrelated
+processes. It prints the URL to open.
+
 Package-level docs start at [`docs/packages/index.md`](docs/packages/index.md). Architecture docs start at [`docs/architecture/index.md`](docs/architecture/index.md).
 
 ## Quality Gates
