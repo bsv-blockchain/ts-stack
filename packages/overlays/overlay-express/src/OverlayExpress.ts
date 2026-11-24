@@ -2468,6 +2468,21 @@ export default class OverlayExpress {
       })
     }
     if (typeof merklePathHex !== 'string' || merklePathHex === '') {
+      const statusText = typeof txStatus === 'string' ? txStatus.toUpperCase() : ''
+      if (statusText === 'MINED' || statusText === 'IMMUTABLE') {
+        // Arcade attaches the Merkle path to a mined callback best-effort and treats any 2xx
+        // as delivered. A non-2xx answer makes it retry with backoff, reloading the path
+        // first; acknowledging here would leave the transaction unproven.
+        this.logger.warn({
+          operation: 'overlay.provider_callback',
+          outcome: 'proof_missing',
+          txid,
+          txStatus
+        })
+        return res
+          .status(503)
+          .json({ status: 'error', message: 'Mined transaction status received without proof' })
+      }
       return res
         .status(202)
         .json({ status: 'success', message: 'Transaction status received without proof' })

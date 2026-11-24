@@ -68,6 +68,7 @@ AuthFetch configuration in its existing transport-options constructor position.
 ```ts
 export interface AuthFetchOptions extends SimplifiedFetchTransportOptions {
     responseTimeoutMs?: number;
+    sendEmptyCertificateResponses?: boolean;
 }
 ```
 
@@ -81,6 +82,17 @@ of requestTimeoutMs, which bounds transport fetch and response-body reads.
 
 ```ts
 responseTimeoutMs?: number
+```
+
+#### Property sendEmptyCertificateResponses
+
+Answer a server's certificate request with an empty certificateResponse when the wallet
+holds no requested certificate. Defaults to false, which sends nothing in that case. Enable
+it only for servers that accept an empty answer: `@bsv/auth-express-middleware` replies
+400 ERR_CERTIFICATES_REQUIRED.
+
+```ts
+sendEmptyCertificateResponses?: boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)

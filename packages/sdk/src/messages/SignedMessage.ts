@@ -10,6 +10,10 @@ import {
   MAX_SIGNED_MESSAGE_BYTES,
   MIN_SIGNED_MESSAGE_BYTES
 } from './MessageValidation.js'
+import type {
+  OriginatorDomainNameStringUnder250Bytes,
+  WalletInterface
+} from '../wallet/Wallet.interfaces.js'
 
 const VERSION = '42423301'
 
@@ -51,18 +55,112 @@ export const sign = (message: number[], signer: PrivateKey, verifier?: PublicKey
 }
 
 /**
+ * Signs a message with the BRC-77 message signing protocol through a wallet, for an application
+ * that holds a `WalletInterface` rather than a private key. The wallet derives the same signing
+ * key as {@link sign} (protocol `[2, 'message signing']`, key ID the random 32-byte key ID), so
+ * the result verifies with {@link verify}.
+ * @param message The message to sign
+ * @param wallet The signer's wallet; its identity key is the signer
+ * @param [verifier] The public key of the person who can verify the message. If not provided, anyone will be able to verify the message signature.
+ * @param [originator] The originator passed to the wallet
+ *
+ * @returns The message signature.
+ *
+ * The wallet is asked for its identity key first, then for the signature. An anyone-verifiable
+ * signature is verified before it is returned, and an Error is thrown if it does not verify
+ * against the wallet's identity key. A signature for a specific verifier cannot be checked
+ * against the identity key without that verifier's private key, so it is returned as signed.
+ */
+export const signWithWallet = async (
+  message: number[],
+  wallet: WalletInterface,
+  verifier?: PublicKey,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+): Promise<number[]> => {
+  const plaintext = copyMessageBytes(message, 'Message')
+  const verifierKey = verifier === undefined ? undefined : copyPublicKey(verifier, 'Verifier')
+  const keyID = Random(32)
+  // One call at a time: behind a permissions manager each call is its own prompt, so the user
+  // sees them in order, and a refused identity-key read never leaves a signing prompt pending.
+  const { publicKey } = await wallet.getPublicKey({ identityKey: true }, originator)
+  const signerKey = PublicKey.fromString(publicKey)
+  const { signature } = await wallet.createSignature(
+    {
+      data: plaintext,
+      protocolID: [2, 'message signing'],
+      keyID: toBase64(keyID),
+      counterparty: verifierKey?.toString() ?? 'anyone'
+    },
+    originator
+  )
+  const signed = toArray(VERSION, 'hex').concat(
+    signerKey.encode(true) as number[],
+    verifierKey === undefined ? [0] : (verifierKey.encode(true) as number[]),
+    keyID,
+    signature
+  )
+  // An anyone-verifiable result can be checked here with public data alone. A wallet whose
+  // identity key is not its derivation root (a proxy or a misconfigured substrate) then fails
+  // now instead of returning bytes that never verify. A designated-verifier result cannot be
+  // checked against the identity key without the verifier's private key (asking the wallet for
+  // its own derived key would not prove that binding), so it is returned as signed.
+  if (verifierKey === undefined) {
+    let verified = false
+    try {
+      verified = verify(plaintext, signed)
+    } catch {
+      verified = false
+    }
+    if (!verified) {
+      throw new Error(
+        `The wallet's signature does not verify against its identity key ${signerKey.toString()}`
+      )
+    }
+  }
+  return signed
+}
+
+/** Options for {@link verify}. */
+export interface SignedMessageVerifyOptions {
+  /**
+   * The public key (or its hex) that must have signed the message. A valid signature by any
+   * other key verifies as `false`.
+   */
+  expectedSigner?: PublicKey | string
+}
+
+const resolveExpectedSigner = (expected?: PublicKey | string): PublicKey | undefined => {
+  if (expected === undefined) return undefined
+  if (typeof expected === 'string') return PublicKey.fromString(expected)
+  return copyPublicKey(expected, 'Expected signer')
+}
+
+/**
  * Verifies a message using the BRC-77 message signing protocol.
  * @param message The message to verify.
  * @param sig The message signature to be verified.
  * @param [recipient] The private key of the message verifier. This can be omitted if the message is verifiable by anyone.
+ * @param [options] `expectedSigner`: the key that must have signed. Without it, any signer is accepted.
  *
  * @returns True if the message is verified.
  *
  * A valid signature authenticates the exact bytes and intended verifier, not
  * application purpose or freshness. Authorization messages must embed a domain,
- * audience, unique challenge, and expiry and must reject challenge reuse.
+ * audience, unique challenge, and expiry and must reject challenge reuse. Without
+ * `expectedSigner`, it also does not say who signed: the signer is whoever the
+ * signature names.
+ *
+ * The expected signer is checked first. For a designated-verifier signature by
+ * another key, `verify` therefore returns `false` before the recipient checks,
+ * even where a missing or wrong `recipient` would otherwise throw.
  */
-export const verify = (message: number[], sig: number[], recipient?: PrivateKey): boolean => {
+export const verify = (
+  message: number[],
+  sig: number[],
+  recipient?: PrivateKey,
+  options?: SignedMessageVerifyOptions
+): boolean => {
+  const expectedSigner = resolveExpectedSigner(options?.expectedSigner)
   const plaintext = copyMessageBytes(message, 'Message')
   const signatureBytes = copyMessageBytes(
     sig,
@@ -76,6 +174,7 @@ export const verify = (message: number[], sig: number[], recipient?: PrivateKey)
     throw new Error(`Message version mismatch: Expected ${VERSION}, received ${messageVersion}`)
   }
   const signer = PublicKey.fromString(toHex(reader.read(33)))
+  if (expectedSigner !== undefined && signer.toString() !== expectedSigner.toString()) return false
   const [verifierFirst] = reader.read(1)
   let recipientKey: PrivateKey
   if (verifierFirst === 0) {

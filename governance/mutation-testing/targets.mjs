@@ -9707,7 +9707,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/Peer.ts',
-          'const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes',
+          'const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes',
           'this.#wallet = wallet'
         ],
         ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
