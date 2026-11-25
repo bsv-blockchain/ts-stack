@@ -74,10 +74,10 @@ test('workspace inventory ignores generated mutation sandboxes while retaining n
   )
 })
 
-test('workspace discovery exactly matches the 64-project registry', () => {
+test('workspace discovery exactly matches the 61-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 64)
+  assert.equal(discovered.length, 61)
   assert.equal(discovered.filter(project => project.manifest.private !== true).length, 45)
   assert.deepEqual(
     discovered.map(project => project.path),
@@ -101,7 +101,7 @@ test('workspace discovery exactly matches the 64-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 74)
+  assert.equal(manifests.length, 71)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 
@@ -114,7 +114,7 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 64)
+  assert.equal(result.projects.length, 61)
   assert.equal(result.publicPackages, 45)
   assert.equal(result.findings.length, 0)
 })

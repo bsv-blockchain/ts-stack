@@ -6,12 +6,12 @@ on:
       project:
         description: UI application
         type: choice
-        options: [peerpay-react, registrant, uhrp-ui, wui]
+        options: [uhrp-ui, wui]
         required: true
       target:
         description: CARS configuration index
         type: choice
-        options: ['1', '2']
+        options: ['1']
         default: '1'
       publish:
         description: Request release approval after staging the artifact
@@ -49,8 +49,8 @@ jobs:
       - name: Build from workspace lock and assemble frontend
         run: |
           set -euo pipefail
-          case "$UI_PROJECT" in peerpay-react|registrant|uhrp-ui|wui) ;; *) exit 1 ;; esac
-          case "$CARS_TARGET" in 1|2) ;; *) exit 1 ;; esac
+          case "$UI_PROJECT" in uhrp-ui|wui) ;; *) exit 1 ;; esac
+          case "$CARS_TARGET" in 1) ;; *) exit 1 ;; esac
           project="packages/ui/$UI_PROJECT"
           jq -e --argjson target "$CARS_TARGET" '
             .frontend.language == "react" and
@@ -94,11 +94,11 @@ jobs:
           path: ${{ runner.temp }}/cars-candidate
       - name: Verify and release the exact artifact
         env:
-          CARS_PRIVATE_KEY: ${{ secrets[format('CARS_{0}_{1}_PRIVATE_KEY', fromJSON('{"peerpay-react":"PEERPAY_REACT","registrant":"REGISTRANT","uhrp-ui":"UHRP_UI","wui":"WUI"}')[inputs.project], inputs.target)] }}
+          CARS_PRIVATE_KEY: ${{ secrets[format('CARS_{0}_{1}_PRIVATE_KEY', fromJSON('{"uhrp-ui":"UHRP_UI","wui":"WUI"}')[inputs.project], inputs.target)] }}
         run: |
           set -euo pipefail
-          case "$UI_PROJECT" in peerpay-react|registrant|uhrp-ui|wui) ;; *) exit 1 ;; esac
-          case "$CARS_TARGET" in 1|2) ;; *) exit 1 ;; esac
+          case "$UI_PROJECT" in uhrp-ui|wui) ;; *) exit 1 ;; esac
+          case "$CARS_TARGET" in 1) ;; *) exit 1 ;; esac
           : "${CARS_PRIVATE_KEY:?Configure the selected CARS project and target in release-approval}"
           project="packages/ui/$UI_PROJECT"
           jq -e --argjson target "$CARS_TARGET" '

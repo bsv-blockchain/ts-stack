@@ -2125,137 +2125,6 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1(webpack@5.111.0)
 
-  packages/ui/peerpay-react:
-    dependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@26.6.1)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@26.6.1)
-    devDependencies:
-      sass:
-        specifier: ^1.89.2
-        version: 1.108.2
-      sass-embedded:
-        specifier: ^1.89.2
-        version: 1.108.2
-
-  packages/ui/peerpay-react/frontend:
-    dependencies:
-      '@babbage/go':
-        specifier: ^0.1.16
-        version: 0.1.20(@bsv/sdk@packages+sdk)
-      '@bsv/amountinator-react':
-        specifier: workspace:^
-        version: link:../../amountinator-react
-      '@bsv/identity-react':
-        specifier: workspace:^
-        version: link:../../identity-react
-      '@bsv/message-box-client':
-        specifier: workspace:^
-        version: link:../../../messaging/message-box-client
-      '@bsv/sdk':
-        specifier: workspace:^
-        version: link:../../../sdk
-      '@bsv/uhrp-react':
-        specifier: workspace:^
-        version: link:../../uhrp-react
-      '@emotion/react':
-        specifier: ^11.11.1
-        version: 11.14.0(@types/react@18.3.32)(react@18.3.1)
-      '@emotion/styled':
-        specifier: ^11.11.0
-        version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.32)(react@18.3.1))(@types/react@18.3.32)(react@18.3.1)
-      '@mui/icons-material':
-        specifier: ^5.11.16
-        version: 5.18.0(@mui/material@5.18.0(@emotion/react@11.14.0(@types/react@18.3.32)(react@18.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@18.3.32)(react@18.3.1))(@types/react@18.3.32)(react@18.3.1))(@types/react@18.3.32)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.32)(react@18.3.1)
-      '@mui/material':
-        specifier: ^5.13.6
-        version: 5.18.0(@emotion/react@11.14.0(@types/react@18.3.32)(react@18.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@18.3.32)(react@18.3.1))(@types/react@18.3.32)(react@18.3.1))(@types/react@18.3.32)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@types/jest':
-        specifier: ^29.5.11
-        version: 29.5.14
-      '@types/node':
-        specifier: ^20.11.0
-        version: 20.19.43
-      qr-scanner:
-        specifier: ^1.4.2
-        version: 1.4.2
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-      react-router:
-        specifier: ^5.3.4
-        version: 5.3.4(react@18.3.1)
-      react-router-dom:
-        specifier: ^5.3.4
-        version: 5.3.4(react@18.3.1)
-      react-toastify:
-        specifier: ^8.2.0
-        version: 8.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      zustand:
-        specifier: ^4.5.0
-        version: 4.5.7(@types/react@18.3.32)(immer@11.2.10)(react@18.3.1)
-    devDependencies:
-      '@types/qrcode':
-        specifier: ^1.5.5
-        version: 1.5.6
-      '@types/react':
-        specifier: ^18.2.47
-        version: 18.3.32
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.1
-      '@types/react-router-dom':
-        specifier: ^5.3.3
-        version: 5.3.3
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^6.20.0
-        version: 6.21.0(@typescript-eslint/parser@6.21.0(@typescript/typescript6@6.0.2)(eslint@9.39.5(jiti@1.21.7)))(@typescript/typescript6@6.0.2)(eslint@9.39.5(jiti@1.21.7))
-      '@typescript-eslint/parser':
-        specifier: ^6.20.0
-        version: 6.21.0(@typescript/typescript6@6.0.2)(eslint@9.39.5(jiti@1.21.7))
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      '@vitejs/plugin-react':
-        specifier: ^4.3.4
-        version: 4.7.0(vite@6.4.6(@types/node@20.19.43)(jiti@1.21.7)(lightningcss@1.33.0)(sass-embedded@1.108.2)(sass@1.108.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
-      eslint-plugin-react-hooks:
-        specifier: ^4.6.0
-        version: 4.6.2(eslint@9.39.5(jiti@1.21.7))
-      interpolate-html-plugin:
-        specifier: ^4.0.0
-        version: 4.0.0
-      sass-embedded:
-        specifier: ^1.86.0
-        version: 1.108.2
-      standard:
-        specifier: ^17.0.0
-        version: 17.1.2(@typescript-eslint/parser@6.21.0(@typescript/typescript6@6.0.2)(eslint@9.39.5(jiti@1.21.7)))
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-      vite:
-        specifier: ^6.2.3
-        version: 6.4.6(@types/node@20.19.43)(jiti@1.21.7)(lightningcss@1.33.0)(sass-embedded@1.108.2)(sass@1.108.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
-
-  packages/ui/registrant:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@26.6.1)
-      '@bsv/lars':
-        specifier: ^1.5.7
-        version: 1.5.8(@types/node@26.6.1)
-
   packages/ui/registrant/frontend:
     dependencies:
       '@bsv/sdk':
@@ -3359,11 +3228,6 @@ packages:
     resolution: {integrity: sha512-fWUO6pa4z2WBAWbcHsfWIT7SVqjzxi/kqd0M92naZNEcgKO7RQ57IuMTesH5+3bnhO+b41nT6qGYTB8Di4JRUw==}
     engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
-  '@babbage/go@0.1.20':
-    resolution: {integrity: sha512-9ZBy1SH8VWQN+6qIy1sNbzL70rVRw6T1Ws5O0KFZghtZ2clsNnsdSSS7qL8i2aUJ/zVlzaOKQhcAUQugj7oGEA==}
-    peerDependencies:
-      '@bsv/sdk': '*'
-
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
@@ -3999,12 +3863,6 @@ packages:
     resolution: {integrity: sha512-TRvTbeibL1ORTXe5NbH+9XUZdbjns55AmFfg8BroI1Ge13CqNF58Txg3Zd/+gjUCSh0ROHqJ1qJfnoX2MAxUZg==}
     hasBin: true
 
-  '@bsv/authsocket-client@2.1.11':
-    resolution: {integrity: sha512-Y1PHmNzd2/Ry02t8iciGmGeJtTL239AP5lMSGNE3gvujA5dphHaNJKsEBYRME1hR+ZKDGYb/sUgZr7DF8wlB9Q==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      '@bsv/sdk': ^2.4.1 || ^3.0.0 || ^4.0.1
-
   '@bsv/cars-cli@1.2.9':
     resolution: {integrity: sha512-pbFUpxnN3cxcRwcB5QvSLAnU4z5zlIDA3wRCr6VaU7HF9ghwsebPhCG1wTbv2OwBkklXgHGHD3tp/rt9xnH6OA==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
@@ -4014,12 +3872,6 @@ packages:
     resolution: {integrity: sha512-joyNZr8czcD0jfpGwKHREum/20Bh5G+9wlqVaOpir/fiaejN+1Re8VeLhwEkBADumW/NY/69IZT6K0HsaUSrCA==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     hasBin: true
-
-  '@bsv/message-box-client@2.7.1':
-    resolution: {integrity: sha512-I/ZvgUUZvVkA5bRaMxmXDXDG5Tg4zACBfO5KS9bAgGewrwxbdUSvBiMbebRgz/yiwIOWndTuwDoac5owS56ntQ==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      '@bsv/sdk': ^2.8.6 || ^3.0.0 || ^4.0.1
 
   '@bsv/sdk@1.10.4':
     resolution: {integrity: sha512-NuEXWwtuZ3WbER9wLtm33QCfhVwLyTyAzGholOeHo1imNDLLe7d2HADmf8hlSqAkNud3Y03S2poRc6aJMRWDrA==}
@@ -7815,9 +7667,6 @@ packages:
 
   '@types/node@26.6.1':
     resolution: {integrity: sha512-VqGJBMCtdhqkBUCcBLvywI0NJ+KLuVzgNnlBUNFOQjqVxzo2lxLUNg1DSey8+u2u6ktswSAxg+s68QLzWHNOuA==}
-
-  '@types/offscreencanvas@2019.7.3':
-    resolution: {integrity: sha512-ieXiYmgSRXUDeOntE1InxjWyvEelZGP63M+cGuquuRLuIKKT1osnkXjxev9B7d1nXSug5vpunx+gNlbVxMlC9A==}
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
@@ -13230,9 +13079,6 @@ packages:
   pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
 
-  qr-scanner@1.4.2:
-    resolution: {integrity: sha512-kV1yQUe2FENvn59tMZW6mOVfpq9mGxGf8l6+EGaXUOd4RBOLg7tRC83OrirM5AtDvZRpdjdlXURsHreAOSPOUw==}
-
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
     engines: {node: '>=10.13.0'}
@@ -13889,9 +13735,6 @@ packages:
     resolution: {integrity: sha512-kugK8djotnG9HQRPTOf36asKYlxg8rWWsNLYHOgWDIVOiZQqlRfKBgF4XXM6kfw146kIDMvm57B4GIkvDSyTzA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
-
-  satoshi-shop-client@2.0.7:
-    resolution: {integrity: sha512-YrsMMQg6immRV8lnJ4DJFlSwg1e0Jaam9hGXMpTBYLZDxn6yJs8jT8wuMtIBLE+OjU7gqRsowH25Uplvubtr6g==}
 
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
@@ -15627,16 +15470,6 @@ snapshots:
       is-potential-custom-element-name: 1.0.1
       lru-cache: 11.5.3
 
-  '@babbage/go@0.1.20(@bsv/sdk@packages+sdk)':
-    dependencies:
-      '@bsv/message-box-client': 2.7.1(@bsv/sdk@packages+sdk)
-      '@bsv/sdk': link:packages/sdk
-      satoshi-shop-client: 2.0.7
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -16446,15 +16279,6 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@bsv/authsocket-client@2.1.11(@bsv/sdk@packages+sdk)':
-    dependencies:
-      '@bsv/sdk': link:packages/sdk
-      socket.io-client: 4.8.3
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
   '@bsv/cars-cli@1.2.9(@types/node@26.6.1)':
     dependencies:
       '@bsv/sdk': 1.10.4
@@ -16491,15 +16315,6 @@ snapshots:
       - '@types/node'
       - debug
       - supports-color
-
-  '@bsv/message-box-client@2.7.1(@bsv/sdk@packages+sdk)':
-    dependencies:
-      '@bsv/authsocket-client': 2.1.11(@bsv/sdk@packages+sdk)
-      '@bsv/sdk': link:packages/sdk
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
 
   '@bsv/sdk@1.10.4': {}
 
@@ -20662,8 +20477,6 @@ snapshots:
   '@types/node@26.6.1':
     dependencies:
       undici-types: 8.9.0
-
-  '@types/offscreencanvas@2019.7.3': {}
 
   '@types/parse-json@4.0.2': {}
 
@@ -27542,10 +27355,6 @@ snapshots:
 
   pure-rand@8.4.2: {}
 
-  qr-scanner@1.4.2:
-    dependencies:
-      '@types/offscreencanvas': 2019.7.3
-
   qrcode@1.5.4:
     dependencies:
       dijkstrajs: 1.0.3
@@ -28357,10 +28166,6 @@ snapshots:
       source-map-js: 1.2.2
     optionalDependencies:
       '@parcel/watcher': 2.6.0
-
-  satoshi-shop-client@2.0.7:
-    dependencies:
-      '@bsv/sdk': 2.8.11
 
   saxes@6.0.0:
     dependencies:

@@ -18,7 +18,8 @@ baseline.
 | Metanet App Catalog                  | `metanet-apps`                    |
 | UHRP React                           | `@bsv/uhrp-react`                 |
 | BTMS frontend                        | Private browser application       |
-| PeerPay, Registrant, UHRP UI and WUI | CARS deployments                  |
+| Registrant                           | Private browser application       |
+| UHRP UI and WUI                      | CARS deployments                  |
 
 Install from the root with the committed pnpm lockfile. For the UHRP React
 example, build the library and run the Vite development server.
@@ -27,6 +28,9 @@ example, build the library and run the Vite development server.
 pnpm --filter @bsv/uhrp-react build
 pnpm --filter uhrp-react-example start
 ```
+
+The Registrant workspace includes the BSV-maintained frontend. Its existing
+external deployment has a separate owner and release route.
 
 ## Publication handoff
 

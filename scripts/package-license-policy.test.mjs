@@ -50,7 +50,7 @@ test('all package projects use the exact Apache License 2.0, the root NOTICE and
   )
   assert.equal(LICENSE_DECLARATION, 'Apache-2.0')
   assert.equal(OCI_LICENSE_REFERENCE, 'Apache-2.0')
-  assert.equal(discoverPackageManifests().length, 74)
+  assert.equal(discoverPackageManifests().length, 71)
   assert.deepEqual(validatePackageLicenses(), [])
 })
 

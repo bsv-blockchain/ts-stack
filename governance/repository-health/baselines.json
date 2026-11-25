@@ -4,10 +4,10 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 64,
-    "packageAreaProjects": 58,
+    "projects": 61,
+    "packageAreaProjects": 55,
     "publicPackages": 45,
-    "privatePackageAreaProjects": 13
+    "privatePackageAreaProjects": 10
   },
   "ci": {
     "mergeGateSeconds": 295,
