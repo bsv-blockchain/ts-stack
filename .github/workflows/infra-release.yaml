@@ -266,7 +266,7 @@ jobs:
         if: matrix.component.kind == 'frontend'
         env:
           IMAGE: ${{ matrix.component.image }}:${{ matrix.component.tag }}
-        run: node scripts/check-ui-image.mjs "$IMAGE"
+        run: bash scripts/check-ui-image.sh "$IMAGE"
 
       - name: Reject high and critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

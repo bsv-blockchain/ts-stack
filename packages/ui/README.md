@@ -49,7 +49,7 @@ pnpm lockfile and the SDK and wallet packages from the same source revision.
 docker build --platform linux/amd64 -f packages/ui/Dockerfile \
   --build-arg UI_WORKSPACE=@bsv/wui-frontend \
   --build-arg UI_PATH=packages/ui/wui/frontend -t wui:local .
-node scripts/check-ui-image.mjs wui:local
+bash scripts/check-ui-image.sh wui:local
 docker run --rm --read-only --tmpfs /tmp -p 127.0.0.1:8080:8080 wui:local
 ```
 

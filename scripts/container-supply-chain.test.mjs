@@ -282,9 +282,9 @@ test('every official frontend uses the shared build, runtime proof and immutable
     assert.match(workflow, /UI_WORKSPACE/)
     assert.match(workflow, /UI_PATH/)
   }
-  assert.match(ci, /scripts\/check-ui-image\.mjs/)
+  assert.match(ci, /scripts\/check-ui-image\.sh/)
   assert.match(release, /git archive "\$SOURCE_SHA" \| tar -x -C "\$root"/)
-  assert.match(release, /node scripts\/check-ui-image\.mjs "\$IMAGE"/)
+  assert.match(release, /bash scripts\/check-ui-image\.sh "\$IMAGE"/)
   assert.doesNotMatch(release, /ref: \$\{\{ needs\.discover\.outputs\.source-sha/)
   assert.doesNotMatch(release, /cache-(?:from|to): type=gha/)
   assert.match(release, /tag="rev-\$SOURCE_SHA"/)
