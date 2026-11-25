@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
@@ -59,8 +59,11 @@ try {
   const rendered = renderToString(React.createElement(IdentitySearchField))
   assert.match(rendered, /Search Identity/)
   assert.match(rendered, /role="combobox"/)
+  const material = JSON.parse(
+    await readFile(new URL(import.meta.resolve('@mui/material/package.json')), 'utf8')
+  )
   console.log(
-    `Packed ${packed.name}@${packed.version} imports in Node and renders with React 18 and MUI 5`
+    `Packed ${packed.name}@${packed.version} imports in Node and renders with React ${React.version} and MUI ${material.version}`
   )
 } finally {
   dom?.window.close()
