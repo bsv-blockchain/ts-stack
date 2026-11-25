@@ -534,7 +534,7 @@ export function selectFrontendComponents(changedFiles, affectedNames) {
       'packages/ui/Dockerfile',
       'packages/ui/Dockerfile.dockerignore',
       'packages/ui/nginx.conf',
-      'scripts/check-ui-image.sh',
+      'scripts/check-ui-image.mjs',
       '.github/workflows/infra-release.yaml',
       '.github/workflows/ci.yml'
     ].includes(file)

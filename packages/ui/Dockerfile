@@ -18,7 +18,7 @@ RUN test -n "$UI_WORKSPACE" && test -n "$UI_PATH" \
 
 # Governed Node.js base: 24.22.3-alpine3.24
 FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS runtime
-RUN apk add --no-cache nginx=1.30.8-r0 libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 nginx=1.30.8-r0 \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES.md /usr/share/licenses/ts-stack/
 COPY LICENSES /usr/share/licenses/ts-stack/LICENSES

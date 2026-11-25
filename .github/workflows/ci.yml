@@ -2147,7 +2147,7 @@ jobs:
           cache-from: type=gha,scope=frontend-${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=frontend-${{ matrix.name }}
       - name: Exercise the deployed HTTP contract
-        run: bash scripts/check-ui-image.sh ts-stack-frontend:contract
+        run: node scripts/check-ui-image.mjs ts-stack-frontend:contract
 
   merge-gate:
     name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary analysis PR gate' || 'merge-gate' }}
