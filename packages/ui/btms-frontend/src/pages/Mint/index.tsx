@@ -14,7 +14,7 @@ import {
 } from '@mui/material'
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import useStyles from './mint-style'
 import { StorageUploader } from '@bsv/sdk'
@@ -22,13 +22,8 @@ import { StorageUploader } from '@bsv/sdk'
 import { btms, walletClient } from '../../btms'
 import { formatBtmsError } from '../../utils/formatBtmsError'
 
-interface MintProps {
-  history: {
-    push: (path: string) => void
-  }
-}
-
-const Mint: React.FC<MintProps> = ({ history }) => {
+const Mint: React.FC = () => {
+  const navigate = useNavigate()
   const classes = useStyles()
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -109,7 +104,7 @@ const Mint: React.FC<MintProps> = ({ history }) => {
       })
 
       toast.success(`Issued ${quantity} ${name} successfully!`)
-      history.push('/')
+      navigate('/')
     } catch (err: unknown) {
       toast.error(formatBtmsError(err, 'Something went wrong while minting.'))
     } finally {
@@ -135,7 +130,7 @@ const Mint: React.FC<MintProps> = ({ history }) => {
       </Backdrop>
 
       <Container maxWidth="lg" sx={{ pb: 8 }}>
-        <Grid container alignItems="center" className={classes.button}>
+        <Grid container sx={{ alignItems: 'center' }} className={classes.button}>
           <Button component={Link} to="/" color="secondary">
             <ArrowBackIosNewIcon className={classes.back_icon} /> My Assets
           </Button>
@@ -143,7 +138,7 @@ const Mint: React.FC<MintProps> = ({ history }) => {
 
         <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, mt: 1.5 }}>
           <Grid container spacing={4}>
-            <Grid item xs={12} md={7}>
+            <Grid size={{ xs: 12, md: 7 }}>
               <Typography variant="h4" sx={{ fontWeight: 700 }} className={classes.title}>
                 Issue New Asset
               </Typography>
@@ -151,15 +146,15 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                 Create a new tokenized asset with a clear name, description, and initial supply.
               </Typography>
 
-              <Grid item container direction="column" className={classes.sub_title}>
+              <Grid container sx={{ flexDirection: 'column' }} className={classes.sub_title}>
                 {/* Token name */}
-                <Grid item container direction="column" className={classes.form}>
-                  <Grid item>
+                <Grid container sx={{ flexDirection: 'column' }} className={classes.form}>
+                  <Grid>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       Asset Name
                     </Typography>
                   </Grid>
-                  <Grid item>
+                  <Grid>
                     <TextField
                       placeholder="e.g. Gold, USD, Real Estate Fund"
                       variant="outlined"
@@ -173,20 +168,20 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                 </Grid>
 
                 {/* Image */}
-                <Grid item container direction="column" className={classes.form}>
-                  <Grid item>
+                <Grid container sx={{ flexDirection: 'column' }} className={classes.form}>
+                  <Grid>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       Image
                     </Typography>
                   </Grid>
-                  <Grid item container>
+                  <Grid container>
                     <Paper elevation={0} className={classes.photo_container}>
                       {photoURL ? (
-                        <Grid item className={classes.photo_preview}>
+                        <Grid className={classes.photo_preview}>
                           <img src={photoURL} className={classes.photo_preview_img} alt="preview" />
                         </Grid>
                       ) : (
-                        <Grid item>
+                        <Grid>
                           <IconButton color="secondary" onClick={handlePhotoClick}>
                             <AddAPhotoIcon />
                             <input
@@ -204,18 +199,18 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                 </Grid>
 
                 {/* Quantity */}
-                <Grid item container direction="column" className={classes.form}>
-                  <Grid item>
+                <Grid container sx={{ flexDirection: 'column' }} className={classes.form}>
+                  <Grid>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       Quantity
                     </Typography>
                   </Grid>
-                  <Grid item>
+                  <Grid>
                     <Typography variant="body2">
                       Total units to issue (e.g. ounces, dollars, shares)
                     </Typography>
                   </Grid>
-                  <Grid item>
+                  <Grid>
                     <TextField
                       placeholder="Quantity"
                       value={quantity}
@@ -229,13 +224,13 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                 </Grid>
 
                 {/* Description */}
-                <Grid item container direction="column" className={classes.form}>
-                  <Grid item>
+                <Grid container sx={{ flexDirection: 'column' }} className={classes.form}>
+                  <Grid>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       Asset Description
                     </Typography>
                   </Grid>
-                  <Grid item>
+                  <Grid>
                     <TextField
                       placeholder="Describe what this asset represents"
                       multiline
@@ -251,13 +246,13 @@ const Mint: React.FC<MintProps> = ({ history }) => {
               </Grid>
             </Grid>
 
-            <Grid item xs={12} md={5}>
+            <Grid size={{ xs: 12, md: 5 }}>
               <Box sx={{ position: 'sticky', top: 24, display: 'grid', gap: 2 }}>
                 <Typography variant="overline" color="text.secondary">
                   Preview
                 </Typography>
                 <Paper elevation={0} sx={{ p: 3, background: 'rgba(255, 255, 255, 0.7)' }}>
-                  <Grid container direction="column" rowGap={1.5}>
+                  <Grid container sx={{ flexDirection: 'column', rowGap: 1.5 }}>
                     <Typography variant="subtitle2">Asset</Typography>
                     <Typography sx={{ wordBreak: 'break-word' }}>
                       {name || 'Untitled Asset'}

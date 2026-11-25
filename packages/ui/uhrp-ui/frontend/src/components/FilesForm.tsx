@@ -299,7 +299,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
     <Box sx={{ py: 2 }} className="files-form-container">
       <Card elevation={3} sx={{ mb: 3, overflow: 'visible', borderRadius: 2 }}>
         <CardContent sx={{ p: 3 }}>
-          <Box display="flex" alignItems="center" mb={3}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <StorageIcon fontSize="large" color="primary" sx={{ mr: 2 }} />
             <Typography variant="h5" component="h2">
               Manage Your Files
@@ -321,7 +321,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                   </MenuItem>
                 ))}
                 <MenuItem value="add-new-option">
-                  <Box display="flex" alignItems="center">
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <CloudUploadIcon fontSize="small" sx={{ mr: 1 }} />
                     Add New Server
                   </Box>
@@ -436,7 +436,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Box display="flex" alignItems="center">
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <ScheduleIcon
                           fontSize="small"
                           color="action"
@@ -485,12 +485,26 @@ const FilesForm: React.FC<FilesFormProps> = () => {
       ) : (
         <Card elevation={2} sx={{ p: 5, textAlign: 'center', width: '100%' }}>
           {loading ? (
-            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center">
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
               <CircularProgress size={40} sx={{ mb: 2 }} />
               <Typography variant="body1">Loading files...</Typography>
             </Box>
           ) : (
-            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center">
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
               <StorageIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
               <Typography variant="body1" color="text.secondary">
                 No files found. Click "Load My Files" to view your uploaded files.
@@ -506,9 +520,11 @@ const FilesForm: React.FC<FilesFormProps> = () => {
         onClose={handleCloseRenewDialog}
         fullWidth
         maxWidth="sm"
-        PaperProps={{
-          elevation: 24,
-          sx: { borderRadius: 2 }
+        slotProps={{
+          paper: {
+            elevation: 24,
+            sx: { borderRadius: 2 }
+          }
         }}
       >
         <DialogTitle
@@ -566,7 +582,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
               </Typography>
 
               <Stack spacing={1}>
-                <Box display="flex">
+                <Box sx={{ display: 'flex' }}>
                   <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
                     Status:
                   </Typography>
@@ -578,7 +594,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 </Box>
 
                 {renewalResult.prevExpiryTime && (
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
                       Previous Expiry:
                     </Typography>
@@ -589,7 +605,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 )}
 
                 {renewalResult.newExpiryTime && (
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
                       New Expiry:
                     </Typography>
@@ -600,7 +616,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 )}
 
                 {renewalResult.amount && (
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
                       Amount:
                     </Typography>
@@ -634,9 +650,11 @@ const FilesForm: React.FC<FilesFormProps> = () => {
         onClose={handleCloseFindDialog}
         fullWidth
         maxWidth="sm"
-        PaperProps={{
-          elevation: 24,
-          sx: { borderRadius: 2 }
+        slotProps={{
+          paper: {
+            elevation: 24,
+            sx: { borderRadius: 2 }
+          }
         }}
       >
         <DialogTitle
@@ -654,17 +672,19 @@ const FilesForm: React.FC<FilesFormProps> = () => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFindFileUrl(e.target.value)}
               placeholder="Enter UHRP URL to find file information"
               sx={{ mb: 2 }}
-              InputProps={{
-                endAdornment: (
-                  <IconButton
-                    size="small"
-                    onClick={handleFindFile}
-                    disabled={loading || !findFileUrl.trim()}
-                    color="primary"
-                  >
-                    <SearchIcon />
-                  </IconButton>
-                )
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <IconButton
+                      size="small"
+                      onClick={handleFindFile}
+                      disabled={loading || !findFileUrl.trim()}
+                      color="primary"
+                    >
+                      <SearchIcon />
+                    </IconButton>
+                  )
+                }
               }}
             />
             <Typography variant="caption" color="text.secondary">
@@ -683,7 +703,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 </Typography>
 
                 <Stack spacing={1.5}>
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
                       Name:
                     </Typography>
@@ -692,7 +712,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                     </Typography>
                   </Box>
 
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
                       Size:
                     </Typography>
@@ -704,18 +724,18 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                     />
                   </Box>
 
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
                       Type:
                     </Typography>
                     <Typography variant="body2">{fileDetails.mimeType}</Typography>
                   </Box>
 
-                  <Box display="flex">
+                  <Box sx={{ display: 'flex' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
                       Expiry:
                     </Typography>
-                    <Box display="flex" alignItems="center">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <ScheduleIcon
                         fontSize="small"
                         color="action"
@@ -752,9 +772,11 @@ const FilesForm: React.FC<FilesFormProps> = () => {
         onClose={handleCloseNewOptionDialog}
         fullWidth
         maxWidth="sm"
-        PaperProps={{
-          elevation: 24,
-          sx: { borderRadius: 2 }
+        slotProps={{
+          paper: {
+            elevation: 24,
+            sx: { borderRadius: 2 }
+          }
         }}
       >
         <DialogTitle

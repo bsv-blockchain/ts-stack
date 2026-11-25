@@ -30,6 +30,7 @@ function evidence(selected = true) {
     'coverage-other',
     'coverage-upload',
     'infra',
+    'frontend-images',
     'docs-validate',
     'conformance'
   ]
@@ -64,6 +65,7 @@ function evidence(selected = true) {
   needs.scope.outputs = {
     docs: String(selected),
     conformance: String(selected),
+    'has-frontends': String(selected),
     'local-ci-certified': 'false'
   }
   needs['infra-scope'].outputs = { 'has-infra': String(selected) }

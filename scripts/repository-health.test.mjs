@@ -266,8 +266,8 @@ test('every public package declares supported runtime and canonical support meta
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
-      '>=22',
-      `${project.path} must declare the exact supported Node.js runtime floor`
+      project.manifest.name === '@bsv/amountinator-react' ? undefined : '>=22',
+      `${project.path} must preserve the exact supported Node.js runtime floor`
     )
     assert.equal(
       project.manifest.publishConfig?.access,

@@ -19,6 +19,7 @@ import AppChip from '../AppChip/index.js'
 import { Services } from '@bsv/wallet-toolbox-client'
 import { UserContext } from '../../UserContext.js'
 import { toast } from 'react-toastify'
+import { determineUpgradeAmount } from '../../utils/determineUpgradeAmount.js'
 
 const services = new Services('main')
 
@@ -53,15 +54,6 @@ const SpendingAuthorizationHandler: React.FC = () => {
     }
   }
 
-  const determineUpgradeAmount = (previousAmountInSats: number | undefined) => {
-    if (!quote || quote.requestID !== currentRequest) return undefined
-    const usdPerSatoshi = quote.usdPerBsv / 100_000_000
-    const previousAmountInUsd = (previousAmountInSats ?? Number.NaN) * usdPerSatoshi
-    const tier = [5, 10, 20].find(amount => previousAmountInUsd <= amount) ?? 50
-    const satoshis = Math.round(tier / usdPerSatoshi)
-    return Number.isSafeInteger(satoshis) && satoshis > 0 ? satoshis : undefined
-  }
-
   useEffect(() => {
     if (!currentRequest) return
     let cancelled = false
@@ -90,7 +82,18 @@ const SpendingAuthorizationHandler: React.FC = () => {
   const isSpendingLimitIncrease = currentPerm.description === 'Increase spending limit'
   const isCreateSpendingLimit = currentPerm.description === 'Create a spending limit'
   const isLimitChange = isSpendingLimitIncrease || isCreateSpendingLimit
-  const upgradeAmount = determineUpgradeAmount(currentPerm.amountPreviouslyAuthorized)
+  const previousAmount = currentPerm.amountPreviouslyAuthorized ?? 0
+  const suggestedAmount =
+    quote?.requestID === currentRequest && quote !== undefined
+      ? determineUpgradeAmount(previousAmount, quote.usdPerBsv)
+      : undefined
+  const upgradeAmount =
+    suggestedAmount !== undefined &&
+    Number.isSafeInteger(suggestedAmount) &&
+    suggestedAmount > previousAmount &&
+    suggestedAmount >= currentPerm.authorizationAmount
+      ? suggestedAmount
+      : undefined
 
   // Determine dialog title
   const getDialogTitle = () => {

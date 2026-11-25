@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Avatar, Chip, Stack, Typography } from '@mui/material'
 import type { PaletteMode } from '@mui/material'
-import AppsIcon from '@mui/icons-material/Apps'
+import { Apps as AppsIcon } from '@mui/icons-material'
 import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
 import { normalizeAppLabel, resolveAppBaseUrl } from './utils.js'

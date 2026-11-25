@@ -45,3 +45,10 @@ test('changes tier exactly at the established spending thresholds', () => {
     )
   )
 })
+
+test('a granted tier advances after rounding to the nearest satoshi', () => {
+  const usdPerBsv = 29
+  const fiveDollarLimit = Math.round((5 * 100_000_000) / usdPerBsv)
+  assert.equal(determineUpgradeAmount(fiveDollarLimit - 1, usdPerBsv, 'usd'), 5)
+  assert.equal(determineUpgradeAmount(fiveDollarLimit, usdPerBsv, 'usd'), 10)
+})

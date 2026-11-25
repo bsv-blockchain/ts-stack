@@ -1,9 +1,7 @@
 name: Infra Release
 
-# Primary general image release for all infra/* components.
-# Builds a Docker image for every component in ./infra whose
-# package.json version is not yet published to GHCR, and pushes
-# the image as ghcr.io/<owner>/<component>:v<version>.
+# Publishes all registered Docker images to GHCR. Services use immutable
+# version tags, and browser applications use immutable source revision tags.
 #
 # This is the normal OCI path for self-hosters and third-party systems.
 # WAB additionally publishes to AWS Marketplace via
@@ -134,6 +132,7 @@ jobs:
         id: set
         env:
           OWNER: ${{ github.repository_owner }}
+          SOURCE_SHA: ${{ steps.source.outputs.source-sha }}
         run: |
           owner="${OWNER,,}"
           components='[]'
@@ -148,6 +147,9 @@ jobs:
             fi
             image="ghcr.io/$owner/$name"
             tag="v$version"
+            if [[ "$(jq -r '.kind' <<<"$component")" == frontend ]]; then
+              tag="rev-$SOURCE_SHA"
+            fi
             resolved="$(jq -c \
               --argjson component "$component" \
               --arg version "$version" \
@@ -232,8 +234,8 @@ jobs:
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ matrix.component.path }}
-          file: ${{ matrix.component.path }}/Dockerfile
+          context: ${{ matrix.component.kind == 'frontend' && '.' || matrix.component.path }}
+          file: ${{ matrix.component.kind == 'frontend' && 'packages/ui/Dockerfile' || format('{0}/Dockerfile', matrix.component.path) }}
           platforms: linux/amd64
           load: true
           push: false
@@ -242,11 +244,19 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            ${{ matrix.component.kind == 'frontend' && format('UI_WORKSPACE={0}', matrix.component.workspace) || '' }}
+            ${{ matrix.component.kind == 'frontend' && format('UI_PATH={0}', matrix.component.path) || '' }}
             APP_COMMIT=${{ needs.discover.outputs.source-sha }}
             APP_VERSION=${{ matrix.component.version }}
             SOURCE_DATE_EPOCH=${{ steps.source.outputs.source_date_epoch }}
           cache-from: type=gha,scope=infra-${{ matrix.component.name }}
           cache-to: type=gha,mode=max,scope=infra-${{ matrix.component.name }}
+
+      - name: Exercise the frontend image before publication
+        if: matrix.component.kind == 'frontend'
+        env:
+          IMAGE: ${{ matrix.component.image }}:${{ matrix.component.tag }}
+        run: bash scripts/check-ui-image.sh "$IMAGE"
 
       - name: Reject high and critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

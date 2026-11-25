@@ -71,16 +71,16 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
   return (
     <form onSubmit={handleDownload}>
       <Grid container spacing={3} sx={{ py: 2 }}>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Typography variant="h5" gutterBottom sx={{ fontWeight: 'medium' }}>
             Download Form
           </Typography>
-          <Typography color="textSecondary" paragraph sx={{ mb: 3 }}>
+          <Typography color="textSecondary" component="p" sx={{ mb: 3 }}>
             Download files from UHRP Storage
           </Typography>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <TextField
             fullWidth
             variant="outlined"
@@ -92,7 +92,7 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <FormControl fullWidth variant="outlined" sx={{ mb: 3 }}>
             <InputLabel id="network-select-label">Network</InputLabel>
             <Select
@@ -111,7 +111,7 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
           </FormControl>
         </Grid>
 
-        <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+        <Grid size={{ xs: 12 }} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
           <Button
             variant="contained"
             color="primary"
@@ -126,7 +126,7 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
         </Grid>
 
         {loading && (
-          <Grid item xs={12} sx={{ mt: 2 }}>
+          <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
             <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
           </Grid>
         )}

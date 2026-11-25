@@ -46,6 +46,7 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: Readonly<PaymentForm
   const [recipient, setRecipient] = useState(defaultRecipient ?? '')
   const [amount, setAmount] = useState<number>(0)
   const [sending, setSending] = useState(false)
+  const sendingRef = useRef(false)
   const [profiles, setProfiles] = useState<WalletProfile[]>([])
   const [currencySymbol, setCurrencySymbol] = useState('$')
   const currencyConverter = useMemo(() => new CurrencyConverter(), [])
@@ -104,22 +105,27 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: Readonly<PaymentForm
   const canSend = recipient.trim().length > 0 && amount > 0 && !sending
 
   const send = async () => {
-    if (!canSend) return
+    if (!canSend || sendingRef.current) return
+    sendingRef.current = true
+    setSending(true)
     try {
-      setSending(true)
       await peerPay.sendLivePayment({
         recipient: recipient.trim(),
         amount
       })
-      onSent?.()
+      ++amountRevision.current
+      setAmount(0)
+      setInput('')
       toast.success('Payment Success!')
-      setInput('0')
     } catch (e) {
       toast.error('[PaymentForm] sendLivePayment error:', e as any)
       alert((e as Error)?.message ?? 'Failed to send payment')
+      return
     } finally {
+      sendingRef.current = false
       setSending(false)
     }
+    onSent?.()
   }
 
   return (
@@ -132,6 +138,7 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: Readonly<PaymentForm
           <FormControl fullWidth>
             <Select
               label="Destination Profile"
+              disabled={sending}
               value={recipient || ''} // recipient is the identityKey string
               displayEmpty
               onChange={e => setRecipient(e.target.value as string)}
@@ -153,6 +160,7 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: Readonly<PaymentForm
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField
             label="Enter Amount"
+            disabled={sending}
             variant="outlined"
             value={input}
             onChange={handleAmountChange}

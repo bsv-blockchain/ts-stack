@@ -239,9 +239,12 @@ function DataPage() {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        justifyContent="space-between"
-        sx={{ mb: 2 }}
+
+        sx={{
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+          mb: 2
+        }}
       >
         <Typography variant="h4" gutterBottom>
           Storage Providers
@@ -283,12 +286,14 @@ function DataPage() {
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                    justifyContent="space-between"
+                    sx={{
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      justifyContent: 'space-between'
+                    }}
                   >
                     {/* Left side: TxID + Description */}
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="body1" fontWeight="bold">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                         {shortTxid(store.storageIdentityKey)}
                       </Typography>
                       {/* Copy button for TXID */}
@@ -312,7 +317,7 @@ function DataPage() {
                     </Stack>
 
                     {/* Right side: Status + Satoshis + Outgoing/Incoming indicator */}
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                       {/* Show status as a Chip, possibly color-coded */}
                       <Chip label={store.role} color={store.roleColor} size="small" />
                     </Stack>

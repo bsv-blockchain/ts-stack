@@ -62,6 +62,7 @@ updates:
       - /infra/wab
       - /infra/wallet-infra
       - /infra/webrtpay-relay
+      - /packages/ui
     patterns:
       - '*'
     multi-ecosystem-group: stack-maintenance

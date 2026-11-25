@@ -90,7 +90,7 @@ function DiscoverByKey() {
           {error}
         </Alert>
       )}
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mt: 2 }}>
         <TextField
           label="Identity Key (pubkey hex)"
           value={identityKey}
@@ -256,7 +256,7 @@ function DiscoverByAttrs() {
         </Button>
       </Paper>
 
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mt: 2 }}>
         <TextField
           label="Limit"
           type="number"

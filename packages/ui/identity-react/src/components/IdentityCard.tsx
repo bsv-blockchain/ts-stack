@@ -191,7 +191,7 @@ const IdentityCard: React.FC<IdentityProps> = ({ identityKey, themeMode = 'light
           <Typography
             variant="h6"
             component="div"
-            fontSize="1em"
+            sx={{ fontSize: '1em' }}
             color={themeMode === 'light' ? 'black' : 'white'}
           >
             {resolvedIdentity.name}

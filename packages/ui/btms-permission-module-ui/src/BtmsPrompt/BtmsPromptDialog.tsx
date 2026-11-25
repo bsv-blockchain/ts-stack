@@ -12,11 +12,13 @@ import {
   IconButton,
   Tooltip
 } from '@mui/material'
-import TokenIcon from '@mui/icons-material/Token'
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
-import SendIcon from '@mui/icons-material/Send'
-import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import {
+  Token as TokenIcon,
+  ArrowForward as ArrowForwardIcon,
+  Send as SendIcon,
+  LocalFireDepartment as LocalFireDepartmentIcon,
+  ContentCopy as ContentCopyIcon
+} from '@mui/icons-material'
 import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
 import { AppOriginChip } from './AppOriginChip.js'
@@ -81,12 +83,12 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
     if (promptInfo.type === 'btms_spend') {
       const spendInfo = promptInfo as BTMSSpendInfo
       return (
-        <Stack spacing={1.5} alignItems="center">
+        <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
           <Typography variant="body1" sx={{ color: textPrimary, lineHeight: 1.6 }}>
             Authorize this app to spend
           </Typography>
           <AppOriginChip app={app} paletteMode={resolvedMode} />
-          <Typography variant="h6" fontWeight="bold" sx={{ mt: 0.5 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5 }}>
             {formatAmount(spendInfo.sendAmount)} {spendInfo.tokenName} tokens
           </Typography>
         </Stack>
@@ -97,12 +99,12 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
       const burnInfo = promptInfo as BTMSBurnInfo
       const isBurnAll = burnInfo.burnAll || burnInfo.burnAmount === 0
       return (
-        <Stack spacing={1.5} alignItems="center">
+        <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
           <Typography variant="body1" sx={{ color: textPrimary, lineHeight: 1.6 }}>
             Authorize this app to burn tokens
           </Typography>
           <AppOriginChip app={app} paletteMode={resolvedMode} />
-          <Typography variant="h6" fontWeight="bold" sx={{ mt: 0.5 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5 }}>
             {isBurnAll
               ? `All ${burnInfo.tokenName} tokens`
               : `${formatAmount(burnInfo.burnAmount)} ${burnInfo.tokenName} tokens`}
@@ -124,11 +126,11 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
       const accessChipText =
         resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.82)'
       return (
-        <Stack spacing={2} alignItems="center">
+        <Stack spacing={2} sx={{ alignItems: 'center' }}>
           <Typography variant="body1" sx={{ color: textPrimary, lineHeight: 1.6 }}>
             Authorize this app to access your BTMS tokens
           </Typography>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <AppOriginChip app={app} size="compact" paletteMode={resolvedMode} />
             <ArrowForwardIcon sx={{ color: textMuted }} />
             <Chip
@@ -166,8 +168,8 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
       onClose={onDeny}
       maxWidth="xs"
       fullWidth
-      PaperProps={{
-        sx: {
+      sx={{
+        '& .MuiDialog-paper': {
           borderRadius: 3,
           bgcolor: dialogBg,
           color: textPrimary
@@ -175,7 +177,7 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
       }}
     >
       <DialogContent sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
           {getTitle()}
         </Typography>
 

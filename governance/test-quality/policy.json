@@ -2789,14 +2789,14 @@
       {
         "manifest": "packages/ui/uhrp-ui/package.json",
         "kind": "example-or-platform",
-        "rationale": "This workspace contains the CARS configuration and commands for the separate UHRP browser frontend. It owns no application runtime or independent input parser.",
+        "rationale": "This workspace delegates development and build commands to the UHRP frontend. It owns no application runtime or independent input parser.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-12-25"
       },
       {
         "manifest": "packages/ui/wui/package.json",
         "kind": "example-or-platform",
-        "rationale": "This workspace is the CARS configuration for a separate wallet frontend. The frontend owns wallet input behavior and has its own governed property suite.",
+        "rationale": "This workspace delegates development and build commands to the wallet frontend. The frontend owns wallet input behavior and has its own governed property suite.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-12-25"
       },

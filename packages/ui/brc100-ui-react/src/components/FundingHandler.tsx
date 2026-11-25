@@ -24,7 +24,6 @@ type WalletFunder = (
 interface FundingRequest {
   wallet: WalletInterface
   resolve: () => void
-  reject: (error: Error) => void
 }
 
 const FundingHandler: React.FC = () => {
@@ -49,8 +48,8 @@ const FundingHandler: React.FC = () => {
       submittingRef.current = false
     }
 
-    return new Promise<void>((resolve, reject) => {
-      request.current = { wallet, resolve, reject }
+    return new Promise<void>(resolve => {
+      request.current = { wallet, resolve }
       setIdentityKey(publicKey)
       setPaymentTX('')
       setOpen(true)
@@ -72,7 +71,8 @@ const FundingHandler: React.FC = () => {
     setIdentityKey('')
     setPaymentTX('')
     setOpen(false)
-    pending?.reject(new Error('Wallet funding was cancelled'))
+    // Funding is optional in wallet registration. Dismissing the prompt skips it.
+    pending?.resolve()
   }
 
   const handleFunded = async () => {
@@ -102,7 +102,7 @@ const FundingHandler: React.FC = () => {
     <CustomDialog open={open} onClose={handleClose} title="Fund Your Wallet">
       <DialogContent>
         <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-          Please fund the following root key with satoshis to activate your wallet:
+          You can add satoshis now or skip this step and fund your wallet later.
         </Typography>
         <Box
           sx={{ mt: 2, display: 'flex', alignItems: 'center', bgcolor: 'background.paper', p: 1 }}
@@ -157,6 +157,9 @@ const FundingHandler: React.FC = () => {
         />
       </DialogContent>
       <DialogActions>
+        <Button onClick={handleClose} disabled={submitting}>
+          Skip for now
+        </Button>
         <Button
           variant="contained"
           onClick={handleFunded}

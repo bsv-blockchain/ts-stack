@@ -111,7 +111,7 @@ function UtilitiesPage() {
         Utilities
       </Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button variant="contained" onClick={handleCheckAuth}>
             Is Authenticated?
           </Button>
@@ -122,7 +122,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             label="Basket Name"
             value={basketName}
@@ -136,7 +136,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button variant="contained" onClick={handleGetHeight}>
             Get Height
           </Button>
@@ -144,7 +144,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             label="Block Height"
             value={headerHeight}
@@ -158,7 +158,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button variant="contained" onClick={handleGetNetwork}>
             Get Network
           </Button>
@@ -166,7 +166,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button variant="contained" onClick={handleGetVersion}>
             Get Version
           </Button>
@@ -174,7 +174,7 @@ function UtilitiesPage() {
         </Stack>
       </Paper>
       <Paper sx={{ p: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button variant="contained" onClick={handleGetPrivateKey}>
             Get Private Key
           </Button>

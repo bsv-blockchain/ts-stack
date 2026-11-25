@@ -2,23 +2,15 @@
   "name": "@bsv/wui",
   "private": true,
   "version": "1.0.0",
-  "description": "Standard BSV project structure",
+  "description": "wui browser application",
   "scripts": {
-    "lars": "lars",
-    "cars": "cars",
-    "lars:config": "lars config",
-    "start": "lars start",
-    "deploy": "cars deploy now 1",
-    "build:cars": "cars build 1",
-    "format:check": "prettier --check package.json deployment-info.json README.md"
+    "start": "pnpm --filter @bsv/wui-frontend dev",
+    "build": "pnpm --filter @bsv/wui-frontend build",
+    "format:check": "prettier --check package.json README.md"
   },
   "keywords": [],
   "author": "BSV Association",
   "license": "Apache-2.0",
-  "devDependencies": {
-    "@p2ppsr/cars-cli": "1.2.34",
-    "@p2ppsr/lars": "1.5.13"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

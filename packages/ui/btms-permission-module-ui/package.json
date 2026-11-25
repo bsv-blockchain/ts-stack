@@ -10,18 +10,22 @@
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
       }
     }
   },
   "scripts": {
     "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/prompt-message.property.test.mjs",
-    "build": "tsc -b",
+    "build": "tsc -b && tsdown src/index.ts --format cjs --platform neutral --dts --out-dir dist/cjs --tsconfig tsconfig.json",
     "clean": "rm -rf dist",
     "lint": "oxlint . --deny-warnings",
     "format:check": "prettier --check src tests '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
     "typecheck": "tsc --noEmit",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports BtmsPermissionPrompt,BtmsPromptDialog,useBtmsPrompt",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs,esm --exports BtmsPermissionPrompt,BtmsPromptDialog,useBtmsPrompt",
     "test": "pnpm build && node --test tests/*.test.mjs",
     "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.mjs"
   },
@@ -48,15 +52,16 @@
   "devDependencies": {
     "fast-check": "^4.9.0",
     "@bsv/uhrp-react": "workspace:^",
-    "@mui/icons-material": "^6.0.0",
-    "@mui/material": "^6.0.0",
-    "@types/react": "^18.0.0",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
+    "@mui/icons-material": "^9.6.0",
+    "@mui/material": "^9.6.0",
+    "@types/react": "^19.3.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "@typescript/native": "npm:typescript@7.0.2",
     "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0"
+    "@emotion/styled": "^11.14.1",
+    "tsdown": "0.23.7"
   },
   "repository": {
     "type": "git",

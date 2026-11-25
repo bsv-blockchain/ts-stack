@@ -74,6 +74,10 @@ export const RUNTIME_COMPONENTS = [
   { name: 'webrtpay-relay', path: 'infra/webrtpay-relay', wallet: false }
 ]
 
+export const FRONTEND_COMPONENTS = JSON.parse(
+  readFileSync(path.join(REPOSITORY_ROOT, 'governance/container-images.json'), 'utf8')
+).components.filter(component => component.kind === 'frontend')
+
 const FULL_INFRA_CONTROL_PATHS = new Set([
   'governance/Dockerfile.container-bases',
   'governance/container-images.json'
@@ -523,6 +527,23 @@ export function selectRuntimeComponents(changedFiles) {
   return RUNTIME_COMPONENTS.filter(component => selected.has(component.name))
 }
 
+export function selectFrontendComponents(changedFiles, affectedNames) {
+  const sharedImageChange = changedFiles.some(file =>
+    [
+      'governance/container-images.json',
+      'packages/ui/Dockerfile',
+      'packages/ui/Dockerfile.dockerignore',
+      'packages/ui/nginx.conf',
+      'scripts/check-ui-image.sh',
+      '.github/workflows/infra-release.yaml',
+      '.github/workflows/ci.yml'
+    ].includes(file)
+  )
+  return FRONTEND_COMPONENTS.filter(
+    component => sharedImageChange || affectedNames.includes(component.workspace)
+  )
+}
+
 export function docsAreAffected(changedFiles) {
   return changedFiles.some(file => {
     const normalizedFile = normalized(file)
@@ -692,6 +713,9 @@ function main(arguments_) {
       affectedProjects: projectRecords(projects, workspace.affected),
       buildProjects: projectRecords(projects, buildNames),
       infraMatrix: { include: infraEntries },
+      frontendMatrix: {
+        include: selectFrontendComponents(changedFiles, workspace.affected)
+      },
       runtimeMatrix: {
         include: runtimeComponents.map(component => ({ component }))
       },

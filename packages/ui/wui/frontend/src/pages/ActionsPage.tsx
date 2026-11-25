@@ -31,7 +31,7 @@ import AddIcon from '@mui/icons-material/Add'
 import InputIcon from '@mui/icons-material/Input'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutlineOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
@@ -449,9 +449,12 @@ function ActionsPage() {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        justifyContent="space-between"
-        sx={{ mb: 2 }}
+
+        sx={{
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+          mb: 2
+        }}
       >
         <Typography variant="h4" gutterBottom>
           Actions
@@ -470,8 +473,8 @@ function ActionsPage() {
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1">Filters</Typography>
-        <Grid container spacing={2} alignItems="center" sx={{ mt: 1 }}>
-          <Grid item xs={12} sm={3}>
+        <Grid container spacing={2} sx={{ alignItems: 'center', mt: 1 }}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <TextField
               label="Labels (comma-separated)"
               value={labelsFilter || ''}
@@ -479,7 +482,7 @@ function ActionsPage() {
               fullWidth
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <FormControl fullWidth>
               <InputLabel>Label Query Mode</InputLabel>
               <Select
@@ -492,7 +495,7 @@ function ActionsPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={6} sm={2}>
+          <Grid size={{ xs: 6, sm: 2 }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -503,7 +506,7 @@ function ActionsPage() {
               label="Include Labels"
             />
           </Grid>
-          <Grid item xs={6} sm={2}>
+          <Grid size={{ xs: 6, sm: 2 }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -514,7 +517,7 @@ function ActionsPage() {
               label="Include Inputs"
             />
           </Grid>
-          <Grid item xs={6} sm={2}>
+          <Grid size={{ xs: 6, sm: 2 }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -526,7 +529,7 @@ function ActionsPage() {
             />
           </Grid>
         </Grid>
-        <Box textAlign="right" sx={{ mt: 2 }}>
+        <Box sx={{ textAlign: 'right', mt: 2 }}>
           <Button
             variant="outlined"
             onClick={() => {
@@ -541,7 +544,7 @@ function ActionsPage() {
 
       {/* List */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">Action List</Typography>
           <FormControl size="small" sx={{ width: 100 }}>
             <InputLabel>Limit</InputLabel>
@@ -581,12 +584,14 @@ function ActionsPage() {
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                    justifyContent="space-between"
+                    sx={{
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      justifyContent: 'space-between'
+                    }}
                   >
                     {/* Left side: TxID + Description */}
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="body1" fontWeight="bold">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                         {shortTxid(action.txid)}
                       </Typography>
                       {/* Copy button for TXID */}
@@ -609,7 +614,7 @@ function ActionsPage() {
                     </Stack>
 
                     {/* Right side: Status + Satoshis + Outgoing/Incoming indicator */}
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                       {/* Show status as a Chip, possibly color-coded */}
                       <Chip
                         label={action.status}
@@ -640,7 +645,7 @@ function ActionsPage() {
                   {action.labels && action.labels.length > 0 && (
                     <Box>
                       <Typography variant="subtitle2">Labels:</Typography>
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                         {keyedValues(action.labels).map(({ key, value }) => (
                           <Chip key={key} label={value} size="small" variant="outlined" />
                         ))}
@@ -673,7 +678,7 @@ function ActionsPage() {
                       </Typography>
                       <Grid container spacing={2}>
                         {action.inputs.map(inp => (
-                          <Grid item xs={12} key={inp.sourceOutpoint}>
+                          <Grid size={{ xs: 12 }} key={inp.sourceOutpoint}>
                             <Paper variant="outlined" sx={{ p: 2, backgroundColor: '#fafafa' }}>
                               <Stack spacing={1}>
                                 <Typography variant="body2">
@@ -696,7 +701,7 @@ function ActionsPage() {
                                 {/* Locking / Unlocking scripts can be large. Put them in scrollable boxes. */}
                                 {inp.sourceLockingScript && (
                                   <Box>
-                                    <Typography variant="body2" fontWeight="bold">
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                       Source Locking Script:
                                     </Typography>
                                     <Box
@@ -716,7 +721,7 @@ function ActionsPage() {
                                 )}
                                 {inp.unlockingScript && (
                                   <Box>
-                                    <Typography variant="body2" fontWeight="bold">
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                       Unlocking Script:
                                     </Typography>
                                     <Box
@@ -760,7 +765,7 @@ function ActionsPage() {
                       </Typography>
                       <Grid container spacing={2}>
                         {action.outputs.map(out => (
-                          <Grid item xs={12} key={out.outputIndex}>
+                          <Grid size={{ xs: 12 }} key={out.outputIndex}>
                             <Paper variant="outlined" sx={{ p: 2, backgroundColor: '#fafafa' }}>
                               <Stack spacing={1}>
                                 <Typography variant="body2">
@@ -789,10 +794,10 @@ function ActionsPage() {
                                 {/* Tags if present */}
                                 {out.tags && out.tags.length > 0 && (
                                   <Box>
-                                    <Typography variant="body2" fontWeight="bold">
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                       Tags:
                                     </Typography>
-                                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                                       {keyedValues(out.tags).map(({ key, value }) => (
                                         <Chip key={key} label={value} size="small" />
                                       ))}
@@ -810,7 +815,7 @@ function ActionsPage() {
                                 {/* Locking script can be large. */}
                                 {out.lockingScript && (
                                   <Box>
-                                    <Typography variant="body2" fontWeight="bold">
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                       Locking Script:
                                     </Typography>
                                     <Box
@@ -1463,7 +1468,7 @@ function CreateActionFormContent(
 
         {/* LockTime & Version */}
         <Grid container spacing={2}>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <TextField
               label="Lock Time"
               type="number"
@@ -1476,7 +1481,7 @@ function CreateActionFormContent(
               disabled={createLoading}
             />
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <TextField
               label="Version"
               type="number"
@@ -1511,7 +1516,7 @@ function CreateActionFormContent(
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             Options
           </Typography>
-          <Stack direction="row" spacing={2} flexWrap="wrap">
+          <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -1609,7 +1614,7 @@ function CreateActionFormContent(
       <Divider sx={{ my: 2 }} />
 
       {/* Inputs */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="h6">Inputs</Typography>
         <Button
           variant="contained"
@@ -1628,10 +1633,14 @@ function CreateActionFormContent(
           variant="outlined"
         >
           <Box
-            display="flex"
-            justifyContent="flex-end"
-            alignItems="center"
-            sx={{ position: 'absolute', top: 4, right: 4 }}
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              position: 'absolute',
+              top: 4,
+              right: 4
+            }}
           >
             <IconButton
               size="small"
@@ -1651,10 +1660,10 @@ function CreateActionFormContent(
             </IconButton>
           </Box>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Outpoint (txid.index)" value={inp.outpoint} fullWidth disabled />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Input Description"
                 value={inp.inputDescription}
@@ -1662,7 +1671,7 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 label="Unlocking Script"
                 value={inp.unlockingScript || ''}
@@ -1670,7 +1679,7 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 label="Unlocking Script Length"
                 value={
@@ -1680,7 +1689,7 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 label="Sequence Number"
                 value={inp.sequenceNumber !== undefined ? String(inp.sequenceNumber) : ''}
@@ -1695,7 +1704,7 @@ function CreateActionFormContent(
       <Divider sx={{ my: 2 }} />
 
       {/* Outputs */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="h6">Outputs</Typography>
         <Button
           variant="contained"
@@ -1714,10 +1723,14 @@ function CreateActionFormContent(
           variant="outlined"
         >
           <Box
-            display="flex"
-            justifyContent="flex-end"
-            alignItems="center"
-            sx={{ position: 'absolute', top: 4, right: 4 }}
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              position: 'absolute',
+              top: 4,
+              right: 4
+            }}
           >
             <IconButton
               size="small"
@@ -1737,7 +1750,7 @@ function CreateActionFormContent(
             </IconButton>
           </Box>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={8}>
+            <Grid size={{ xs: 12, sm: 8 }}>
               <TextField
                 label="Locking Script"
                 multiline
@@ -1747,10 +1760,10 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField label="Satoshis" type="number" value={out.satoshis} fullWidth disabled />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 label="Output Description"
                 value={out.outputDescription}
@@ -1758,10 +1771,10 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Basket (optional)" value={out.basket || ''} fullWidth disabled />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Tags (if any)"
                 value={out.tags?.join(', ') || ''}
@@ -1769,7 +1782,7 @@ function CreateActionFormContent(
                 disabled
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 label="Custom Instructions"
                 multiline

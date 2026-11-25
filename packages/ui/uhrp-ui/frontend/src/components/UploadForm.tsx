@@ -137,15 +137,15 @@ const UploadForm: React.FC<UploadFormProps> = () => {
   return (
     <form onSubmit={handleUpload}>
       <Grid container spacing={3} sx={{ py: 2 }}>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Typography variant="h5" gutterBottom sx={{ fontWeight: 'medium' }}>
             Upload Form
           </Typography>
-          <Typography color="textSecondary" paragraph sx={{ mb: 3 }}>
+          <Typography color="textSecondary" component="p" sx={{ mb: 3 }}>
             Upload files to UHRP Storage
           </Typography>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
             <InputLabel>UHRP Storage Server URL</InputLabel>
             <Select value={storageURL} onChange={handleSelectChange} label="Storage Server URL">
@@ -158,7 +158,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
             <InputLabel>Duration</InputLabel>
             <Select
@@ -186,7 +186,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12 }} sx={{ mb: 3 }}>
           <Typography variant="body2" color="textSecondary" gutterBottom>
             Select a file to upload
           </Typography>
@@ -200,13 +200,15 @@ const UploadForm: React.FC<UploadFormProps> = () => {
             }}
           />
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Dialog
             open={openDialog}
             onClose={handleCloseDialog}
-            PaperProps={{
-              elevation: 24,
-              sx: { borderRadius: 2 }
+            slotProps={{
+              paper: {
+                elevation: 24,
+                sx: { borderRadius: 2 }
+              }
             }}
           >
             <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
@@ -243,7 +245,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
             </DialogActions>
           </Dialog>
         </Grid>
-        <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+        <Grid size={{ xs: 12 }} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
           <Button
             variant="contained"
             color="primary"
@@ -257,7 +259,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
           </Button>
         </Grid>
         {loading && (
-          <Grid item xs={12} sx={{ mt: 2 }}>
+          <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
             <LinearProgress
               variant={uploadProgress === 0 ? 'indeterminate' : 'determinate'}
               value={uploadProgress}
@@ -266,7 +268,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
           </Grid>
         )}
         {results && (
-          <Grid item xs={12} sx={{ mt: 3, p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
+          <Grid size={{ xs: 12 }} sx={{ mt: 3, p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: 'success.dark', mb: 2 }}>
               Upload Successful!
             </Typography>

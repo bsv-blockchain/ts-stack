@@ -55,7 +55,7 @@ describe('visible search feedback', () => {
     const selected = vi.fn()
     render(<IdentitySearchField onIdentitySelected={selected} />)
     await search('alice')
-    expect(screen.getByRole('status').textContent).toMatch(/Saved contacts are unavailable/)
+    expect(screen.getByText(/Saved contacts are unavailable/).getAttribute('role')).toBe('status')
     fireEvent.click(screen.getByRole('option', { name: /Alice/ }))
     expect(selected).toHaveBeenCalledExactlyOnceWith(identity)
     expect(screen.queryByRole('alert')).toBeNull()

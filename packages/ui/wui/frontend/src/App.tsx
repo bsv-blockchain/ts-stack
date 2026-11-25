@@ -29,7 +29,9 @@ function AppContent() {
   // If still loading, show a splash or spinner
   if (loadingInitialWallet) {
     return (
-      <Box minHeight="100vh" display="flex" justifyContent="center" alignItems="center">
+      <Box
+        sx={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+      >
         <CircularProgress />
       </Box>
     )

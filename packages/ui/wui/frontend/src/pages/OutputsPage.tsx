@@ -147,7 +147,7 @@ function OutputsPage() {
       {/* FILTERS Panel */}
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1">Filters</Typography>
-        <Stack direction="row" spacing={2} sx={{ mt: 2 }} flexWrap="wrap">
+        <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', mt: 2 }}>
           <TextField
             label="Basket"
             size="small"
@@ -213,11 +213,13 @@ function OutputsPage() {
         </Stack>
 
         <Box
-          sx={{ mt: 2 }}
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            mt: 2
+          }}
         >
           <Button
             variant="outlined"
@@ -309,7 +311,7 @@ function OutputListItem({
         display: 'block'
       }}
     >
-      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <ListItemText
           primary={`Outpoint: ${item.outpoint}`}
           secondary={

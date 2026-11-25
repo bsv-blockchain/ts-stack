@@ -91,6 +91,7 @@ export function validateCiResults(needs, event) {
     expectResult(name, selected && !(localCertificate && event === 'pull_request'))
   }
   expectResult('infra', output('infra-scope', 'has-infra', 'boolean'))
+  expectResult('frontend-images', output('scope', 'has-frontends', 'boolean'))
   expectResult('docs-validate', output('scope', 'docs', 'boolean'))
   expectResult('conformance', output('scope', 'conformance', 'boolean'))
   // A PR result cannot attest to the queue's different, combined commit.

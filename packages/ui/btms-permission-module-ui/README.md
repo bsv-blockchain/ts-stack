@@ -27,8 +27,11 @@ npm install @bsv/btms-permission-module-ui
 ### Peer Dependencies
 
 ```bash
-npm install react @mui/material @mui/icons-material
+npm install react @mui/material @mui/icons-material @emotion/react @emotion/styled @bsv/uhrp-react
 ```
+
+The package supports ESM imports and CommonJS require with TypeScript
+declarations for each entry point.
 
 ## Usage
 

@@ -105,6 +105,54 @@
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay",
       "release": "ghcr-keyless"
+    },
+    {
+      "name": "btms-frontend",
+      "path": "packages/ui/btms-frontend",
+      "kind": "frontend",
+      "workspace": "@bsv/btms-frontend",
+      "title": "BTMS",
+      "description": "Manage, issue and transfer fungible BSV tokens",
+      "license": "Apache-2.0",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/btms-frontend",
+      "release": "ghcr-keyless"
+    },
+    {
+      "name": "registrant",
+      "path": "packages/ui/registrant/frontend",
+      "kind": "frontend",
+      "workspace": "registrant",
+      "title": "Registrant",
+      "description": "Register protocol, basket and certificate definitions",
+      "license": "Apache-2.0",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/registrant/frontend",
+      "release": "ghcr-keyless"
+    },
+    {
+      "name": "uhrp-ui",
+      "path": "packages/ui/uhrp-ui/frontend",
+      "kind": "frontend",
+      "workspace": "uhrp-example-ui",
+      "title": "UHRP UI",
+      "description": "Upload and retrieve UHRP content",
+      "license": "Apache-2.0",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-ui/frontend",
+      "release": "ghcr-keyless"
+    },
+    {
+      "name": "wui",
+      "path": "packages/ui/wui/frontend",
+      "kind": "frontend",
+      "workspace": "@bsv/wui-frontend",
+      "title": "Wallet UI",
+      "description": "Access and manage a BRC-100 wallet",
+      "license": "Apache-2.0",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/wui/frontend",
+      "release": "ghcr-keyless"
     }
   ]
 }

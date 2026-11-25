@@ -256,6 +256,24 @@
       "requiresReadme": true,
       "requiresLicenseFile": true
     },
+    "legacy-browser-library": {
+      "description": "Published browser library that preserves its established deep imports and unrestricted Node engine field",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:browser",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresExports": false,
+      "requiresNodeEngine": false,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
     "react-native-library": {
       "description": "Published React Native/mobile library",
       "requiredScripts": [
@@ -334,8 +352,8 @@
       "requiresReadme": true
     },
     "deployment-project": {
-      "description": "Private remote deployment configuration for a separate browser application workspace",
-      "requiredScripts": ["format:check", "deploy"],
+      "description": "Private development entry point for a browser application published as an image",
+      "requiredScripts": ["build", "format:check", "start"],
       "requiresReadme": true
     }
   },
@@ -758,7 +776,7 @@
       "name": "@bsv/amountinator-react",
       "owner": "ts-stack-maintainers",
       "area": "ui",
-      "profile": "browser-library",
+      "profile": "legacy-browser-library",
       "criticality": "tier-2",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc",
@@ -794,7 +812,7 @@
       "criticality": "tier-2",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc",
-      "consumerProfiles": ["browser-bundler", "node-esm"]
+      "consumerProfiles": ["browser-bundler", "node-cjs", "node-esm"]
     },
     {
       "path": "packages/ui/identity-react",

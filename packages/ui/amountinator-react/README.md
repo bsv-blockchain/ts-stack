@@ -15,7 +15,7 @@ their BRC-100 wallet settings.
 ## Installation
 
 ```bash
-npm install @bsv/amountinator-react
+npm install @bsv/amountinator-react react @mui/material @mui/icons-material @emotion/react @emotion/styled
 ```
 
 ## Exports

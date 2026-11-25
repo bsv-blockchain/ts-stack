@@ -11,6 +11,7 @@ import {
   ListItemIcon,
   ListItemText,
   Snackbar,
+  SnackbarContent,
   TextField,
   Tooltip,
   Typography,
@@ -50,10 +51,14 @@ const CopyNotificationManager = () => {
       open={open}
       autoHideDuration={3000}
       onClose={() => setOpen(false)}
-      message="Identity key copied to clipboard"
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      ContentProps={{ role: 'status', 'aria-live': 'polite' }}
-    />
+    >
+      <SnackbarContent
+        role="status"
+        aria-live="polite"
+        message="Identity key copied to clipboard"
+      />
+    </Snackbar>
   )
 }
 
@@ -74,12 +79,10 @@ export interface IdentitySearchFieldProps {
 
 type SearchInputParams =
   | AutocompleteRenderInputParams
-  | (Pick<AutocompleteRenderInputParams, 'id' | 'disabled' | 'fullWidth' | 'size'> & {
-      slotProps: {
-        input: AutocompleteRenderInputParams['InputProps']
-        inputLabel: AutocompleteRenderInputParams['InputLabelProps']
-        htmlInput: AutocompleteRenderInputParams['inputProps']
-      }
+  | (Omit<AutocompleteRenderInputParams, 'slotProps'> & {
+      InputProps: AutocompleteRenderInputParams['slotProps']['input']
+      InputLabelProps: AutocompleteRenderInputParams['slotProps']['inputLabel']
+      inputProps: AutocompleteRenderInputParams['slotProps']['htmlInput']
     })
 
 // Memoized component for individual list items to prevent re-rendering the entire list on hover

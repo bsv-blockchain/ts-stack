@@ -1,4 +1,4 @@
-import React, { FC, useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useStore } from './store'
 
 /**
@@ -19,7 +19,7 @@ interface SourceProps extends React.SourceHTMLAttributes<HTMLSourceElement> {
  * @param {SourceProps} props - The component's properties
  * @returns {JSX.Element} - The resolved `<source>` element or a loading indicator
  */
-const Source: FC<SourceProps> = ({ src, loading, ...props }) => {
+const Source = ({ src, loading, ...props }: SourceProps): React.JSX.Element => {
   const resolvedUrl = useStore(state => state.urls[src] || '')
   const setResolvedURL = useStore(state => state.setResolvedURL)
   const sourceRef = useRef<HTMLSourceElement>(null)

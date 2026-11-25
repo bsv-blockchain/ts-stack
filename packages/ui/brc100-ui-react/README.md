@@ -8,8 +8,8 @@ A library of reusable React components for building wallet UIs.
 npm install @bsv/brc100-ui-react-components
 ```
 
-Use React and React DOM 18 in the host application. Keep the host's SDK and wallet-toolbox client within the
-package's peer ranges. The browser entry works with Vite and esbuild. Node imports and CommonJS consumers share
+The host supplies SDK 4.1.2 or newer within SDK 4, wallet-toolbox client 2.18 or
+newer within major 2, and React and React DOM 18. The browser entry works with Vite and esbuild. Node imports and CommonJS consumers share
 the same React context instances.
 
 ```tsx

@@ -1,7 +1,7 @@
 // frontend/src/pages/Tokens/index.tsx
 
 import React, { useMemo, useState, useEffect } from 'react'
-import { Link, useHistory, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Grid,
   Typography,
@@ -28,7 +28,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { Img } from '@bsv/uhrp-react'
 import SortIcon from '@mui/icons-material/Sort'
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep'
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutlineOutlined'
 import SendIcon from '@mui/icons-material/Send'
 import CallReceivedIcon from '@mui/icons-material/CallReceived'
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment'
@@ -138,8 +138,8 @@ const reportRemovedOutputs = (removedCount: number, failedCount: number) => {
 
 const Tokens: React.FC = () => {
   const classes = useStyles()
-  const history = useHistory()
-  const { assetId } = useParams<{ assetId?: string }>()
+  const navigate = useNavigate()
+  const { assetId } = useParams<'assetId'>()
   let tokenID = assetId || ''
   if (tokenID) {
     // Replace ALL underscores with dots (not just the first one)
@@ -304,7 +304,7 @@ const Tokens: React.FC = () => {
       <div>
         <Container>
           <Grid container>
-            <Grid item className={classes.back_button}>
+            <Grid className={classes.back_button}>
               <Button component={Link} to="/" color="secondary">
                 <ArrowBackIosNewIcon className={classes.back_icon} /> My Tokens
               </Button>
@@ -325,7 +325,7 @@ const Tokens: React.FC = () => {
       <div>
         <Container>
           <Grid container>
-            <Grid item className={classes.back_button}>
+            <Grid className={classes.back_button}>
               <Button component={Link} to="/" color="secondary">
                 <ArrowBackIosNewIcon className={classes.back_icon} /> My Tokens
               </Button>
@@ -347,7 +347,7 @@ const Tokens: React.FC = () => {
   return (
     <div>
       <Container maxWidth="lg" sx={{ pb: 8 }}>
-        <Grid container alignItems="center" className={classes.back_button}>
+        <Grid container sx={{ alignItems: 'center' }} className={classes.back_button}>
           <Button component={Link} to="/" color="secondary">
             <ArrowBackIosNewIcon className={classes.back_icon} /> My Tokens
           </Button>
@@ -356,7 +356,7 @@ const Tokens: React.FC = () => {
         <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, mt: 2 }}>
           <Grid container spacing={4}>
             {/* Left side - Token info */}
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                 <Box
                   sx={{
@@ -422,11 +422,7 @@ const Tokens: React.FC = () => {
               <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <Send assetId={token.assetId} asset={token} onReloadNeeded={refresh} />
                 <Receive assetId={token.assetId} asset={token} onReloadNeeded={refresh} />
-                <Burn
-                  assetId={token.assetId}
-                  asset={token}
-                  onReloadNeeded={() => history.push('/')}
-                />
+                <Burn assetId={token.assetId} asset={token} onReloadNeeded={() => navigate('/')} />
               </Box>
               {SHOW_TEST_CLEAN_BAD_OUTPUTS && (
                 <Box sx={{ mt: 2 }}>
@@ -445,7 +441,7 @@ const Tokens: React.FC = () => {
             </Grid>
 
             {/* Right side - Balance history graph */}
-            <Grid item xs={12} md={8}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <Box
                 sx={{
                   mb: 1,
@@ -540,9 +536,8 @@ const Tokens: React.FC = () => {
           </Grid>
         </Paper>
 
-        <Grid container direction="column" sx={{ pt: 2 }}>
+        <Grid container sx={{ flexDirection: 'column', pt: 2 }}>
           <Grid
-            item
             sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
           >
             <Typography variant="h5" sx={{ fontWeight: 700 }}>

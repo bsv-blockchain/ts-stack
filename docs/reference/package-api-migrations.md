@@ -123,10 +123,9 @@ explicitly authorized operations.
 - Release note: Currency amount display, entry, and formatting with React. The implementation, tests and package tooling are developed in TS Stack.
 - Migration: Keep importing @bsv/amountinator-react. Use the compatibility ranges in its package manifest and follow the package README for integration.
 
-| Public subpath   | Runtime target(s)    | Declaration target(s)  |
-| ---------------- | -------------------- | ---------------------- |
-| `.`              | `./out/src/index.js` | `./out/src/index.d.ts` |
-| `./package.json` | `./package.json`     | —                      |
+| Public subpath | Runtime target(s)    | Declaration target(s)  |
+| -------------- | -------------------- | ---------------------- |
+| `.`            | `./out/src/index.js` | `./out/src/index.d.ts` |
 
 ## @bsv/auth
 
@@ -215,9 +214,9 @@ explicitly authorized operations.
 - Release note: React prompts and dialogs for BTMS spending authorization. The implementation, tests and package tooling are developed in TS Stack.
 - Migration: Keep importing @bsv/btms-permission-module-ui. Use the compatibility ranges in its package manifest and follow the package README for integration.
 
-| Public subpath | Runtime target(s) | Declaration target(s) |
-| -------------- | ----------------- | --------------------- |
-| `.`            | `./dist/index.js` | `./dist/index.d.ts`   |
+| Public subpath | Runtime target(s)                           | Declaration target(s)                           |
+| -------------- | ------------------------------------------- | ----------------------------------------------- |
+| `.`            | `./dist/index.js`<br>`./dist/cjs/index.cjs` | `./dist/index.d.ts`<br>`./dist/cjs/index.d.cts` |
 
 ## @bsv/chirp
 

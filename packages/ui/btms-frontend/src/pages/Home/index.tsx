@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Grid,
   Typography,
@@ -29,12 +29,6 @@ import { AssetView } from '../../btms/types'
 import useBtmsAssets from '../../hooks/useBtmsAssets'
 import useBtmsIncoming from '../../hooks/useBtmsIncoming'
 import { formatBtmsError } from '../../utils/formatBtmsError'
-
-interface HomeProps {
-  history: {
-    push: (path: string) => void
-  }
-}
 
 const INCOMING_REFRESH_MS = 30000
 
@@ -70,7 +64,8 @@ const truncateAssetId = (assetId: string, prefix = 8, suffix = 8): string => {
   return `${assetId.slice(0, prefix)}...${assetId.slice(-suffix)}`
 }
 
-const Home: React.FC<HomeProps> = ({ history }) => {
+const Home: React.FC = () => {
+  const navigate = useNavigate()
   const classes = useStyles()
 
   const {
@@ -253,7 +248,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
     <div>
       <Container maxWidth="lg" sx={{ pb: 8 }}>
         <Grid container spacing={4} className={classes.title}>
-          <Grid item xs={12} md={7}>
+          <Grid size={{ xs: 12, md: 7 }}>
             <Typography variant="h2" sx={{ fontWeight: 700 }}>
               BTMS Asset Vault
             </Typography>
@@ -266,7 +261,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
               </Button>
             </Box>
           </Grid>
-          <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <Paper
               elevation={0}
               sx={{ p: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(16px)' }}
@@ -293,11 +288,10 @@ const Home: React.FC<HomeProps> = ({ history }) => {
 
         <Grid
           container
-          alignItems="center"
+          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
           className={classes.table_title}
-          justifyContent="space-between"
         >
-          <Grid item>
+          <Grid>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               My Assets
             </Typography>
@@ -307,7 +301,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
           </Grid>
         </Grid>
 
-        <Grid container direction="column">
+        <Grid container sx={{ flexDirection: 'column' }}>
           <TableContainer component={Paper} elevation={0} sx={{ mt: 2 }}>
             <Table>
               <TableHead>
@@ -354,7 +348,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                         <TableCell
                           align="left"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => history.push(`/tokens/${token.assetId.replace('.', '_')}`)}
+                          onClick={() => navigate(`/tokens/${token.assetId.replace('.', '_')}`)}
                         >
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box
@@ -421,7 +415,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                         <TableCell
                           align="left"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => history.push(`/tokens/${token.assetId.replace('.', '_')}`)}
+                          onClick={() => navigate(`/tokens/${token.assetId.replace('.', '_')}`)}
                         >
                           <Typography variant="body2" color="text.secondary">
                             View details

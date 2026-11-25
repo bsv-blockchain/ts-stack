@@ -1,7 +1,9 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const React = require('react')
-const { create, act } = require('react-test-renderer')
+const { create } = require('react-test-renderer')
+const { act } = React
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const {
   LookupResolver,
   PrivateKey,
@@ -28,12 +30,19 @@ const resolve = url => useStore.getState().setResolvedURL(url)
 test('passes plain image and media URLs through and preserves their attributes', async () => {
   const src = 'https://cdn.example/picture.png'
   await resolve(src)
-  const image = create(React.createElement(Img, { src, alt: 'Wallet badge' }))
-  const source = create(React.createElement(Source, { src, type: 'image/png' }))
+  let image
+  let source
+  await act(async () => {
+    image = create(React.createElement(Img, { src, alt: 'Wallet badge' }))
+    source = create(React.createElement(Source, { src, type: 'image/png' }))
+  })
   assert.deepEqual(image.toJSON().props, { src, alt: 'Wallet badge' })
-  assert.deepEqual(source.toJSON().props, { src, type: 'image/png' })
-  image.unmount()
-  source.unmount()
+  assert.equal(source.toJSON().props.src, src)
+  assert.equal(source.toJSON().props.type, 'image/png')
+  await act(async () => {
+    image.unmount()
+    source.unmount()
+  })
 })
 
 test('restarts an empty media element as soon as its async source becomes available', async () => {
@@ -66,8 +75,10 @@ test('restarts an empty media element as soon as its async source becomes availa
 
   assert.equal(pendingMedia.loads, 1)
   assert.equal(playingMedia.loads, 0)
-  pendingSource.unmount()
-  playingSource.unmount()
+  await act(async () => {
+    pendingSource.unmount()
+    playingSource.unmount()
+  })
 })
 
 test('shows fallbacks, retries unavailable UHRP content and shares each lookup', async t => {
@@ -101,8 +112,10 @@ test('shows fallbacks, retries unavailable UHRP content and shares each lookup',
   assert.equal(image.toJSON().props.alt, '')
   assert.equal(source.toJSON().props.src, resolved)
   assert.equal(JSON.parse(storage.get('uhrp-react-session')).state.urls[src], resolved)
-  image.unmount()
-  source.unmount()
+  await act(async () => {
+    image.unmount()
+    source.unmount()
+  })
 })
 
 test('renders the SDK-resolved URL from a signed advertisement', async t => {
@@ -139,7 +152,7 @@ test('renders the SDK-resolved URL from a signed advertisement', async t => {
   assert.equal(lookup.mock.callCount(), 1)
   assert.equal(image.toJSON().props.src, advertisedUrl)
   assert.equal(image.toJSON().props.alt, 'Catalog badge')
-  image.unmount()
+  await act(async () => image.unmount())
 })
 
 test('exposes the same named exports to CommonJS and ESM consumers', async () => {

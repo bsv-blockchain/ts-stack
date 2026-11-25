@@ -8,9 +8,8 @@ A library of reusable React components for displaying and searching identity inf
 npm install @bsv/identity-react
 ```
 
-The package uses SDK 4.1.1 or later in the 4.x line, React 18, Material UI, and
-Emotion 11. Install these peers in the consuming app if your package manager
-does not install them automatically.
+The consuming app supplies SDK 4.1.2 or later within SDK 4, React 18 or 19,
+Material UI and Emotion 11. Identity React uses UHRP React 2 for media resolution.
 
 ## Example Usage
 

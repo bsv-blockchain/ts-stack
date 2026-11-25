@@ -73,7 +73,10 @@ const infrastructure = (
         packageName: manifest.name,
         version: manifest.version,
         engines: manifest.engines ?? {},
-        runtimeTargets: ['node', containerPolicy.platform]
+        runtimeTargets: [
+          component.kind === 'frontend' ? 'browser' : 'node',
+          containerPolicy.platform
+        ]
       }
     })
   )
@@ -173,14 +176,14 @@ ${table(
     project.profile,
     project.consumerProfiles.join(', '),
     project.runtimeTargets.join(', '),
-    `\`${project.engines.node}\``,
+    project.engines.node ? `\`${project.engines.node}\`` : '—',
     repositoryLink(project)
   ])
 )}
 
-## Standalone infrastructure manifests
+## Container release inventory
 
-These versions identify the checked-in service manifests; production identity is
+These versions identify the checked-in manifests; production identity is
 the separately released and verified image digest.
 
 ${table(
@@ -189,7 +192,7 @@ ${table(
     project.title,
     `\`${project.packageName}\``,
     `\`${project.version}\``,
-    `\`${project.engines.node}\``,
+    project.engines.node ? `\`${project.engines.node}\`` : '—',
     project.runtimeTargets.join(', '),
     project.release,
     repositoryLink(project)
@@ -205,13 +208,17 @@ ${table(
     ['Package-area projects', baseline.workspace.packageAreaProjects],
     ['Public npm packages', publicPackages.length],
     ['Private package-area projects', baseline.workspace.privatePackageAreaProjects],
-    ['Standalone infrastructure projects', infrastructure.length]
+    [
+      'Standalone infrastructure projects',
+      infrastructure.filter(component => component.kind !== 'frontend').length
+    ],
+    ['Frontend images', infrastructure.filter(component => component.kind === 'frontend').length]
   ]
 )}
 
 Public packages use the \`npm-oidc\` release route. Other workspace projects are
 private packages or documentation/conformance tooling. Standalone infrastructure
-components are governed separately by \`governance/container-images.json\` and use their
+and frontend images are governed separately by \`governance/container-images.json\` and use their
 recorded container release route; they are not published by the public-package job.
 
 ## Conformance corpus

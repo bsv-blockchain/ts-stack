@@ -125,6 +125,8 @@ jobs:
       direct-projects: ${{ steps.scope.outputs.direct-projects }}
       affected-projects: ${{ steps.scope.outputs.affected-projects }}
       build-projects: ${{ steps.scope.outputs.build-projects }}
+      frontend-matrix: ${{ steps.scope.outputs.frontend-matrix }}
+      has-frontends: ${{ steps.scope.outputs.has-frontends }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
@@ -189,6 +191,8 @@ jobs:
           echo "direct-projects=$(jq -c '.directProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "affected-projects=$(jq -c '.affectedProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "build-projects=$(jq -c '.buildProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "frontend-matrix=$(jq -c '.frontendMatrix' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "has-frontends=$(jq -r '.frontendMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "infra-matrix=$(jq -c '.infraMatrix' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "docs=$(jq -r '.docs' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
@@ -2110,6 +2114,41 @@ jobs:
           fail-on-severity: high
           comment-summary-in-pr: never
 
+  frontend-images:
+    name: Frontend image / ${{ matrix.name }}
+    if: needs.scope.outputs.has-frontends == 'true'
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.scope.outputs.frontend-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the release image from the workspace lockfile
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: packages/ui/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ts-stack-frontend:contract
+          build-args: |
+            UI_WORKSPACE=${{ matrix.workspace }}
+            UI_PATH=${{ matrix.path }}
+          cache-from: type=gha,scope=frontend-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=frontend-${{ matrix.name }}
+      - name: Exercise the deployed HTTP contract
+        run: bash scripts/check-ui-image.sh ts-stack-frontend:contract
+
   merge-gate:
     name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.id == 41898282 && startsWith(github.head_ref, 'codex/merge-queue-analysis/') && 'Auxiliary analysis PR gate' || 'merge-gate' }}
     if: always()
@@ -2138,6 +2177,7 @@ jobs:
       - sonar-zero-findings
       - build-and-test
       - infra
+      - frontend-images
       - docs-validate
       - conformance
       - dependency-review

@@ -58,11 +58,11 @@ const App: React.FC = () => {
     <Container maxWidth="md" sx={{ paddingTop: '2em', paddingBottom: '2em' }}>
       <NoMncModal open={walletMissing} onClose={() => setWalletMissing(false)} />
       <Grid container spacing={2}>
-        <Grid item xs={12} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12 }} sx={{ mb: 2 }}>
           <Typography variant="h4" align="center" sx={{ fontWeight: 'bold', mb: 1 }}>
             UHRP Storage UI
           </Typography>
-          <Typography color="textSecondary" paragraph align="center" sx={{ mb: 3 }}>
+          <Typography color="textSecondary" component="p" align="center" sx={{ mb: 3 }}>
             Upload and Download Content
           </Typography>
           <Tabs
@@ -84,14 +84,14 @@ const App: React.FC = () => {
             <Tab label="Files" />
           </Tabs>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <div style={{ minHeight: '400px' }}>
             {tabIndex === 0 && <DownloadForm />}
             {tabIndex === 1 && <UploadForm />}
             {tabIndex === 2 && <FilesForm />}
           </div>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Footer />
         </Grid>
       </Grid>

@@ -163,11 +163,14 @@ function HomePage() {
 
   return (
     <Box
-      display="flex"
-      justifyContent="center"
-      alignItems="flex-start"
-      minHeight="100vh"
-      sx={{ px: 2, py: 4 }}
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        minHeight: '100vh',
+        px: 2,
+        py: 4
+      }}
     >
       <Paper
         sx={{
@@ -202,7 +205,7 @@ function HomePage() {
                 }}
               >
                 <Box>
-                  <Typography fontWeight="bold">
+                  <Typography sx={{ fontWeight: 'bold' }}>
                     {c.name} (<strong>••••{c.pubKeySuffix}</strong>)
                   </Typography>
                   <Typography variant="body2">
@@ -225,7 +228,7 @@ function HomePage() {
           })}
         </Stack>
 
-        <Box textAlign="right">
+        <Box sx={{ textAlign: 'right' }}>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={startAddConfig}>
             Add New
           </Button>

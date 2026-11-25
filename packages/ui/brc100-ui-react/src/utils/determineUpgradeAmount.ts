@@ -7,9 +7,8 @@ export const determineUpgradeAmount = (
   usdPerBsv: number,
   returnType: 'sats' | 'usd' = 'sats'
 ): number => {
-  const previousUsd = previousAmountInSats * (usdPerBsv / 1e8)
+  const tierInSatoshis = (usd: number) => Math.round((usd * 1e8) / usdPerBsv)
+  const nextUsd = [5, 10, 20].find(tier => previousAmountInSats < tierInSatoshis(tier)) ?? 50
 
-  const nextUsd = [5, 10, 20].find(tier => previousUsd < tier) ?? 50
-
-  return returnType === 'usd' ? nextUsd : Math.round((nextUsd * 1e8) / usdPerBsv)
+  return returnType === 'usd' ? nextUsd : tierInSatoshis(nextUsd)
 }

@@ -355,7 +355,7 @@ function CertificatesPage() {
    ************************************************/
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Certificates</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openAcquireModal}>
           Acquire Certificate
@@ -409,7 +409,7 @@ function CertificatesPage() {
               key={JSON.stringify([c.certifier, c.type, c.subject, c.serialNumber])}
               sx={{ borderBottom: '1px solid #eee', display: 'block' }}
             >
-              <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <ListItemText
                   primary={`Serial: ${c.serialNumber} – Type: ${c.type} – Certifier: ${c.certifier}`}
                   secondary={
@@ -454,7 +454,7 @@ function CertificatesPage() {
         <DialogContent sx={{ pt: 2 }}>
           {acquireError && <Alert severity="error">{acquireError}</Alert>}
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Certificate Type (base64)"
                 value={acqType}
@@ -462,7 +462,7 @@ function CertificatesPage() {
                 fullWidth
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 label="Certifier PubKey"
                 value={acqCertifier}
@@ -470,7 +470,7 @@ function CertificatesPage() {
                 fullWidth
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <FormControl fullWidth>
                 <InputLabel>Acquisition Protocol</InputLabel>
                 <Select

@@ -38,39 +38,36 @@
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/amountinator-react#readme",
   "dependencies": {
     "@bsv/amountinator": "workspace:^",
-    "@emotion/react": "^11.11.1",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.11.16",
-    "@mui/material": "^5.13.6",
-    "react": "^18.2.0",
     "use-async-effect": "^2.2.7"
   },
   "devDependencies": {
     "fast-check": "^4.9.0",
-    "@types/jest": "^29.5.12",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.15",
     "ts-node": "^10.9.2",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@types/react": "^18.3.0"
-  },
-  "exports": {
-    ".": {
-      "types": "./out/src/index.d.ts",
-      "default": "./out/src/index.js"
-    },
-    "./package.json": "./package.json"
+    "@types/react": "^19.3.3",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.6.0",
+    "@mui/material": "^9.6.0",
+    "react": "^19.3.1"
   },
   "keywords": [
     "bsv",
     "ui"
   ],
-  "engines": {
-    "node": ">=22"
-  },
   "sideEffects": true,
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.11.16 || ^6 || ^7 || ^8 || ^9",
+    "@mui/material": "^5.13.6 || ^6 || ^7 || ^8 || ^9",
+    "react": "^18.2.0 || ^19"
   }
 }

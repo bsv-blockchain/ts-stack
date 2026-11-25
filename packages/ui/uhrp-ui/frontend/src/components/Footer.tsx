@@ -6,7 +6,7 @@ const Footer: React.FC = () => {
     <>
       <br />
       <br />
-      <Typography align="center" paragraph>
+      <Typography align="center" component="p" sx={{ mb: 2 }}>
         Check out the{' '}
         <a href="https://github.com/bsv-blockchain/uhrp-services">
           Universal Hash Resolution Protocol
