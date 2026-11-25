@@ -4,7 +4,11 @@ import InputAdornment from '@mui/material/InputAdornment'
 import { CurrencyConverter } from '@bsv/amountinator'
 import useAsyncEffect from 'use-async-effect'
 
-const AmountInputField = ({ onSatoshisChange }) => {
+interface AmountInputFieldProps {
+  onSatoshisChange: (satoshis: number | null) => void
+}
+
+const AmountInputField = ({ onSatoshisChange }: AmountInputFieldProps) => {
   const [amount, setAmount] = useState('')
   const [currencySymbol, setCurrencySymbol] = useState('$')
   const currencyConverter = useMemo(() => new CurrencyConverter(), [])
@@ -15,20 +19,23 @@ const AmountInputField = ({ onSatoshisChange }) => {
     setCurrencySymbol(currencyConverter.getCurrencySymbol())
   }, [])
 
-  const handleAmountChange = useCallback(async (event) => {
-    const input = event.target.value.replace(/[^0-9.]/g, '')
+  const handleAmountChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const input = event.target.value.replace(/[^0-9.]/g, '')
 
-    setAmount(input)
+      setAmount(input)
 
-    // Note: Handle errors at a higher layer!
-    if (input === '' || input === '.' || input === '..') {
-      onSatoshisChange(null)
-      return
-    }
+      const numericAmount = Number(input)
+      if (input === '' || !Number.isFinite(numericAmount)) {
+        onSatoshisChange(null)
+        return
+      }
 
-    const satoshis = await currencyConverter.convertToSatoshis(input)
-    onSatoshisChange(satoshis)
-  }, [currencyConverter, onSatoshisChange])
+      const satoshis = await currencyConverter.convertToSatoshis(numericAmount)
+      onSatoshisChange(satoshis)
+    },
+    [currencyConverter, onSatoshisChange]
+  )
 
   return (
     <TextField
