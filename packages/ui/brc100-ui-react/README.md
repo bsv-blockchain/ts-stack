@@ -11,3 +11,5 @@ npm install @bsv/brc100-ui-react-components
 ## License
 
 The license for the code in this repository is the Apache License 2.0.
+
+[Apache License 2.0](./LICENSE)

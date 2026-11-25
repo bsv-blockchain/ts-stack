@@ -54,8 +54,7 @@ jobs:
           project="packages/ui/$UI_PROJECT"
           jq -e --argjson target "$CARS_TARGET" '
             .frontend.language == "react" and
-            .configs[$target].deploy == ["frontend"] and
-            (.configs[$target].projectID | type == "string" and length > 0)
+            .configs[$target].deploy == ["frontend"]
           ' "$project/deployment-info.json" > /dev/null
           pnpm --filter "{./$project/frontend}..." run build
           test -s "$project/frontend/build/index.html"
@@ -102,6 +101,10 @@ jobs:
           case "$CARS_TARGET" in 1|2) ;; *) exit 1 ;; esac
           : "${CARS_PRIVATE_KEY:?Configure the selected CARS project and target in release-approval}"
           project="packages/ui/$UI_PROJECT"
+          jq -e --argjson target "$CARS_TARGET" '
+            .configs[$target].deploy == ["frontend"] and
+            (.configs[$target].projectID | type == "string" and length > 0)
+          ' "$project/deployment-info.json" > /dev/null
           (cd "$RUNNER_TEMP/cars-candidate" && sha256sum -c SHA256SUMS)
           cp "$RUNNER_TEMP/cars-candidate/cars_artifact_1.tgz" "$project/"
           pnpm --dir "$project" exec cars release now "$CARS_TARGET" --key "$CARS_PRIVATE_KEY"

@@ -19,13 +19,13 @@ import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
-import { AppOriginChip } from './AppOriginChip'
-import { formatAmount, parseTokenMessage, truncateHex } from './utils'
+import { AppOriginChip } from './AppOriginChip.js'
+import { formatAmount, parseTokenMessage, truncateHex } from './utils.js'
 import type {
   BTMSBurnInfo,
   BTMSSpendInfo,
   BtmsPromptDialogProps
-} from './types'
+} from './types.js'
 
 /**
  * Modal dialog for prompting user to approve BTMS token operations.

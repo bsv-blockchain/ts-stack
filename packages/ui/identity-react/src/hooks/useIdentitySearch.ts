@@ -6,7 +6,7 @@ import {
   OriginatorDomainNameStringUnder250Bytes
 } from '@bsv/sdk'
 import type { AutocompleteInputChangeReason } from '@mui/material/Autocomplete'
-import { fetchIdentities } from '../utils/identityUtils'
+import { fetchIdentities } from '../utils/identityUtils.js'
 
 export interface UseIdentitySearchProps {
   onIdentitySelected?: (selectedIdentity: DisplayableIdentity) => void

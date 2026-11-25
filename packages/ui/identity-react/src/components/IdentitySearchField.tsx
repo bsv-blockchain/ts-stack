@@ -20,9 +20,9 @@ import { Search as SearchIcon, ContentCopy as ContentCopyIcon } from '@mui/icons
 import { NoMncModal } from 'metanet-react-prompt'
 import { DisplayableIdentity } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
-import { isIdentityKey } from '../utils/identityUtils'
-import { useIdentitySearch } from '../hooks/useIdentitySearch'
-import { DEFAULT_IDENTITY } from '../types'
+import { isIdentityKey } from '../utils/identityUtils.js'
+import { useIdentitySearch } from '../hooks/useIdentitySearch.js'
+import { DEFAULT_IDENTITY } from '../types/index.js'
 
 // Create a global event system without causing re-renders in React components
 const copyEvents = {

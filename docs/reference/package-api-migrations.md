@@ -749,11 +749,11 @@ CLI entry points: `{"create-bsv-app":"dist/index.js"}`.
 - Release note: Metanet application publication, discovery and lifecycle APIs. The implementation, tests and package tooling are developed in TS Stack.
 - Migration: Keep importing metanet-apps. Use the compatibility ranges in its package manifest and follow the package README for integration.
 
-| Public subpath   | Runtime target(s)                          | Declaration target(s)   |
-| ---------------- | ------------------------------------------ | ----------------------- |
-| `.`              | `./dist/esm/mod.js`<br>`./dist/cjs/mod.js` | `./dist/types/mod.d.ts` |
-| `./mod.ts`       | `./dist/esm/mod.js`<br>`./dist/cjs/mod.js` | `./dist/types/mod.d.ts` |
-| `./package.json` | `./package.json`                           | —                       |
+| Public subpath   | Runtime target(s)                          | Declaration target(s)                            |
+| ---------------- | ------------------------------------------ | ------------------------------------------------ |
+| `.`              | `./dist/esm/mod.js`<br>`./dist/cjs/mod.js` | `./dist/types/mod.d.ts`<br>`./dist/cjs/mod.d.ts` |
+| `./mod.ts`       | `./dist/esm/mod.js`<br>`./dist/cjs/mod.js` | `./dist/types/mod.d.ts`<br>`./dist/cjs/mod.d.ts` |
+| `./package.json` | `./package.json`                           | —                                                |
 
 ## Change procedure
 

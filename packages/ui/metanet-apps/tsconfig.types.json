@@ -5,10 +5,10 @@
     "outDir": "./dist/types",
     "emitDeclarationOnly": true,
     "declaration": true,
-    "declarationMap": true,
-    "typeRoots": [
-      "./src/utils/types",
-      "./node_modules/@types"
-    ]
+    "declarationMap": false,
+    "typeRoots": ["./src/utils/types", "./node_modules/@types"],
+    "sourceMap": false,
+    "inlineSources": false,
+    "tsBuildInfoFile": "./node_modules/.cache/metanet-apps-types.tsbuildinfo"
   }
 }

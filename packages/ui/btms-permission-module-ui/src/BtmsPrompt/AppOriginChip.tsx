@@ -4,7 +4,7 @@ import type { PaletteMode } from '@mui/material'
 import AppsIcon from '@mui/icons-material/Apps'
 import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
-import { normalizeAppLabel, resolveAppBaseUrl } from './utils'
+import { normalizeAppLabel, resolveAppBaseUrl } from './utils.js'
 
 export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'; paletteMode?: PaletteMode }> = ({
   app,

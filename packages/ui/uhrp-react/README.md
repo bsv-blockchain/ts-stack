@@ -43,10 +43,10 @@ export function LessonMedia({ posterUrl, videoUhrpUrl }: LessonMediaProps) {
 }
 ```
 
-| Component | Loading prop | Native attributes |
-| --- | --- | --- |
-| `Img` | `fallback` | Image attributes such as `alt`, `width`, and `loading="lazy"` |
-| `Source` | `loading` | Source attributes such as `type` and `media` |
+| Component | Loading prop | Native attributes                                             |
+| --------- | ------------ | ------------------------------------------------------------- |
+| `Img`     | `fallback`   | Image attributes such as `alt`, `width`, and `loading="lazy"` |
+| `Source`  | `loading`    | Source attributes such as `type` and `media`                  |
 
 Supply the same `src` to components that should share lookup results. Resolved
 URLs are cached for the browser session. A missing or failed lookup can be tried
@@ -68,3 +68,5 @@ tests use local fixtures. See the [example app](./example) for a browser demo.
 ## License
 
 The license for the code in this repository is the Apache License 2.0.
+
+[Apache License 2.0](./LICENSE)

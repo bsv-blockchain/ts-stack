@@ -74,12 +74,14 @@ const { promptUser, PromptComponent } = useTokenSpendPrompt({
 React hook for managing token usage prompts.
 
 **Parameters:**
+
 - `focusHandlers` (optional): Window focus management functions
   - `isFocused: () => Promise<boolean>`
   - `onFocusRequested: () => Promise<void>`
   - `onFocusRelinquished: () => Promise<void>`
 
 **Returns:**
+
 - `promptUser: (app: string, message: string) => Promise<boolean>` - Function to show prompt
 - `PromptComponent: React.ComponentType` - Component to render
 
@@ -88,6 +90,7 @@ React hook for managing token usage prompts.
 The underlying dialog component (exported as default).
 
 **Props:**
+
 - `app: string` - Application name requesting permission
 - `message: string` - JSON-encoded token spend information
 - `onAllow: () => void` - Callback when user approves
@@ -139,6 +142,7 @@ The `message` parameter contains JSON with:
 ### TokenAccessPrompt
 
 Displays a Material-UI dialog with:
+
 - Token icon and name
 - Application requesting permission
 - Send amount and recipient
@@ -165,3 +169,5 @@ const theme = createTheme({
 ## License
 
 Open BSV
+
+[Apache License 2.0](./LICENSE)

@@ -54,8 +54,7 @@ import {
 
 /**
  * RequestInterceptorWallet wraps another WalletInterface and records each call's
- * `originator` via the supplied `updateRecentApp` callback.  The callback is
- * awaited but **errors are swallowed** so telemetry never blocks wallet
+ * `originator` via the supplied `updateRecentApp` callback. Tracking runs in the background so telemetry never blocks wallet
  * functionality.
  */
 export class RequestInterceptorWallet implements WalletInterface {
@@ -71,12 +70,12 @@ export class RequestInterceptorWallet implements WalletInterface {
   /**
    * Call the tracking hook, swallowing any error so the wallet op proceeds.
    */
-  private record(
+  private async record(
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<void> {
     if (!originator) return;
     try {
-      this.updateRecentApp(this.profileId, originator);
+      await this.updateRecentApp(this.profileId, originator);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[RequestInterceptorWallet] updateRecentApp failed:', err);
@@ -91,7 +90,7 @@ export class RequestInterceptorWallet implements WalletInterface {
     args: TArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<TResult> {
-    this.record(originator);
+    void this.record(originator);
     // Preserve `this` binding for underlying wallet methods.
     return fn.call(this.underlying, args, originator);
   }

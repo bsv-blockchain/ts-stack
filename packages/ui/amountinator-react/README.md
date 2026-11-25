@@ -21,11 +21,7 @@ npm install @bsv/amountinator-react
 ## Exports
 
 ```ts
-import {
-  AmountDisplay,
-  AmountInputField,
-  useCurrencyDisplay
-} from '@bsv/amountinator-react'
+import { AmountDisplay, AmountInputField, useCurrencyDisplay } from '@bsv/amountinator-react'
 ```
 
 ---
@@ -54,7 +50,7 @@ import { AmountDisplay } from '@bsv/amountinator-react'
 export const FormattedAmount = () => {
   return (
     <AmountDisplay
-      paymentAmount='12345 SATS'
+      paymentAmount="12345 SATS"
       formatOptions={{
         useCommas: true,
         decimalPlaces: 2
@@ -72,10 +68,10 @@ export const FormattedAmount = () => {
 
 ### Props
 
-| Prop | Type | Required | Description |
-| --- | --- | --- | --- |
-| `paymentAmount` | `number \| string` | Yes | Amount to convert/format |
-| `formatOptions` | `FormatOptions` | No | Decimal places + separators |
+| Prop            | Type               | Required | Description                 |
+| --------------- | ------------------ | -------- | --------------------------- |
+| `paymentAmount` | `number \| string` | Yes      | Amount to convert/format    |
+| `formatOptions` | `FormatOptions`    | No       | Decimal places + separators |
 
 `FormatOptions`:
 
@@ -111,9 +107,9 @@ export const SendForm = () => {
 
 ### Props
 
-| Prop | Type | Required | Description |
-| --- | --- | --- | --- |
-| `onSatoshisChange` | `(sats: number \| null) => void` | Yes | Called when parsed value changes |
+| Prop               | Type                             | Required | Description                      |
+| ------------------ | -------------------------------- | -------- | -------------------------------- |
+| `onSatoshisChange` | `(sats: number \| null) => void` | Yes      | Called when parsed value changes |
 
 ---
 
@@ -162,3 +158,5 @@ For explicit behavior, prefer string values with currency codes, for example:
 ## License
 
 Apache License 2.0.
+
+[Apache License 2.0](./LICENSE)

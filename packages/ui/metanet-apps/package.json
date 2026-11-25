@@ -15,8 +15,6 @@
     "PATENTS",
     "NOTICE",
     "dist",
-    "src",
-    "mod.ts",
     "LICENSE",
     "UPSTREAM_NOTICE"
   ],
@@ -65,14 +63,24 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/types/mod.d.ts",
+        "default": "./dist/esm/mod.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mod.d.ts",
+        "default": "./dist/cjs/mod.js"
+      }
     },
     "./mod.ts": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/types/mod.d.ts",
+        "default": "./dist/esm/mod.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mod.d.ts",
+        "default": "./dist/cjs/mod.js"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -87,5 +95,12 @@
   "sideEffects": true,
   "publishConfig": {
     "access": "public"
+  },
+  "typesVersions": {
+    "*": {
+      "mod.ts": [
+        "dist/types/mod.d.ts"
+      ]
+    }
   }
 }

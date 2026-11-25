@@ -15,7 +15,8 @@
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "types": ["jest"]
+    "types": ["jest"],
+    "inlineSources": true
   },
   "files": ["mod.ts"],
   "include": ["src"],

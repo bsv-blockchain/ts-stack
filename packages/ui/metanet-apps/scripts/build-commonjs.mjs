@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
@@ -16,4 +16,5 @@ await build({
   format: 'cjs',
   sourcemap: true
 })
+await cp(new URL('../dist/types/', import.meta.url), cjs, { recursive: true })
 await writeFile(new URL('package.json', cjs), '{"type":"commonjs"}\n')

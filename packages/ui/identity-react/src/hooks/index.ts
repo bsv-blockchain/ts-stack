@@ -1,1 +1,1 @@
-export { useIdentitySearch } from './useIdentitySearch'
+export { useIdentitySearch } from './useIdentitySearch.js'

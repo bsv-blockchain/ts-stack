@@ -7,6 +7,7 @@ A library of reusable React components for displaying and searching identity inf
 ```bash
 npm install @bsv/identity-react
 ```
+
 ## Example Usage
 
 #### Identity Card
@@ -178,3 +179,5 @@ superseded queries are discarded, including when the new query is a cache hit.
 ## License
 
 The license for the code in this repository is the Apache License 2.0.
+
+[Apache License 2.0](./LICENSE)

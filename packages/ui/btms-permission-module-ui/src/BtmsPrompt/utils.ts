@@ -1,4 +1,4 @@
-import type { BTMSPromptInfo } from './types'
+import type { BTMSPromptInfo } from './types.js'
 
 /**
  * Parses the BTMS token message to extract structured information.

@@ -15,7 +15,7 @@ import makeStyles from '@mui/styles/makeStyles';
 import style from './style';
 import { toast } from 'react-toastify';
 import BasketChip from '../BasketChip';
-import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
+import { useHistory } from 'react-router-dom';
 import AppChip from '../AppChip';
 import { formatDistance } from 'date-fns';
 import { WalletContext } from '../../WalletContext'

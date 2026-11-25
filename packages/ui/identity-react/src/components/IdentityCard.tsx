@@ -1,6 +1,6 @@
 import { Avatar, Badge, Box, CardContent, Icon, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
 import React, { useEffect, useState } from 'react';
-import { DEFAULT_IDENTITY, IdentityProps } from '../types';
+import { DEFAULT_IDENTITY, IdentityProps } from '../types/index.js';
 import { IdentityClient, DisplayableIdentity } from '@bsv/sdk';
 import { Img } from '@bsv/uhrp-react';
 import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';

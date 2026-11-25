@@ -11,19 +11,15 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "rootDir": ".",
     "composite": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "inlineSources": true,
+    "tsBuildInfoFile": "./node_modules/.cache/amountinator-react.tsbuildinfo"
   },
-  "include": [
-    "src*",
-    "test*"
-  ],
-  "exclude": [
-    "node_modules",
-    "jest.config.ts"
-  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "jest.config.ts"],
   "references": [],
   "extends": "../../../config/typescript/browser.json"
 }

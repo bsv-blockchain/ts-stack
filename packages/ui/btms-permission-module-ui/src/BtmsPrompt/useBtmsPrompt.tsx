@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PaletteMode } from '@mui/material'
-import BtmsPromptDialog from './BtmsPromptDialog'
-import type { BtmsPromptDialogProps } from './types'
+import BtmsPromptDialog from './BtmsPromptDialog.js'
+import type { BtmsPromptDialogProps } from './types.js'
 
 /**
  * Focus handlers for window management (optional)

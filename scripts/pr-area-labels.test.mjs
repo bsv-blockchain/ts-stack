@@ -48,6 +48,17 @@ const PACKAGE_PATHS = [
   'packages/overlays/overlay-express',
   'packages/overlays/topics',
   'packages/sdk',
+  'packages/ui/amountinator-react',
+  'packages/ui/brc100-ui-react',
+  'packages/ui/btms-frontend',
+  'packages/ui/btms-permission-module-ui',
+  'packages/ui/identity-react',
+  'packages/ui/metanet-apps',
+  'packages/ui/peerpay-react',
+  'packages/ui/registrant',
+  'packages/ui/uhrp-react',
+  'packages/ui/uhrp-ui',
+  'packages/ui/wui',
   'packages/verifast',
   'packages/wallet/btms',
   'packages/wallet/btms-permission-module',
@@ -76,6 +87,7 @@ const GROUPS = [
   'middleware',
   'network',
   'overlays',
+  'ui',
   'wallet'
 ]
 

@@ -13,6 +13,9 @@ import {
   TwilioPhoneInteractor,
   WABClient,
   PermissionRequest,
+  DEFAULT_SETTINGS,
+  WalletSettings,
+  WalletSettingsManager,
 } from '@bsv/wallet-toolbox-client'
 import {
   PrivateKey,
@@ -22,7 +25,6 @@ import {
   WalletInterface,
   CachedKeyDeriver,
 } from '@bsv/sdk'
-import { DEFAULT_SETTINGS, WalletSettings, WalletSettingsManager } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { DEFAULT_WAB_URL, DEFAULT_STORAGE_URL, DEFAULT_CHAIN, ADMIN_ORIGINATOR, DEFAULT_USE_WAB } from './config'

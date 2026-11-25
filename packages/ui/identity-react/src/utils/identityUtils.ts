@@ -5,7 +5,7 @@ import {
   OriginatorDomainNameStringUnder250Bytes,
   WalletInterface
 } from '@bsv/sdk'
-import { Certifier } from '../types'
+import { Certifier } from '../types/index.js'
 
 export const sleep = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms))
