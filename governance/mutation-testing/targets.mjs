@@ -6969,30 +6969,27 @@ function uiPropertyTargets(repositoryRoot) {
       'amountinator-react',
       'amount-display',
       'src/utils/amountDisplayFormatting.ts',
-      'const parseInputAmount =',
-      'const getDefaultDecimalPlaces ='
+      ['const parseInputAmount =', 'const getDefaultDecimalPlaces =']
     ],
     ['brc100-ui-react', 'spending-tier', 'src/utils/determineUpgradeAmount.ts'],
     [
       'btms-permission-module-ui',
       'prompt-message',
       'src/BtmsPrompt/utils.ts',
-      'export const parseTokenMessage =',
-      'export const formatAmount ='
+      ['export const parseTokenMessage =', 'export const formatAmount =']
     ],
     [
       'identity-react',
       'identity-input',
       'src/utils/identityUtils.ts',
-      'export const isIdentityKey =',
-      'export const fetchIdentities ='
+      ['export const isIdentityKey =', 'export const fetchIdentities =']
     ],
     ['metanet-apps', 'app-metadata', 'src/metadata.ts'],
     ['uhrp-react', 'media-resolution', 'src/store.ts'],
     ['wui/frontend', 'wallet-input', 'src/utils/miscHelpers.ts']
   ]
   return Object.fromEntries(
-    suites.map(([directory, suite, source, start, end]) => {
+    suites.map(([directory, suite, source, range]) => {
       const packageDirectory = `packages/ui/${directory}`
       const relativeConfig = `${'../'.repeat(packageDirectory.split('/').length)}${config}`
       return [
@@ -7002,9 +6999,7 @@ function uiPropertyTargets(repositoryRoot) {
           manifest: `${packageDirectory}/package.json`,
           propertyTest: `${packageDirectory}/tests/property/${suite}.property.test.mjs`,
           mutate: [
-            start === undefined
-              ? source
-              : sourceLineRange(repositoryRoot, packageDirectory, source, start, end)
+            range ? sourceLineRange(repositoryRoot, packageDirectory, source, ...range) : source
           ],
           configurationInputs: [config, 'config/testing/property-replay.mjs'],
           ...vitestTarget(relativeConfig)

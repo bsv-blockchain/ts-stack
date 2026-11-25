@@ -74,66 +74,44 @@ const Trust = ({ history }: { history: History }) => {
     }
   }, [settingsNeedsUpdate, history])
 
-  const shownTrustedEntities = trustedEntities.filter(x => {
-    if (!search) {
-      return true
-    }
-    return (
-      x.name.toLowerCase().indexOf(search.toLowerCase()) !== -1 ||
-      x.description.toLowerCase().indexOf(search.toLowerCase()) !== -1
-    )
-  })
+  const searchText = search.toLowerCase()
+  const shownTrustedEntities = trustedEntities.filter(
+    entity =>
+      !searchText ||
+      entity.name.toLowerCase().includes(searchText) ||
+      entity.description.toLowerCase().includes(searchText)
+  )
 
   const handleSave = async () => {
     try {
       setSettingsLoading(true)
-      // Show a toast progress bar if not using save modal
-      if (!saveModalOpen) {
-        toast.promise(
-          (async () => {
-            try {
-              await updateSettings(
-                JSON.parse(
-                  JSON.stringify({
-                    ...settings,
-                    trustSettings: {
-                      trustLevel,
-                      trustedCertifiers: trustedEntities
-                    }
-                  })
-                )
-              )
-            } catch (e) {
-              console.error(e)
-              throw e
-            }
-          })(),
-          {
-            pending: 'Saving settings...',
-            success: {
-              render: 'Trust relationships updated!',
-              autoClose: 2000
-            },
-            error: 'Failed to save settings! 🤯'
+      const save = updateSettings(
+        structuredClone({
+          ...settings,
+          trustSettings: {
+            trustLevel,
+            trustedCertifiers: trustedEntities
           }
-        )
+        })
+      )
+      if (!saveModalOpen) {
+        await toast.promise(save, {
+          pending: 'Saving settings...',
+          success: {
+            render: 'Trust relationships updated!',
+            autoClose: 2000
+          },
+          error: 'Failed to save settings.'
+        })
       } else {
-        await updateSettings(
-          JSON.parse(
-            JSON.stringify({
-              ...settings,
-              trustSettings: {
-                trustLevel,
-                trustedCertifiers: trustedEntities
-              }
-            })
-          )
-        )
+        await save
         toast.success('Trust relationships updated!')
       }
       setSettingsNeedsUpdate(false)
+      return true
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Please try again.')
+      if (saveModalOpen) toast.error(e instanceof Error ? e.message : 'Please try again.')
+      return false
     } finally {
       setSettingsLoading(false)
     }
@@ -238,7 +216,10 @@ const Trust = ({ history }: { history: History }) => {
         open={saveModalOpen}
         onConfirm={async () => {
           setSettingsNeedsUpdate(false)
-          await handleSave()
+          if (!(await handleSave())) {
+            setSettingsNeedsUpdate(true)
+            return
+          }
           setSaveModalOpen(false)
           if (nextLocation) history.push(nextLocation)
         }}

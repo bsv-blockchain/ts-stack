@@ -1993,13 +1993,13 @@ importers:
 
   packages/ui/identity-react:
     dependencies:
-      '@bsv/sdk':
-        specifier: workspace:^
-        version: link:../../sdk
       '@bsv/uhrp-react':
         specifier: workspace:^
         version: link:../uhrp-react
     devDependencies:
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@18.3.32)(react@18.3.1)
@@ -2056,11 +2056,10 @@ importers:
         version: 4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(jiti@1.21.7)(jsdom@30.1.3(@noble/hashes@2.4.0))(lightningcss@1.33.0)(sass-embedded@1.108.2)(sass@1.108.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
 
   packages/ui/metanet-apps:
-    dependencies:
+    devDependencies:
       '@bsv/sdk':
         specifier: workspace:^
         version: link:../../sdk
-    devDependencies:
       '@eslint/js':
         specifier: ^9.23.0
         version: 9.39.5
@@ -2329,13 +2328,13 @@ importers:
 
   packages/ui/uhrp-react:
     dependencies:
-      '@bsv/sdk':
-        specifier: workspace:^
-        version: link:../../sdk
       zustand:
         specifier: ^4.5.6
         version: 4.5.7(@types/react@18.3.32)(immer@11.2.10)(react@18.3.1)
     devDependencies:
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
       '@types/react':
         specifier: ^18.3.1
         version: 18.3.32

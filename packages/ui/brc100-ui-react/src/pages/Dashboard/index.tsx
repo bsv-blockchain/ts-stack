@@ -115,19 +115,15 @@ export default function Dashboard() {
           <Route path="/dashboard/certificate/:certType" component={CertificateAccess} />
 
           {/* Default Fallback Route */}
-          <Route
-            component={() => {
-              return (
-                <div className={(classes as any).full_width} style={{ padding: '1em' }}>
-                  <br />
-                  <br />
-                  <Typography align="center" color="textPrimary">
-                    Use the menu to select a page
-                  </Typography>
-                </div>
-              )
-            }}
-          />
+          <Route>
+            <div className={(classes as any).full_width} style={{ padding: '1em' }}>
+              <br />
+              <br />
+              <Typography align="center" color="textPrimary">
+                Use the menu to select a page
+              </Typography>
+            </div>
+          </Route>
         </Switch>
       </div>
     </div>

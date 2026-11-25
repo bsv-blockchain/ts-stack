@@ -173,34 +173,38 @@ const CertificateChip: React.FC<CertificateChipProps> = ({
       onClick={handleClick}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
-      sx={theme => ({
-        width: '100%',
-        p: 1.5,
-        borderRadius: 3,
-        border: '1px solid',
-        borderColor: 'divider',
-        bgcolor:
-          backgroundColor !== 'transparent'
-            ? backgroundColor
-            : alpha(theme.palette.common[theme.palette.mode === 'dark' ? 'white' : 'black'], 0.02),
-        cursor: clickable ? 'pointer' : 'default'
-      })}
+      sx={theme => {
+        const tint = theme.palette.mode === 'dark' ? 'white' : 'black'
+        return {
+          width: '100%',
+          p: 1.5,
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor:
+            backgroundColor !== 'transparent'
+              ? backgroundColor
+              : alpha(theme.palette.common[tint], 0.02),
+          cursor: clickable ? 'pointer' : 'default'
+        }
+      }}
     >
       {/* Header: left (icon+name), right (docs+revoke) */}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ ...ROW_SX, height: 'auto' }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Avatar
             src={iconSrcFrom(iconURL)}
-            sx={theme => ({
-              width: 36,
-              height: 36,
-              fontSize: 14,
-              bgcolor: iconURL
-                ? 'transparent'
-                : `grey.${theme.palette.mode === 'dark' ? 800 : 200}`,
-              color: iconURL ? undefined : theme.palette.text.primary,
-              boxShadow: 1
-            })}
+            sx={theme => {
+              const fallbackColor = theme.palette.mode === 'dark' ? 'grey.800' : 'grey.200'
+              return {
+                width: 36,
+                height: 36,
+                fontSize: 14,
+                bgcolor: iconURL ? 'transparent' : fallbackColor,
+                color: iconURL ? undefined : theme.palette.text.primary,
+                boxShadow: 1
+              }
+            }}
           >
             {!iconURL && (certname?.[0]?.toUpperCase() || 'C')}
           </Avatar>

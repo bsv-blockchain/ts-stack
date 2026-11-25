@@ -234,6 +234,7 @@ const PasswordForm = ({
   passwordFieldRef
 }: PasswordFormProps) => {
   const theme = useTheme()
+  const submitLabel = accountStatus === 'new-user' ? 'Create Account' : 'Login'
   return (
     <form onSubmit={handleSubmitPassword}>
       <TextField
@@ -306,13 +307,7 @@ const PasswordForm = ({
           py: 1.2
         }}
       >
-        {loading ? (
-          <CircularProgress size={24} />
-        ) : accountStatus === 'new-user' ? (
-          'Create Account'
-        ) : (
-          'Login'
-        )}
+        {loading ? <CircularProgress size={24} /> : submitLabel}
       </Button>
     </form>
   )

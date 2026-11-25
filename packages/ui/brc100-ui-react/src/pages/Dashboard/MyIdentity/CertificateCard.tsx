@@ -257,6 +257,117 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
   )
 }
 
+interface CertificateMetaRowProps {
+  readonly label: React.ReactNode
+  readonly value?: React.ReactNode
+  readonly dividerBelow?: boolean
+  readonly copyable?: boolean
+}
+
+function MetaRow({
+  label,
+  value,
+  dividerBelow = false,
+  copyable = false
+}: CertificateMetaRowProps) {
+  if (!value && value !== 0) return null
+
+  const copy = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    copyToClipboard(String(value ?? ''))
+  }
+  const title = typeof value === 'string' ? value : undefined
+  return (
+    <>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'center',
+          columnGap: 1,
+          my: 0.5
+        }}
+      >
+        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+          <b>{label}</b>
+        </Typography>
+        <Box />
+        {copyable ? (
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              justifyContent: 'flex-end'
+            }}
+          >
+            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }} title={title}>
+              {value}
+            </Typography>
+            <Tooltip title="Copy">
+              <IconButton size="small" onClick={copy}>
+                <ContentCopyIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          <Typography
+            variant="body2"
+            sx={{ textAlign: 'right', whiteSpace: 'nowrap' }}
+            title={title}
+          >
+            {value}
+          </Typography>
+        )}
+      </Box>
+      {dividerBelow && <Divider sx={{ my: 2 }} />}
+    </>
+  )
+}
+
+function CertificateFieldValue({
+  fieldType,
+  value
+}: Readonly<{ fieldType: string; value: unknown }>) {
+  if (fieldType === 'imageURL' && typeof value === 'string') {
+    return (
+      <Img
+        style={{ width: '5em', height: '5em', objectFit: 'cover', borderRadius: 8 }}
+        src={value}
+      />
+    )
+  }
+
+  if (fieldType === 'other' || typeof value === 'object') {
+    const text = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
+    return (
+      <Box
+        sx={{
+          mt: 1,
+          p: 2,
+          bgcolor: 'background.paper',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider'
+        }}
+      >
+        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+          {text}
+        </Typography>
+      </Box>
+    )
+  }
+
+  return (
+    <Stack direction="row" spacing={1} alignItems="baseline">
+      <Typography variant="body1">Value:</Typography>
+      <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>
+        {String(value)}
+      </Typography>
+    </Stack>
+  )
+}
+
 const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({
   open,
   onClose,
@@ -295,91 +406,6 @@ const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({
     })
   }
 
-  const MetaRow: React.FC<{
-    label: React.ReactNode
-    value?: React.ReactNode
-    dividerBelow?: boolean
-  }> = ({ label, value, dividerBelow = false }) => {
-    if (!value && value !== 0) return null
-    return (
-      <>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr auto',
-            alignItems: 'center',
-            columnGap: 1,
-            my: 0.5
-          }}
-        >
-          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-            <b>{label}</b>
-          </Typography>
-          <Box />
-          <Typography
-            variant="body2"
-            sx={{ textAlign: 'right', whiteSpace: 'nowrap' }}
-            title={typeof value === 'string' ? value : undefined}
-          >
-            {value}
-          </Typography>
-        </Box>
-        {dividerBelow && <Divider sx={{ my: 2 }} />}
-      </>
-    )
-  }
-
-  const CopyableMetaRow: React.FC<{
-    label: React.ReactNode
-    value?: React.ReactNode
-    dividerBelow?: boolean
-  }> = ({ label, value, dividerBelow = false }) => {
-    if (!value && value !== 0) return null
-    const copy = (e: React.MouseEvent) => {
-      e.stopPropagation()
-      copyToClipboard(String(value ?? ''))
-    }
-    return (
-      <>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr auto',
-            alignItems: 'center',
-            columnGap: 1,
-            my: 0.5
-          }}
-        >
-          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-            <b>{label}</b>
-          </Typography>
-          <Box />
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 0.5,
-              justifyContent: 'flex-end'
-            }}
-          >
-            <Typography
-              variant="body2"
-              sx={{ whiteSpace: 'nowrap' }}
-              title={typeof value === 'string' ? value : undefined}
-            >
-              {value}
-            </Typography>
-            <Tooltip title="Copy">
-              <IconButton size="small" onClick={copy}>
-                <ContentCopyIcon fontSize="inherit" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-        {dividerBelow && <Divider sx={{ my: 2 }} />}
-      </>
-    )
-  }
   const CT = certificateType ?? actualData?.certType ?? actualData?.type ?? ''
 
   return (
@@ -440,19 +466,15 @@ const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({
               { key: 'desc', comp: 'plain' as const, label: 'Description:', value: description }
             ].filter(r => r.value !== undefined && r.value !== null && r.value !== '')
 
-            return rows.map((r, i) => {
-              const dividerBelow = i < rows.length - 1
-              return r.comp === 'copy' ? (
-                <CopyableMetaRow
-                  key={r.key}
-                  label={r.label}
-                  value={r.value}
-                  dividerBelow={dividerBelow}
-                />
-              ) : (
-                <MetaRow key={r.key} label={r.label} value={r.value} dividerBelow={dividerBelow} />
-              )
-            })
+            return rows.map((row, index) => (
+              <MetaRow
+                key={row.key}
+                label={row.label}
+                value={row.value}
+                dividerBelow={index < rows.length - 1}
+                copyable={row.comp === 'copy'}
+              />
+            ))
           })()}
         </Box>
         <Divider sx={{ my: 2 }} />
@@ -518,42 +540,7 @@ const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({
                       </Typography>
                     )}
 
-                    {/* Value (render as NON-clickable text) */}
-                    {value.type === 'imageURL' ? (
-                      <Img
-                        style={{
-                          width: '5em',
-                          height: '5em',
-                          objectFit: 'cover',
-                          borderRadius: 8
-                        }}
-                        src={value.value}
-                      />
-                    ) : value.type === 'other' || typeof value.value === 'object' ? (
-                      <Box
-                        sx={{
-                          mt: 1,
-                          p: 2,
-                          bgcolor: 'background.paper',
-                          borderRadius: 1,
-                          border: '1px solid',
-                          borderColor: 'divider'
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                          {typeof value.value === 'object'
-                            ? JSON.stringify(value.value, null, 2)
-                            : String(value.value)}
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Stack direction="row" spacing={1} alignItems="baseline">
-                        <Typography variant="body1">Value:</Typography>
-                        <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>
-                          {String(value.value)}
-                        </Typography>
-                      </Stack>
-                    )}
+                    <CertificateFieldValue fieldType={value.type} value={value.value} />
                   </Stack>
                 </Box>
               </Stack>

@@ -9,9 +9,8 @@ import { toast } from 'react-toastify'
 import PageHeader from '../../../components/PageHeader'
 import { WalletContext } from '../../../WalletContext'
 import { UserContext } from '../../../UserContext'
-import { WalletOutput } from '@bsv/sdk'
+import { RegistryClient, type WalletOutput } from '@bsv/sdk'
 import BasketAccessList from '../../../components/BasketAccessList'
-import { RegistryClient } from '@bsv/sdk'
 import AppLogo from '../../../components/AppLogo'
 // Placeholder type for basket details - adjust based on actual SDK response
 interface BasketDetails {

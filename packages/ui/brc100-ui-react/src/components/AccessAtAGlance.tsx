@@ -85,7 +85,12 @@ const setCachedBasketAccess = (originator: string, data: string[]) => {
 /*  Component                                                         */
 /* ------------------------------------------------------------------ */
 
-const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({ originator, history }) => {
+const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
+  originator,
+  history,
+  loading,
+  setRefresh
+}) => {
   /* ------------- Context / state ---------------------------------- */
   const { managers, adminOriginator } = useContext(WalletContext)
   const permissionsManager = managers.permissionsManager
@@ -94,6 +99,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({ originator, history }
   const [protocolIsEmpty, setProtocolIsEmpty] = useState(false)
   const [certificateIsEmpty, setCertificateIsEmpty] = useState(false)
   const [isLoadingBaskets, setIsLoadingBaskets] = useState(false)
+  const [revision, setRevision] = useState(0)
 
   /* ------------- Helpers ------------------------------------------ */
 
@@ -171,7 +177,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({ originator, history }
     }, 0)
 
     return () => controller.abort()
-  }, [originator, adminOriginator, permissionsManager, processActionsInChunks])
+  }, [originator, adminOriginator, permissionsManager, processActionsInChunks, revision])
 
   /* ------------- Memo: path for manage-app link ------------------- */
   const manageAppPath = useMemo(
@@ -243,15 +249,28 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({ originator, history }
           </Box>
         )}
 
-        {recentBasketAccess.length === 0 && certificateIsEmpty && protocolIsEmpty && (
-          <Typography color="textSecondary" align="center" sx={{ pt: '5em' }}>
-            No recent access
-          </Typography>
-        )}
+        {!loading &&
+          !isLoadingBaskets &&
+          recentBasketAccess.length === 0 &&
+          certificateIsEmpty &&
+          protocolIsEmpty && (
+            <Typography color="textSecondary" align="center" sx={{ pt: '5em' }}>
+              No recent access
+            </Typography>
+          )}
       </Box>
 
       {/* ---------------------- Manage app button --------------------- */}
       <Box textAlign="center" sx={{ p: '1em' }}>
+        <Button
+          disabled={loading || isLoadingBaskets}
+          onClick={() => {
+            setRefresh(true)
+            setRevision(current => current + 1)
+          }}
+        >
+          Refresh Activity
+        </Button>
         <Button
           onClick={() => history.push({ pathname: manageAppPath })}
           sx={{

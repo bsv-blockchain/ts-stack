@@ -232,15 +232,17 @@ const CounterpartyAccess: React.FC = () => {
         />
       </Grid>
       <Grid item>
-        {isLoading ? (
+        {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
-        ) : error ? (
+        )}
+        {!isLoading && error && (
           <Typography color="error" sx={{ p: 2 }}>
             {error}
           </Typography>
-        ) : (
+        )}
+        {!isLoading && !error && (
           <SimpleTabs counterparty={counterparty} trustEndorsements={trustEndorsements} />
         )}
       </Grid>

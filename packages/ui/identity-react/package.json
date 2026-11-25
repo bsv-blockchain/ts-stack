@@ -31,10 +31,10 @@
     }
   },
   "dependencies": {
-    "@bsv/sdk": "workspace:^",
     "@bsv/uhrp-react": "workspace:^"
   },
   "peerDependencies": {
+    "@bsv/sdk": "^4.1.1",
     "@emotion/react": "^11.0.0",
     "@emotion/styled": "^11.0.0",
     "@mui/icons-material": ">=5.0.0",
@@ -56,6 +56,7 @@
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports IdentitySearchField,useIdentitySearch"
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "fast-check": "^4.9.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",

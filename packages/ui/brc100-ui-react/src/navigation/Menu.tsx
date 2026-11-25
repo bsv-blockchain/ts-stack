@@ -70,7 +70,7 @@ interface MenuProps {
   menuRef: React.RefObject<HTMLDivElement>
 }
 
-export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
+export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuProps>) {
   const history = useHistory()
   const breakpoints = useBreakpoint()
   const { logout, managers, activeProfile, setActiveProfile } = useContext(WalletContext)
@@ -102,12 +102,8 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
   useEffect(() => {
     // Explicitly cast breakpoints to avoid TypeScript error
     const { sm } = breakpoints as { sm: boolean }
-    if (!sm) {
-      setMenuOpen(true)
-    } else {
-      setMenuOpen(false)
-    }
-  }, [breakpoints])
+    setMenuOpen(!sm)
+  }, [breakpoints, setMenuOpen])
 
   //get Most Recent Profile Key
   const getMRPK = async () => {
@@ -203,17 +199,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
       }
     }
 
-    if (menuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
+    if (!menuOpen) return
+    document.addEventListener('mousedown', handleClickOutside)
 
     // Cleanup
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [menuOpen])
+  }, [menuOpen, menuRef, setMenuOpen])
 
   const createTokenFor = async (profile: string, amount: number) => {
     if (amount < 0) {
@@ -268,7 +261,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
   // Helper function to refresh profiles
   const refreshProfiles = useCallback(async () => {
-    if (!managers?.walletManager || !managers.walletManager?.listProfiles) return
+    if (!managers.walletManager?.listProfiles) return
 
     try {
       setProfilesLoading(true)
@@ -387,7 +380,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
   // Load profiles when wallet is initialized
   useEffect(() => {
-    refreshProfiles()
+    void refreshProfiles()
   }, [refreshProfiles])
 
   return (

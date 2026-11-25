@@ -15,9 +15,12 @@ const scripts = Array.from(
 ).filter(source => !/^(?:[a-z]+:|\/\/)/i.test(source))
 
 assert.ok(scripts.length > 0, 'The application must reference a bundled entry script')
-for (const source of scripts) {
-  const pathname = new URL(source, 'https://ui-build.invalid/').pathname
-  const file = path.join(output, pathname)
-  assert.ok(file.startsWith(output + path.sep), 'The script must resolve inside the build')
-  assert.ok((await stat(file)).size > 0, `Missing bundled script ${source}`)
-}
+await Promise.all(
+  scripts.map(async source => {
+    const pathname = new URL(source, 'https://ui-build.invalid/').pathname
+    const file = path.join(output, pathname)
+    assert.ok(file.startsWith(output + path.sep), 'The script must resolve inside the build')
+    const info = await stat(file)
+    assert.ok(info.isFile() && info.size > 0, `Missing bundled script ${source}`)
+  })
+)

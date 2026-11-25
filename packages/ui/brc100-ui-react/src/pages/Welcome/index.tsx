@@ -55,18 +55,16 @@ const welcomeStyles = {
     selectedTheme: 'light' | 'dark',
     currentSelectedCurrency: string,
     buttonCurrency: string
-  ) => ({
-    boxShadow: currentSelectedCurrency === buttonCurrency ? '0px 0px 8px 2px #E04040' : 'none',
-    backgroundColor:
-      currentSelectedCurrency === buttonCurrency
-        ? '#444444'
-        : selectedTheme === 'light'
-          ? '#EEEEEE'
-          : 'black',
-    color: currentSelectedCurrency === buttonCurrency ? 'white' : '#888888',
-    border:
-      currentSelectedCurrency !== buttonCurrency ? `1px solid ${theme.palette.divider}` : 'none'
-  })
+  ) => {
+    const selected = currentSelectedCurrency === buttonCurrency
+    const defaultBackground = selectedTheme === 'light' ? '#EEEEEE' : 'black'
+    return {
+      boxShadow: selected ? '0px 0px 8px 2px #E04040' : 'none',
+      backgroundColor: selected ? '#444444' : defaultBackground,
+      color: selected ? 'white' : '#888888',
+      border: selected ? 'none' : `1px solid ${theme.palette.divider}`
+    }
+  }
 }
 
 // Mock Images for now

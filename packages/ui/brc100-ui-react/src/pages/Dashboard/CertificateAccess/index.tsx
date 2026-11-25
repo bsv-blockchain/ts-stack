@@ -45,6 +45,7 @@ const CertificateAccess: React.FC = () => {
   const certType = decodeURIComponent(encodedCertType)
 
   const { managers, settings } = useContext(WalletContext)
+  const trustedCertifiers = settings.trustSettings.trustedCertifiers
 
   const [copied, setCopied] = useState<{ [key: string]: boolean }>({ id: false })
   const [certDefinition, setCertDefinition] = useState<CertificateDefinition | null>(null)
@@ -52,11 +53,10 @@ const CertificateAccess: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let current = true
     const fetchCertDefinition = async () => {
-      if (!managers.walletManager) return // Or relevant manager
-      const registryOperators: string[] = settings.trustSettings.trustedCertifiers.map(
-        (x: any) => x.identityKey
-      )
+      if (!managers.walletManager) return
+      const registryOperators = trustedCertifiers.map(certifier => certifier.identityKey)
       setLoading(true)
       setError(null)
       try {
@@ -65,6 +65,7 @@ const CertificateAccess: React.FC = () => {
           type: certType,
           registryOperators
         })
+        if (!current) return
 
         if (results.length === 0) {
           const placeholderDef: CertificateDefinition = {
@@ -83,9 +84,7 @@ const CertificateAccess: React.FC = () => {
         let maxTrustedPoints = 0
         for (let i = 0; i < results.length; i++) {
           const resultTrustLevel =
-            settings.trustSettings.trustedCertifiers.find(
-              x => x.identityKey === results[i].registryOperator
-            )?.trust || 0
+            trustedCertifiers.find(x => x.identityKey === results[i].registryOperator)?.trust || 0
           if (resultTrustLevel > maxTrustedPoints) {
             mostTrustedIndex = i
             maxTrustedPoints = resultTrustLevel
@@ -102,30 +101,21 @@ const CertificateAccess: React.FC = () => {
         }
         setCertDefinition(placeholderDef)
       } catch (err: any) {
+        if (!current) return
         console.error('Failed to fetch certificate definition:', err)
         setError(`Failed to load certificate definition: ${err.message}`)
-        // toast.error(`Failed to load certificate definition: ${err.message}`);
-        const placeholderDef: CertificateDefinition = {
-          name: `Certificate: ${certType}`,
-          iconURL: DEFAULT_APP_ICON,
-          description: 'default description.',
-          documentationURL: 'https://docs.default.com/certificates',
-          fields: {
-            field1: {
-              friendlyName: 'default Field 1',
-              description: 'Description for default field 1.',
-              fieldIcon: ''
-            }
-          }
-        }
-        setCertDefinition(placeholderDef)
       } finally {
-        setLoading(false)
+        if (current) setLoading(false)
       }
     }
 
-    fetchCertDefinition().catch(() => setError('Could not load this certificate.'))
-  }, [certType, managers.walletManager]) // TODO: Re-evaluate dependency on trusted entities
+    fetchCertDefinition().catch(() => {
+      if (current) setError('Could not load this certificate.')
+    })
+    return () => {
+      current = false
+    }
+  }, [certType, managers.walletManager, trustedCertifiers])
 
   const handleCopy = (data: string, type: string) => {
     copyToClipboard(data, () => {
@@ -213,18 +203,18 @@ const CertificateAccess: React.FC = () => {
         <Box component="ul" sx={{ pl: 2, listStyle: 'none' }}>
           {' '}
           {/* Use Box for list styling */}
-          {Object.entries(fields).map(([, value], index) => {
+          {Object.entries(fields).map(([fieldName, value]) => {
             return (
-              <Box component="li" key={index} sx={{ display: 'flex', alignItems: 'start', mb: 2 }}>
+              <Box
+                component="li"
+                key={fieldName}
+                sx={{ display: 'flex', alignItems: 'start', mb: 2 }}
+              >
                 {value.fieldIcon && (
                   <Avatar sx={{ mr: 2, bgcolor: 'grey.200' }}>
                     {' '}
                     {/* Added bgcolor for placeholder */}
-                    <Img
-                      style={{ width: '75%', height: '75%' }}
-                      src={value.fieldIcon}
-                      // uhrpUrl={"TODO: Add UHRP URL if needed"} // Add UHRP URL if required by Img component
-                    />
+                    <Img style={{ width: '75%', height: '75%' }} src={value.fieldIcon} alt="" />
                   </Avatar>
                 )}
                 <Box>

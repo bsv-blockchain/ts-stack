@@ -13,7 +13,10 @@ Metanet Apps allows developers to:
 
 ## Installation
 
-Requires Node.js 22 or later for Node consumers. Publishing, updating, and removing listings require an authorized BRC-100 wallet. Public discovery through explicit overlay hosts does not need wallet access.
+Install SDK 4.1.1 or later in the 4.x line in the consuming project. Node
+consumers need Node.js 22 or later. Publishing, updating, and removing listings
+require an authorized BRC-100 wallet. Public discovery through explicit
+overlay hosts works without wallet access.
 
 ```bash
 npm install metanet-apps

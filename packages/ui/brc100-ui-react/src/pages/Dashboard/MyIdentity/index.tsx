@@ -10,12 +10,14 @@ import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import EyeCon from '@mui/icons-material/Visibility'
 import { WalletContext } from '../../../WalletContext'
-import { ProtoWallet, VerifiableCertificate } from '@bsv/sdk'
+import { ProtoWallet, VerifiableCertificate, type WalletCertificate } from '@bsv/sdk'
 import CertificateCard, { type DisplayedCertificate } from './CertificateCard'
 
 const useStyles = makeStyles(style as any, {
   name: 'MyIdentity'
 })
+
+const MAX_CONCURRENT_CERTIFICATE_PROOFS = 4
 
 const MyIdentity = () => {
   const { managers, network, adminOriginator, activeProfile } = useContext(WalletContext)
@@ -53,6 +55,36 @@ const MyIdentity = () => {
       setPrimaryIdentityKey('...')
       setPrivilegedIdentityKey('...')
 
+      const proveCertificate = async (
+        certificate: WalletCertificate
+      ): Promise<DisplayedCertificate | undefined> => {
+        if (!active) return undefined
+        try {
+          const proof = await permissionsManager.proveCertificate(
+            {
+              certificate,
+              fieldsToReveal: Object.keys(certificate.fields),
+              verifier: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' // anyone public key
+            },
+            adminOriginator
+          )
+          const decryptedFields = await new VerifiableCertificate(
+            certificate.type,
+            certificate.serialNumber,
+            certificate.subject,
+            certificate.certifier,
+            certificate.revocationOutpoint,
+            certificate.fields,
+            proof.keyringForVerifier,
+            certificate.signature
+          ).decryptFields(new ProtoWallet('anyone'))
+          return { ...certificate, decryptedFields }
+        } catch (error) {
+          console.error(error)
+          return undefined
+        }
+      }
+
       const getProvenCertificates = async () => {
         const certs = await permissionsManager.listCertificates(
           {
@@ -62,39 +94,16 @@ const MyIdentity = () => {
           },
           adminOriginator
         )
-        const provenCerts = []
-        if (certs && certs.certificates && certs.certificates.length > 0) {
-          for (const certificate of certs.certificates) {
-            try {
-              const fieldsToReveal = Object.keys(certificate.fields)
-              const proof = await permissionsManager.proveCertificate(
-                {
-                  certificate,
-                  fieldsToReveal,
-                  verifier: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' // anyone public key
-                },
-                adminOriginator
-              )
-              const decrypted = await new VerifiableCertificate(
-                certificate.type,
-                certificate.serialNumber,
-                certificate.subject,
-                certificate.certifier,
-                certificate.revocationOutpoint,
-                certificate.fields,
-                proof.keyringForVerifier,
-                certificate.signature
-              ).decryptFields(new ProtoWallet('anyone'))
-              provenCerts.push({
-                ...certificate,
-                decryptedFields: decrypted
-              })
-            } catch (e) {
-              console.error(e)
-            }
-          }
+        const proofs: Array<Promise<DisplayedCertificate | undefined>> = []
+        for (const certificate of certs?.certificates ?? []) {
+          // Each pending proof waits for its slot, while the results keep wallet order.
+          const slot = proofs[proofs.length - MAX_CONCURRENT_CERTIFICATE_PROOFS]
+          proofs.push(
+            slot ? slot.then(() => proveCertificate(certificate)) : proveCertificate(certificate)
+          )
         }
-        if (active) setCertificates(provenCerts)
+        const proven = await Promise.all(proofs)
+        if (active) setCertificates(proven.filter(certificate => certificate !== undefined))
       }
 
       getProvenCertificates().catch(() => console.error('Could not load wallet certificates.'))

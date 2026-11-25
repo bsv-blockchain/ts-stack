@@ -12,7 +12,7 @@ import {
   TextField,
   InputAdornment
 } from '@mui/material'
-import { FC, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { FC, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
 import AmountDisplay from './AmountDisplay'
 import { WalletContext } from '../WalletContext'
@@ -23,6 +23,7 @@ import AppLogo from './AppLogo'
 
 type Props = {
   app: string
+  /** Set to zero to hide the spending editor, which displays one authorization. */
   limit?: number
   onEmptyList?: () => void
 }
@@ -45,7 +46,144 @@ function limitCurrency(rawCurrency: string): keyof typeof limitUnits {
   return 'sats'
 }
 
-export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handleEmptyList }) => {
+export const SpendingAuthorizationList: FC<Props> = ({ app, limit, onEmptyList }) =>
+  limit === 0 ? null : <SpendingAuthorizationEditor app={app} onEmptyList={onEmptyList} />
+
+interface LimitInputProps {
+  editingExisting: boolean
+  valid: boolean
+  saving: boolean
+  input: string
+  onInput: (value: string) => void
+  onSubmit: () => void
+  unitName: string
+  step: number
+  unitLabel: string
+}
+
+function LimitInput({
+  editingExisting,
+  valid,
+  saving,
+  input,
+  onInput,
+  onSubmit,
+  unitName,
+  step,
+  unitLabel
+}: Readonly<LimitInputProps>) {
+  const [focused, setFocused] = useState(false)
+  const editing = !editingExisting || focused || input !== ''
+  const adornment = <InputAdornment position="start">{unitLabel}</InputAdornment>
+  const prompt = editingExisting ? `Enter new limit in ${unitName}` : `Enter limit in ${unitName}`
+
+  return (
+    <Box
+      display="flex"
+      alignItems="center"
+      gap={2}
+      justifyContent={editingExisting ? undefined : 'center'}
+    >
+      <TextField
+        value={input}
+        onChange={event => onInput(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={editingExisting && focused ? '' : prompt}
+        size="small"
+        type={editing ? 'number' : 'text'}
+        inputProps={editing ? { min: 0, step, 'aria-label': prompt } : { 'aria-label': prompt }}
+        InputProps={editing ? { startAdornment: adornment } : undefined}
+        sx={{
+          width: 220,
+          '& input[type=number]': { MozAppearance: 'textfield' },
+          '& input[type=number]::-webkit-outer-spin-button': {
+            WebkitAppearance: 'none',
+            margin: 0
+          },
+          '& input[type=number]::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 }
+        }}
+      />
+      {input !== '' && (
+        <Button
+          onClick={onSubmit}
+          disabled={saving || !valid}
+          size="small"
+          variant={editingExisting ? 'contained' : 'text'}
+        >
+          {saving && <CircularProgress size={16} sx={{ mr: 1 }} />}
+          {saving ? 'Saving…' : 'Submit'}
+        </Button>
+      )}
+    </Box>
+  )
+}
+
+function SpendingProgress({ message }: Readonly<{ message: string }>) {
+  return (
+    <Box textAlign="center" pt={6}>
+      <Box p={3} display="flex" justifyContent="center" alignItems="center">
+        <AppLogo rotate size={50} />
+      </Box>
+      <Typography variant="body1" sx={{ mt: 2 }}>
+        {message}
+      </Typography>
+    </Box>
+  )
+}
+
+interface SpendingSummaryProps {
+  authorizedAmount: number
+  currentSpending: number
+  onRevoke: () => void
+  children: ReactNode
+}
+
+function SpendingSummary({
+  authorizedAmount,
+  currentSpending,
+  onRevoke,
+  children
+}: Readonly<SpendingSummaryProps>) {
+  const progress =
+    authorizedAmount > 0
+      ? Math.min(Math.max((-currentSpending / authorizedAmount) * 100, 0), 100)
+      : 0
+  return (
+    <Box>
+      <Typography variant="h2" gutterBottom>
+        Monthly spending limit: <AmountDisplay showFiatAsInteger>{authorizedAmount}</AmountDisplay>
+      </Typography>
+      <Box mb={3}>{children}</Box>
+      <Typography variant="body1" gutterBottom>
+        Current spending
+      </Typography>
+      <LinearProgress
+        variant="determinate"
+        value={progress}
+        sx={{ height: 8, borderRadius: 4, mb: 1 }}
+      />
+      <Box display="flex" justifyContent="space-between" alignItems="center">
+        <Typography variant="body2" color="text.secondary">
+          <AmountDisplay showFiatAsInteger>{-currentSpending}</AmountDisplay> spent
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          <AmountDisplay showFiatAsInteger>{authorizedAmount}</AmountDisplay> limit
+        </Typography>
+      </Box>
+      <Box mt={3} textAlign="center">
+        <Button variant="outlined" color="error" onClick={onRevoke} size="small">
+          Revoke
+        </Button>
+      </Box>
+    </Box>
+  )
+}
+
+function SpendingAuthorizationEditor({
+  app,
+  onEmptyList = handleEmptyList
+}: Readonly<Omit<Props, 'limit'>>) {
   const { managers, spendingRequests, settings, activeProfile } = useContext(WalletContext)
   const rates = useContext(ExchangeRateContext)
 
@@ -63,9 +201,7 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
     waitingForAuth?: boolean
     renewLimit?: boolean
   }>({ list: true })
-  const [isEditingLimit, setIsEditingLimit] = useState(false)
-  const [tempLimit, setTempLimit] = useState<string>('')
-  const [originalLimit, setOriginalLimit] = useState<string>('')
+  const [tempLimit, setTempLimit] = useState('')
 
   // --------------------------------------------------------------------------
   //   CURRENCY / UNITS (mirror AmountDisplay semantics)
@@ -164,7 +300,7 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
       await new Promise(res => setTimeout(res, 6000))
       SPENDING_CACHE.delete(cacheKey)
       await refreshAuthorizations()
-      setIsEditingLimit(false)
+      setTempLimit('')
     } catch (e: unknown) {
       toast.error(
         `Failed to create spending authorization: ${e instanceof Error ? e.message : 'unknown error'}`
@@ -189,7 +325,7 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
       )
     } finally {
       setBusy(b => ({ ...b, renewLimit: false }))
-      setIsEditingLimit(false)
+      setTempLimit('')
     }
   }
 
@@ -211,7 +347,7 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
       await new Promise(res => setTimeout(res, 2300))
       SPENDING_CACHE.delete(cacheKey)
       await refreshAuthorizations()
-      setIsEditingLimit(false)
+      setTempLimit('')
     } catch (e: unknown) {
       toast.error(
         `Failed to increase spending authorization: ${e instanceof Error ? e.message : 'unknown error'}`
@@ -261,23 +397,32 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
   // --------------------------------------------------------------------------
   //   RENDER
   // --------------------------------------------------------------------------
-  if (busy.list) {
-    return (
-      <Box textAlign="center" pt={6}>
-        <Box p={3} display="flex" justifyContent="center" alignItems="center">
-          <AppLogo rotate size={50} />
-        </Box>
-        <Typography variant="body1" sx={{ mt: 2 }}>
-          Loading spending authorizations…
-        </Typography>
-      </Box>
-    )
+  if (busy.list) return <SpendingProgress message="Loading spending authorizations…" />
+
+  const submitLimit = () => {
+    if (!validLimit) return
+    if (authorization) void updateSpendingAuthorization()
+    else void createSpendingAuthorization(newLimit)
   }
+  const limitEditor = (
+    <LimitInput
+      editingExisting={Boolean(authorization)}
+      valid={validLimit}
+      saving={Boolean(busy.create || busy.renewLimit)}
+      input={tempLimit}
+      onInput={setTempLimit}
+      onSubmit={submitLimit}
+      unitName={unitName}
+      step={inputStep}
+      unitLabel={adornmentLabel}
+    />
+  )
+  const openRevokeDialog = () => setDialogOpen(true)
+  const closeRevokeDialog = () => setDialogOpen(false)
 
   return (
     <>
-      {/* revoke-confirmation dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} onClose={closeRevokeDialog}>
         <DialogTitle>Revoke authorization?</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -285,241 +430,36 @@ export const SpendingAuthorizationList: FC<Props> = ({ app, onEmptyList = handle
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} disabled={busy.revoke}>
+          <Button onClick={closeRevokeDialog} disabled={busy.revoke}>
             Cancel
           </Button>
           <Button onClick={handleConfirmRevoke} disabled={busy.revoke}>
-            {busy.revoke ? (
-              <>
-                <CircularProgress size={16} sx={{ mr: 1 }} />
-                Revoking…
-              </>
-            ) : (
-              'Revoke'
-            )}
+            {busy.revoke && <CircularProgress size={16} sx={{ mr: 1 }} />}
+            {busy.revoke ? 'Revoking…' : 'Revoke'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* authorised state ---------------------------------------------------- */}
-      {authorization || busy.renewLimit ? (
-        <Box>
-          {busy.renewLimit ? (
-            <Box textAlign="center" pt={6}>
-              <Box p={3} display="flex" justifyContent="center" alignItems="center">
-                <AppLogo rotate size={50} />
-              </Box>
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                Updating spending authorization…
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              <Typography variant="h2" gutterBottom>
-                Monthly spending limit:{' '}
-                <AmountDisplay showFiatAsInteger>{authorizedAmount}</AmountDisplay>
-              </Typography>
-
-              {/* Current monthly spending limit section */}
-              <Box mb={3}>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <TextField
-                    value={isEditingLimit ? tempLimit : ''}
-                    onChange={e => {
-                      if (!isEditingLimit) {
-                        setIsEditingLimit(true)
-                        setOriginalLimit('') // baseline for cancel check
-                      }
-                      setTempLimit(e.target.value) // don't prefill with current limit
-                    }}
-                    onFocus={() => {
-                      if (!isEditingLimit) {
-                        setIsEditingLimit(true)
-                        setTempLimit('') // leave empty on focus
-                        setOriginalLimit('') // so blur-without-change cancels cleanly
-                      }
-                    }}
-                    onBlur={() => {
-                      if (isEditingLimit && tempLimit === originalLimit) {
-                        // user didn’t type anything — cancel edit & reset
-                        setIsEditingLimit(false)
-                        setTempLimit('')
-                        setOriginalLimit('')
-                      }
-                    }}
-                    placeholder={isEditingLimit ? '' : `Enter new limit in ${unitName}`}
-                    size="small"
-                    type={isEditingLimit ? 'number' : 'text'}
-                    inputProps={isEditingLimit ? { min: 0, step: inputStep } : undefined}
-                    InputProps={
-                      isEditingLimit
-                        ? {
-                            startAdornment: (
-                              <InputAdornment position="start">{adornmentLabel}</InputAdornment>
-                            )
-                          }
-                        : undefined
-                    }
-                    sx={{
-                      width: 220,
-                      '& input': { cursor: isEditingLimit ? 'text' : 'pointer' },
-                      '& input[type=number]': { MozAppearance: 'textfield' },
-                      '& input[type=number]::-webkit-outer-spin-button': {
-                        WebkitAppearance: 'none',
-                        margin: 0
-                      },
-                      '& input[type=number]::-webkit-inner-spin-button': {
-                        WebkitAppearance: 'none',
-                        margin: 0
-                      }
-                    }}
-                  />
-                  {isEditingLimit && tempLimit !== originalLimit && (
-                    <Button
-                      onClick={() => {
-                        void updateSpendingAuthorization()
-                      }}
-                      disabled={busy.renewLimit || !validLimit}
-                      size="small"
-                      variant="contained"
-                      sx={{
-                        boxShadow: 3,
-                        '&:hover': { boxShadow: 6 },
-                        '&:active': { boxShadow: 1 }
-                      }}
-                    >
-                      {busy.renewLimit ? (
-                        <>
-                          <CircularProgress size={16} sx={{ mr: 1 }} />
-                          Updating…
-                        </>
-                      ) : (
-                        'Submit'
-                      )}
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-
-              {/* Current spending progress section */}
-              <Box>
-                <Typography variant="body1" gutterBottom>
-                  Current spending
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={
-                    authorizedAmount > 0
-                      ? Math.min(Math.max((-currentSpending / authorizedAmount) * 100, 0), 100)
-                      : 0
-                  }
-                  sx={{ height: 8, borderRadius: 4, mb: 1 }}
-                />
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2" color="text.secondary">
-                    <AmountDisplay showFiatAsInteger>{currentSpending * -1}</AmountDisplay> spent
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <AmountDisplay showFiatAsInteger>{authorizedAmount}</AmountDisplay> limit
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box mt={3} textAlign="center">
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={() => setDialogOpen(true)}
-                  size="small"
-                >
-                  Revoke
-                </Button>
-              </Box>
-            </>
-          )}
-        </Box>
-      ) : (
-        /* unauthorised state -------------------------------------------------- */
+      {busy.renewLimit && <SpendingProgress message="Updating spending authorization…" />}
+      {authorization && !busy.renewLimit && (
+        <SpendingSummary
+          authorizedAmount={authorizedAmount}
+          currentSpending={currentSpending}
+          onRevoke={openRevokeDialog}
+        >
+          {limitEditor}
+        </SpendingSummary>
+      )}
+      {!authorization && !busy.renewLimit && busy.waitingForAuth && (
+        <SpendingProgress message="Setting up spending authorization…" />
+      )}
+      {!authorization && !busy.renewLimit && !busy.waitingForAuth && (
         <Box textAlign="center" pt={6}>
-          {busy.waitingForAuth ? (
-            <>
-              <Box p={3} display="flex" justifyContent="center" alignItems="center">
-                <AppLogo rotate size={50} />
-              </Box>
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                Setting up spending authorization…
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Typography variant="body1">
-                This app must ask for permission before spending.
-              </Typography>
-              <Typography variant="body1" gutterBottom sx={{ pt: 2 }}>
-                Allow this app to spend a certain amount?
-              </Typography>
-              <Box display="flex" alignItems="center" gap={2} justifyContent="center">
-                <TextField
-                  value={isEditingLimit ? tempLimit : ''}
-                  onChange={e => {
-                    if (!isEditingLimit) {
-                      setIsEditingLimit(true)
-                      setTempLimit(e.target.value)
-                      setOriginalLimit('')
-                    } else {
-                      setTempLimit(e.target.value)
-                    }
-                  }}
-                  onFocus={() => {
-                    if (!isEditingLimit) {
-                      setIsEditingLimit(true)
-                      setTempLimit('')
-                      setOriginalLimit('')
-                    }
-                  }}
-                  placeholder={`Enter limit in ${unitName}`}
-                  size="small"
-                  type="number"
-                  inputProps={{ min: 0, step: inputStep }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">{adornmentLabel}</InputAdornment>
-                    )
-                  }}
-                  sx={{
-                    width: 220,
-                    '& input[type=number]': { MozAppearance: 'textfield' },
-                    '& input[type=number]::-webkit-outer-spin-button': {
-                      WebkitAppearance: 'none',
-                      margin: 0
-                    },
-                    '& input[type=number]::-webkit-inner-spin-button': {
-                      WebkitAppearance: 'none',
-                      margin: 0
-                    }
-                  }}
-                />
-                {tempLimit && (
-                  <Button
-                    onClick={() => {
-                      if (validLimit) void createSpendingAuthorization(newLimit)
-                    }}
-                    disabled={busy.create || busy.waitingForAuth || !validLimit}
-                    size="small"
-                  >
-                    {busy.create ? (
-                      <>
-                        <CircularProgress size={16} sx={{ mr: 1 }} />
-                        Creating…
-                      </>
-                    ) : (
-                      'Submit'
-                    )}
-                  </Button>
-                )}
-              </Box>
-            </>
-          )}
+          <Typography variant="body1">This app must ask for permission before spending.</Typography>
+          <Typography variant="body1" gutterBottom sx={{ pt: 2 }}>
+            Allow this app to spend a certain amount?
+          </Typography>
+          {limitEditor}
         </Box>
       )}
     </>

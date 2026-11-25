@@ -50,16 +50,20 @@ const AddPopularSigniaCertifiersModal = ({ open, setOpen, classes }) => {
           </DialogContentText>
           <center>
             <List className={classes.oracle_link_container}>
-              {popularCertifiers.map((c, i) => {
+              {popularCertifiers.map(c => {
                 if (c.hide) {
                   return null
                 }
                 return (
-                  <ListItem key={i}>
+                  <ListItem key={c.URL}>
                     <div className={classes.oracle_link}>
                       <Link href={c.URL} target="_blank" rel="noopener noreferrer">
                         <center>
-                          <img src={`${c.URL}/favicon.ico`} className={classes.oracle_icon} />
+                          <img
+                            src={`${c.URL}/favicon.ico`}
+                            className={classes.oracle_icon}
+                            alt=""
+                          />
                           <Typography className={classes.oracle_title}>{c.name}</Typography>
                         </center>
                       </Link>

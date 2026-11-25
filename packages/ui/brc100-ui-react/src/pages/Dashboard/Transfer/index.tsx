@@ -19,21 +19,19 @@ import {
   Select,
   MenuItem,
   FormControl,
-  CircularProgress
+  CircularProgress,
+  OutlinedInput
 } from '@mui/material'
 import InputAdornment from '@mui/material/InputAdornment'
 import { PeerPayClient, IncomingPayment } from '@bsv/message-box-client'
-import { WalletClient } from '@bsv/sdk'
 import { WalletContext } from '../../../WalletContext'
 import { toast } from 'react-toastify'
 import { MESSAGEBOX_HOST } from '../../../config'
 import { CurrencyConverter } from '@bsv/amountinator'
 import useAsyncEffect from 'use-async-effect'
 import { WalletProfile } from '../../../types/WalletProfile'
-import { OutlinedInput } from '@mui/material'
 
 export type PeerPayRouteProps = {
-  walletClient?: WalletClient
   defaultRecipient?: string
 }
 
@@ -43,7 +41,7 @@ type PaymentFormProps = {
   onSent?: () => void
   defaultRecipient?: string
 }
-function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
+function PaymentForm({ peerPay, onSent, defaultRecipient }: Readonly<PaymentFormProps>) {
   const { managers, activeProfile } = useContext(WalletContext)
   const [recipient, setRecipient] = useState(defaultRecipient ?? '')
   const [amount, setAmount] = useState<number>(0)
@@ -81,7 +79,7 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
 
   useEffect(() => {
     let alive = true
-    ;(async () => {
+    void (async () => {
       try {
         if (!managers?.walletManager) return
         const list: WalletProfile[] = await managers.walletManager.listProfiles()
@@ -182,7 +180,7 @@ type PaymentListProps = {
   peerPay: PeerPayClient
 }
 
-function PaymentList({ payments, onRefresh, peerPay }: PaymentListProps) {
+function PaymentList({ payments, onRefresh, peerPay }: Readonly<PaymentListProps>) {
   // Track loading per messageId so buttons aren't linked
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({})
 
@@ -201,16 +199,16 @@ function PaymentList({ payments, onRefresh, peerPay }: PaymentListProps) {
     try {
       await peerPay.acceptPayment(p)
       return true
-    } catch (e1) {
-      toast.error('[PaymentList] acceptPayment raw failed → refetching by id', e1 as any)
+    } catch (error) {
+      toast.error('[PaymentList] acceptPayment raw failed → refetching by id', error as any)
       try {
         const list = await peerPay.listIncomingPayments(MESSAGEBOX_HOST)
         const fresh = list.find(x => String(x.messageId) === id)
         if (!fresh) throw new Error('Payment not found on refresh')
         await peerPay.acceptPayment(fresh)
         return true
-      } catch (e2) {
-        toast.error('[PaymentList] acceptPayment refresh retry failed', e2 as any)
+      } catch (error_) {
+        toast.error('[PaymentList] acceptPayment refresh retry failed', error_ as any)
         return false
       } finally {
         setLoadingFor(id, false)
@@ -293,7 +291,7 @@ function PaymentList({ payments, onRefresh, peerPay }: PaymentListProps) {
 }
 
 /* ------------------------------- Route View -------------------------------- */
-export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
+export default function PeerPayRoute({ defaultRecipient }: Readonly<PeerPayRouteProps>) {
   const { managers, adminOriginator } = useContext(WalletContext)
 
   const peerPay = useMemo(() => {
@@ -337,13 +335,13 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
   }, [peerPay])
 
   useEffect(() => {
-    fetchPayments()
+    void fetchPayments()
   }, [fetchPayments])
 
   useEffect(() => {
     if (!peerPay) return
     let mounted = true
-    ;(async () => {
+    void (async () => {
       try {
         await peerPay.initializeConnection()
         await peerPay.listenForLivePayments({

@@ -11,7 +11,7 @@ const Footer: React.FC = () => {
         <a href="https://github.com/bsv-blockchain/uhrp-services">
           Universal Hash Resolution Protocol
         </a>
-        !
+        {'!'}
       </Typography>
       <Typography align="center">
         <a href="https://github.com/bsv-blockchain/uhrp-ui">BSV UHRP UI</a>

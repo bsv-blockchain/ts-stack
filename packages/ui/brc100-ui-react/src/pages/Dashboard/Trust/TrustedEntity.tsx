@@ -37,6 +37,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, className }: TrustedEntityP
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const lowerTrustColor = trust > 4 ? 'primary' : 'default'
 
   const handleTrustChange = (_event: Event, v: number | number[]) => {
     if (typeof v !== 'number') return
@@ -180,7 +181,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, className }: TrustedEntityP
                 {/* Trust Level Chip */}
                 <Chip
                   label={`Trust Level: ${trust}/10`}
-                  color={trust > 7 ? 'success' : trust > 4 ? 'primary' : 'default'}
+                  color={trust > 7 ? 'success' : lowerTrustColor}
                   size="small"
                   sx={{ mr: 1 }}
                 />

@@ -41,6 +41,7 @@
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs ."
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "fast-check": "^4.9.0",
     "@types/react": "^18.3.1",
     "react": "^18.3.1",
@@ -49,7 +50,6 @@
     "@typescript/native": "npm:typescript@7.0.2"
   },
   "dependencies": {
-    "@bsv/sdk": "workspace:^",
     "zustand": "^4.5.6"
   },
   "engines": {
@@ -57,6 +57,7 @@
   },
   "sideEffects": false,
   "peerDependencies": {
+    "@bsv/sdk": "^4.1.1",
     "react": ">=18"
   },
   "bugs": {

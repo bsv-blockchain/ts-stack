@@ -37,7 +37,7 @@ const BreakpointProvider: React.FC<BreakpointProviderProps> = ({ children, queri
       }, {} as BreakpointMatches)
       setQueryMatch(updatedMatches)
     }
-    if (window && window.matchMedia) {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       const matches = {} as BreakpointMatches
       keys.forEach(media => {
         if (typeof queries[media] === 'string') {

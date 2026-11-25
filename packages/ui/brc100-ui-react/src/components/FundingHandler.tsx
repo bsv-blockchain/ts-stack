@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useRef, useCallback } from 'react'
 import {
   DialogContent,
   DialogActions,
@@ -15,66 +15,88 @@ import { WalletInterface } from '@bsv/sdk'
 import { toast } from 'react-toastify'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
+type WalletFunder = (
+  presentationKey: number[],
+  wallet: WalletInterface,
+  adminOriginator: string
+) => Promise<void>
+
+interface FundingRequest {
+  wallet: WalletInterface
+  resolve: () => void
+  reject: (error: Error) => void
+}
+
 const FundingHandler: React.FC = () => {
   const { setWalletFunder } = useContext(WalletContext)
   const [open, setOpen] = useState(false)
   const [identityKey, setIdentityKey] = useState('')
-  const [paymentTX, setPaymentTX] = useState<string>('')
-  const [resolveFn, setResolveFn] = useState<Function>(() => {})
-  const [wallet, setWallet] = useState<WalletInterface | null>(null)
+  const [paymentTX, setPaymentTX] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const request = useRef<FundingRequest>()
+  const submittingRef = useRef(false)
 
-  useEffect(() => {
-    setWalletFunder((() => {
-      return async (
-        _: number[],
-        wallet: WalletInterface,
-        adminOriginator: string
-      ): Promise<void> => {
-        try {
-          const { publicKey } = await wallet.getPublicKey({ identityKey: true }, adminOriginator)
-          setIdentityKey(publicKey)
-        } catch {
-          setIdentityKey('')
-        }
-        return new Promise<void>(resolve => {
-          setResolveFn(() => resolve)
-          setWallet(wallet)
-          setOpen(true)
-        })
-      }
-    }) as any)
+  const showFundingPrompt = useCallback<WalletFunder>(async (_, wallet, adminOriginator) => {
+    if (request.current || submittingRef.current)
+      throw new Error('A funding request is already open')
+
+    submittingRef.current = true
+    let publicKey: string
+    try {
+      const identity = await wallet.getPublicKey({ identityKey: true }, adminOriginator)
+      publicKey = identity.publicKey
+    } finally {
+      submittingRef.current = false
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      request.current = { wallet, resolve, reject }
+      setIdentityKey(publicKey)
+      setPaymentTX('')
+      setOpen(true)
+    })
   }, [])
 
+  useEffect(() => {
+    // The wallet context exposes the React setter for function-valued state.
+    const register = setWalletFunder as React.Dispatch<
+      React.SetStateAction<WalletFunder | undefined>
+    >
+    register(() => showFundingPrompt)
+  }, [setWalletFunder, showFundingPrompt])
+
   const handleClose = () => {
+    if (submittingRef.current) return
+    const pending = request.current
+    request.current = undefined
+    setIdentityKey('')
+    setPaymentTX('')
     setOpen(false)
-    resolveFn()
+    pending?.reject(new Error('Wallet funding was cancelled'))
   }
 
   const handleFunded = async () => {
+    const pending = request.current
+    if (!pending || submittingRef.current || !paymentTX.trim()) return
+
+    submittingRef.current = true
+    setSubmitting(true)
     try {
-      if (!wallet) throw new Error('Wallet is not ready.')
       const payment = JSON.parse(paymentTX)
-      await wallet.internalizeAction(payment)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Please try again.')
-      console.error(e)
-    } finally {
+      const result = await pending.wallet.internalizeAction(payment)
+      if (result.accepted !== true) throw new Error('Wallet did not accept the funding transaction')
+      request.current = undefined
+      setIdentityKey('')
+      setPaymentTX('')
       setOpen(false)
-      resolveFn()
+      pending.resolve()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Please try again.')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
   }
-
-  // const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const file = e.target.files && e.target.files[0]
-  //   if (!file) return
-  //   const reader = new FileReader()
-  //   reader.onload = evt => {
-  //     const text = evt.target?.result as string
-  //     setPaymentTX(text.trim())
-  //   }
-  //   reader.readAsText(file)
-  //   setFileName(file.name)
-  // }
 
   return (
     <CustomDialog open={open} onClose={handleClose} title="Fund Your Wallet">
@@ -112,6 +134,7 @@ const FundingHandler: React.FC = () => {
           fullWidth
           rows={4}
           value={paymentTX}
+          disabled={submitting}
           onChange={e => setPaymentTX(e.target.value)}
           variant="outlined"
           sx={{
@@ -132,19 +155,14 @@ const FundingHandler: React.FC = () => {
             }
           }}
         />
-        {/* <Button component="label" sx={{ mt: 1 }}>
-          Upload Transaction File
-          <input type="file" hidden accept=".txt,.hex" onChange={handleFileUpload} />
-        </Button> */}
-        {/* {fileName && (
-          <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
-            Uploaded file: {fileName}
-          </Typography>
-        )} */}
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" onClick={handleFunded} disabled={!paymentTX.trim()}>
-          Fund Wallet
+        <Button
+          variant="contained"
+          onClick={handleFunded}
+          disabled={submitting || !paymentTX.trim()}
+        >
+          {submitting ? 'Funding…' : 'Fund Wallet'}
         </Button>
       </DialogActions>
     </CustomDialog>

@@ -4,7 +4,8 @@ UHRP-enabled React components for images, video, and audio.
 
 ## Install
 
-Use React 18 or later and Node.js 22 or later to build your app.
+Use SDK 4.1.1 or later in the 4.x line, React 18 or later, and Node.js 22 or
+later to build your app.
 
 ```sh
 npm install @bsv/uhrp-react

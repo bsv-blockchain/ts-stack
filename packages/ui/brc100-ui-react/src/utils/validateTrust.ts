@@ -1,4 +1,5 @@
 import isImageUrl from './isImageUrl'
+import { webURL } from '../components/registryMetadata'
 
 /**
  * Validates that a trust object of a domain follows the BRC-68 protocol
@@ -23,7 +24,8 @@ const validateTrust = async (
       throw e
     }
   }
-  const iconValid = await isImageUrl(trust.icon)
+  const icon = webURL(trust.icon)
+  const iconValid = icon !== undefined && (await isImageUrl(icon))
   if (!iconValid) {
     const e = new Error('Trust validation failed, icon image URL is invalid')
     ;(e as any).field = 'icon'

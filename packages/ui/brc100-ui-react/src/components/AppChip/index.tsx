@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Chip, Badge, Tooltip, Avatar, Stack, Typography } from '@mui/material'
+import { Chip, Badge, Tooltip, Avatar, Stack, Typography, Box } from '@mui/material'
 import { withRouter, RouteComponentProps } from 'react-router-dom'
 import isImageUrl from '../../utils/isImageUrl'
 import fetchManifest, { appMetadataUrl } from '../../utils/parseAppManifest'
@@ -9,7 +9,6 @@ import Memory from '@mui/icons-material/Memory'
 import CloseIcon from '@mui/icons-material/Close'
 import { generateDefaultIcon } from '../../constants/popularApps'
 import PlaceholderAvatar from '../PlaceholderAvatar'
-import { Box } from '@mui/material'
 // Create styled components for elements that need specific styling
 const ChipContainer = styled('div')(() => ({
   position: 'relative',
@@ -58,7 +57,7 @@ const AppChip: React.FC<AppChipProps> = ({
 }) => {
   const theme = useTheme()
   if (typeof label !== 'string') {
-    throw new Error('Error in AppChip: label prop must be a string!')
+    throw new TypeError('Error in AppChip: label prop must be a string!')
   }
   if (label.startsWith('babbage_app_')) {
     label = label.substring(12)

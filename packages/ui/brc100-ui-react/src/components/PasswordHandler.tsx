@@ -15,6 +15,13 @@ import { toast } from 'react-toastify'
 import { WalletContext } from '../WalletContext'
 
 type VerifyPassword = (candidate: string) => boolean | Promise<boolean>
+type PasswordRetriever = (reason: string, verify: VerifyPassword) => Promise<string>
+
+interface PasswordRequest {
+  verify: VerifyPassword
+  resolve: (password: string) => void
+  reject: (error: Error) => void
+}
 
 const PasswordHandler: React.FC = () => {
   const { onFocusRequested, onFocusRelinquished, isFocused } =
@@ -22,89 +29,99 @@ const PasswordHandler: React.FC = () => {
   const [wasOriginallyFocused, setWasOriginallyFocused] = useState(false)
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
-  const [test, setTest] = useState<VerifyPassword>(() => () => false)
   const [verifying, setVerifying] = useState(false)
-  const requestRevision = useRef(0)
+  const request = useRef<PasswordRequest | null>(null)
   const verificationInProgress = useRef(false)
-  const [resolve, setResolve] = useState<Function>(() => {})
-  const [reject, setReject] = useState<Function>(() => {})
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const { setPasswordRetriever } = useContext(WalletContext)
 
-  const manageFocus = useCallback(() => {
-    isFocused().then(wasOriginallyFocused => {
-      setWasOriginallyFocused(wasOriginallyFocused)
-      if (!wasOriginallyFocused) {
-        onFocusRequested()
+  const manageFocus = useCallback(
+    async (pending: PasswordRequest) => {
+      try {
+        const alreadyFocused = await isFocused()
+        if (request.current !== pending) return
+        setWasOriginallyFocused(alreadyFocused)
+        if (!alreadyFocused) await onFocusRequested()
+      } catch {
+        // Focus assistance can fail while the password form remains usable.
       }
-    })
-  }, [isFocused, onFocusRequested])
+    },
+    [isFocused, onFocusRequested]
+  )
+
+  const retrievePassword = useCallback<PasswordRetriever>(
+    (reason, verify) => {
+      if (request.current) {
+        return Promise.reject(new Error('A password request is already open'))
+      }
+
+      return new Promise<string>((resolve, reject) => {
+        const pending = { verify, resolve, reject }
+        request.current = pending
+        setReason(reason)
+        verificationInProgress.current = false
+        setVerifying(false)
+        setWasOriginallyFocused(true)
+        setPassword('')
+        setShowPassword(false)
+        setOpen(true)
+        void manageFocus(pending)
+      })
+    },
+    [manageFocus]
+  )
 
   useEffect(() => {
-    setPasswordRetriever((): any => {
-      return (reason: string, test: VerifyPassword): Promise<string> => {
-        return new Promise<string>((resolve: Function, reject: Function) => {
-          setReason(() => {
-            return reason
-          })
-          setTest(() => {
-            return test
-          })
-          setResolve(() => {
-            return resolve
-          })
-          setReject(() => {
-            return reject
-          })
-          requestRevision.current++
-          verificationInProgress.current = false
-          setVerifying(false)
-          setPassword('')
-          setOpen(true)
-          manageFocus()
-        })
-      }
-    })
-  }, [manageFocus, setPasswordRetriever])
+    // The wallet context exposes the React setter for function-valued state.
+    const register = setPasswordRetriever as React.Dispatch<
+      React.SetStateAction<PasswordRetriever | undefined>
+    >
+    register(() => retrievePassword)
+  }, [retrievePassword, setPasswordRetriever])
 
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
-    e.preventDefault()
-    if (verificationInProgress.current) return
-    const revision = requestRevision.current
+  const closePrompt = () => {
+    request.current = null
+    verificationInProgress.current = false
+    setVerifying(false)
+    setPassword('')
+    setOpen(false)
+    if (!wasOriginallyFocused) {
+      void onFocusRelinquished().catch(() => {
+        // The password request has already settled.
+      })
+    }
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const pending = request.current
+    if (!pending || verificationInProgress.current) return
     verificationInProgress.current = true
     setVerifying(true)
     try {
-      const success = await test(password)
-      if (revision !== requestRevision.current) return
+      const success = await pending.verify(password)
+      if (request.current !== pending) return
       if (success !== true) {
         toast.error('Incorrect password')
         return
       }
-      resolve(password)
-      setPassword('')
-      setOpen(false)
-      if (!wasOriginallyFocused) await onFocusRelinquished()
+      closePrompt()
+      pending.resolve(password)
     } catch {
-      if (revision === requestRevision.current) toast.error('Could not verify password. Try again.')
+      if (request.current === pending) toast.error('Could not verify password. Try again.')
     } finally {
-      if (revision === requestRevision.current) {
+      if (request.current === pending) {
         verificationInProgress.current = false
         setVerifying(false)
       }
     }
   }
 
-  const handleAbort = async () => {
-    requestRevision.current++
-    verificationInProgress.current = false
-    reject(new Error('User has closed password dialog'))
-    setVerifying(false)
-    setPassword('')
-    setOpen(false)
-    if (!wasOriginallyFocused) {
-      await onFocusRelinquished()
-    }
+  const handleAbort = () => {
+    const pending = request.current
+    closePrompt()
+    pending?.reject(new Error('User has closed password dialog'))
   }
 
   return (

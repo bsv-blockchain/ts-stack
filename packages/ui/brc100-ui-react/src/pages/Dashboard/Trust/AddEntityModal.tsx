@@ -19,6 +19,7 @@ import NameIcon from '@mui/icons-material/Person'
 import PictureIcon from '@mui/icons-material/InsertPhoto'
 import PublicKeyIcon from '@mui/icons-material/Key'
 import CustomDialog from '../../../components/CustomDialog'
+import { webURL } from '../../../components/registryMetadata'
 import { toast } from 'react-toastify'
 import validateTrust from '../../../utils/validateTrust'
 import { Certifier } from '@bsv/wallet-toolbox-client'
@@ -60,16 +61,17 @@ const AddEntityModal = ({
       const result = await window.fetch(url, { signal: controller.signal })
       clearTimeout(id)
       const json = await result.json()
-      if (!json.babbage || !json.babbage.trust || typeof json.babbage.trust !== 'object') {
+      const trust = json.babbage?.trust
+      if (!trust || typeof trust !== 'object') {
         throw new Error(
           'This domain does not support importing a trust relationship (it needs to follow the BRC-68 protocol)'
         )
       }
-      await validateTrust(json.babbage.trust)
-      setName(json.babbage.trust.name)
-      setDescription(json.babbage.trust.note)
-      setIcon(json.babbage.trust.icon)
-      setIdentityKey(json.babbage.trust.publicKey)
+      await validateTrust(trust)
+      setName(trust.name)
+      setDescription(trust.note)
+      setIcon(trust.icon)
+      setIdentityKey(trust.publicKey)
       setFieldsValid(true)
     } catch (e) {
       setFieldsValid(false)
@@ -114,7 +116,7 @@ const AddEntityModal = ({
     }
   }
 
-  const handleTrust = async () => {
+  const handleTrust = () => {
     setTrustedEntities(t => {
       if (t.some(x => x.identityKey === identityKey)) {
         toast.error('An entity with this public key is already in the list!')
@@ -311,7 +313,11 @@ const AddEntityModal = ({
                 borderRadius: '6px'
               }}
             >
-              <img src={icon} style={{ width: '4em', height: '4em', borderRadius: '6px' }} />
+              <img
+                src={webURL(icon)}
+                alt=""
+                style={{ width: '4em', height: '4em', borderRadius: '6px' }}
+              />
               <Box>
                 <Typography>
                   <b>{name}</b>

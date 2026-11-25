@@ -9,9 +9,9 @@ import {
 } from '@mui/material'
 
 interface WalletRequiredDialogProps {
-  appName: string
-  open: boolean
-  onClose: () => void
+  readonly appName: string
+  readonly open: boolean
+  readonly onClose: () => void
 }
 
 export function WalletRequiredDialog({ appName, open, onClose }: WalletRequiredDialogProps) {

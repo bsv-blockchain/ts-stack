@@ -1,6 +1,6 @@
 import type { Theme } from '@mui/material/styles'
 
-export default (theme: Theme) => ({
+const welcomeStyle = (theme: Theme) => ({
   content_wrap: {
     top: 0,
     bottom: 0,
@@ -35,3 +35,5 @@ export default (theme: Theme) => ({
     }
   }
 })
+
+export default welcomeStyle

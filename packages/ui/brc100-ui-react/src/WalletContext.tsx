@@ -276,13 +276,13 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     // Certificate
     if ('certificateType' in req || 'type' in req) {
       const type = (req.certificateType ?? req.type) as string | undefined
-      const fields = new Set<string>(req.fieldsArray ?? req.fields ?? [])
       if (!type) return false
       const rule = d.allow.certificates?.find(c => c.type === type)
-      if (!rule) return false
-      if (!rule.fields || rule.fields.size === 0) return true
-      for (const f of fields) if (!rule.fields.has(f)) return false
-      return true
+      const requestedFields = Array.from(new Set<string>(req.fieldsArray ?? req.fields ?? []))
+      return (
+        rule !== undefined &&
+        (!rule.fields?.size || requestedFields.every(field => rule.fields?.has(field)))
+      )
     }
     // Protocol
     if ('protocolID' in req) {
@@ -598,31 +598,18 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   // Provide a handler for spending authorization requests that enqueues them
   const spendingAuthorizationCallback = useCallback(
     async (args: PermissionRequest & { requestID: string }): Promise<void> => {
-      const { requestID, originator, reason, renewal, spending } = args
-
-      if (!requestID || !spending) {
-        return Promise.resolve()
-      }
-
-      let { satoshis, lineItems } = spending
-
-      if (!lineItems) {
-        lineItems = []
-      }
-
-      // TODO: support these
-      const transactionAmount = 0
-      const totalPastSpending = 0
-      const amountPreviouslyAuthorized = 0
+      const { requestID, originator, reason, renewal, spending, previousToken } = args
+      if (!requestID || !spending) return
+      const { satoshis, lineItems = [] } = spending
 
       // Create the new permission request
       const newItem: SpendingRequest = {
         requestID,
         originator,
         description: reason,
-        transactionAmount,
-        totalPastSpending,
-        amountPreviouslyAuthorized,
+        transactionAmount: satoshis,
+        totalPastSpending: 0, // This callback carries the current request and prior authorization.
+        amountPreviouslyAuthorized: previousToken?.authorizedAmount ?? 0,
         authorizationAmount: satoshis,
         renewal,
         lineItems
@@ -667,9 +654,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     }): Promise<void> => {
       const { requestID, originator, permissions } = args
 
-      if (!requestID || !permissions) {
-        return Promise.resolve()
-      }
+      if (!requestID || !permissions) return
 
       // Create the new permission request
       const newItem: GroupPermissionRequest = {
@@ -733,13 +718,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   // ---- WAB + network + storage configuration ----
   const [wabUrl, setWabUrl] = useState<string>(DEFAULT_WAB_URL)
-  const [, setWabInfo] = useState<{
-    supportedAuthMethods: string[]
-    faucetEnabled: boolean
-    faucetAmount: number
-  } | null>(null)
-
-  const [, setSelectedAuthMethod] = useState<string>('')
   const [selectedNetwork, setSelectedNetwork] = useState<'main' | 'test'>(DEFAULT_CHAIN) // "test" or "main"
   const [selectedStorageUrl, setSelectedStorageUrl] = useState<string>(DEFAULT_STORAGE_URL)
 
@@ -758,14 +736,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
       }
 
-      const info = await response.json()
-      setWabInfo(info)
-
-      // If there's only one auth method, auto-select it
-      if (info.supportedAuthMethods && info.supportedAuthMethods.length === 1) {
-        setSelectedAuthMethod(info.supportedAuthMethods[0])
-      }
-      return info
+      return (await response.json()) as { supportedAuthMethods?: string[] } | null
     } catch (error: any) {
       console.error('Error fetching WAB info', error)
       toast.error('Could not fetch WAB info: ' + error.message)
@@ -775,20 +746,15 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   // Auto-fetch WAB info and apply default configuration when component mounts
   useEffect(() => {
-    if (!localStorage.snap && configStatus === 'initial' && useWab) {
-      ;(async () => {
-        try {
-          const info = await fetchWabInfo()
-
-          if (info && info.supportedAuthMethods && info.supportedAuthMethods.length > 0) {
-            setSelectedAuthMethod(info.supportedAuthMethods[0])
-            // Automatically apply default configuration
-            setConfigStatus('configured')
-          }
-        } catch (error: any) {
-          console.error('Error in initial WAB setup', error)
-        }
-      })()
+    if (localStorage.snap || configStatus !== 'initial' || !useWab) return
+    let active = true
+    fetchWabInfo()
+      .then(info => {
+        if (active && info?.supportedAuthMethods?.length) setConfigStatus('configured')
+      })
+      .catch(() => console.error('Could not initialize wallet configuration.'))
+    return () => {
+      active = false
     }
   }, [wabUrl, configStatus, fetchWabInfo, useWab])
 
@@ -820,8 +786,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
       setUseWab(useWabSetting !== false)
       setWabUrl(wabUrl)
-      setWabInfo(wabInfo)
-      setSelectedAuthMethod(method)
       setSelectedNetwork(network)
       setSelectedStorageUrl(storageUrl)
 
