@@ -8,6 +8,9 @@ A library of reusable React components for displaying and searching identity inf
 npm install @bsv/identity-react
 ```
 
+The package uses React 18, Material UI, and Emotion 11. If your package manager
+does not install peers automatically, add those peers to the consuming app.
+
 ## Example Usage
 
 #### Identity Card
