@@ -94,7 +94,10 @@ const PasswordHandler: React.FC = () => {
       React.SetStateAction<PasswordRetriever | undefined>
     >
     register(() => retrievePassword)
-    return () => register(current => (current === retrievePassword ? undefined : current))
+    return () =>
+      register((current: PasswordRetriever | undefined) =>
+        current === retrievePassword ? undefined : current
+      )
   }, [retrievePassword, setPasswordRetriever])
 
   useEffect(
