@@ -2,6 +2,17 @@ import { formatAmountWithCurrency } from '../src/utils/amountFormatHelpers'
 import { CurrencyConverter } from '../src/utils/currencyConverter'
 
 describe('formatAmountWithCurrency', () => {
+  test('converts BSV and satoshis exactly without a fiat exchange rate', async () => {
+    const converter = new CurrencyConverter(0)
+    converter.preferredCurrency = 'BSV'
+    expect(converter.convertCurrency(7, 'SATS', 'BSV')).toBe(0.00000007)
+    expect(converter.convertCurrency(0.00000007, 'BSV', 'SATS')).toBe(7)
+    await expect(converter.convertToSatoshis(0.00000007)).resolves.toBe(7)
+    await expect(converter.convertToSatoshis(0.000000075)).resolves.toBe(8)
+    await expect(converter.convertToSatoshis(0.00000007000000000001)).resolves.toBe(8)
+    await expect(converter.convertToSatoshis(21_000_000)).resolves.toBe(2_100_000_000_000_000)
+  })
+
   test('infers unitless satoshi and decimal BSV amounts using the wallet currency', async () => {
     const settingsManager = {
       get: jest.fn().mockResolvedValue({ currency: 'USD' })
