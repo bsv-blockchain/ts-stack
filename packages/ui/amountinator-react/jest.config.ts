@@ -1,25 +1,16 @@
-import type { Config } from 'jest';
-//import { defaults } from 'jest-config'
+import type { Config } from 'jest'
 
-export default async (): Promise<Config> => {
-  //console.log(defaults)
-  return {
-    bail: 1,
-    verbose: true,
-    // default is '.'
-    rootDir: '.',
-    // Must include source and test folders: default is ['<rootDir>']
-    roots: ["<rootDir>"],
-    // Speed up by restricting to module (source files) extensions used.
-    moduleFileExtensions: ['ts', 'js'],
-    // excluded source files...
-    modulePathIgnorePatterns: ['out/src', 'out/test'],
-    // Default is 'node'
-    testEnvironment: 'node',
-    // default [ '**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)' ]
-    testMatch: ['**/?(*.)+(test).[tj]s'],
-    // default []
-    testRegex: [],
-    transform: { '^.+\\.ts$': ['ts-jest', { 'rootDir': "." }] },
-  }
+const config: Config = {
+  bail: 1,
+  verbose: true,
+  rootDir: '.',
+  roots: ['<rootDir>'],
+  moduleFileExtensions: ['ts', 'js'],
+  modulePathIgnorePatterns: ['out/src', 'out/test'],
+  testEnvironment: 'node',
+  testMatch: ['**/?(*.)+(test).[tj]s'],
+  testRegex: [],
+  transform: { '^.+\\.ts$': ['ts-jest', { rootDir: '.' }] }
 }
+
+export default config

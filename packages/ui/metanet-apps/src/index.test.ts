@@ -6,17 +6,11 @@ import { METANET_APPS_KEY_ID, METANET_APPS_PROTOCOL } from './constants.js'
 import { AppMetadataValidationError, normalizeAppMetadata } from './metadata.js'
 
 class MockLookupFacilitator implements OverlayLookupFacilitator {
-  readonly calls: Array<{ host: string, question: LookupQuestion, timeout?: number }> = []
+  readonly calls: Array<{ host: string; question: LookupQuestion; timeout?: number }> = []
 
-  constructor (
-    private readonly responses: Record<string, LookupAnswer | Error>
-  ) {}
+  constructor(private readonly responses: Record<string, LookupAnswer | Error>) {}
 
-  async lookup (
-    host: string,
-    question: LookupQuestion,
-    timeout?: number
-  ): Promise<LookupAnswer> {
+  async lookup(host: string, question: LookupQuestion, timeout?: number): Promise<LookupAnswer> {
     this.calls.push({ host, question, timeout })
     const response = this.responses[host]
     if (response instanceof Error) throw response
@@ -35,29 +29,34 @@ describe('AppCatalog direct host lookup', () => {
     })
     const catalog = new AppCatalog({ networkPreset: 'mainnet' })
 
-    const result = await catalog.findAppsAcrossHosts({}, {
-      facilitator,
-      hosts: ['https://overlay-ap-1.example', 'https://overlay-eu-1.example'],
-      timeout: 1234
-    })
+    const result = await catalog.findAppsAcrossHosts(
+      {},
+      {
+        facilitator,
+        hosts: ['https://overlay-ap-1.example', 'https://overlay-eu-1.example'],
+        timeout: 1234
+      }
+    )
 
     expect(result.apps).toEqual([])
     expect(facilitator.calls).toHaveLength(2)
     expect(facilitator.calls[0].timeout).toBe(1234)
-    expect(result.diagnostics.hosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        host: 'https://overlay-ap-1.example',
-        ok: true,
-        rawOutputCount: 1,
-        parsedAppCount: 0,
-        parseFailureCount: 1
-      }),
-      expect.objectContaining({
-        host: 'https://overlay-eu-1.example',
-        ok: false,
-        error: 'region unavailable'
-      })
-    ]))
+    expect(result.diagnostics.hosts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          host: 'https://overlay-ap-1.example',
+          ok: true,
+          rawOutputCount: 1,
+          parsedAppCount: 0,
+          parseFailureCount: 1
+        }),
+        expect.objectContaining({
+          host: 'https://overlay-eu-1.example',
+          ok: false,
+          error: 'region unavailable'
+        })
+      ])
+    )
   })
 
   it('lets findApps use direct hosts when hosts are supplied', async () => {
@@ -66,11 +65,14 @@ describe('AppCatalog direct host lookup', () => {
     })
     const catalog = new AppCatalog({ networkPreset: 'mainnet' })
 
-    const apps = await catalog.findApps({ category: 'Utility' }, {
-      facilitator,
-      hosts: ['https://overlay-us-1.example/'],
-      includeBeef: false
-    })
+    const apps = await catalog.findApps(
+      { category: 'Utility' },
+      {
+        facilitator,
+        hosts: ['https://overlay-us-1.example/'],
+        includeBeef: false
+      }
+    )
 
     expect(apps).toEqual([])
     expect(facilitator.calls).toHaveLength(1)
@@ -84,16 +86,43 @@ describe('AppCatalog direct host lookup', () => {
     })
   })
 
+  it('trims and deduplicates configured hosts without changing their path', async () => {
+    const facilitator = new MockLookupFacilitator({})
+    const catalog = new AppCatalog({ networkPreset: 'mainnet' })
+
+    await catalog.findAppsAcrossHosts(
+      {},
+      {
+        facilitator,
+        hosts: [
+          ' ',
+          '////',
+          ' https://overlay.example/path/// ',
+          'https://overlay.example/path',
+          'http://localhost:8080/'
+        ]
+      }
+    )
+
+    expect(facilitator.calls.map(({ host }) => host)).toEqual([
+      'https://overlay.example/path',
+      'http://localhost:8080'
+    ])
+  })
+
   it('sends direct outpoint queries to the lookup service', async () => {
     const facilitator = new MockLookupFacilitator({
       'https://overlay.example': { type: 'output-list', outputs: [] }
     })
     const catalog = new AppCatalog({ networkPreset: 'mainnet' })
 
-    await catalog.findApps({ outpoint: `${'a'.repeat(64)}.0` }, {
-      facilitator,
-      hosts: ['https://overlay.example']
-    })
+    await catalog.findApps(
+      { outpoint: `${'a'.repeat(64)}.0` },
+      {
+        facilitator,
+        hosts: ['https://overlay.example']
+      }
+    )
 
     expect(facilitator.calls[0].question.query).toEqual({ outpoint: `${'a'.repeat(64)}.0` })
   })
@@ -106,11 +135,13 @@ describe('Metanet Apps contract', () => {
   })
 
   it('throws a stable error for a resolved SDK broadcast failure', () => {
-    expect(() => requireAppCatalogBroadcastSuccess({
-      status: 'error',
-      code: 'ERR_ALL_HOSTS_REJECTED',
-      description: 'Rejected'
-    })).toThrow(expect.objectContaining({ code: 'ERR_ALL_HOSTS_REJECTED' }))
+    expect(() =>
+      requireAppCatalogBroadcastSuccess({
+        status: 'error',
+        code: 'ERR_ALL_HOSTS_REJECTED',
+        description: 'Rejected'
+      })
+    ).toThrow(expect.objectContaining({ code: 'ERR_ALL_HOSTS_REJECTED' }))
   })
 
   it('accepts canonical v0.1 metadata without rewriting publisher data', () => {
@@ -130,16 +161,18 @@ describe('Metanet Apps contract', () => {
   })
 
   it('rejects noncanonical metadata v2', () => {
-    expect(() => normalizeAppMetadata({
-      schema_version: '2.0',
-      app_version: '1.0.0',
-      name: 'Unsafe app',
-      description: 'Unsafe URL example.',
-      icon_url: 'https://example.com/icon.png',
-      launch_url: 'http://user:secret@example.com',
-      domain: 'example.com',
-      released_at: '2026-07-20T00:00:00Z'
-    } as never)).toThrow(expect.objectContaining({ code: 'ERR_METADATA_UNSUPPORTED_SCHEMA' }))
+    expect(() =>
+      normalizeAppMetadata({
+        schema_version: '2.0',
+        app_version: '1.0.0',
+        name: 'Unsafe app',
+        description: 'Unsafe URL example.',
+        icon_url: 'https://example.com/icon.png',
+        launch_url: 'http://user:secret@example.com',
+        domain: 'example.com',
+        released_at: '2026-07-20T00:00:00Z'
+      } as never)
+    ).toThrow(expect.objectContaining({ code: 'ERR_METADATA_UNSUPPORTED_SCHEMA' }))
   })
 
   it('mirrors the canonical topic required fields', () => {

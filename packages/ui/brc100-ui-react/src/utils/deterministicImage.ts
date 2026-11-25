@@ -3,16 +3,16 @@
  * @param id - The unique identifier to generate an icon for (pubkey, protocolID, etc)
  * @returns A data URL containing the jdenticon SVG
  */
-import * as jdenticon from 'jdenticon';
+import * as jdenticon from 'jdenticon'
 
 export const deterministicImage = (id: string): string => {
   // Generate the SVG as a string
-  const svg = jdenticon.toSvg(id, 100);
+  const svg = jdenticon.toSvg(id, 100)
 
   // Convert the SVG to a data URL
-  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 
-  return dataUrl;
-};
+  return dataUrl
+}
 
-export default deterministicImage;
+export default deterministicImage

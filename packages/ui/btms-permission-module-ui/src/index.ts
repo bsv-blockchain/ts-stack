@@ -6,10 +6,7 @@
  * @bsv/btms-permission-module core package.
  */
 
-export {
-  useBtmsPrompt,
-  type FocusHandlers
-} from './BtmsPrompt/index.js'
+export { useBtmsPrompt, type FocusHandlers } from './BtmsPrompt/index.js'
 export { default as BtmsPromptDialog } from './BtmsPrompt/index.js'
 export {
   BtmsPermissionPrompt,

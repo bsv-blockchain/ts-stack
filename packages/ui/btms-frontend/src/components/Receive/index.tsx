@@ -49,7 +49,10 @@ const parseIncomingMetadata = (metadata: unknown): Record<string, unknown> | und
   return undefined
 }
 
-const getMetadataString = (metadata: Record<string, unknown> | undefined, key: string): string | undefined => {
+const getMetadataString = (
+  metadata: Record<string, unknown> | undefined,
+  key: string
+): string | undefined => {
   const value = metadata?.[key]
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined
 }
@@ -59,12 +62,23 @@ const truncateAssetId = (assetId: string, prefix = 8, suffix = 8): string => {
   return `${assetId.slice(0, prefix)}...${assetId.slice(-suffix)}`
 }
 
+// Wallet writes can use the same inputs. Keep approval and settlement ordered and stop after a failure.
+const processPayments = async (
+  payments: IncomingToken[],
+  process: (payment: IncomingToken) => Promise<unknown>
+): Promise<void> => {
+  await payments.reduce<Promise<unknown>>(
+    (previous, payment) => previous.then(() => process(payment)),
+    Promise.resolve()
+  )
+}
+
 const Receive: React.FC<ReceiveProps> = ({
   assetId,
   asset,
   badge = false,
   incomingAmount,
-  onReloadNeeded = () => { }
+  onReloadNeeded = () => {}
 }) => {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -110,12 +124,12 @@ const Receive: React.FC<ReceiveProps> = ({
 
     try {
       setLoading(true)
-      for (const payment of incoming) {
-        await btms.accept(payment)
-      }
+      await processPayments(incoming, payment => btms.accept(payment))
       await loadIncoming(assetId)
       await Promise.resolve(onReloadNeeded())
-      toast.success(`Received ${incoming.length} transfer${incoming.length === 1 ? '' : 's'} of ${resolvedAssetName}`)
+      toast.success(
+        `Received ${incoming.length} transfer${incoming.length === 1 ? '' : 's'} of ${resolvedAssetName}`
+      )
       setOpen(false)
     } catch (err: any) {
       toast.error(formatBtmsError(err, 'Failed to receive incoming asset'))
@@ -133,13 +147,13 @@ const Receive: React.FC<ReceiveProps> = ({
       setProcessingSender(sender)
       setProcessingAction('receive')
 
-      for (const payment of senderPayments) {
-        await btms.accept(payment)
-      }
+      await processPayments(senderPayments, payment => btms.accept(payment))
 
       await loadIncoming(assetId)
       await Promise.resolve(onReloadNeeded())
-      toast.success(`Received ${senderPayments.length} transfer${senderPayments.length === 1 ? '' : 's'} from sender`)
+      toast.success(
+        `Received ${senderPayments.length} transfer${senderPayments.length === 1 ? '' : 's'} from sender`
+      )
     } catch (err: any) {
       toast.error(formatBtmsError(err, 'Failed to receive sender transfers'))
     } finally {
@@ -158,13 +172,13 @@ const Receive: React.FC<ReceiveProps> = ({
       setProcessingSender(sender)
       setProcessingAction('reject')
 
-      for (const payment of senderPayments) {
-        await btms.refundIncoming(payment)
-      }
+      await processPayments(senderPayments, payment => btms.refundIncoming(payment))
 
       await loadIncoming(assetId)
       await Promise.resolve(onReloadNeeded())
-      toast.success(`Rejected ${senderPayments.length} transfer${senderPayments.length === 1 ? '' : 's'} from sender`)
+      toast.success(
+        `Rejected ${senderPayments.length} transfer${senderPayments.length === 1 ? '' : 's'} from sender`
+      )
     } catch (err: any) {
       toast.error(formatBtmsError(err, 'Failed to reject sender transfers'))
     } finally {
@@ -176,8 +190,8 @@ const Receive: React.FC<ReceiveProps> = ({
 
   // badge logic
   const currentCount = incoming.length
-  const badgeVisible =
-    typeof badge === 'number' ? badge > 0 : typeof incomingAmount === 'number' ? incomingAmount > 0 : !!badge
+  const hasIncomingAmount = typeof incomingAmount === 'number' ? incomingAmount > 0 : badge
+  const badgeVisible = typeof badge === 'number' ? badge > 0 : hasIncomingAmount
 
   const resolvedAssetMetadata = useMemo(() => {
     for (const payment of incoming) {
@@ -200,10 +214,17 @@ const Receive: React.FC<ReceiveProps> = ({
   const resolvedAssetDescription = asset?.description ?? resolvedAssetMetadata?.description
   const resolvedAssetIconURL = asset?.iconURL ?? resolvedAssetMetadata?.iconURL
   const resolvedAssetId = assetId ?? incoming[0]?.assetId ?? '(unknown)'
-  const totalIncomingAmount = incoming.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
+  const totalIncomingAmount = incoming.reduce(
+    (sum, payment) => sum + (Number(payment.amount) || 0),
+    0
+  )
+  const transferLabel = currentCount === 1 ? 'transfer' : 'transfers'
 
   const incomingBySender = useMemo(() => {
-    const senderMap: Record<string, { sender: string, amount: number, count: number, payments: IncomingToken[] }> = {}
+    const senderMap: Record<
+      string,
+      { sender: string; amount: number; count: number; payments: IncomingToken[] }
+    > = {}
 
     for (const payment of incoming) {
       const sender = getSenderGroupKey(payment)
@@ -240,7 +261,13 @@ const Receive: React.FC<ReceiveProps> = ({
         </Button>
       </Badge>
 
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" aria-labelledby="receive-dialog-title">
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="receive-dialog-title"
+      >
         <DialogTitle id="receive-dialog-title">Receive {resolvedAssetName}</DialogTitle>
 
         <DialogContent dividers>
@@ -257,10 +284,16 @@ const Receive: React.FC<ReceiveProps> = ({
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                   {resolvedAssetName}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                >
                   Asset ID:
                   <Tooltip title={resolvedAssetId}>
-                    <span style={{ fontFamily: 'monospace' }}>{truncateAssetId(resolvedAssetId)}</span>
+                    <span style={{ fontFamily: 'monospace' }}>
+                      {truncateAssetId(resolvedAssetId)}
+                    </span>
                   </Tooltip>
                   <Tooltip title="Copy Asset ID">
                     <IconButton size="small" sx={{ p: 0.25 }} onClick={() => void copyAssetId()}>
@@ -278,16 +311,26 @@ const Receive: React.FC<ReceiveProps> = ({
             )}
 
             {loading && incoming.length === 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 3, gap: 1.5 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  py: 3,
+                  gap: 1.5
+                }}
+              >
                 <CircularProgress color="secondary" size={24} />
-                <Typography variant="body2" color="text.secondary">Loading incoming asset...</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Loading incoming asset...
+                </Typography>
               </Box>
             ) : (
               <>
                 <Typography variant="body1">
                   {currentCount === 0
                     ? 'No incoming asset available to receive.'
-                    : `${totalIncomingAmount} units incoming across ${currentCount} transfer${currentCount === 1 ? '' : 's'}`}
+                    : `${totalIncomingAmount} units incoming across ${currentCount} ${transferLabel}`}
                 </Typography>
 
                 {currentCount > 0 && (
@@ -298,7 +341,15 @@ const Receive: React.FC<ReceiveProps> = ({
 
                     <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                       {incomingBySender.map(entry => (
-                        <Box key={entry.sender} sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5 }}>
+                        <Box
+                          key={entry.sender}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: 1.5
+                          }}
+                        >
                           <Box sx={{ minWidth: 0 }}>
                             {entry.sender === '(unknown)' ? (
                               <Typography variant="body2">Unknown sender</Typography>
@@ -315,7 +366,9 @@ const Receive: React.FC<ReceiveProps> = ({
                               disabled={loading || entry.sender === '(unknown)'}
                               onClick={() => void handleRejectBySender(entry.sender)}
                             >
-                              {processingSender === entry.sender && processingAction === 'reject' ? 'Rejecting...' : 'Reject'}
+                              {processingSender === entry.sender && processingAction === 'reject'
+                                ? 'Rejecting...'
+                                : 'Reject'}
                             </Button>
                             <Button
                               size="small"
@@ -324,7 +377,9 @@ const Receive: React.FC<ReceiveProps> = ({
                               disabled={loading}
                               onClick={() => void handleReceiveBySender(entry.sender)}
                             >
-                              {processingSender === entry.sender && processingAction === 'receive' ? 'Receiving...' : 'Receive'}
+                              {processingSender === entry.sender && processingAction === 'receive'
+                                ? 'Receiving...'
+                                : 'Receive'}
                             </Button>
                           </Box>
                         </Box>

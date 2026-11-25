@@ -55,9 +55,7 @@ const appMetadata: PublishedAppMetadata = {
   release_date: new Date().toISOString()
 }
 
-const result = requireAppCatalogBroadcastSuccess(
-  await catalog.publishApp(appMetadata)
-)
+const result = requireAppCatalogBroadcastSuccess(await catalog.publishApp(appMetadata))
 console.log('Published app:', result)
 ```
 
@@ -106,10 +104,7 @@ spend it. After an update succeeds, look up the replacement token independently
 once it has been indexed. Removal spends that current token.
 
 ```typescript
-const [listing] = await catalog.findApps(
-  { outpoint: currentOutpoint },
-  { includeBeef: true }
-)
+const [listing] = await catalog.findApps({ outpoint: currentOutpoint }, { includeBeef: true })
 if (!listing) throw new Error('The current listing is not available yet.')
 
 const updated = requireAppCatalogBroadcastSuccess(

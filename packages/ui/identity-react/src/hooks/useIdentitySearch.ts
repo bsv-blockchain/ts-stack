@@ -16,7 +16,7 @@ export interface UseIdentitySearchProps {
 }
 
 class SearchCache {
-  private cache = new Map<string, { data: DisplayableIdentity[]; timestamp: number }>()
+  private readonly cache = new Map<string, { data: DisplayableIdentity[]; timestamp: number }>()
 
   get(query: string): DisplayableIdentity[] | null {
     const key = query.toLowerCase().trim()

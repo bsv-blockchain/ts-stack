@@ -10,15 +10,9 @@
   ],
   "compilerOptions": {
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "btms-core/dist/frontend/src/btms": [
-        "./src/btms/index.ts"
-      ],
-      "btms-core/dist/frontend/src/btms/index.js": [
-        "./src/btms/index.ts"
-      ]
+      "@/*": ["./src/*"],
+      "btms-core/dist/frontend/src/btms": ["./src/btms/index.ts"],
+      "btms-core/dist/frontend/src/btms/index.js": ["./src/btms/index.ts"]
     },
     "skipLibCheck": true,
     "allowJs": true

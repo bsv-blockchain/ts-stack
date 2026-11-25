@@ -1,7 +1,6 @@
 import React from 'react'
 import { WalletContextProvider } from './WalletContext'
 import { HashRouter as Router, Route, Switch } from 'react-router-dom'
-import 'react-toastify/dist/ReactToastify.css'
 import { BreakpointProvider } from './utils/useBreakpoints'
 import { ExchangeRateContextProvider } from './components/AmountDisplay/ExchangeRateContextProvider'
 import Greeter from './pages/Greeter'
@@ -34,7 +33,7 @@ import { NativeHandlers, UserContextProvider } from './UserContext'
 import GroupPermissionHandler from './components/GroupPermissionHandler'
 
 interface UserInterfaceProps {
-  onWalletReady: (wallet: WalletInterface) => Promise<(() => void) | undefined>;
+  onWalletReady: (wallet: WalletInterface) => Promise<(() => void) | undefined>
   /**
    * Native handlers that can be injected to provide platform-specific functionality.
    * Includes:
@@ -43,12 +42,17 @@ interface UserInterfaceProps {
    * - onFocusRelinquished: Relinquish focus from the application window
    * - onDownloadFile: Download a file (works across browser, Tauri, extensions)
    */
-  nativeHandlers?: NativeHandlers;
-  appVersion?: string;
-  appName?: string;
+  nativeHandlers?: NativeHandlers
+  appVersion?: string
+  appName?: string
 }
 
-const UserInterface: React.FC<UserInterfaceProps> = ({ onWalletReady, nativeHandlers, appVersion, appName }) => {
+const UserInterface: React.FC<UserInterfaceProps> = ({
+  onWalletReady,
+  nativeHandlers,
+  appVersion,
+  appName
+}) => {
   return (
     <UserContextProvider nativeHandlers={nativeHandlers} appVersion={appVersion} appName={appName}>
       <WalletContextProvider onWalletReady={onWalletReady}>
@@ -67,11 +71,11 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ onWalletReady, nativeHand
                 <ThemedToastContainer />
                 <GroupPermissionHandler />
                 <Switch>
-                  <Route exact path='/' component={Greeter} />
-                  <Route path='/dashboard' component={Dashboard} />
-                  <Route exact path='/recovery/lost-phone' component={LostPhone} />
-                  <Route exact path='/recovery/lost-password' component={LostPassword} />
-                  <Route exact path='/recovery' component={Recovery} />
+                  <Route exact path="/" component={Greeter} />
+                  <Route path="/dashboard" component={Dashboard} />
+                  <Route exact path="/recovery/lost-phone" component={LostPhone} />
+                  <Route exact path="/recovery/lost-password" component={LostPassword} />
+                  <Route exact path="/recovery" component={Recovery} />
                 </Switch>
               </BreakpointProvider>
             </Router>

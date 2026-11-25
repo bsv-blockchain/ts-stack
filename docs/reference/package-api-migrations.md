@@ -182,9 +182,9 @@ explicitly authorized operations.
 - Release note: React wallet screens and permission UI for BRC-100 applications. The implementation, tests and package tooling are developed in TS Stack.
 - Migration: Keep importing @bsv/brc100-ui-react-components. Use the compatibility ranges in its package manifest and follow the package README for integration.
 
-| Public subpath | Runtime target(s)                      | Declaration target(s)     |
-| -------------- | -------------------------------------- | ------------------------- |
-| `.`            | `./dist/index.js`<br>`./dist/index.js` | `./dist/types/index.d.ts` |
+| Public subpath | Runtime target(s)                                            | Declaration target(s)                                              |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `.`            | `./dist/index.js`<br>`./dist/index.mjs`<br>`./dist/index.js` | `./dist/index.d.ts`<br>`./dist/index.d.mts`<br>`./dist/index.d.ts` |
 
 ## @bsv/btms
 

@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 
-const output = path.resolve(process.argv[2] ?? 'dist')
+const requestedOutput = process.argv[2] ?? 'dist'
+assert.ok(
+  requestedOutput === 'build' || requestedOutput === 'dist',
+  'Expected build or dist output'
+)
+const output = path.resolve(requestedOutput === 'build' ? 'build' : 'dist')
 const html = await readFile(path.join(output, 'index.html'), 'utf8')
 const scripts = Array.from(
   html.matchAll(/<script\s[^>]*\bsrc="([^"]+)"/g),

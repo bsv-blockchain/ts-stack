@@ -18,21 +18,19 @@ import {
   Typography,
   Select,
   MenuItem,
-  InputLabel,
   FormControl,
   CircularProgress
 } from '@mui/material'
 import InputAdornment from '@mui/material/InputAdornment'
 import { PeerPayClient, IncomingPayment } from '@bsv/message-box-client'
-import { PubKeyHex, WalletClient } from '@bsv/sdk'
+import { WalletClient } from '@bsv/sdk'
 import { WalletContext } from '../../../WalletContext'
 import { toast } from 'react-toastify'
-import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
 import { MESSAGEBOX_HOST } from '../../../config'
-import { CurrencyConverter } from 'amountinator'
+import { CurrencyConverter } from '@bsv/amountinator'
 import useAsyncEffect from 'use-async-effect'
 import { WalletProfile } from '../../../types/WalletProfile'
-import { OutlinedInput } from '@mui/material';
+import { OutlinedInput } from '@mui/material'
 
 export type PeerPayRouteProps = {
   walletClient?: WalletClient
@@ -46,14 +44,14 @@ type PaymentFormProps = {
   defaultRecipient?: string
 }
 function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
-  const {managers, activeProfile} = useContext(WalletContext)
+  const { managers, activeProfile } = useContext(WalletContext)
   const [recipient, setRecipient] = useState(defaultRecipient ?? '')
   const [amount, setAmount] = useState<number>(0)
   const [sending, setSending] = useState(false)
   const [profiles, setProfiles] = useState<WalletProfile[]>([])
-  const [destProfileId, setDestProfileId] = useState<string>('')
   const [currencySymbol, setCurrencySymbol] = useState('$')
-  const currencyConverter = new CurrencyConverter()
+  const currencyConverter = useMemo(() => new CurrencyConverter(), [])
+  const amountRevision = useRef(0)
   const [input, setInput] = useState('')
 
   useAsyncEffect(async () => {
@@ -63,39 +61,46 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
   }, [])
 
   const otherProfiles = useMemo(
-  () => profiles.filter(p => p.identityKey !== activeProfile?.identityKey),
-  [profiles, activeProfile?.identityKey]
+    () => profiles.filter(p => p.identityKey !== activeProfile?.identityKey),
+    [profiles, activeProfile?.identityKey]
   )
 
-  const handleAmountChange = useCallback(async (event) => {
-    const input = event.target.value.replace(/[^0-9.]/g, '')
-    if (input !== amount) {
+  const handleAmountChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const input = event.target.value.replace(/[^0-9.]/g, '')
       setInput(input)
-      const satoshis = await currencyConverter.convertToSatoshis(input)
-      setAmount(satoshis)
-    }
-  }, [])
+      const revision = ++amountRevision.current
+      setAmount(0)
+      const numericAmount = Number(input)
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) return
+      const satoshis = await currencyConverter.convertToSatoshis(numericAmount)
+      if (revision === amountRevision.current) setAmount(satoshis ?? 0)
+    },
+    [currencyConverter]
+  )
 
   useEffect(() => {
     let alive = true
-      ; (async () => {
-        try {
-          if (!managers?.walletManager) return
-          const list: WalletProfile[] = await managers.walletManager.listProfiles()
-          if (!alive) return
-          const cloned = list.map(p => ({
-            id: [...p.id],
-            name: String(p.name),
-            createdAt: p.createdAt ?? null,
-            active: !!p.active,
-            identityKey: p.identityKey
-          }))
-          setProfiles(cloned)
-        } catch (e) {
-          toast.error('[PaymentForm] listProfiles error:', e as any)
-        }
-      })()
-    return () => { alive = false }
+    ;(async () => {
+      try {
+        if (!managers?.walletManager) return
+        const list: WalletProfile[] = await managers.walletManager.listProfiles()
+        if (!alive) return
+        const cloned = list.map(p => ({
+          id: [...p.id],
+          name: String(p.name),
+          createdAt: p.createdAt ?? null,
+          active: !!p.active,
+          identityKey: p.identityKey
+        }))
+        setProfiles(cloned)
+      } catch (e) {
+        toast.error('[PaymentForm] listProfiles error:', e as any)
+      }
+    })()
+    return () => {
+      alive = false
+    }
   }, [managers])
 
   const canSend = recipient.trim().length > 0 && amount > 0 && !sending
@@ -129,17 +134,17 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
           <FormControl fullWidth>
             <Select
               label="Destination Profile"
-              value={recipient || ''}                 // recipient is the identityKey string
+              value={recipient || ''} // recipient is the identityKey string
               displayEmpty
-              onChange={(e) => setRecipient(e.target.value as string)}
-              renderValue={(val) => {
+              onChange={e => setRecipient(e.target.value as string)}
+              renderValue={val => {
                 if (!val) return ''
-                const p = profiles.find(p => p.identityKey === val)  // <- fix
+                const p = profiles.find(p => p.identityKey === val) // <- fix
                 return p ? `${p.name} — ${p.identityKey.slice(0, 10)}` : ''
               }}
               input={<OutlinedInput notched={false} />}
             >
-              {otherProfiles.map((p) => (
+              {otherProfiles.map(p => (
                 <MenuItem key={p.identityKey} value={p.identityKey}>
                   {p.name} — {p.identityKey.slice(0, 10)}
                 </MenuItem>
@@ -158,7 +163,6 @@ function PaymentForm({ peerPay, onSent, defaultRecipient }: PaymentFormProps) {
             }}
             fullWidth
           />
-
         </Stack>
 
         <Box>
@@ -240,7 +244,7 @@ function PaymentList({ payments, onRefresh, peerPay }: PaymentListProps) {
         <Typography color="text.secondary">No pending transfers.</Typography>
       ) : (
         <List sx={{ width: '100%' }}>
-          {payments.map((p) => {
+          {payments.map(p => {
             const id = String(p.messageId)
             const isLoading = !!loadingById[id]
             return (
@@ -289,34 +293,44 @@ function PaymentList({ payments, onRefresh, peerPay }: PaymentListProps) {
 }
 
 /* ------------------------------- Route View -------------------------------- */
-export default function PeerPayRoute({ walletClient, defaultRecipient }: PeerPayRouteProps) {
-  const { activeProfile, managers, adminOriginator } = useContext(WalletContext)
+export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
+  const { managers, adminOriginator } = useContext(WalletContext)
 
   const peerPay = useMemo(() => {
     const wc = managers.permissionsManager
+    if (!wc) return undefined
     return new PeerPayClient({
       walletClient: wc,
       messageBoxHost: MESSAGEBOX_HOST,
       enableLogging: true,
       originator: adminOriginator
     })
-  }, [walletClient])
+  }, [managers.permissionsManager, adminOriginator])
 
   const [payments, setPayments] = useState<IncomingPayment[]>([])
   const [loading, setLoading] = useState(false)
-  const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'info' | 'warning' | 'error' }>({
+  const [snack, setSnack] = useState<{
+    open: boolean
+    msg: string
+    severity: 'success' | 'info' | 'warning' | 'error'
+  }>({
     open: false,
     msg: '',
-    severity: 'info',
+    severity: 'info'
   })
 
   const fetchPayments = useCallback(async () => {
+    if (!peerPay) return
     try {
       setLoading(true)
       const list = await peerPay.listIncomingPayments(MESSAGEBOX_HOST)
       setPayments(list)
     } catch (e) {
-      setSnack({ open: true, msg: (e as Error)?.message ?? 'Failed to load payments', severity: 'error' })
+      setSnack({
+        open: true,
+        msg: (e as Error)?.message ?? 'Failed to load payments',
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -327,24 +341,34 @@ export default function PeerPayRoute({ walletClient, defaultRecipient }: PeerPay
   }, [fetchPayments])
 
   useEffect(() => {
+    if (!peerPay) return
     let mounted = true
-      ; (async () => {
-        try {
-          await peerPay.initializeConnection()
-          await peerPay.listenForLivePayments({
-            overrideHost: MESSAGEBOX_HOST,
-            onPayment: (payment) => {
-              if (!mounted) return
-              setPayments((prev) => [...prev, payment])
-              setSnack({ open: true, msg: 'New incoming payment', severity: 'success' })
-            },
+    ;(async () => {
+      try {
+        await peerPay.initializeConnection()
+        await peerPay.listenForLivePayments({
+          overrideHost: MESSAGEBOX_HOST,
+          onPayment: payment => {
+            if (!mounted) return
+            setPayments(prev => [...prev, payment])
+            setSnack({ open: true, msg: 'New incoming payment', severity: 'success' })
+          }
+        })
+      } catch {
+        if (mounted)
+          setSnack({
+            open: true,
+            msg: 'Live payment updates are unavailable.',
+            severity: 'warning'
           })
-        } catch (e) {
-          // silently handle errors
-        }
-      })()
-    return () => { mounted = false }
+      }
+    })()
+    return () => {
+      mounted = false
+    }
   }, [peerPay])
+
+  if (!peerPay) return <Typography role="status">Wallet is not ready.</Typography>
 
   return (
     <Container maxWidth="sm">
@@ -368,10 +392,15 @@ export default function PeerPayRoute({ walletClient, defaultRecipient }: PeerPay
         <Snackbar
           open={snack.open}
           autoHideDuration={3500}
-          onClose={() => setSnack((s) => ({ ...s, open: false }))}
+          onClose={() => setSnack(s => ({ ...s, open: false }))}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))} variant="filled" sx={{ width: '100%' }}>
+          <Alert
+            severity={snack.severity}
+            onClose={() => setSnack(s => ({ ...s, open: false }))}
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
             {snack.msg}
           </Alert>
         </Snackbar>

@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { CurrencyConverter } from '@bsv/amountinator'
 import useAsyncEffect from 'use-async-effect'
 import { Tooltip, Typography } from '@mui/material'
-import { DisplayAmount, FormatOptions, normalizeDisplayAmount } from '../../utils/amountDisplayFormatting'
+import {
+  DisplayAmount,
+  FormatOptions,
+  normalizeDisplayAmount
+} from '../../utils/amountDisplayFormatting'
 
 interface AmountDisplayProps {
   paymentAmount: number | string
@@ -24,7 +28,11 @@ const AmountDisplay = ({ paymentAmount, formatOptions }: AmountDisplayProps) => 
   useAsyncEffect(async () => {
     try {
       await currencyConverter.initialize()
-      const convertedAmount = await normalizeDisplayAmount(currencyConverter, paymentAmount, formatOptions)
+      const convertedAmount = await normalizeDisplayAmount(
+        currencyConverter,
+        paymentAmount,
+        formatOptions
+      )
       setDisplayAmount(convertedAmount)
     } catch (error) {
       console.error('Failed to convert amount:', error)

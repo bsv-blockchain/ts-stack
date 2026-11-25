@@ -1,6 +1,13 @@
 import { useState, useEffect, useContext } from 'react'
 import {
-  DialogContent, DialogContentText, DialogActions, Button, Typography, Checkbox, FormControlLabel, CircularProgress
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  Typography,
+  Checkbox,
+  FormControlLabel,
+  CircularProgress
 } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import CustomDialog from '../CustomDialog'
@@ -13,119 +20,122 @@ import BasketChip from '../BasketChip'
 import AmountDisplay from '../AmountDisplay'
 import { GroupedPermissions } from '@bsv/wallet-toolbox-client'
 
-const useStyles = makeStyles({
-  protocol_grid: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    alignItems: 'center',
-    gridColumnGap: '0.5em',
-    padding: '1em 0px'
+const useStyles = makeStyles(
+  {
+    protocol_grid: {
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr',
+      alignItems: 'center',
+      gridColumnGap: '0.5em',
+      padding: '1em 0px'
+    },
+    protocol_inset: {
+      marginLeft: '2.5em',
+      paddingLeft: '0.5em',
+      borderLeft: '3px solid #bbb',
+      paddingTop: '0.5em',
+      marginBottom: '1em'
+    },
+    basket_grid: {
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr',
+      alignItems: 'center',
+      gridColumnGap: '0.5em',
+      padding: '0.5em 0px'
+    },
+    basket_inset: {
+      marginLeft: '2.5em',
+      paddingLeft: '0.5em',
+      borderLeft: '3px solid #bbb',
+      paddingTop: '0.5em',
+      marginBottom: '1em'
+    },
+    certificate_grid: {
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr',
+      alignItems: 'center',
+      gridColumnGap: '0.5em',
+      padding: '0.5em 0px'
+    },
+    certificate_inset: {
+      marginLeft: '2.5em',
+      paddingLeft: '0.5em',
+      borderLeft: '3px solid #bbb',
+      marginBottom: '1em'
+    },
+    certificate_attribute_wrap: {
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr',
+      alignItems: 'center',
+      gridGap: '0.5em'
+    },
+    certificate_display: {
+      display: 'grid',
+      gridTemplateRows: 'auto'
+    }
   },
-  protocol_inset: {
-    marginLeft: '2.5em',
-    paddingLeft: '0.5em',
-    borderLeft: '3px solid #bbb',
-    paddingTop: '0.5em',
-    marginBottom: '1em'
-  },
-  basket_grid: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    alignItems: 'center',
-    gridColumnGap: '0.5em',
-    padding: '0.5em 0px'
-  },
-  basket_inset: {
-    marginLeft: '2.5em',
-    paddingLeft: '0.5em',
-    borderLeft: '3px solid #bbb',
-    paddingTop: '0.5em',
-    marginBottom: '1em'
-  },
-  certificate_grid: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    alignItems: 'center',
-    gridColumnGap: '0.5em',
-    padding: '0.5em 0px'
-  },
-  certificate_inset: {
-    marginLeft: '2.5em',
-    paddingLeft: '0.5em',
-    borderLeft: '3px solid #bbb',
-    marginBottom: '1em'
-  },
-  certificate_attribute_wrap: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    alignItems: 'center',
-    gridGap: '0.5em'
-  },
-  certificate_display: {
-    display: 'grid',
-    gridTemplateRows: 'auto'
-  }
-}, { name: 'GroupPermissionHandler' })
+  { name: 'GroupPermissionHandler' }
+)
 
 interface SpendingAuthorization {
-  amount: number;
-  enabled?: boolean;
-  description?: string;
+  amount: number
+  enabled?: boolean
+  description?: string
   // Avoid using index signature with any
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 interface ProtocolPermission {
-  protocolID: [number, string];
-  counterparty?: string;
-  description?: string;
-  enabled?: boolean;
+  rowKey?: string
+  protocolID: [number, string]
+  counterparty?: string
+  description?: string
+  enabled?: boolean
   // Avoid using index signature with any
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 interface BasketAccessItem {
-  basket: string;
-  description?: string;
-  enabled?: boolean;
+  rowKey?: string
+  basket: string
+  description?: string
+  enabled?: boolean
   // Avoid using index signature with any
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 interface CertificateAccessItem {
-  type: string;
-  fields?: string[];
-  verifierPublicKey?: string;
-  description?: string;
-  enabled?: boolean;
+  rowKey?: string
+  type: string
+  fields?: string[]
+  verifierPublicKey?: string
+  description?: string
+  enabled?: boolean
   // Avoid using index signature with any
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 interface GroupPermissions {
-  protocolPermissions?: ProtocolPermission[];
-  basketAccess?: BasketAccessItem[];
-  certificateAccess?: CertificateAccessItem[];
-  spendingAuthorization?: SpendingAuthorization;
+  protocolPermissions: ProtocolPermission[]
+  basketAccess: BasketAccessItem[]
+  certificateAccess: CertificateAccessItem[]
+  spendingAuthorization?: SpendingAuthorization
 }
 
 // We use the structure of requests from the wallet context
 // Each request contains requestID, originator and groupPermissions
 
 const GroupPermissionHandler = () => {
-  const {
-    groupPermissionRequests,
-    advanceGroupQueue,
-    managers
-  } = useContext<WalletContextValue>(WalletContext)
+  const { groupPermissionRequests, advanceGroupQueue, managers } =
+    useContext<WalletContextValue>(WalletContext)
 
-  const {
-    groupPermissionModalOpen
-  } = useContext<UserContextValue>(UserContext)
+  const { groupPermissionModalOpen } = useContext<UserContextValue>(UserContext)
 
   const [originator, setOriginator] = useState('')
   const [requestID, setRequestID] = useState<string | null>(null)
-  const [spendingAuthorization, setSpendingAuthorization] = useState<SpendingAuthorization | undefined>(undefined)
+  const [spendingAuthorization, setSpendingAuthorization] = useState<
+    SpendingAuthorization | undefined
+  >(undefined)
   const [protocolPermissions, setProtocolPermissions] = useState<ProtocolPermission[]>([])
   const [basketAccess, setBasketAccess] = useState<BasketAccessItem[]>([])
   const [certificateAccess, setCertificateAccess] = useState<CertificateAccessItem[]>([])
@@ -136,8 +146,7 @@ const GroupPermissionHandler = () => {
     // Deny the current group permission request
     if (requestID) {
       try {
-        await managers?.permissionsManager.denyGroupedPermission(requestID)
-        console.log('Denying group permission for requestID:', requestID)
+        await managers.permissionsManager?.denyGroupedPermission(requestID)
       } catch (error) {
         console.error('Error denying group permission:', error)
       }
@@ -147,6 +156,8 @@ const GroupPermissionHandler = () => {
   }
 
   const handleGrant = async () => {
+    const permissionsManager = managers.permissionsManager
+    if (!permissionsManager) return
     setIsGranting(true)
     try {
       const granted: GroupPermissions = {
@@ -155,10 +166,7 @@ const GroupPermissionHandler = () => {
         certificateAccess: []
       }
 
-      if (
-        typeof spendingAuthorization === 'object' &&
-        spendingAuthorization?.enabled
-      ) {
+      if (typeof spendingAuthorization === 'object' && spendingAuthorization?.enabled) {
         const spendingAuthCopy = { ...spendingAuthorization }
         delete spendingAuthCopy.enabled
         granted.spendingAuthorization = spendingAuthCopy
@@ -168,6 +176,7 @@ const GroupPermissionHandler = () => {
         if (x.enabled) {
           const xCopy = { ...x }
           delete xCopy.enabled
+          delete xCopy.rowKey
           granted.protocolPermissions.push(xCopy)
         }
       }
@@ -176,6 +185,7 @@ const GroupPermissionHandler = () => {
         if (x.enabled) {
           const xCopy = { ...x }
           delete xCopy.enabled
+          delete xCopy.rowKey
           granted.basketAccess.push(xCopy)
         }
       }
@@ -184,18 +194,18 @@ const GroupPermissionHandler = () => {
         if (x.enabled) {
           const xCopy = { ...x }
           delete xCopy.enabled
+          delete xCopy.rowKey
           granted.certificateAccess.push(xCopy)
         }
       }
 
       if (requestID) {
         try {
-          await managers?.permissionsManager.grantGroupedPermission({
+          await permissionsManager.grantGroupedPermission({
             requestID,
-            granted: granted as GroupedPermissions, //? TODO: Confirm this is correct
-            expiry: 0 // ?
+            granted: granted as GroupedPermissions,
+            expiry: 0
           })
-          console.log('Granting group permission for requestID:', requestID, 'with granted:', granted)
         } catch (error) {
           console.error('Error granting group permission:', error)
         }
@@ -214,7 +224,7 @@ const GroupPermissionHandler = () => {
       const currentRequest = groupPermissionRequests[0]
 
       // Process the current request
-      const processRequest = async () => {
+      const processRequest = () => {
         try {
           // Ensure we have proper typing for the current request
           const { requestID, originator, permissions } = currentRequest
@@ -233,36 +243,41 @@ const GroupPermissionHandler = () => {
 
           // Set protocol permissions
           setProtocolPermissions(
-            (groupPermissions?.protocolPermissions)
-              ? groupPermissions.protocolPermissions.map(x => ({ ...x, enabled: true }))
+            groupPermissions?.protocolPermissions
+              ? groupPermissions.protocolPermissions.map((x, index) => ({
+                  ...x,
+                  enabled: true,
+                  rowKey: `${requestID}:protocol:${index}`
+                }))
               : []
           )
 
           // Set basket access permissions
           setBasketAccess(
-            (groupPermissions?.basketAccess)
-              ? groupPermissions.basketAccess.map(x => ({ ...x, enabled: true }))
+            groupPermissions?.basketAccess
+              ? groupPermissions.basketAccess.map((x, index) => ({
+                  ...x,
+                  enabled: true,
+                  rowKey: `${requestID}:basket:${index}`
+                }))
               : []
           )
 
           // Set certificate access permissions
           setCertificateAccess(
-            (groupPermissions?.certificateAccess)
-              ? groupPermissions.certificateAccess.map(x => ({
-                ...x,
-                enabled: true,
-                fields: Array.isArray(x.fields)
-                  ? x.fields
-                  : x.fields
-                    ? Object.keys(x.fields)
-                    : []
-              }))
+            groupPermissions?.certificateAccess
+              ? groupPermissions.certificateAccess.map((x, index) => ({
+                  ...x,
+                  enabled: true,
+                  rowKey: `${requestID}:certificate:${index}`,
+                  fields: Array.isArray(x.fields) ? x.fields : Object.keys(x.fields ?? {})
+                }))
               : []
           )
 
           // Set spending authorization
           setSpendingAuthorization(
-            (groupPermissions?.spendingAuthorization)
+            groupPermissions?.spendingAuthorization
               ? { ...groupPermissions.spendingAuthorization, enabled: true }
               : undefined
           )
@@ -320,147 +335,158 @@ const GroupPermissionHandler = () => {
     <CustomDialog
       open={groupPermissionModalOpen && groupPermissionRequests.length > 0}
       onClose={handleCancel}
-      maxWidth='md'
+      maxWidth="md"
       fullWidth
-      title='Select App Permissions'
+      title="Select App Permissions"
     >
       <DialogContent>
         <DialogContentText>
           <br />
-          An app is requesting access to some of your information, and it wants to do some things on your behalf. Have a look through the below list of items, and select the ones you'd be okay with.
+          An app is requesting access to some of your information, and it wants to do some things on
+          your behalf. Have a look through the below list of items, and select the ones you'd be
+          okay with.
         </DialogContentText>
         <br />
         <center>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            alignItems: 'center',
-            width: 'min-content',
-            gap: '2em'
-          }}>
-            {originator && <div>
-              <AppChip
-                size={2.5}
-                showDomain
-                label={originator}
-                clickable={false}
-              />
-            </div>}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              alignItems: 'center',
+              width: 'min-content',
+              gap: '2em'
+            }}
+          >
+            {originator && (
+              <div>
+                <AppChip size={2.5} showDomain label={originator} clickable={false} />
+              </div>
+            )}
           </div>
         </center>
         <br />
         {spendingAuthorization && (
           <>
-            <Typography variant='h3'>Spending Authorization</Typography>
+            <Typography variant="h3">Spending Authorization</Typography>
             <FormControlLabel
-              control={<Checkbox
-                checked={spendingAuthorization.enabled}
-                onChange={() => setSpendingAuthorization(prev => ({ ...prev, enabled: !prev.enabled }))}
-              />}
-              label={<span>Let the app spend <AmountDisplay abbreviate>{spendingAuthorization.amount}</AmountDisplay> over the next 2 months without asking.</span>}
+              control={
+                <Checkbox
+                  checked={spendingAuthorization.enabled}
+                  onChange={() =>
+                    setSpendingAuthorization(prev =>
+                      prev === undefined ? prev : { ...prev, enabled: !prev.enabled }
+                    )
+                  }
+                />
+              }
+              label={
+                <span>
+                  Let the app spend{' '}
+                  <AmountDisplay abbreviate>{spendingAuthorization.amount}</AmountDisplay> over the
+                  next 2 months without asking.
+                </span>
+              }
             />
             <br />
             <br />
           </>
         )}
-        {protocolPermissions && protocolPermissions.length > 0 && <>
-          <Typography variant='h3'>Protocol Permissions</Typography>
-          <Typography color='textSecondary' variant='caption'>
-            Protocols let apps talk in specific languages using your information.
-          </Typography>
-          {protocolPermissions.map((x, i) => (
-            <div key={i} className={classes.protocol_grid}>
-              <div>
-                <Checkbox
-                  checked={x.enabled}
-                  onChange={() => toggleProtocolPermission(i)}
-                />
-              </div>
-              <div>
-                <ProtoChip
-                  protocolID={x.protocolID[1]}
-                  securityLevel={x.protocolID[0]}
-                  counterparty={x.counterparty}
-                />
-                <div className={classes.protocol_inset}>
-                  <p style={{ marginBottom: '0px' }}><b>Reason:{' '}</b>{x.description}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </>}
-        {certificateAccess && certificateAccess.length > 0 && <>
-          <Typography variant='h3'>Certificate Access</Typography>
-          <Typography color='textSecondary' variant='caption'>
-            Certificates are documents issued to you by various third parties.
-          </Typography>
-          {certificateAccess.map((x, i) => (
-            <div key={i} className={classes.certificate_grid}>
-              <div>
-                <Checkbox
-                  checked={x.enabled}
-                  onChange={() => toggleCertificateAccess(i)}
-                />
-              </div>
-              <div className={classes.certificate_display}>
+        {protocolPermissions && protocolPermissions.length > 0 && (
+          <>
+            <Typography variant="h3">Protocol Permissions</Typography>
+            <Typography color="textSecondary" variant="caption">
+              Protocols let apps talk in specific languages using your information.
+            </Typography>
+            {protocolPermissions.map((x, i) => (
+              <div key={x.rowKey} className={classes.protocol_grid}>
                 <div>
-                  <CertificateChip
-                    certType={x.type}
-                    certVerifier={x.verifierPublicKey}
+                  <Checkbox checked={x.enabled} onChange={() => toggleProtocolPermission(i)} />
+                </div>
+                <div>
+                  <ProtoChip
+                    protocolID={x.protocolID[1]}
+                    securityLevel={x.protocolID[0]}
+                    counterparty={x.counterparty}
                   />
-                </div>
-                <div className={classes.certificate_inset}>
-                  <div className={classes.certificate_attribute_wrap}>
-                    <div style={{ minHeight: '0.5em' }} />
-                    <div></div>
+                  <div className={classes.protocol_inset}>
+                    <p style={{ marginBottom: '0px' }}>
+                      <b>Reason: </b>
+                      {x.description}
+                    </p>
                   </div>
-                  <p style={{ marginBottom: '0px' }}><b>Reason:{' '}</b>{x.description || ''}</p>
                 </div>
               </div>
-            </div>
-          ))}
-        </>}
-        {basketAccess && basketAccess.length > 0 && <>
-          <Typography variant='h3'>Basket Access</Typography>
-          <Typography color='textSecondary' variant='caption'>
-            Baskets hold various tokens or "things" you own.
-          </Typography>
-          {basketAccess.map((x, i) => (
-            <div key={i} className={classes.basket_grid}>
-              <div>
-                <Checkbox
-                  checked={x.enabled}
-                  onChange={() => toggleBasketAccess(i)}
-                />
-              </div>
-              <div>
-                <BasketChip
-                  basketId={x.basket}
-                />
-                <div className={classes.basket_inset}>
-                  <p style={{ marginBottom: '0px' }}><b>Reason:{' '}</b>{x.description}</p>
+            ))}
+          </>
+        )}
+        {certificateAccess && certificateAccess.length > 0 && (
+          <>
+            <Typography variant="h3">Certificate Access</Typography>
+            <Typography color="textSecondary" variant="caption">
+              Certificates are documents issued to you by various third parties.
+            </Typography>
+            {certificateAccess.map((x, i) => (
+              <div key={x.rowKey} className={classes.certificate_grid}>
+                <div>
+                  <Checkbox checked={x.enabled} onChange={() => toggleCertificateAccess(i)} />
+                </div>
+                <div className={classes.certificate_display}>
+                  <div>
+                    <CertificateChip certType={x.type} certVerifier={x.verifierPublicKey} />
+                  </div>
+                  <div className={classes.certificate_inset}>
+                    <div className={classes.certificate_attribute_wrap}>
+                      <div style={{ minHeight: '0.5em' }} />
+                      <div></div>
+                    </div>
+                    <p style={{ marginBottom: '0px' }}>
+                      <b>Reason: </b>
+                      {x.description || ''}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </>}
+            ))}
+          </>
+        )}
+        {basketAccess && basketAccess.length > 0 && (
+          <>
+            <Typography variant="h3">Basket Access</Typography>
+            <Typography color="textSecondary" variant="caption">
+              Baskets hold various tokens or "things" you own.
+            </Typography>
+            {basketAccess.map((x, i) => (
+              <div key={x.rowKey} className={classes.basket_grid}>
+                <div>
+                  <Checkbox checked={x.enabled} onChange={() => toggleBasketAccess(i)} />
+                </div>
+                <div>
+                  <BasketChip basketId={x.basket} />
+                  <div className={classes.basket_inset}>
+                    <p style={{ marginBottom: '0px' }}>
+                      <b>Reason: </b>
+                      {x.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </DialogContent>
       <br />
-      <DialogActions style={{
-        justifyContent: 'space-around',
-        padding: '1em',
-        flex: 'none'
-      }}
+      <DialogActions
+        style={{
+          justifyContent: 'space-around',
+          padding: '1em',
+          flex: 'none'
+        }}
       >
-        <Button
-          onClick={handleCancel}
-          color='primary'
-          disabled={isGranting}
-        >
+        <Button onClick={handleCancel} color="primary" disabled={isGranting}>
           Deny All
         </Button>
         <Button
-          color='primary'
+          color="primary"
           onClick={handleGrant}
           disabled={isGranting}
           startIcon={isGranting ? <CircularProgress size={16} /> : undefined}

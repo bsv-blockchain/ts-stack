@@ -1,4 +1,4 @@
-export default theme => ({
+const appsStyles = () => ({
   apps_view: {
     padding: '1em 1em 2em 1em'
   },
@@ -34,3 +34,5 @@ export default theme => ({
     }
   }
 })
+
+export default appsStyles

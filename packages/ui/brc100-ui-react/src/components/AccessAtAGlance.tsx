@@ -1,17 +1,5 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
-import {
-  Typography,
-  Button,
-  List,
-  ListSubheader,
-  Box,
-} from '@mui/material'
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { Typography, Button, List, ListSubheader, Box } from '@mui/material'
 import BasketChip from './BasketChip'
 import CertificateAccessList from './CertificateAccessList'
 import ProtocolPermissionList from './ProtocolPermissionList'
@@ -97,12 +85,7 @@ const setCachedBasketAccess = (originator: string, data: string[]) => {
 /*  Component                                                         */
 /* ------------------------------------------------------------------ */
 
-const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
-  originator,
-  loading,
-  setRefresh,
-  history,
-}) => {
+const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({ originator, history }) => {
   /* ------------- Context / state ---------------------------------- */
   const { managers, adminOriginator } = useContext(WalletContext)
   const permissionsManager = managers.permissionsManager
@@ -115,30 +98,30 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
   /* ------------- Helpers ------------------------------------------ */
 
   /** Process actions in small chunks to keep the main thread responsive */
-  const processActionsInChunks = useCallback(
-    async (actions: Action[], signal: AbortSignal) => {
-      const baskets = new Set<string>()
-      const chunkSize = 5
+  const processActionsInChunks = useCallback(async (actions: Action[], signal: AbortSignal) => {
+    const baskets = new Set<string>()
+    const chunkSize = 5
 
-      for (let i = 0; i < actions.length && !signal.aborted; i += chunkSize) {
-        const chunk = actions.slice(i, i + chunkSize)
-
-        chunk.forEach(action => {
-          action.outputs?.forEach(output => {
-            if (output.basket && output.basket !== 'default')
-              baskets.add(output.basket)
-          })
-        })
-
-        // Yield back to the event loop after each chunk
-        if (i + chunkSize < actions.length)
-          await new Promise(r => setTimeout(r, 0))
+    async function processChunk(offset: number): Promise<void> {
+      if (signal.aborted) return
+      const chunk = actions.slice(offset, offset + chunkSize)
+      for (const action of chunk) {
+        for (const output of action.outputs ?? []) {
+          if (output.basket && output.basket !== 'default') baskets.add(output.basket)
+        }
       }
 
-      return Array.from(baskets)
-    },
-    [],
-  )
+      const nextOffset = offset + chunkSize
+      if (nextOffset < actions.length) {
+        // Yield to the browser before processing the next batch.
+        await new Promise(resolve => setTimeout(resolve, 0))
+        await processChunk(nextOffset)
+      }
+    }
+
+    await processChunk(0)
+    return Array.from(baskets)
+  }, [])
 
   /* ------------- Effect: load cached data immediately ------------- */
   useEffect(() => {
@@ -153,7 +136,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
 
   /* ------------- Effect: load fresh basket access ----------------- */
   useEffect(() => {
-    if (!originator) return
+    if (!originator || !permissionsManager) return
 
     const controller = new AbortController()
 
@@ -168,15 +151,12 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
           {
             labels: [`admin originator ${originator}`],
             labelQueryMode: 'any',
-            includeOutputs: true,
+            includeOutputs: true
           },
           adminOriginator
         )
 
-        const filteredResults = await processActionsInChunks(
-          actions,
-          controller.signal
-        )
+        const filteredResults = await processActionsInChunks(actions, controller.signal)
 
         if (!controller.signal.aborted) {
           setRecentBasketAccess(filteredResults)
@@ -184,8 +164,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
           setCachedBasketAccess(originator, filteredResults)
         }
       } catch (err: unknown) {
-        if ((err as Error).name !== 'AbortError')
-          console.error('Error loading basket access:', err)
+        if ((err as Error).name !== 'AbortError') console.error('Error loading basket access:', err)
       } finally {
         if (!controller.signal.aborted) setIsLoadingBaskets(false)
       }
@@ -197,19 +176,14 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
   /* ------------- Memo: path for manage-app link ------------------- */
   const manageAppPath = useMemo(
     () => `/dashboard/manage-app/${encodeURIComponent(originator)}`,
-    [originator],
+    [originator]
   )
 
   /* ------------- Render ------------------------------------------- */
 
   return (
     <div style={{ paddingTop: '1em' }}>
-      <Typography
-        variant="h3"
-        color="textPrimary"
-        gutterBottom
-        style={{ paddingBottom: '0.2em' }}
-      >
+      <Typography variant="h3" color="textPrimary" gutterBottom style={{ paddingBottom: '0.2em' }}>
         Access At A Glance
       </Typography>
 
@@ -220,7 +194,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
           borderRadius: '0.25em',
           p: '1em',
           minHeight: '13em',
-          position: 'relative',
+          position: 'relative'
         }}
       >
         {!isLoadingBaskets && recentBasketAccess.length !== 0 && (
@@ -248,7 +222,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
         sx={{
           bgcolor: 'background.paper',
           borderRadius: '0.25em',
-          minHeight: '13em',
+          minHeight: '13em'
         }}
       >
         <CertificateAccessList
@@ -263,20 +237,17 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
           onEmptyList={() => setCertificateIsEmpty(true)}
         />
 
+        {isLoadingBaskets && (
+          <Box p={3} display="flex" justifyContent="center" alignItems="center">
+            <AppLogo rotate size={50} />
+          </Box>
+        )}
 
-        {isLoadingBaskets && <Box p={3} display="flex" justifyContent="center" alignItems="center"><AppLogo rotate size={50} /></Box>}
-
-        {recentBasketAccess.length === 0 &&
-          certificateIsEmpty &&
-          protocolIsEmpty && (
-            <Typography
-              color="textSecondary"
-              align="center"
-              sx={{ pt: '5em' }}
-            >
-              No recent access
-            </Typography>
-          )}
+        {recentBasketAccess.length === 0 && certificateIsEmpty && protocolIsEmpty && (
+          <Typography color="textSecondary" align="center" sx={{ pt: '5em' }}>
+            No recent access
+          </Typography>
+        )}
       </Box>
 
       {/* ---------------------- Manage app button --------------------- */}
@@ -285,9 +256,7 @@ const AccessAtAGlance: React.FC<AccessAtAGlanceProps> = ({
           onClick={() => history.push({ pathname: manageAppPath })}
           sx={{
             backgroundColor:
-              history.location.pathname === manageAppPath
-                ? 'action.selected'
-                : 'inherit',
+              history.location.pathname === manageAppPath ? 'action.selected' : 'inherit'
           }}
         >
           Manage App

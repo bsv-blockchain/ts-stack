@@ -29,17 +29,19 @@
     "access": "public"
   },
   "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/media-resolution.property.test.mjs",
     "clean": "rm -rf dist",
     "build": "tsc",
     "test": "pnpm build && node --test tests/*.test.cjs",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.cjs\" package.json tsconfig.json README.md",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{cjs,ts,tsx}\" package.json tsconfig.json README.md",
     "typecheck": "tsc --noEmit",
     "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.cjs",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Img,Source",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs ."
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "@types/react": "^18.3.1",
     "react": "^18.3.1",
     "react-test-renderer": "^18.3.1",

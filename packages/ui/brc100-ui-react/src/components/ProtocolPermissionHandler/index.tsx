@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { DialogContent, DialogActions, Button, Box, Stack, Tooltip, Avatar, Divider } from '@mui/material'
+import { DialogContent, DialogActions, Button, Box, Stack, Tooltip, Divider } from '@mui/material'
 import CustomDialog from '../CustomDialog/index'
 import { WalletContext } from '../../WalletContext'
 import { UserContext } from '../../UserContext'
@@ -12,13 +12,13 @@ import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket'
 import deterministicColor from '../../utils/deterministicColor'
 
 // Permission request types
-type PermissionType = 'identity' | 'protocol' | 'renewal' | 'basket';
 
 // Permission type documents
 const permissionTypeDocs = {
   identity: {
     title: 'Trusted Entities Access Request',
-    description: 'An app is requesting access to lookup identity information using the entities you trust.',
+    description:
+      'An app is requesting access to lookup identity information using the entities you trust.',
     icon: <VerifiedUserIcon fontSize="medium" />
   },
   renewal: {
@@ -35,7 +35,7 @@ const permissionTypeDocs = {
     title: 'Protocol Access Request',
     icon: <CodeIcon fontSize="medium" />
   }
-};
+}
 
 const ProtocolPermissionHandler = () => {
   const { protocolRequests, advanceProtocolQueue, managers } = useContext(WalletContext)
@@ -64,23 +64,9 @@ const ProtocolPermissionHandler = () => {
   // Get permission type document
   const getPermissionTypeDoc = () => {
     // Default to protocol if type is undefined
-    const type = currentPerm.type || 'protocol';
-    return permissionTypeDocs[type];
-  };
-
-  const getIconAvatar = () => (
-    <Avatar
-      sx={{
-        width: 40,
-        height: 40,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}
-    >
-      {getPermissionTypeDoc().icon}
-    </Avatar>
-  );
+    const type = currentPerm.type || 'protocol'
+    return permissionTypeDocs[type]
+  }
 
   return (
     <CustomDialog
@@ -93,9 +79,7 @@ const ProtocolPermissionHandler = () => {
         {/* Main content with app and protocol details */}
         <Stack spacing={1}>
           {/* App section */}
-          {currentPerm.description && <Stack>
-            {currentPerm.description}
-          </Stack>}
+          {currentPerm.description && <Stack>{currentPerm.description}</Stack>}
 
           <AppChip
             size={1.5}
@@ -116,16 +100,18 @@ const ProtocolPermissionHandler = () => {
           {currentPerm.counterparty && (
             <>
               <Divider />
-              <Stack direction="row" alignItems="center" spacing={1} justifyContent="space-between" sx={{
-                height: '3em',
-                width: '100%'
-              }}>
-                <Box sx={{ fontWeight: 'bold' }}>
-                  Counterparty:
-                </Box>
-                <Stack px={3}>
-                  {currentPerm.counterparty}
-                </Stack>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                justifyContent="space-between"
+                sx={{
+                  height: '3em',
+                  width: '100%'
+                }}
+              >
+                <Box sx={{ fontWeight: 'bold' }}>Counterparty:</Box>
+                <Stack px={3}>{currentPerm.counterparty}</Stack>
               </Stack>
             </>
           )}
@@ -138,18 +124,10 @@ const ProtocolPermissionHandler = () => {
       </Tooltip>
 
       <DialogActions sx={{ justifyContent: 'space-between' }}>
-        <Button
-          onClick={handleDeny}
-          variant="outlined"
-          color="inherit"
-        >
+        <Button onClick={handleDeny} variant="outlined" color="inherit">
           Deny
         </Button>
-        <Button
-          onClick={handleGrant}
-          variant="contained"
-          color="primary"
-        >
+        <Button onClick={handleGrant} variant="contained" color="primary">
           Grant Access
         </Button>
       </DialogActions>

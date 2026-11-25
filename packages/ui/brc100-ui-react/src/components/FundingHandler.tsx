@@ -1,5 +1,14 @@
 import { useState, useEffect, useContext } from 'react'
-import { DialogContent, DialogActions, Button, Typography, TextField, Box, IconButton, Tooltip } from '@mui/material'
+import {
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  TextField,
+  Box,
+  IconButton,
+  Tooltip
+} from '@mui/material'
 import CustomDialog from './CustomDialog'
 import { WalletContext } from '../WalletContext'
 import { WalletInterface } from '@bsv/sdk'
@@ -11,19 +20,23 @@ const FundingHandler: React.FC = () => {
   const [open, setOpen] = useState(false)
   const [identityKey, setIdentityKey] = useState('')
   const [paymentTX, setPaymentTX] = useState<string>('')
-  const [resolveFn, setResolveFn] = useState<Function>(() => { })
+  const [resolveFn, setResolveFn] = useState<Function>(() => {})
   const [wallet, setWallet] = useState<WalletInterface | null>(null)
 
   useEffect(() => {
     setWalletFunder((() => {
-      return async (_: number[], wallet: WalletInterface, adminOriginator: string): Promise<void> => {
-        return new Promise<void>(async resolve => {
-          try {
-            const identityKey = (await wallet.getPublicKey({ identityKey: true }, adminOriginator)).publicKey
-            setIdentityKey(identityKey)
-          } catch (e) {
-            setIdentityKey('')
-          }
+      return async (
+        _: number[],
+        wallet: WalletInterface,
+        adminOriginator: string
+      ): Promise<void> => {
+        try {
+          const { publicKey } = await wallet.getPublicKey({ identityKey: true }, adminOriginator)
+          setIdentityKey(publicKey)
+        } catch {
+          setIdentityKey('')
+        }
+        return new Promise<void>(resolve => {
           setResolveFn(() => resolve)
           setWallet(wallet)
           setOpen(true)
@@ -39,10 +52,11 @@ const FundingHandler: React.FC = () => {
 
   const handleFunded = async () => {
     try {
+      if (!wallet) throw new Error('Wallet is not ready.')
       const payment = JSON.parse(paymentTX)
       await wallet.internalizeAction(payment)
     } catch (e) {
-      toast.error(e.message)
+      toast.error(e instanceof Error ? e.message : 'Please try again.')
       console.error(e)
     } finally {
       setOpen(false)
@@ -62,22 +76,27 @@ const FundingHandler: React.FC = () => {
   //   setFileName(file.name)
   // }
 
-
   return (
     <CustomDialog open={open} onClose={handleClose} title="Fund Your Wallet">
       <DialogContent>
         <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
           Please fund the following root key with satoshis to activate your wallet:
         </Typography>
-        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', bgcolor: 'background.paper', p: 1 }}>
-          <Typography variant="body2" sx={{ flexGrow: 1, userSelect: 'all', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+        <Box
+          sx={{ mt: 2, display: 'flex', alignItems: 'center', bgcolor: 'background.paper', p: 1 }}
+        >
+          <Typography
+            variant="body2"
+            sx={{ flexGrow: 1, userSelect: 'all', wordBreak: 'break-all', fontFamily: 'monospace' }}
+          >
             {identityKey}
           </Typography>
           <Tooltip title="Copy to clipboard">
             <IconButton
               size="small"
               onClick={() => {
-                navigator.clipboard.writeText(identityKey)
+                navigator.clipboard
+                  .writeText(identityKey)
                   .then(() => toast.success('Identity key copied to clipboard'))
                   .catch(err => toast.error('Failed to copy: ' + err.message))
               }}
@@ -124,7 +143,7 @@ const FundingHandler: React.FC = () => {
         )} */}
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" onClick={handleFunded} disabled={!setPaymentTX}>
+        <Button variant="contained" onClick={handleFunded} disabled={!paymentTX.trim()}>
           Fund Wallet
         </Button>
       </DialogActions>

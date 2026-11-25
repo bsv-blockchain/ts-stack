@@ -7,7 +7,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check src public '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
     "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs dist"
   },
   "dependencies": {

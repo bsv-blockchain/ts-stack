@@ -21,11 +21,7 @@ import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
 import { AppOriginChip } from './AppOriginChip.js'
 import { formatAmount, parseTokenMessage, truncateHex } from './utils.js'
-import type {
-  BTMSBurnInfo,
-  BTMSSpendInfo,
-  BtmsPromptDialogProps
-} from './types.js'
+import type { BTMSBurnInfo, BTMSSpendInfo, BtmsPromptDialogProps } from './types.js'
 
 /**
  * Modal dialog for prompting user to approve BTMS token operations.
@@ -76,7 +72,8 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
 
   const getIcon = () => {
     if (promptInfo.type === 'btms_spend') return <SendIcon sx={{ fontSize: 40, color: 'white' }} />
-    if (promptInfo.type === 'btms_burn') return <LocalFireDepartmentIcon sx={{ fontSize: 40, color: 'white' }} />
+    if (promptInfo.type === 'btms_burn')
+      return <LocalFireDepartmentIcon sx={{ fontSize: 40, color: 'white' }} />
     return <TokenIcon sx={{ fontSize: 40, color: 'white' }} />
   }
 
@@ -118,15 +115,14 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
     }
 
     if (promptInfo.type === 'btms_access') {
-      const accessChipBg = resolvedMode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(0, 0, 0, 0.05)'
-      const accessChipBorder = resolvedMode === 'dark'
-        ? '1px solid rgba(255, 255, 255, 0.14)'
-        : '1px solid rgba(0, 0, 0, 0.12)'
-      const accessChipText = resolvedMode === 'dark'
-        ? 'rgba(255, 255, 255, 0.9)'
-        : 'rgba(0, 0, 0, 0.82)'
+      const accessChipBg =
+        resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)'
+      const accessChipBorder =
+        resolvedMode === 'dark'
+          ? '1px solid rgba(255, 255, 255, 0.14)'
+          : '1px solid rgba(0, 0, 0, 0.12)'
+      const accessChipText =
+        resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.82)'
       return (
         <Stack spacing={2} alignItems="center">
           <Typography variant="body1" sx={{ color: textPrimary, lineHeight: 1.6 }}>
@@ -183,41 +179,45 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
           {getTitle()}
         </Typography>
 
-        <Box sx={{
-          backgroundColor: panelBg,
-          borderRadius: 3,
-          p: 4,
-          mb: 3
-        }}>
+        <Box
+          sx={{
+            backgroundColor: panelBg,
+            borderRadius: 3,
+            p: 4,
+            mb: 3
+          }}
+        >
           {/* Token Icon */}
           {(() => {
-            const iconURL = promptInfo.type !== 'btms_access'
-              ? (promptInfo as BTMSSpendInfo | BTMSBurnInfo).iconURL
-              : undefined
+            const iconURL =
+              promptInfo.type !== 'btms_access'
+                ? (promptInfo as BTMSSpendInfo | BTMSBurnInfo).iconURL
+                : undefined
 
             return iconURL ? (
-              <Box sx={{
-                width: 80,
-                height: 80,
-                mx: 'auto',
-                mb: 3,
-                borderRadius: '50%',
-                overflow: 'hidden',
-                bgcolor: 'rgba(255, 255, 255, 0.1)'
-              }}>
-                <Img
-                  src={iconURL}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  mx: 'auto',
+                  mb: 3,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  bgcolor: 'rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                <Img src={iconURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </Box>
             ) : (
-              <Avatar sx={{
-                width: 80,
-                height: 80,
-                mx: 'auto',
-                mb: 3,
-                bgcolor: 'rgba(255, 255, 255, 0.1)'
-              }}>
+              <Avatar
+                sx={{
+                  width: 80,
+                  height: 80,
+                  mx: 'auto',
+                  mb: 3,
+                  bgcolor: 'rgba(255, 255, 255, 0.1)'
+                }}
+              >
                 {getIcon()}
               </Avatar>
             )
@@ -228,7 +228,15 @@ const BtmsPromptDialog: React.FC<BtmsPromptDialogProps> = ({
 
           {/* Asset ID */}
           {promptInfo.type !== 'btms_access' && promptInfo.assetId && (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mt: 1.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 0.5,
+                mt: 1.5
+              }}
+            >
               <Typography
                 variant="caption"
                 sx={{

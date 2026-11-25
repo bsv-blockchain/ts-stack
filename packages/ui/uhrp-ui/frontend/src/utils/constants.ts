@@ -10,31 +10,17 @@ const storageStagingURL = 'https://staging-nanostore.babbage.systems'
 const storageLocalURL = 'http://localhost:3104'
 
 // List of possible storage URLs (used for drop-downs, etc.)
-const storageURLs = [storageProdURL, storageStagingURL, storageLocalURL ]
+const storageURLs = [storageProdURL, storageStagingURL, storageLocalURL]
 
-let constants: Constants
+function defaultStorageUrl(host: string): string {
+  if (host.startsWith('localhost')) return storageLocalURL
+  if (host.startsWith('staging') || import.meta.env.DEV) return storageStagingURL
+  return storageProdURL
+}
 
-if (window.location.host.startsWith('localhost')) {
-  // Local
-  constants = {
-    storageURL: storageLocalURL,
-    storageURLs: storageURLs
-  }
-} else if (
-  window.location.host.startsWith('staging') ||
-  process.env.NODE_ENV === 'development'
-) {
-  // Staging/Development
-  constants = {
-    storageURL: storageStagingURL,
-    storageURLs: storageURLs
-  }
-} else {
-  // Production
-  constants = {
-    storageURL: storageProdURL,
-    storageURLs: storageURLs
-  }
+const constants: Constants = {
+  storageURL: defaultStorageUrl(window.location.host),
+  storageURLs
 }
 
 export default constants

@@ -7,7 +7,11 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
-import { governedWorkspacePackages, workspaceRuntimeClosure } from './lib/workspace-packages.mjs'
+import {
+  governedWorkspacePackages,
+  reactHostDependencies,
+  workspaceRuntimeClosure
+} from './lib/workspace-packages.mjs'
 import { expectedThirdPartyFilesForPackage } from './third-party-license-policy.mjs'
 
 export { workspaceRuntimeClosure }
@@ -597,6 +601,9 @@ async function checkConsumer({
         '--package-lock=false',
         '--omit=dev',
         tarballPath,
+        ...reactHostDependencies(manifest).filter(
+          dependency => !consumerDependencies.includes(dependency.split('@')[0])
+        ),
         ...consumerDependencies,
         ...localConsumerDependencyTarballs
       ],

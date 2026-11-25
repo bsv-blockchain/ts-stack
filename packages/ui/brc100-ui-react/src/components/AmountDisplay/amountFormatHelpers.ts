@@ -1,6 +1,12 @@
 const localeDefault = Intl.NumberFormat().resolvedOptions().locale?.split('-u-')[0] || 'en-US'
-const groupDefault = Intl.NumberFormat(localeDefault).formatToParts(10234.56).filter(p => p.type === 'group')[0].value
-const decimalDefault = Intl.NumberFormat(localeDefault).formatToParts(1234.56).filter(p => p.type === 'decimal')[0].value
+const groupDefault =
+  Intl.NumberFormat(localeDefault)
+    .formatToParts(10234.56)
+    .find(p => p.type === 'group')?.value ?? ','
+const decimalDefault =
+  Intl.NumberFormat(localeDefault)
+    .formatToParts(1234.56)
+    .find(p => p.type === 'decimal')?.value ?? '.'
 
 export const satoshisOptions = {
   fiatFormats: [
@@ -88,7 +94,7 @@ export const satoshisOptions = {
 }
 
 export const formatSatoshisAsFiat = (
-  satoshis = NaN,
+  satoshis = Number.NaN,
   satoshisPerUSD = null,
   format: any = null,
   settingsCurrency = 'SATS',
@@ -98,46 +104,92 @@ export const formatSatoshisAsFiat = (
 ) => {
   if (settingsCurrency) {
     // See if requested currency matches a known fiat format, if not use 'USD'
-    let fiatFormat = satoshisOptions.fiatFormats.find(f => f.name === settingsCurrency)
-    if (!fiatFormat) fiatFormat = satoshisOptions.fiatFormats.find(f => f.name === 'USD')
-    format = fiatFormat
+    format =
+      satoshisOptions.fiatFormats.find(f => f.name === settingsCurrency) ??
+      satoshisOptions.fiatFormats[0]
   }
   format ??= satoshisOptions.fiatFormats[0]
   const locale = format.locale ?? localeDefault
 
-  const usd = (satoshisPerUSD && Number.isInteger(Number(satoshis))) ? satoshis / satoshisPerUSD : NaN
+  const usd =
+    satoshisPerUSD && Number.isInteger(Number(satoshis)) ? satoshis / satoshisPerUSD : Number.NaN
+  if (Number.isNaN(usd)) return '...'
 
-  if (isNaN(usd)) return '...'
-
-  let minDigits = 2
-  let maxDigits
-  const v = Math.abs(usd)
-  if (v < 0.001) minDigits = 6
-  else if (v < 0.01) minDigits = 5
-  else if (v < 0.1) minDigits = 4
-  else if (v < 1) minDigits = 3
-
-  if (showFiatAsInteger) {
-    minDigits = 0
-    maxDigits = 0
-  }
-
-  if (!format || format.currency === 'USD') {
-    const usdFormat = new Intl.NumberFormat(locale, { currency: 'USD', style: 'currency', minimumFractionDigits: minDigits, maximumFractionDigits: maxDigits })
-    return usdFormat.format(usd)
-    // return (Math.abs(usd) >= 1) ? usdFormat.format(usd) : `${(usd * 100).toFixed(3)} ¢`
-  } else if (format.currency === 'EUR') {
-    const eur = usd * eurPerUSD
-    if (isNaN(eur)) return '...'
-    const eurFormat = new Intl.NumberFormat(locale, { currency: 'EUR', style: 'currency', minimumFractionDigits: minDigits })
-    return eurFormat.format(eur)
-  } else if (format.currency === 'GBP') {
-    const gbp = usd * gbpPerUSD
-    if (isNaN(gbp)) return '...'
-    const gbpFormat = new Intl.NumberFormat(locale, { currency: 'GBP', style: 'currency', minimumFractionDigits: minDigits })
-    return gbpFormat.format(gbp)
+  const minimumFractionDigits = showFiatAsInteger ? 0 : fiatPrecision(Math.abs(usd))
+  const options = { currency: format.currency, style: 'currency' as const, minimumFractionDigits }
+  switch (format.currency) {
+    case 'USD':
+      return new Intl.NumberFormat(locale, {
+        ...options,
+        maximumFractionDigits: showFiatAsInteger ? 0 : undefined
+      }).format(usd)
+    case 'EUR':
+      return formatQuotedCurrency(usd * eurPerUSD, locale, options)
+    case 'GBP':
+      return formatQuotedCurrency(usd * gbpPerUSD, locale, options)
+    default:
+      return undefined
   }
 }
+
+function fiatPrecision(amount: number): number {
+  if (amount < 0.001) return 6
+  if (amount < 0.01) return 5
+  if (amount < 0.1) return 4
+  if (amount < 1) return 3
+  return 2
+}
+
+function formatQuotedCurrency(amount: number, locale: string, options: Intl.NumberFormatOptions) {
+  if (Number.isNaN(amount)) return '...'
+  return new Intl.NumberFormat(locale, options).format(amount)
+}
+
+function splitInteger(value: string, group: string, decimal: string, unit: string) {
+  const layouts = {
+    BSV: {
+      minLength: 9,
+      chunks: [
+        [2, group],
+        [3, group],
+        [3, decimal],
+        [3, group],
+        [3, group]
+      ]
+    },
+    mBSV: {
+      minLength: 6,
+      chunks: [
+        [2, group],
+        [3, decimal],
+        [3, group],
+        [3, group],
+        [3, group]
+      ]
+    },
+    SATS: {
+      minLength: 0,
+      chunks: [
+        [3, group],
+        [3, group],
+        [3, group],
+        [3, group],
+        [3, group]
+      ]
+    }
+  } as const
+  const { minLength, chunks } = unit === 'BSV' || unit === 'mBSV' ? layouts[unit] : layouts.SATS
+  let remaining = value.padStart(minLength, '0')
+  let result = ''
+  for (const [width, separator] of chunks) {
+    result = remaining.slice(-width) + result
+    remaining = remaining.slice(0, -width)
+    if (remaining.length === 0) return result
+    result = separator + result
+  }
+  return remaining + result
+}
+
 export const formatSatoshis = (
   satoshis: any,
   showPlus = false,
@@ -146,48 +198,18 @@ export const formatSatoshis = (
   settingsCurrency = 'SATS'
 ) => {
   if (settingsCurrency) {
-    // See if requested currency matches a known satoshis format, if not use 'SATS'
-    let satsFormat = satoshisOptions.satsFormats.find(f => f.name === settingsCurrency)
-    if (!satsFormat) satsFormat = satoshisOptions.satsFormats.find(f => f.name === 'SATS')
-    format = satsFormat
+    format =
+      satoshisOptions.satsFormats.find(f => f.name === settingsCurrency) ??
+      satoshisOptions.satsFormats[0]
   }
   format ??= satoshisOptions.satsFormats[0]
-  let s: any = (Number.isInteger(Number(satoshis))) ? Number(satoshis) : null
-  if (s === null) { return '---' }
-  const sign = s < 0 ? '-' : showPlus ? '+' : ''
-  s = Math.abs(s).toFixed(0)
-  // There are at most 21 some odd million hundred million satoshis.
-  // We format this with the following separators.
-  // Note that the decimal only appears after a hundred million satoshis.
-  // 21_000_000.000_000_00
-  const g = format.group ?? groupDefault
-  const d = format.decimal ?? decimalDefault
-  let p, sMinLen
-  switch (format.unit) {
-    case 'BSV': sMinLen = 9; p = [[2, g], [3, g], [3, d], [3, g], [3, g]]; break
-    case 'mBSV': sMinLen = 6; p = [[2, g], [3, d], [3, g], [3, g], [3, g]]; break
-    default:
-      sMinLen = 0; p = [[3, g], [3, g], [3, g], [3, g], [3, g]]; break
-  }
-  let r = ''
-  while (s.length < sMinLen) s = '0' + s
-  while (s.length > 0) {
-    if (p.length === 0) {
-      r = s + r
-      s = ''
-    } else {
-      const q = p.shift()!
-      r = s.substring(s.length - q[0]) + r
-      if (s.length > q[0]) {
-        r = q[1] + r
-        s = s.substring(0, s.length - q[0])
-      } else {
-        s = ''
-      }
-    }
-  }
-  r = `${sign}${r}`
+  const amount = Number(satoshis)
+  if (!Number.isInteger(amount)) return '---'
+  const positiveSign = showPlus ? '+' : ''
+  const sign = amount < 0 ? '-' : positiveSign
+  const group = format.group ?? groupDefault
+  const decimal = format.decimal ?? decimalDefault
+  const formatted = splitInteger(Math.abs(amount).toFixed(0), group, decimal, format.unit)
   const label = abbreviate ? format.abbrev : format.label
-  if (label && label.length > 0) { r = `${r} ${label}` }
-  return r
+  return label ? `${sign}${formatted} ${label}` : `${sign}${formatted}`
 }

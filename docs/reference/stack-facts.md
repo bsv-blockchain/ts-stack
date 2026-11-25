@@ -103,10 +103,10 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 64 |
-| Package-area projects | 58 |
+| Governed projects | 61 |
+| Package-area projects | 55 |
 | Public npm packages | 45 |
-| Private package-area projects | 13 |
+| Private package-area projects | 10 |
 | Standalone infrastructure projects | 8 |
 
 Public packages use the `npm-oidc` release route. Other workspace projects are

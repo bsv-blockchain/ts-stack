@@ -1,4 +1,4 @@
-export default (theme: any) => ({
+const style = (theme: any) => ({
   table_picture: {
     maxWidth: '5em',
     borderRadius: '3em'
@@ -12,3 +12,5 @@ export default (theme: any) => ({
     transition: 'all 0.8s'
   }
 })
+
+export default style

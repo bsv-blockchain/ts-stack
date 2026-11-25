@@ -7,21 +7,28 @@
  * Automatically detects the environment and uses the appropriate method.
  */
 export async function openUrl(url: string): Promise<void> {
+  try {
+    const target = new URL(url)
+    if (target.protocol !== 'https:' && target.protocol !== 'http:') return
+    url = target.href
+  } catch {
+    return
+  }
   // Check if we're in a browser environment
   if (typeof window !== 'undefined') {
     try {
       // Try Tauri first (will work in Tauri apps)
       try {
-        const { openUrl } = await import('@tauri-apps/plugin-opener');
-        await openUrl(url);
-        return;
-      } catch (tauriError) {
+        const { openUrl } = await import('@tauri-apps/plugin-opener')
+        await openUrl(url)
+        return
+      } catch {
         // Not in Tauri or plugin not available - use browser API instead
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
+        window.open(url, '_blank', 'noopener,noreferrer')
+        return
       }
     } catch (error) {
-      console.error('Error opening URL in browser:', error);
+      console.error('Error opening URL in browser:', error)
     }
   }
 
@@ -33,29 +40,29 @@ export async function openUrl(url: string): Promise<void> {
     interface ReactNativeGlobal {
       ReactNative?: {
         Linking?: {
-          canOpenURL: (url: string) => Promise<boolean>;
-          openURL: (url: string) => Promise<void>;
-        };
-      };
+          canOpenURL: (url: string) => Promise<boolean>
+          openURL: (url: string) => Promise<void>
+        }
+      }
     }
 
     // Check for ReactNative.Linking in global scope
-    const globalObj = (typeof global !== 'undefined' ? global : window) as unknown as ReactNativeGlobal;
+    const globalObj = globalThis as typeof globalThis & ReactNativeGlobal
 
     if (globalObj.ReactNative?.Linking) {
-      const Linking = globalObj.ReactNative.Linking;
-      const supported = await Linking.canOpenURL(url);
+      const Linking = globalObj.ReactNative.Linking
+      const supported = await Linking.canOpenURL(url)
       if (supported) {
-        await Linking.openURL(url);
-        return;
+        await Linking.openURL(url)
+        return
       } else {
-        console.error(`Cannot open URL in React Native: ${url}`);
+        console.error(`Cannot open URL in React Native: ${url}`)
       }
     }
-  } catch (error) {
+  } catch {
     // Silently fail if we're not in React Native
   }
 
   // Non-browser, non-React-Native environment (e.g. Node.js)
-  console.warn('Unable to open URL - current environment is not supported');
+  console.warn('Unable to open URL - current environment is not supported')
 }

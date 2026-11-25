@@ -10,7 +10,6 @@ const useCurrencyDisplay = (amount: string | number, formatOptions?: FormatOptio
   const currencyConverter = useMemo(() => new CurrencyConverter(), [])
 
   useEffect(() => {
-
     // Initialize the currency converter
     const initialize = async () => {
       try {
@@ -21,7 +20,7 @@ const useCurrencyDisplay = (amount: string | number, formatOptions?: FormatOptio
       }
     }
 
-    initialize()
+    void initialize()
 
     return () => {
       currencyConverter.dispose()
@@ -31,7 +30,11 @@ const useCurrencyDisplay = (amount: string | number, formatOptions?: FormatOptio
   useAsyncEffect(async () => {
     if (isInitialized) {
       try {
-        const finalAmountToDisplay = await normalizeDisplayAmount(currencyConverter, amount, formatOptions)
+        const finalAmountToDisplay = await normalizeDisplayAmount(
+          currencyConverter,
+          amount,
+          formatOptions
+        )
         setDisplayAmount(finalAmountToDisplay.formattedAmount)
       } catch (err) {
         setError(err as Error)

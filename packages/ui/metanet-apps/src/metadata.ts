@@ -1,30 +1,34 @@
 import type { PublishedAppMetadata } from './types/index.js'
 
-export type AppMetadataValidationCode =
-  | 'ERR_METADATA_INVALID'
-  | 'ERR_METADATA_UNSUPPORTED_SCHEMA'
+export type AppMetadataValidationCode = 'ERR_METADATA_INVALID' | 'ERR_METADATA_UNSUPPORTED_SCHEMA'
 
 export class AppMetadataValidationError extends Error {
-  constructor (readonly code: AppMetadataValidationCode, message: string) {
+  constructor(
+    readonly code: AppMetadataValidationCode,
+    message: string
+  ) {
     super(message)
     this.name = 'AppMetadataValidationError'
   }
 }
 
-function requireString (value: unknown, field: string): asserts value is string {
+function requireString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string') {
     throw new AppMetadataValidationError('ERR_METADATA_INVALID', `${field} must be a string`)
   }
 }
 
-function optionalString (value: unknown, field: string): void {
+function optionalString(value: unknown, field: string): void {
   if (value !== undefined) requireString(value, field)
 }
 
-function optionalStringArray (value: unknown, field: string): void {
+function optionalStringArray(value: unknown, field: string): void {
   if (value === undefined) return
   if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-    throw new AppMetadataValidationError('ERR_METADATA_INVALID', `${field} must be an array of strings`)
+    throw new AppMetadataValidationError(
+      'ERR_METADATA_INVALID',
+      `${field} must be an array of strings`
+    )
   }
 }
 
@@ -36,7 +40,7 @@ function optionalStringArray (value: unknown, field: string): void {
  * remains valid and byte-for-byte application data stays under publisher
  * control.
  */
-export function normalizeAppMetadata (metadata: PublishedAppMetadata): PublishedAppMetadata {
+export function normalizeAppMetadata(metadata: PublishedAppMetadata): PublishedAppMetadata {
   if (metadata === null || typeof metadata !== 'object') {
     throw new AppMetadataValidationError('ERR_METADATA_INVALID', 'metadata must be an object')
   }
@@ -54,7 +58,10 @@ export function normalizeAppMetadata (metadata: PublishedAppMetadata): Published
   optionalString(raw.publisher, 'publisher')
 
   if (typeof raw.httpURL !== 'string' && typeof raw.uhrpURL !== 'string') {
-    throw new AppMetadataValidationError('ERR_METADATA_INVALID', 'httpURL or uhrpURL must be a string')
+    throw new AppMetadataValidationError(
+      'ERR_METADATA_INVALID',
+      'httpURL or uhrpURL must be a string'
+    )
   }
 
   optionalString(raw.httpURL, 'httpURL')
@@ -69,6 +76,6 @@ export function normalizeAppMetadata (metadata: PublishedAppMetadata): Published
   return { ...metadata }
 }
 
-export function validateAppMetadata (metadata: PublishedAppMetadata): void {
+export function validateAppMetadata(metadata: PublishedAppMetadata): void {
   normalizeAppMetadata(metadata)
 }

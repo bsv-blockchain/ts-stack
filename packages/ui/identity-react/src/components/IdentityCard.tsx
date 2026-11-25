@@ -1,124 +1,135 @@
-import { Avatar, Badge, Box, CardContent, Icon, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import { DEFAULT_IDENTITY, IdentityProps } from '../types/index.js';
-import { IdentityClient, DisplayableIdentity } from '@bsv/sdk';
-import { Img } from '@bsv/uhrp-react';
-import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+import {
+  Avatar,
+  Badge,
+  Box,
+  CardContent,
+  Icon,
+  IconButton,
+  Snackbar,
+  Tooltip,
+  Typography
+} from '@mui/material'
+import React, { useEffect, useState } from 'react'
+import { DEFAULT_IDENTITY, IdentityProps } from '../types/index.js'
+import { IdentityClient, DisplayableIdentity } from '@bsv/sdk'
+import { Img } from '@bsv/uhrp-react'
+import { ContentCopy as ContentCopyIcon } from '@mui/icons-material'
 
 // Create an IdentityClient instance
-const identityClient = new IdentityClient();
+const identityClient = new IdentityClient()
 
 // SessionStorage-backed cache for resolved identities (persists across page reloads)
-const CACHE_KEY = 'identity-card-cache';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_ENTRIES = 100; // Prevent unbounded growth
+const CACHE_KEY = 'identity-card-cache'
+const CACHE_EXPIRY = 5 * 60 * 1000 // 5 minutes
+const MAX_CACHE_ENTRIES = 100 // Prevent unbounded growth
 
 class IdentityCache {
-  private cache: Map<string, { identity: DisplayableIdentity; timestamp: number }>;
+  private readonly cache: Map<string, { identity: DisplayableIdentity; timestamp: number }>
 
   constructor() {
     // Hydrate once from sessionStorage on init
-    this.cache = new Map();
+    this.cache = new Map()
     try {
-      const stored = sessionStorage.getItem(CACHE_KEY);
+      const stored = sessionStorage.getItem(CACHE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored);
+        const parsed = JSON.parse(stored)
         for (const [key, value] of Object.entries(parsed)) {
-          this.cache.set(key, value as { identity: DisplayableIdentity; timestamp: number });
+          this.cache.set(key, value as { identity: DisplayableIdentity; timestamp: number })
         }
       }
     } catch (e) {
-      console.warn('Failed to load identity cache from sessionStorage:', e);
+      console.warn('Failed to load identity cache from sessionStorage:', e)
     }
   }
 
   private persist(): void {
     try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(this.cache)));
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(this.cache)))
     } catch (e) {
-      console.warn('Failed to save identity cache to sessionStorage:', e);
+      console.warn('Failed to save identity cache to sessionStorage:', e)
     }
   }
 
   get(identityKey: string): DisplayableIdentity | null {
-    const entry = this.cache.get(identityKey);
-    if (!entry) return null;
+    const entry = this.cache.get(identityKey)
+    if (!entry) return null
 
     if (Date.now() - entry.timestamp > CACHE_EXPIRY) {
-      this.cache.delete(identityKey);
-      this.persist();
-      return null;
+      this.cache.delete(identityKey)
+      this.persist()
+      return null
     }
 
-    return entry.identity;
+    return entry.identity
   }
 
   set(identityKey: string, identity: DisplayableIdentity): void {
     // Simple LRU: remove oldest entries if cache is full
     if (this.cache.size >= MAX_CACHE_ENTRIES) {
-      const firstKey = this.cache.keys().next().value;
+      const firstKey = this.cache.keys().next().value
       if (firstKey) {
-        this.cache.delete(firstKey);
+        this.cache.delete(firstKey)
       }
     }
 
-    this.cache.set(identityKey, { identity, timestamp: Date.now() });
-    this.persist();
+    this.cache.set(identityKey, { identity, timestamp: Date.now() })
+    this.persist()
   }
 }
 
-const identityCache = new IdentityCache();
+const identityCache = new IdentityCache()
 
-const IdentityCard: React.FC<IdentityProps> = ({
-  identityKey,
-  themeMode = 'light'
-}) => {
-  const [resolvedIdentity, setResolvedIdentity] = useState<DisplayableIdentity>(DEFAULT_IDENTITY);
-  const [copySnackbarOpen, setCopySnackbarOpen] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
+const IdentityCard: React.FC<IdentityProps> = ({ identityKey, themeMode = 'light' }) => {
+  const [resolvedIdentity, setResolvedIdentity] = useState<DisplayableIdentity>(DEFAULT_IDENTITY)
+  const [copySnackbarOpen, setCopySnackbarOpen] = useState(false)
+  const [isHovering, setIsHovering] = useState(false)
 
   const handleCopyIdentityKey = () => {
     if (identityKey) {
-      navigator.clipboard.writeText(identityKey)
+      navigator.clipboard
+        .writeText(identityKey)
         .then(() => setCopySnackbarOpen(true))
-        .catch(err => console.error('Could not copy identity key:', err))
+        .catch((err) => console.error('Could not copy identity key:', err))
     }
-  };
+  }
 
   useEffect(() => {
     if (!identityKey) {
-      setResolvedIdentity(DEFAULT_IDENTITY);
-      return;
+      setResolvedIdentity(DEFAULT_IDENTITY)
+      return
     }
 
-    (async () => {
+    let cancelled = false
+    const resolveIdentity = async () => {
       try {
         // Check cache first
-        const cached = identityCache.get(identityKey);
+        const cached = identityCache.get(identityKey)
         if (cached) {
-          setResolvedIdentity(cached);
-          return;
+          setResolvedIdentity(cached)
+          return
         }
 
         // Fetch identities using the IdentityClient
         const matchingIdentities = await identityClient.resolveByIdentityKey({
           identityKey
-        });
+        })
 
-        // Select the first result (most relevant/trusted)
-        if (matchingIdentities.length > 0) {
-          const resolvedId = matchingIdentities[0];
-          setResolvedIdentity(resolvedId);
-
-          // Cache the result
-          identityCache.set(identityKey, resolvedId);
-        }
-      } catch (error) {
-        // Silently fall back to default identity on resolution failure
-        setResolvedIdentity(DEFAULT_IDENTITY);
+        if (cancelled) return
+        // Select the most relevant result returned by the SDK.
+        const resolved = matchingIdentities[0]
+        setResolvedIdentity(resolved ?? DEFAULT_IDENTITY)
+        if (resolved) identityCache.set(identityKey, resolved)
+      } catch {
+        // The card uses a placeholder when the lookup fails.
+        if (!cancelled) setResolvedIdentity(DEFAULT_IDENTITY)
       }
-    })();
-  }, [identityKey]);
+    }
+
+    void resolveIdentity()
+    return () => {
+      cancelled = true
+    }
+  }, [identityKey])
 
   return (
     <React.Fragment>
@@ -135,12 +146,7 @@ const IdentityCard: React.FC<IdentityProps> = ({
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
-        <Tooltip
-          title={
-            resolvedIdentity.badgeLabel
-          }
-          placement="right"
-        >
+        <Tooltip title={resolvedIdentity.badgeLabel} placement="right">
           <Badge
             overlap="circular"
             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -204,11 +210,17 @@ const IdentityCard: React.FC<IdentityProps> = ({
                     transition: 'opacity 0.2s ease-in-out',
                     // Reserve space even when button is hidden
                     width: '24px',
-                    height: '24px',
+                    height: '24px'
                   }}
                   onClick={handleCopyIdentityKey}
                 >
-                  <ContentCopyIcon fontSize="small" sx={{ color: themeMode === 'light' ? 'lightGray' : 'darkGray', fontSize: '0.9rem' }} />
+                  <ContentCopyIcon
+                    fontSize="small"
+                    sx={{
+                      color: themeMode === 'light' ? 'lightGray' : 'darkGray',
+                      fontSize: '0.9rem'
+                    }}
+                  />
                 </IconButton>
               </Tooltip>
             )}
@@ -223,7 +235,7 @@ const IdentityCard: React.FC<IdentityProps> = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
     </React.Fragment>
-  );
-};
+  )
+}
 
-export default IdentityCard;
+export default IdentityCard

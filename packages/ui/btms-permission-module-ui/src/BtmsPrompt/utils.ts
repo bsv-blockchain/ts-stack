@@ -7,7 +7,11 @@ import type { BTMSPromptInfo } from './types.js'
 export const parseTokenMessage = (message: string): BTMSPromptInfo | null => {
   try {
     const parsed = JSON.parse(message)
-    if (parsed.type === 'btms_spend' || parsed.type === 'btms_burn' || parsed.type === 'btms_access') {
+    if (
+      parsed.type === 'btms_spend' ||
+      parsed.type === 'btms_burn' ||
+      parsed.type === 'btms_access'
+    ) {
       return parsed as BTMSPromptInfo
     }
   } catch {
@@ -22,9 +26,9 @@ export const parseTokenMessage = (message: string): BTMSPromptInfo | null => {
   // requesting app, so parsing must stay linear in its length (js/polynomial-redos)
   let amount = 0
   let tokenName = 'Unknown Token'
-  const spendMatch = firstLine.match(/^Spend (\d+) /)
+  const spendMatch = /^Spend (\d+) /.exec(firstLine)
   if (spendMatch != null) {
-    amount = parseInt(spendMatch[1], 10)
+    amount = Number.parseInt(spendMatch[1], 10)
     const nameStart = spendMatch[0].length
     const tokenIdx = firstLine.indexOf(' token', nameStart)
     if (tokenIdx !== -1) {

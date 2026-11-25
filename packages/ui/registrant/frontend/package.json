@@ -9,8 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check src public '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs build"
   },
   "dependencies": {
@@ -52,7 +52,6 @@
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",
-    "metanet-identity-react": "^0.1.78",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",

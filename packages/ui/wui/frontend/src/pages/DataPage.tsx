@@ -1,244 +1,245 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 import {
-    Box,
-    Typography,
-    Paper,
-    Stack,
-    Alert, Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Chip,
-    Tooltip,
-    IconButton,
-    Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    FormControl,
-    RadioGroup,
-    FormControlLabel,
-    Radio
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { useWallet } from '../contexts/WalletContext';
-import { StorageClient, StorageIdb, Wallet, sdk } from '@bsv/wallet-toolbox-client';
-import { PrivateKey } from '@bsv/sdk';
+  Box,
+  Typography,
+  Paper,
+  Stack,
+  Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Tooltip,
+  IconButton,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  RadioGroup,
+  FormControlLabel,
+  Radio
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import { useWallet } from '../contexts/WalletContext'
+import { keyedValues } from '../utils/keyedValues'
+import { StorageClient, StorageIdb, Wallet, sdk } from '@bsv/wallet-toolbox-client'
+import { PrivateKey } from '@bsv/sdk'
 
 class StorageItem implements sdk.WalletStorageInfo {
-    storageIdentityKey: string;
-    storageName: string;
-    storageClass: string;
-    endpointURL?: string;
-    isActive: boolean;
-    isBackup: boolean;
-    isConflicting: boolean;
-    isEnabled: boolean;
-    userId: number;
+  storageIdentityKey: string
+  storageName: string
+  storageClass: string
+  endpointURL?: string
+  isActive: boolean
+  isBackup: boolean
+  isConflicting: boolean
+  isEnabled: boolean
+  userId: number
 
-    get role(): 'active (disabled)' | 'active' | 'conflicting active' | 'backup' {
-        if (this.isConflicting) return 'conflicting active';
-        if (!this.isEnabled && this.isActive) return 'active (disabled)';
-        if (this.isActive) return 'active';
-        return 'backup';
-    }
+  get role(): 'active (disabled)' | 'active' | 'conflicting active' | 'backup' {
+    if (this.isConflicting) return 'conflicting active'
+    if (!this.isEnabled && this.isActive) return 'active (disabled)'
+    if (this.isActive) return 'active'
+    return 'backup'
+  }
 
-    get roleColor(): 'default' | 'primary' | 'success' | 'error' | 'warning' {
-        if (this.isConflicting) return 'error';
-        if (!this.isEnabled && this.isActive) return 'warning';
-        if (this.isActive) return 'success';
-        return 'default';
-    }
+  get roleColor(): 'default' | 'primary' | 'success' | 'error' | 'warning' {
+    if (this.isConflicting) return 'error'
+    if (!this.isEnabled && this.isActive) return 'warning'
+    if (this.isActive) return 'success'
+    return 'default'
+  }
 
-    constructor(store: sdk.WalletStorageInfo) {
-        this.storageIdentityKey = store.storageIdentityKey;
-        this.storageName = store.storageName;
-        this.isConflicting = store.isConflicting;
-        this.isActive = store.isActive;
-        this.isBackup = store.isBackup;
-        this.isEnabled = store.isEnabled;
-        this.storageClass = store.storageClass;
-        this.endpointURL = store.endpointURL;
-        this.userId = store.userId
-    }
+  constructor(store: sdk.WalletStorageInfo) {
+    this.storageIdentityKey = store.storageIdentityKey
+    this.storageName = store.storageName
+    this.isConflicting = store.isConflicting
+    this.isActive = store.isActive
+    this.isBackup = store.isBackup
+    this.isEnabled = store.isEnabled
+    this.storageClass = store.storageClass
+    this.endpointURL = store.endpointURL
+    this.userId = store.userId
+  }
 }
 
 interface CreateStorageInputs {
-    className: 'StorageClient' | 'StorageIdb'
-    endpointURL: string
+  className: 'StorageClient' | 'StorageIdb'
+  endpointURL: string
 }
 
 /** Helper: copy string to clipboard */
 function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text).catch((err) => console.error(err));
+  navigator.clipboard.writeText(text).catch(err => console.error(err))
 }
 
 /** Helper: shortens a TXID for display (e.g., first 8 + '...' + last 8) */
 function shortTxid(txid: string) {
-    if (txid.length <= 16) return txid;
-    return txid.slice(0, 8) + '...' + txid.slice(-8);
+  if (txid.length <= 16) return txid
+  return txid.slice(0, 8) + '...' + txid.slice(-8)
 }
 
 function DataPage() {
-  const { wallet } = useWallet();
+  const { wallet } = useWallet()
 
-  const [stores, setStores] = useState<StorageItem[]>([]);
-  const [loadingList, setLoadingList] = useState(false);
-  const [listError, setListError] = useState<string>("");
+  const [stores, setStores] = useState<StorageItem[]>([])
+  const [loadingList, setLoadingList] = useState(false)
+  const [listError, setListError] = useState<string>('')
 
   /**************************************************
    * useEffect: load the list initially
    **************************************************/
   useEffect(() => {
-    if (!wallet) return;
-    fetchStores();
+    if (!wallet) return
+    fetchStores()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet]);
+  }, [wallet])
 
   /**************************************************
    * Fetch / list storage providers
    **************************************************/
-  async function fetchStores() {
-    if (!wallet) return;
-    setLoadingList(true);
-    setListError("");
+  function fetchStores() {
+    if (!wallet) return
+    setLoadingList(true)
+    setListError('')
     try {
-      const w = wallet as Wallet;
-      const stores = w.storage.getStores();
-      setStores(stores.map((store) => new StorageItem(store)));
+      const w = wallet as Wallet
+      const stores = w.storage.getStores()
+      setStores(stores.map(store => new StorageItem(store)))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("getStores error:", err);
-      setListError(err?.message || String(err));
+      console.error('getStores error:', err)
+      setListError(err?.message || String(err))
     } finally {
-      setLoadingList(false);
+      setLoadingList(false)
     }
   }
 
   /**************************************************
    * CREATE NEW STORAGE PROVIDER Modal
    **************************************************/
-  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createData, setCreateData] = useState<CreateStorageInputs>({
-    className: "StorageClient",
-    endpointURL: "",
-  });
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState<string>("");
-  const [progLogShowDialog, setProgLogShowDialog] = useState(false);
-  const [progLogComplete, setprogLogComplete] = useState(false);
-  const [progLogError, setProgLogError] = useState('');
-  const [progLogTitle, setProgLogTitle] = useState('Progress Log');
-  const [progLogText, setProgLogText] = useState<string[]>([]);
-  const [progLogActiveButtonLabel, setProgLogActiveButtonLabel] = useState('Syncing...');
+    className: 'StorageClient',
+    endpointURL: ''
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string>('')
+  const [progLogShowDialog, setProgLogShowDialog] = useState(false)
+  const [progLogComplete, setprogLogComplete] = useState(false)
+  const [progLogError, setProgLogError] = useState('')
+  const [progLogTitle, setProgLogTitle] = useState('Progress Log')
+  const [progLogText, setProgLogText] = useState<string[]>([])
+  const [progLogActiveButtonLabel, setProgLogActiveButtonLabel] = useState('Syncing...')
 
   /**************************************************
    * Reveal New Storage Provider dialog
    **************************************************/
   function handleOpenCreateModal() {
-    setCreateModalOpen(true);
+    setCreateModalOpen(true)
     // Reset everything
     setCreateData({
-      className: "StorageClient",
-      endpointURL: "",
-    });
-    setCreateError("");
+      className: 'StorageClient',
+      endpointURL: ''
+    })
+    setCreateError('')
   }
 
   function handleCloseCreateModal() {
-    setCreateModalOpen(false);
+    setCreateModalOpen(false)
   }
 
-  function progLog(s: string) : string {
-    const lines = s.split('\n');
+  function progLog(s: string): string {
+    const lines = s.split('\n')
     for (const line of lines) {
-      setProgLogText((prev) => [...prev, line]);
+      setProgLogText(prev => [...prev, line])
     }
     return s
   }
 
   async function doCreateNewStore() {
-    if (!wallet) return;
-    setCreateLoading(true);
-    setProgLogError("");
-    setProgLogShowDialog(true);
+    if (!wallet) return
+    setCreateLoading(true)
+    setProgLogError('')
+    setProgLogShowDialog(true)
     setprogLogComplete(false)
     setProgLogTitle('Sync Progress')
     setProgLogText([])
-    setProgLogActiveButtonLabel('Syncing...');
+    setProgLogActiveButtonLabel('Syncing...')
     try {
-      const w = wallet as Wallet;
+      const w = wallet as Wallet
       switch (createData.className) {
-        case "StorageClient":
+        case 'StorageClient':
           {
-            const store = new StorageClient(w, createData.endpointURL);
-            await store.makeAvailable();
-            await w.storage.addWalletStorageProvider(store);
-            await w.storage.setActive(stores[0].storageIdentityKey, progLog);
+            const store = new StorageClient(w, createData.endpointURL)
+            await store.makeAvailable()
+            await w.storage.addWalletStorageProvider(store)
+            await w.storage.setActive(stores[0].storageIdentityKey, progLog)
           }
-          break;
-        case "StorageIdb":
+          break
+        case 'StorageIdb':
           {
-            const options = StorageIdb.createStorageBaseOptions(w.chain);
-            const store = new StorageIdb(options);
-            await store.migrate(store.dbName, PrivateKey.fromRandom().toHex());
-            await store.makeAvailable();
-            await w.storage.addWalletStorageProvider(store);
-            await w.storage.setActive(stores[0].storageIdentityKey, progLog);
-
+            const options = StorageIdb.createStorageBaseOptions(w.chain)
+            const store = new StorageIdb(options)
+            await store.migrate(store.dbName, PrivateKey.fromRandom().toHex())
+            await store.makeAvailable()
+            await w.storage.addWalletStorageProvider(store)
+            await w.storage.setActive(stores[0].storageIdentityKey, progLog)
           }
-          break;
+          break
         default:
-          break;
+          break
       }
       // refresh the list
-      fetchStores();
+      fetchStores()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("create Storage error:", err);
-      setProgLogError(err?.message || String(err));
+      console.error('create Storage error:', err)
+      setProgLogError(err?.message || String(err))
     } finally {
       setprogLogComplete(true)
-      setCreateLoading(false);
-      setCreateModalOpen(false);
+      setCreateLoading(false)
+      setCreateModalOpen(false)
     }
   }
 
   async function handleBackup() {
-    if (!wallet) return;
-    setProgLogError("");
-    setProgLogShowDialog(true);
+    if (!wallet) return
+    setProgLogError('')
+    setProgLogShowDialog(true)
     setprogLogComplete(false)
     setProgLogTitle('Backup Progress')
     setProgLogText([])
-    setProgLogActiveButtonLabel('Backing Up Active Store...');
+    setProgLogActiveButtonLabel('Backing Up Active Store...')
     try {
-      const w = wallet as Wallet;
-      await w.storage.updateBackups(undefined, progLog);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = wallet as Wallet
+      await w.storage.updateBackups(undefined, progLog)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("Backup Storage error:", err);
-      setProgLogError(err?.message || String(err));
+      console.error('Backup Storage error:', err)
+      setProgLogError(err?.message || String(err))
     } finally {
       setprogLogComplete(true)
-      setCreateLoading(false);
-      setCreateModalOpen(false);
+      setCreateLoading(false)
+      setCreateModalOpen(false)
     }
   }
 
   function progLogHandleDone(): void {
-    setProgLogShowDialog(false);
+    setProgLogShowDialog(false)
   }
 
   return (
     <Box>
       <Stack
-        direction={{ xs: "column", sm: "row" }}
+        direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        alignItems={{ xs: "flex-start", sm: "center" }}
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
         justifyContent="space-between"
         sx={{ mb: 2 }}
       >
@@ -253,11 +254,7 @@ function DataPage() {
             </Button>
           )}
           {/* Add new storage provider */}
-          <Button
-            startIcon={<AddIcon />}
-            variant="contained"
-            onClick={handleOpenCreateModal}
-          >
+          <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateModal}>
             Storage Provider
           </Button>
         </Stack>
@@ -275,18 +272,18 @@ function DataPage() {
         {/* Render each storage provider in an Accordion for detail expansion */}
         {stores.map((store, idx) => {
           return (
-            <Accordion key={idx} sx={{ mt: 2 }}>
+            <Accordion key={store.storageIdentityKey} sx={{ mt: 2 }}>
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
                 aria-controls={`panel-${idx}-content`}
                 id={`panel-${idx}-header`}
               >
                 {/* Top (summary) row: TXID (short), description, status, satoshis */}
-                <Box sx={{ width: "100%" }}>
+                <Box sx={{ width: '100%' }}>
                   <Stack
-                    direction={{ xs: "column", sm: "row" }}
+                    direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
-                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    alignItems={{ xs: 'flex-start', sm: 'center' }}
                     justifyContent="space-between"
                   >
                     {/* Left side: TxID + Description */}
@@ -298,9 +295,9 @@ function DataPage() {
                       <Tooltip title="Copy full Storage Identity Key">
                         <IconButton
                           size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(store.storageIdentityKey);
+                          onClick={e => {
+                            e.stopPropagation()
+                            copyToClipboard(store.storageIdentityKey)
                           }}
                         >
                           <ContentCopyIcon fontSize="inherit" />
@@ -311,19 +308,13 @@ function DataPage() {
                           {`${store.storageName}`}
                         </Typography>
                       )}
-                      <Typography variant="body1">
-                        {store.storageClass}
-                      </Typography>
+                      <Typography variant="body1">{store.storageClass}</Typography>
                     </Stack>
 
                     {/* Right side: Status + Satoshis + Outgoing/Incoming indicator */}
                     <Stack direction="row" spacing={2} alignItems="center">
                       {/* Show status as a Chip, possibly color-coded */}
-                      <Chip
-                        label={store.role}
-                        color={store.roleColor}
-                        size="small"
-                      />
+                      <Chip label={store.role} color={store.roleColor} size="small" />
                     </Stack>
                   </Stack>
                 </Box>
@@ -335,35 +326,22 @@ function DataPage() {
                     <Typography variant="body2">
                       Storage Identity Key: {store.storageIdentityKey}
                     </Typography>
-                    <Typography variant="body2">
-                      Storage Name: {store.storageName}
-                    </Typography>
-                    <Typography variant="body2">
-                      Storage Class: {store.storageClass}
-                    </Typography>
-                    {store.storageClass === "StorageClient" && (
-                      <Typography variant="body2">
-                        Endpoint URL: {store.endpointURL}
-                      </Typography>
+                    <Typography variant="body2">Storage Name: {store.storageName}</Typography>
+                    <Typography variant="body2">Storage Class: {store.storageClass}</Typography>
+                    {store.storageClass === 'StorageClient' && (
+                      <Typography variant="body2">Endpoint URL: {store.endpointURL}</Typography>
                     )}
-                    <Typography variant="body2">
-                      User ID: {store.userId}
-                    </Typography>
+                    <Typography variant="body2">User ID: {store.userId}</Typography>
                   </Box>
                 </Stack>
               </AccordionDetails>
             </Accordion>
-          );
+          )
         })}
       </Paper>
 
       {/** CREATE STORAGE PROVIDER MODAL */}
-      <Dialog
-        open={createModalOpen}
-        onClose={handleCloseCreateModal}
-        fullWidth
-        maxWidth="lg"
-      >
+      <Dialog open={createModalOpen} onClose={handleCloseCreateModal} fullWidth maxWidth="lg">
         <DialogTitle>Add Storage Provider</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1 }}>
@@ -381,12 +359,10 @@ function DataPage() {
                   aria-label="options"
                   name="options"
                   value={createData.className}
-                  onChange={(e) =>
-                    setCreateData((prev) => ({
+                  onChange={e =>
+                    setCreateData(prev => ({
                       ...prev,
-                      className: e.target.value as
-                        | "StorageClient"
-                        | "StorageIdb",
+                      className: e.target.value as 'StorageClient' | 'StorageIdb'
                     }))
                   }
                 >
@@ -401,7 +377,7 @@ function DataPage() {
                     label="StorageClient"
                   />
                 </RadioGroup>
-                {createData.className === "StorageClient" && (
+                {createData.className === 'StorageClient' && (
                   <TextField
                     autoFocus
                     margin="dense"
@@ -411,10 +387,10 @@ function DataPage() {
                     fullWidth
                     variant="outlined"
                     value={createData.endpointURL}
-                    onChange={(e) =>
-                      setCreateData((prev) => ({
+                    onChange={e =>
+                      setCreateData(prev => ({
                         ...prev,
-                        endpointURL: e.target.value,
+                        endpointURL: e.target.value
                       }))
                     }
                   />
@@ -433,22 +409,15 @@ function DataPage() {
             <Button onClick={handleCloseCreateModal} disabled={createLoading}>
               Cancel
             </Button>
-            <Button
-              variant="contained"
-              onClick={doCreateNewStore}
-              disabled={createLoading}
-            >
-              {createLoading ? "Adding..." : "Add"}
+            <Button variant="contained" onClick={doCreateNewStore} disabled={createLoading}>
+              {createLoading ? 'Adding...' : 'Add'}
             </Button>
           </>
         </DialogActions>
       </Dialog>
 
       {/** SHOW SYNC OR BACKUP PROGRESS MODAL */}
-      <Dialog
-        open={progLogShowDialog}
-        aria-labelledby="progress-log-dialog-title"
-      >
+      <Dialog open={progLogShowDialog} aria-labelledby="progress-log-dialog-title">
         <DialogTitle id="progress-log-dialog-title">{progLogTitle}</DialogTitle>
         <DialogContent>
           <Box
@@ -457,7 +426,7 @@ function DataPage() {
               maxHeight: 400,
               overflowY: 'auto',
               whiteSpace: 'pre-wrap', // Preserve newlines and wrap text
-              fontFamily: 'monospace', // Better for log display
+              fontFamily: 'monospace' // Better for log display
             }}
           >
             {progLogError && (
@@ -465,9 +434,9 @@ function DataPage() {
                 {progLogError}
               </Alert>
             )}
-            {progLogText.map((line, index) => (
-              <Typography key={index} variant="body2">
-                {line}
+            {keyedValues(progLogText).map(({ key, value }) => (
+              <Typography key={key} variant="body2">
+                {value}
               </Typography>
             ))}
           </Box>
@@ -484,7 +453,7 @@ function DataPage() {
         </DialogActions>
       </Dialog>
     </Box>
-  );
+  )
 }
 
-export default DataPage;
+export default DataPage

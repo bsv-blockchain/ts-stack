@@ -1,7 +1,6 @@
 import { makeStyles } from '@mui/styles'
-import { Theme } from '@mui/material/styles'
 
-const useStyles = makeStyles((theme: Theme) => ({
+const useStyles = makeStyles({
   sub_title: {
     paddingTop: '0.5em'
   },
@@ -12,6 +11,6 @@ const useStyles = makeStyles((theme: Theme) => ({
   form: {
     marginTop: '0.25em !important'
   }
-}))
+})
 
 export default useStyles

@@ -6,11 +6,11 @@ import { Img } from '@bsv/uhrp-react'
 import { useTheme } from '@mui/material/styles'
 import { normalizeAppLabel, resolveAppBaseUrl } from './utils.js'
 
-export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'; paletteMode?: PaletteMode }> = ({
-  app,
-  size = 'default',
-  paletteMode
-}) => {
+export const AppOriginChip: React.FC<{
+  app: string
+  size?: 'default' | 'compact'
+  paletteMode?: PaletteMode
+}> = ({ app, size = 'default', paletteMode }) => {
   const theme = useTheme()
   const resolvedMode = paletteMode ?? theme.palette.mode
   const normalizedLabel = useMemo(() => normalizeAppLabel(app), [app])
@@ -19,21 +19,14 @@ export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'
   const chipHeight = size === 'compact' ? 38 : 44
   const avatarSize = size === 'compact' ? 28 : 32
   const maxLabelWidth = size === 'compact' ? 150 : 180
-  const chipBg = resolvedMode === 'dark'
-    ? 'rgba(255, 255, 255, 0.08)'
-    : 'rgba(0, 0, 0, 0.06)'
-  const chipBorder = resolvedMode === 'dark'
-    ? '1px solid rgba(255, 255, 255, 0.18)'
-    : '1px solid rgba(0, 0, 0, 0.12)'
-  const avatarBg = resolvedMode === 'dark'
-    ? 'rgba(255, 255, 255, 0.12)'
-    : 'rgba(0, 0, 0, 0.08)'
-  const titleColor = resolvedMode === 'dark'
-    ? 'rgba(255, 255, 255, 0.92)'
-    : 'rgba(0, 0, 0, 0.82)'
-  const subtitleColor = resolvedMode === 'dark'
-    ? 'rgba(255, 255, 255, 0.6)'
-    : 'rgba(0, 0, 0, 0.55)'
+  const chipBg = resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'
+  const chipBorder =
+    resolvedMode === 'dark'
+      ? '1px solid rgba(255, 255, 255, 0.18)'
+      : '1px solid rgba(0, 0, 0, 0.12)'
+  const avatarBg = resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
+  const titleColor = resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.82)'
+  const subtitleColor = resolvedMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.55)'
 
   useEffect(() => {
     let cancelled = false
@@ -55,9 +48,10 @@ export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'
         if (Array.isArray(manifest?.icons) && manifest.icons.length > 0) {
           const iconSrc = manifest.icons[0]?.src
           if (typeof iconSrc === 'string') {
+            const slash = iconSrc.startsWith('/') ? '' : '/'
             const resolvedIcon = iconSrc.startsWith('http')
               ? iconSrc
-              : `${baseUrl}${iconSrc.startsWith('/') ? '' : '/'}${iconSrc}`
+              : `${baseUrl}${slash}${iconSrc}`
             setIconUrl(resolvedIcon)
           }
         }
@@ -84,19 +78,16 @@ export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'
         maxWidth: '100%',
         color: titleColor
       }}
-      icon={(
+      icon={
         <Avatar sx={{ width: avatarSize, height: avatarSize, bgcolor: avatarBg }}>
           {iconUrl ? (
-            <Img
-              src={iconUrl}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <Img src={iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <AppsIcon sx={{ fontSize: 18, color: titleColor }} />
           )}
         </Avatar>
-      )}
-      label={(
+      }
+      label={
         <Stack spacing={0} sx={{ minWidth: 0 }}>
           <Typography
             variant={size === 'compact' ? 'caption' : 'body2'}
@@ -126,7 +117,7 @@ export const AppOriginChip: React.FC<{ app: string; size?: 'default' | 'compact'
             </Typography>
           )}
         </Stack>
-      )}
+      }
     />
   )
 }

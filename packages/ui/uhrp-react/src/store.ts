@@ -30,15 +30,19 @@ export const useStore = create<UrlState>()(
         const existing = pending.get(uhrpUrl)
         if (existing) return existing
 
-        const request = downloader.resolve(uhrpUrl).then(([resolved]) => {
-          if (resolved) {
-            set(state => ({ urls: { ...state.urls, [uhrpUrl]: resolved } }))
-          }
-        }).catch(err => {
-          console.error(err)
-        }).finally(() => {
-          pending.delete(uhrpUrl)
-        })
+        const request = downloader
+          .resolve(uhrpUrl)
+          .then(([resolved]) => {
+            if (resolved) {
+              set(state => ({ urls: { ...state.urls, [uhrpUrl]: resolved } }))
+            }
+          })
+          .catch(err => {
+            console.error(err)
+          })
+          .finally(() => {
+            pending.delete(uhrpUrl)
+          })
         pending.set(uhrpUrl, request)
         return request
       }

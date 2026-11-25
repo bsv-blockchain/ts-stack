@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PaletteMode } from '@mui/material'
 import BtmsPromptDialog from './BtmsPromptDialog.js'
-import type { BtmsPromptDialogProps } from './types.js'
 
 /**
  * Focus handlers for window management (optional)
@@ -28,42 +27,38 @@ export const useBtmsPrompt = (focusHandlers?: FocusHandlers) => {
     paletteMode?: PaletteMode
   } | null>(null)
 
-  const promptUser = useCallback(async (app: string, message: string, paletteMode?: PaletteMode): Promise<boolean> => {
-    // Request focus before showing the prompt (if handlers provided)
-    if (focusHandlers) {
-      const currentlyFocused = await focusHandlers.isFocused()
-      wasOriginallyFocusedRef.current = currentlyFocused
-      if (!currentlyFocused) {
-        await focusHandlers.onFocusRequested()
+  const promptUser = useCallback(
+    async (app: string, message: string, paletteMode?: PaletteMode): Promise<boolean> => {
+      // Request focus before showing the prompt (if handlers provided)
+      if (focusHandlers) {
+        const currentlyFocused = await focusHandlers.isFocused()
+        wasOriginallyFocusedRef.current = currentlyFocused
+        if (!currentlyFocused) {
+          await focusHandlers.onFocusRequested()
+        }
       }
-    }
 
-    return new Promise((resolve) => {
-      setPromptState({ app, message, resolver: resolve, paletteMode })
-    })
-  }, [focusHandlers])
+      return new Promise(resolve => {
+        setPromptState({ app, message, resolver: resolve, paletteMode })
+      })
+    },
+    [focusHandlers]
+  )
 
-  const handleAllow = useCallback(() => {
-    if (promptState) {
-      promptState.resolver(true)
+  const settlePrompt = useCallback(
+    (allowed: boolean) => {
+      if (!promptState) return
+      promptState.resolver(allowed)
       setPromptState(null)
       // Relinquish focus if we weren't originally focused
       if (focusHandlers && !wasOriginallyFocusedRef.current) {
-        focusHandlers.onFocusRelinquished()
+        void focusHandlers.onFocusRelinquished().catch(() => {
+          // A window-management failure does not change the user's recorded decision.
+        })
       }
-    }
-  }, [promptState, focusHandlers])
-
-  const handleDeny = useCallback(() => {
-    if (promptState) {
-      promptState.resolver(false)
-      setPromptState(null)
-      // Relinquish focus if we weren't originally focused
-      if (focusHandlers && !wasOriginallyFocusedRef.current) {
-        focusHandlers.onFocusRelinquished()
-      }
-    }
-  }, [promptState, focusHandlers])
+    },
+    [promptState, focusHandlers]
+  )
 
   const PromptComponent = useCallback(() => {
     if (!promptState) return null
@@ -72,12 +67,12 @@ export const useBtmsPrompt = (focusHandlers?: FocusHandlers) => {
       <BtmsPromptDialog
         app={promptState.app}
         message={promptState.message}
-        onAllow={handleAllow}
-        onDeny={handleDeny}
+        onAllow={() => settlePrompt(true)}
+        onDeny={() => settlePrompt(false)}
         paletteMode={promptState.paletteMode}
       />
     )
-  }, [promptState, handleAllow, handleDeny])
+  }, [promptState, settlePrompt])
 
   return {
     promptUser,
@@ -85,4 +80,4 @@ export const useBtmsPrompt = (focusHandlers?: FocusHandlers) => {
   }
 }
 
-export type { BtmsPromptDialogProps }
+export type { BtmsPromptDialogProps } from './types.js'

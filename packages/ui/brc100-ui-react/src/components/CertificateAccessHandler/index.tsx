@@ -1,5 +1,15 @@
 import { useContext, useState } from 'react'
-import { DialogContent, DialogActions, Button, Typography, Divider, Box, Stack, Tooltip, CircularProgress } from '@mui/material'
+import {
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  Divider,
+  Box,
+  Stack,
+  Tooltip,
+  CircularProgress
+} from '@mui/material'
 import CustomDialog from '../CustomDialog'
 import AppChip from '../AppChip'
 import CertificateChip from '../CertificateChip'
@@ -7,7 +17,6 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 import deterministicColor from '../../utils/deterministicColor'
 import { WalletContext } from '../../WalletContext'
 import { UserContext } from '../../UserContext'
-import { PermissionRequest } from '@bsv/wallet-toolbox-client'
 
 type CertificateAccessRequest = {
   requestID: string
@@ -33,7 +42,9 @@ const CertificateAccessHandler = () => {
       setDenying(true)
       await managers.permissionsManager?.denyPermission(certificateRequests[0].requestID)
       const { originator } = certificateRequests[0] as CertificateAccessRequest
-      window.dispatchEvent(new CustomEvent('cert-access-changed', { detail: { op: 'deny', originator } }))
+      window.dispatchEvent(
+        new CustomEvent('cert-access-changed', { detail: { op: 'deny', originator } })
+      )
     } finally {
       setDenying(false)
       advanceCertificateQueue()
@@ -46,7 +57,9 @@ const CertificateAccessHandler = () => {
     try {
       setGranting(true)
       await managers.permissionsManager?.grantPermission({ requestID })
-      window.dispatchEvent(new CustomEvent('cert-access-changed', { detail: { op: 'grant', originator } }))
+      window.dispatchEvent(
+        new CustomEvent('cert-access-changed', { detail: { op: 'grant', originator } })
+      )
     } finally {
       setGranting(false)
       advanceCertificateQueue()
@@ -55,7 +68,7 @@ const CertificateAccessHandler = () => {
 
   if (!certificateAccessModalOpen || !certificateRequests.length) return null
 
-  const { originator, verifierPublicKey, certificateType, fieldsArray, description, renewal } =
+  const { originator, verifierPublicKey, certificateType, description, renewal } =
     certificateRequests[0] as CertificateAccessRequest
 
   return (
@@ -70,10 +83,9 @@ const CertificateAccessHandler = () => {
           <AppChip size={1.5} showDomain label={originator || 'unknown'} clickable={false} />
           <Divider />
 
-          <CertificateChip
-            certType={certificateType}
-            certVerifier={verifierPublicKey}
-          />
+          {certificateType && (
+            <CertificateChip certType={certificateType} certVerifier={verifierPublicKey} />
+          )}
 
           {description && (
             <>
@@ -85,7 +97,9 @@ const CertificateAccessHandler = () => {
                 justifyContent="space-between"
                 sx={{ height: '3em', width: '100%' }}
               >
-                <Typography variant="body1" fontWeight="bold">Reason:</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  Reason:
+                </Typography>
                 <Stack px={3}>
                   <Typography variant="body1">{description}</Typography>
                 </Stack>
@@ -96,15 +110,31 @@ const CertificateAccessHandler = () => {
       </DialogContent>
 
       <Tooltip title="Unique visual signature for this request" placement="top">
-        <Box sx={{ mb: 3, py: 0.5, background: deterministicColor(JSON.stringify(certificateRequests[0])) }} />
+        <Box
+          sx={{
+            mb: 3,
+            py: 0.5,
+            background: deterministicColor(JSON.stringify(certificateRequests[0]))
+          }}
+        />
       </Tooltip>
 
       <DialogActions sx={{ justifyContent: 'space-between' }}>
-        <Button onClick={handleDeny} variant="outlined" color="inherit" disabled={granting || denying}>
+        <Button
+          onClick={handleDeny}
+          variant="outlined"
+          color="inherit"
+          disabled={granting || denying}
+        >
           Deny
         </Button>
 
-        <Button onClick={handleGrant} variant="contained" color="primary" disabled={granting || denying}>
+        <Button
+          onClick={handleGrant}
+          variant="contained"
+          color="primary"
+          disabled={granting || denying}
+        >
           {granting ? <CircularProgress size={18} /> : 'Grant Access'}
         </Button>
       </DialogActions>

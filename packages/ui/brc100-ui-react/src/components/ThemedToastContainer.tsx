@@ -1,5 +1,4 @@
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from 'react-toastify'
 import { useTheme } from '@mui/material'
 
 const ThemedToastContainer = () => {
@@ -19,7 +18,7 @@ const ThemedToastContainer = () => {
       pauseOnHover
       theme={theme.palette.mode === 'dark' ? 'dark' : 'light'}
     />
-  );
-};
+  )
+}
 
-export default ThemedToastContainer;
+export default ThemedToastContainer

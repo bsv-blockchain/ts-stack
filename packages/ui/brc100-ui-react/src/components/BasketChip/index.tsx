@@ -8,8 +8,9 @@ import { generateDefaultIcon } from '../../constants/popularApps'
 import { useTheme } from '@mui/material/styles'
 import ShoppingBasket from '@mui/icons-material/ShoppingBasket'
 import { WalletContext } from '../../WalletContext'
-import { RegistryClient } from '@bsv/sdk'
+import { BasketDefinitionData, RegistryClient } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
+import { mostTrustedRecord, webURL } from '../registryMetadata'
 
 const useStyles = makeStyles(style as any, {
   name: 'BasketChip'
@@ -29,129 +30,121 @@ interface BasketChipProps extends RouteComponentProps {
 
 const BasketChip: React.FC<BasketChipProps> = ({
   basketId,
-  lastAccessed,
-  domain,
   history,
   clickable = false,
   size = 1.3,
   onClick,
   expires,
-  onCloseClick = () => { },
+  onCloseClick = () => {},
   canRevoke = false
 }) => {
-  const {
-    managers,
-    settings,
-  } = useContext(WalletContext)
+  const { managers, settings, activeProfile } = useContext(WalletContext)
 
   if (typeof basketId !== 'string') {
-    throw new Error('BasketChip was initialized without a valid basketId')
+    throw new TypeError('BasketChip was initialized without a valid basketId')
   }
   const classes = useStyles()
   const theme = useTheme()
 
-  // Initialize BasketMap
-  const registrant = new RegistryClient(managers.permissionsManager)
-
-  const [basketName, setBasketName] = useState(basketId)
-  const [iconURL, setIconURL] = useState(generateDefaultIcon(basketId))
-  const [description, setDescription] = useState('Basket description not found.')
-  const [documentationURL, setDocumentationURL] = useState('https://docs.bsvblockchain.org')
+  const wallet = managers.permissionsManager
+  const trusted = settings.trustSettings.trustedCertifiers
+  const queryKey = JSON.stringify([activeProfile?.id, basketId, trusted])
+  const [lookup, setLookup] = useState<{ key: string; basket: BasketDefinitionData }>()
+  const basket = lookup?.key === queryKey ? lookup.basket : undefined
+  const basketName = basket?.name ?? basketId
+  const iconURL = basket?.iconURL || generateDefaultIcon(basketId)
+  const description = basket?.description ?? 'Basket description not found.'
+  const documentationURL = webURL(basket?.documentationURL) ?? 'https://docs.bsvblockchain.org'
 
   useEffect(() => {
-    const cacheKey = `basketInfo_${basketId}`
+    if (!wallet) return
 
-    const fetchAndCacheData = async () => {
-      // Try to load data from cache
-      const cachedData = window.localStorage.getItem(cacheKey)
-      if (cachedData) {
-        const { name, iconURL, description, documentationURL } = JSON.parse(cachedData)
-        setBasketName(name)
-        setIconURL(iconURL)
-        setDescription(description)
-        setDocumentationURL(documentationURL)
-      }
+    let cancelled = false
+    const resolve = async () => {
       try {
-        // Fetch basket info by ID and trusted entities' public keys
-        const trustedEntities = settings.trustSettings.trustedCertifiers.map(x => x.identityKey)
+        const registrant = new RegistryClient(wallet)
         const results = await registrant.resolve('basket', {
           basketID: basketId,
-          registryOperators: trustedEntities
+          registryOperators: trusted.map(({ identityKey }) => identityKey)
         })
-
-        if (results && results.length > 0) {
-          // Compute the most trusted of the results
-          let mostTrustedIndex = 0
-          let maxTrustPoints = 0
-          for (let i = 0; i < results.length; i++) {
-            const resultTrustLevel = settings.trustSettings.trustedCertifiers.find(x => x.identityKey === results[i].registryOperator)?.trust || 0
-            if (resultTrustLevel > maxTrustPoints) {
-              mostTrustedIndex = i
-              maxTrustPoints = resultTrustLevel
-            }
-          }
-          const basket = results[mostTrustedIndex]
-
-          // Update state and cache the results
-          setBasketName(basket.name)
-          setIconURL(basket.iconURL)
-          setDescription(basket.description)
-          setDocumentationURL(basket.documentationURL)
-
-          // TODO: Store data in local storage
-          window.localStorage.setItem(cacheKey, JSON.stringify({
-            name: basket.name,
-            iconURL: basket.iconURL,
-            description: basket.description,
-            documentationURL: basket.documentationURL
-          }))
-        }
+        const matching = results.filter(
+          (candidate): candidate is BasketDefinitionData =>
+            candidate.definitionType === 'basket' && candidate.basketID === basketId
+        )
+        const basket = mostTrustedRecord(matching, trusted)
+        if (!cancelled && basket) setLookup({ key: queryKey, basket })
       } catch (error) {
-        console.error(error)
+        console.error('Failed to fetch basket details:', error)
       }
     }
 
-    fetchAndCacheData()
-  }, [basketId, settings])
+    void resolve()
+    return () => {
+      cancelled = true
+    }
+  }, [wallet, basketId, trusted, queryKey])
 
   return (
     <Stack direction="column" spacing={1} alignItems="flex-start">
-      <Stack direction="row" alignItems="center" spacing={1} justifyContent="flex-start" sx={{
-        height: '3em', width: '100%',
-        gap: '0.75rem' // Add a more reasonable gap between the label and chip
-      }}>
-        <Typography variant="body1" fontWeight="bold">Basket:</Typography>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        justifyContent="flex-start"
+        sx={{
+          height: '3em',
+          width: '100%',
+          gap: '0.75rem' // Add a more reasonable gap between the label and chip
+        }}
+      >
+        <Typography variant="body1" fontWeight="bold">
+          Basket:
+        </Typography>
         <Chip
-          style={theme.templates?.chip ? theme.templates.chip({ size }) : {
-            height: `${size * 32}px`,
-            minHeight: `${size * 32}px`,
-            backgroundColor: 'transparent',
-            borderRadius: '16px',
-            padding: '8px',
-            margin: '4px'
-          }}
+          style={
+            theme.templates?.chip
+              ? theme.templates.chip({ size })
+              : {
+                  height: `${size * 32}px`,
+                  minHeight: `${size * 32}px`,
+                  backgroundColor: 'transparent',
+                  borderRadius: '16px',
+                  padding: '8px',
+                  margin: '4px'
+                }
+          }
           onDelete={onCloseClick}
           deleteIcon={canRevoke ? <CloseIcon /> : <></>}
           sx={{ '& .MuiTouchRipple-root': { display: clickable ? 'block' : 'none' } }}
           label={
             <div style={theme.templates?.chipLabel || { display: 'flex', flexDirection: 'column' }}>
-              <span style={theme.templates?.chipLabelTitle ? theme.templates.chipLabelTitle({ size }) : {
-                fontSize: `${Math.max(size * 0.8, 0.8)}rem`,
-                fontWeight: '500'
-              }}>
+              <span
+                style={
+                  theme.templates?.chipLabelTitle
+                    ? theme.templates.chipLabelTitle({ size })
+                    : {
+                        fontSize: `${Math.max(size * 0.8, 0.8)}rem`,
+                        fontWeight: '500'
+                      }
+                }
+              >
                 {basketName}
               </span>
-              <span style={theme.templates?.chipLabelSubtitle || {
-                fontSize: '0.7rem',
-                opacity: 0.7
-              }}>
+              <span
+                style={
+                  theme.templates?.chipLabelSubtitle || {
+                    fontSize: '0.7rem',
+                    opacity: 0.7
+                  }
+                }
+              >
                 {basketId}
               </span>
             </div>
           }
           icon={
             <Badge
-              overlap='circular'
+              overlap="circular"
               anchorOrigin={{
                 vertical: 'bottom',
                 horizontal: 'right'
@@ -159,12 +152,13 @@ const BasketChip: React.FC<BasketChipProps> = ({
               badgeContent={
                 <Tooltip
                   arrow
-                  title='Token Basket (click to learn more about baskets)'
+                  title="Token Basket (click to learn more about baskets)"
                   onClick={e => {
                     e.stopPropagation()
                     window.open(
                       'https://projectbabbage.com/docs/babbage-sdk/concepts/baskets',
-                      '_blank'
+                      '_blank',
+                      'noopener,noreferrer'
                     )
                   }}
                 >
@@ -189,7 +183,7 @@ const BasketChip: React.FC<BasketChipProps> = ({
               }
             >
               <Avatar
-                variant='square'
+                variant="square"
                 sx={{
                   width: '2.2em',
                   height: '2.2em',
@@ -218,7 +212,7 @@ const BasketChip: React.FC<BasketChipProps> = ({
                     name: basketName,
                     description,
                     iconURL,
-                    documentationURL,
+                    documentationURL
                   }
                 })
               }
@@ -226,15 +220,19 @@ const BasketChip: React.FC<BasketChipProps> = ({
           }}
         />
       </Stack>
-      {expires &&
+      {expires && (
         <>
           <Divider />
-          <Stack sx={{
-            height: '3em', width: '100%'
-          }}>
+          <Stack
+            sx={{
+              height: '3em',
+              width: '100%'
+            }}
+          >
             Expires: {expires}
           </Stack>
-        </>}
+        </>
+      )}
     </Stack>
   )
 }

@@ -20,7 +20,8 @@ const App: React.FC = () => {
         <div className="media-container">
           <h2 className="subheading">Video Preview</h2>
           <video controls className="video">
-            <Source src="XUTEGfCykZ4E8oJhT98keoPTg2Q28Nq4sJJXLf9CYA5CjV7ZsTCV" />
+            <Source src="/media-preview.webm" type="video/webm" />
+            <track kind="captions" src="/media-preview.vtt" srcLang="en" label="English" default />
           </video>
         </div>
       </div>

@@ -1,4 +1,6 @@
-export default theme => ({
+import type { Theme } from '@mui/material/styles'
+
+const appAccessStyles = (theme: Theme) => ({
   tabs: {
     paddingLeft: '0px'
   },
@@ -60,3 +62,5 @@ export default theme => ({
     }
   }
 })
+
+export default appAccessStyles

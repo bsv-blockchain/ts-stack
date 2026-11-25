@@ -1,30 +1,30 @@
-import React from 'react';
+import React from 'react'
 
 interface AppLogoProps {
-  className?: string;
-  size?: string | number;
-  color?: string;
-  rotate?: boolean;
+  className?: string
+  size?: string | number
+  color?: string
+  rotate?: boolean
 }
 
 const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', rotate }) => {
   // Calculate positions for 8 vertices on a circle
-  const centerX = 100;
-  const centerY = 100;
-  const radius = 80;
-  const vertices = [];
+  const centerX = 100
+  const centerY = 100
+  const radius = 80
+  const vertices = []
 
   // Create 8 vertices positioned in a circle
   for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * 2 * Math.PI;
+    const angle = (i / 8) * 2 * Math.PI
     vertices.push({
       x: centerX + radius * Math.cos(angle),
       y: centerY + radius * Math.sin(angle)
-    });
+    })
   }
 
   // Create edges between all vertices (complete graph)
-  const edges = [];
+  const edges = []
   for (let i = 0; i < vertices.length; i++) {
     for (let j = i + 1; j < vertices.length; j++) {
       edges.push({
@@ -32,12 +32,13 @@ const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', r
         y1: vertices[i].y,
         x2: vertices[j].x,
         y2: vertices[j].y
-      });
+      })
     }
   }
 
   return (
     <svg
+      aria-hidden="true"
       width="200"
       height="200"
       viewBox="0 0 200 200"
@@ -45,7 +46,7 @@ const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', r
       style={{
         width: size || '100%',
         height: size || '100%',
-        animation: rotate ? 'app-logo-rotate 10s linear infinite' : undefined,
+        animation: rotate ? 'app-logo-rotate 10s linear infinite' : undefined
       }}
     >
       <style>
@@ -61,7 +62,7 @@ const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', r
         <circle cx={centerX} cy={centerY} r={radius + 10} fill={'transparent'} />
 
         {/* Edges */}
-        {edges.map((edge, index) => (
+        {edges.map(edge => (
           <line
             key={`edge-${edge.x1}-${edge.y1}-${edge.x2}-${edge.y2}`}
             x1={edge.x1}
@@ -75,7 +76,7 @@ const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', r
         ))}
 
         {/* Vertices */}
-        {vertices.map((vertex, index) => (
+        {vertices.map(vertex => (
           <circle
             key={`vertex-${vertex.x}-${vertex.y}`}
             cx={vertex.x}
@@ -86,7 +87,7 @@ const AppLogo: React.FC<AppLogoProps> = ({ className, size, color = '#2196F3', r
         ))}
       </g>
     </svg>
-  );
-};
+  )
+}
 
-export default AppLogo;
+export default AppLogo

@@ -8,9 +8,9 @@ import {
   Delete as DeleteIcon,
   ExpandLess,
   ExpandMore,
-  Person as PersonIcon,
+  Person as PersonIcon
 } from '@mui/icons-material'
-import SyncAltIcon from '@mui/icons-material/SyncAlt';
+import SyncAltIcon from '@mui/icons-material/SyncAlt'
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 import {
   List,
@@ -47,21 +47,21 @@ import { WalletContext } from '../WalletContext'
 import { UserContext } from '../UserContext'
 import { useBreakpoint } from '../utils/useBreakpoints.js'
 import { Utils, PushDrop, LockingScript, Transaction } from '@bsv/sdk'
-import { WalletProfile } from '../types/WalletProfile';
+import { WalletProfile } from '../types/WalletProfile'
 // Custom styling for menu items
-const menuItemStyle = (isSelected) => ({
+const menuItemStyle = (isSelected: boolean) => ({
   borderRadius: '8px',
   margin: '4px 8px',
   transition: 'all 0.2s ease',
   '&:hover': {
-    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+    backgroundColor: 'rgba(25, 118, 210, 0.1)'
   },
   ...(isSelected && {
     backgroundColor: 'rgba(25, 118, 210, 0.12)',
     '&:hover': {
-      backgroundColor: 'rgba(25, 118, 210, 0.2)',
-    },
-  }),
+      backgroundColor: 'rgba(25, 118, 210, 0.2)'
+    }
+  })
 })
 
 interface MenuProps {
@@ -69,7 +69,6 @@ interface MenuProps {
   setMenuOpen: (open: boolean) => void
   menuRef: React.RefObject<HTMLDivElement>
 }
-
 
 export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
   const history = useHistory()
@@ -83,10 +82,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [profileToDelete, setProfileToDelete] = useState<WalletProfile>(null)
+  const [profileToDelete, setProfileToDelete] = useState<WalletProfile | null>(null)
   const [profilesLoading, setProfilesLoading] = useState(false)
   const [fund, setFund] = useState<boolean>(false)
-
 
   // History.push wrapper
   const navigation = {
@@ -113,14 +111,20 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
   //get Most Recent Profile Key
   const getMRPK = async () => {
-    const listprofiles = await managers.walletManager.listProfiles()
-    const mostRecent = listprofiles.reduce((a, b) => (a.createdAt > b.createdAt ? a : b))
+    const walletManager = managers.walletManager
+    if (!walletManager) throw new Error('Wallet is not ready.')
+    const listprofiles = await walletManager.listProfiles()
+    const [firstProfile, ...otherProfiles] = listprofiles
+    if (!firstProfile) throw new Error('No wallet profiles are available.')
+    const mostRecent = otherProfiles.reduce(
+      (newest, profile) => ((profile.createdAt ?? 0) > (newest.createdAt ?? 0) ? profile : newest),
+      firstProfile
+    )
     return mostRecent.identityKey
   }
 
   useEffect(() => {
     let cancelled = false
-    debugger
     const run = async () => {
       if (!managers?.walletManager || !activeProfile?.name) return
       const cacheKey = `funds_${activeProfile.name}`
@@ -132,19 +136,21 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
           outpoint: string
           satoshis: number
           lockingScript: string
-          tx: Transaction,
-          beef: number[],
+          tx: Transaction
+          beef: number[]
           sender: string
         } = JSON.parse(cached)
 
         const { signableTransaction } = await managers.walletManager.createAction({
           description: 'claiming funds',
           inputBEEF: funding.beef,
-          inputs: [{
-            inputDescription: 'Claim funds',
-            outpoint: funding.outpoint,
-            unlockingScriptLength: 74
-          }],
+          inputs: [
+            {
+              inputDescription: 'Claim funds',
+              outpoint: funding.outpoint,
+              unlockingScriptLength: 74
+            }
+          ],
           options: {
             acceptDelayedBroadcast: false,
             randomizeOutputs: false
@@ -156,7 +162,6 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
         }
 
         const tx = Transaction.fromBEEF(signableTransaction.tx!)
-
 
         const unlocker = new PushDrop(managers.walletManager).unlock(
           [0, 'fundingprofile'],
@@ -170,7 +175,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
         let unlockingScript = await unlocker.sign(tx, 0)
         let reference = signableTransaction.reference
-        const signRes = await managers.walletManager.signAction({
+        await managers.walletManager.signAction({
           reference,
           spends: {
             0: {
@@ -185,7 +190,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     }
 
     void run()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [activeProfile?.name, managers?.walletManager])
 
   // Second useEffect to handle outside clicks
@@ -208,36 +215,36 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     }
   }, [menuOpen])
 
-  const createTokenFor = async(profile: string, amount:number) =>
-  {
-    if(amount < 0)
-    {
+  const createTokenFor = async (profile: string, amount: number) => {
+    if (amount < 0) {
       return
     }
+    const walletManager = managers.walletManager
+    if (!walletManager || !activeProfile) throw new Error('Wallet is not ready.')
     const cacheKey = `funds_${newProfileName.trim()}`
-    const pd = new PushDrop(managers.walletManager)
+    const pd = new PushDrop(walletManager)
     const fields = [Utils.toArray(`Funding Wallet: ${newProfileName.trim()}`)]
     const counterparty = profile
     const sender = activeProfile.identityKey
-    const lockingScript = await pd.lock(
-      fields,
-      [0, 'fundingprofile'],
-      '1',
-      counterparty
-    )
+    const lockingScript = await pd.lock(fields, [0, 'fundingprofile'], '1', counterparty)
 
-    const createRes = await managers.walletManager.createAction({
-      description: 'funding new profile',
-      outputs: [{
-        lockingScript: lockingScript.toHex(),
-        satoshis: amount,
-        outputDescription: 'New profile funds',
-      }],
-      options: {
-        randomizeOutputs: false,
-        acceptDelayedBroadcast: false
-      }
-    }, 'Metanet-Desktop')
+    const createRes = await walletManager.createAction(
+      {
+        description: 'funding new profile',
+        outputs: [
+          {
+            lockingScript: lockingScript.toHex(),
+            satoshis: amount,
+            outputDescription: 'New profile funds'
+          }
+        ],
+        options: {
+          randomizeOutputs: false,
+          acceptDelayedBroadcast: false
+        }
+      },
+      'Metanet-Desktop'
+    )
 
     const beef = createRes.tx!
     const tx = Transaction.fromAtomicBEEF(createRes.tx!)
@@ -245,15 +252,18 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     const txid = tx.id('hex')
     const satoshis = tx.outputs[0].satoshis
 
-    localStorage.setItem(cacheKey, JSON.stringify({
-      txid,
-      tx,
-      outpoint,
-      satoshis,
-      lockingScript: lockingScript.toHex(),
-      beef,
-      sender: sender
-    }))
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        txid,
+        tx,
+        outpoint,
+        satoshis,
+        lockingScript: lockingScript.toHex(),
+        beef,
+        sender: sender
+      })
+    )
   }
 
   // Helper function to refresh profiles
@@ -269,7 +279,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
       const profileList = await Promise.resolve(managers.walletManager?.listProfiles())
       setProfiles(profileList)
     } catch (error) {
-      toast.error(`Error loading profiles: ${error.message || error}`)
+      toast.error(
+        `Error loading profiles: ${(error instanceof Error ? error.message : 'Please try again.') || error}`
+      )
     } finally {
       setProfilesLoading(false)
     }
@@ -291,16 +303,17 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
       // Then fund the new profile
       if (fund) {
-          createTokenFor(await getMRPK(), 5000)
+        await createTokenFor(await getMRPK(), 5000)
       }
 
       // Refresh the profile list
       await refreshProfiles()
     } catch (error) {
-      toast.error(`Error creating profile: ${error.message || error}`)
+      toast.error(
+        `Error creating profile: ${(error instanceof Error ? error.message : 'Please try again.') || error}`
+      )
       setProfilesLoading(false)
-    }
-    finally{
+    } finally {
       setFund(false)
     }
   }
@@ -315,7 +328,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
       // Perform the async operation
       await managers.walletManager.switchProfile(profileId)
-      setActiveProfile(profiles.find(profile => profile.id == profileId))
+      setActiveProfile(
+        managers.walletManager.listProfiles().find(profile => profile.active) ?? null
+      )
 
       // Refresh the profile list to update active status
       if (history.location.pathname.startsWith('/dashboard/app/')) {
@@ -323,7 +338,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
       }
       await refreshProfiles()
     } catch (error) {
-      toast.error(`Error switching profile: ${error.message || error}`)
+      toast.error(
+        `Error switching profile: ${(error instanceof Error ? error.message : 'Please try again.') || error}`
+      )
       setProfilesLoading(false)
     }
   }
@@ -333,7 +350,6 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     setProfileToDelete(profile)
     setDeleteConfirmOpen(true)
   }
-
 
   const handleDeleteProfile = async () => {
     if (!profileToDelete || !managers?.walletManager) return
@@ -348,7 +364,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
       setProfileToDelete(null)
       await refreshProfiles()
     } catch (error: any) {
-      toast.error(`Error deleting profile: ${error.message || error}`)
+      toast.error(
+        `Error deleting profile: ${(error instanceof Error ? error.message : 'Please try again.') || error}`
+      )
       setProfilesLoading(false)
     }
   }
@@ -361,7 +379,10 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     }
 
     // Convert to hex and show first 8 characters
-    return id.slice(0, 4).map(byte => byte.toString(16).padStart(2, '0')).join('')
+    return id
+      .slice(0, 4)
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('')
   }
 
   // Load profiles when wallet is initialized
@@ -371,9 +392,9 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
   return (
     <Drawer
-      anchor='left'
+      anchor="left"
       open={menuOpen}
-      variant='persistent'
+      variant="persistent"
       onClose={() => setMenuOpen(false)}
       sx={{
         width: 320,
@@ -385,8 +406,8 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
           borderColor: 'divider',
           boxShadow: 3,
           background: 'background.paper',
-          overflowX: 'hidden',
-        },
+          overflowX: 'hidden'
+        }
       }}
     >
       <Box
@@ -410,11 +431,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
               <PersonIcon />
             </ListItemIcon>
             <ListItemText
-              primary={
-                <Typography variant="body1">
-                  Profiles
-                </Typography>
-              }
+              primary={<Typography variant="body1">Profiles</Typography>}
               secondary={
                 !profilesOpen && profiles.length > 0 ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, overflow: 'hidden' }}>
@@ -453,8 +470,12 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
           <Collapse in={profilesOpen} timeout="auto" unmountOnExit>
             <Box sx={{ p: 1 }}>
-              <Grid container spacing={1} sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-                {profiles.map((profile) => (
+              <Grid
+                container
+                spacing={1}
+                sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+              >
+                {profiles.map(profile => (
                   <Grid item xs={12} key={formatProfileId(profile.id)}>
                     <Card
                       variant={profile.active ? 'outlined' : 'elevation'}
@@ -469,25 +490,37 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
                         cursor: profile.active ? 'default' : 'pointer',
                         '&:hover': {
                           boxShadow: profile.active ? 1 : 3,
-                          backgroundColor: profile.active ? alpha('#1976d2', 0.08) : alpha('#1976d2', 0.04)
+                          backgroundColor: profile.active
+                            ? alpha('#1976d2', 0.08)
+                            : alpha('#1976d2', 0.04)
                         }
                       }}
                     >
                       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Typography variant="subtitle2" sx={{ fontWeight: profile.active ? 'bold' : 'normal' }}>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: profile.active ? 'bold' : 'normal' }}
+                          >
                             {profile.name}
                           </Typography>
-                          {profile.active && <Chip size="small" label="Active" color="primary" sx={{ height: 20, fontSize: '0.7rem' }} />}
+                          {profile.active && (
+                            <Chip
+                              size="small"
+                              label="Active"
+                              color="primary"
+                              sx={{ height: 20, fontSize: '0.7rem' }}
+                            />
+                          )}
                         </Box>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
                           <Typography variant="caption" color="textSecondary">
-                            Identity Key: {(profile?.identityKey?.slice(0, 10))}
+                            Identity Key: {profile?.identityKey?.slice(0, 10)}
                           </Typography>
                           {!profile.active && !profile.id.every(x => x === 0) && (
                             <IconButton
                               size="small"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation() // Prevent card click from triggering
                                 confirmDeleteProfile(profile)
                               }}
@@ -533,7 +566,12 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/apps'}
             sx={menuItemStyle(history.location.pathname === '/dashboard/apps')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/apps' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color: history.location.pathname === '/dashboard/apps' ? 'primary.main' : 'inherit'
+              }}
+            >
               <BrowseIcon />
             </ListItemIcon>
             <ListItemText
@@ -553,7 +591,13 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/identity'}
             sx={menuItemStyle(history.location.pathname === '/dashboard/identity')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/identity' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color:
+                  history.location.pathname === '/dashboard/identity' ? 'primary.main' : 'inherit'
+              }}
+            >
               <IdentityIcon />
             </ListItemIcon>
             <ListItemText
@@ -573,7 +617,12 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/trust'}
             sx={menuItemStyle(history.location.pathname === '/dashboard/trust')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/trust' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color: history.location.pathname === '/dashboard/trust' ? 'primary.main' : 'inherit'
+              }}
+            >
               <VerifiedUserIcon />
             </ListItemIcon>
             <ListItemText
@@ -593,7 +642,13 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/security'}
             sx={menuItemStyle(history.location.pathname === '/dashboard/security')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/security' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color:
+                  history.location.pathname === '/dashboard/security' ? 'primary.main' : 'inherit'
+              }}
+            >
               <SecurityIcon />
             </ListItemIcon>
             <ListItemText
@@ -613,7 +668,13 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/settings'}
             sx={menuItemStyle(history.location.pathname === '/dashboard/settings')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/settings' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color:
+                  history.location.pathname === '/dashboard/settings' ? 'primary.main' : 'inherit'
+              }}
+            >
               <SettingsIcon />
             </ListItemIcon>
             <ListItemText
@@ -633,7 +694,13 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             selected={history.location.pathname === '/dashboard/transfer'}
             sx={menuItemStyle(history.location.pathname === '/dashbaord/transfer')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/transfer' ? 'primary.main' : 'inherit' }}>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color:
+                  history.location.pathname === '/dashboard/transfer' ? 'primary.main' : 'inherit'
+              }}
+            >
               <SyncAltIcon />
             </ListItemIcon>
             <ListItemText
@@ -649,7 +716,6 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
           </ListItemButton>
         </List>
 
-
         <Box sx={{ mt: 'auto', mb: 2 }}>
           <ListItemButton
             onClick={() => {
@@ -661,25 +727,19 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             <ListItemIcon sx={{ minWidth: 40 }}>
               <LogoutIcon />
             </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography variant="body1">
-                  Logout
-                </Typography>
-              }
-            />
+            <ListItemText primary={<Typography variant="body1">Logout</Typography>} />
           </ListItemButton>
 
           <Typography
-            variant='caption'
-            color='textSecondary'
-            align='center'
+            variant="caption"
+            color="textSecondary"
+            align="center"
             sx={{
               display: 'block',
               mt: 2,
               textAlign: 'center',
               width: '100%',
-              opacity: 0.5,
+              opacity: 0.5
             }}
           >
             {appName} v{appVersion}
@@ -689,13 +749,13 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
         </Box>
       </Box>
 
-
       {/* Create Profile Dialog */}
       <Dialog open={createProfileOpen} onClose={() => setCreateProfileOpen(false)}>
         <DialogTitle>Create New Profile</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Enter a name for the new profile. Each profile has its own set of keys and can be used for different purposes.
+            Enter a name for the new profile. Each profile has its own set of keys and can be used
+            for different purposes.
           </DialogContentText>
 
           <TextField
@@ -705,16 +765,12 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             type="text"
             fullWidth
             value={newProfileName}
-            onChange={(e) => setNewProfileName(e.target.value)}
+            onChange={e => setNewProfileName(e.target.value)}
           />
 
           <FormControlLabel
             control={
-              <Checkbox
-                checked={fund}
-                onChange={(e) => setFund(e.target.checked)}
-                value='on'
-              />
+              <Checkbox checked={fund} onChange={e => setFund(e.target.checked)} value="on" />
             }
             label="Automatically fund wallet with 5000 sats?"
             sx={{ mt: 1 }}
@@ -722,71 +778,84 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateProfileOpen(false)}>Cancel</Button>
-          <Button
-            onClick={() => handleCreateProfile()}
-            color="primary"
-          >
+          <Button onClick={() => handleCreateProfile()} color="primary">
             Create
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-    <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-      <DialogTitle>Delete Profile</DialogTitle>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Delete Profile</DialogTitle>
 
-      <DialogContent>
-        <DialogContentText
-          sx={{
-            textAlign: 'center',
-            '& strong': { color: 'error.main' },
-            wordBreak: 'break-word',
-          }}
-        >
-          <strong>Permanent deletion</strong><br />
-          This will erase <strong>all data</strong> and <strong>all satoshis</strong> for this profile.<br />
-          Are you sure you want to delete profile (<code>{profileToDelete?.name?.slice(0, 10)}</code> - <code>{profileToDelete?.identityKey?.slice(0, 10)}</code>)?<br />
-          This action cannot be undone.
-        </DialogContentText>
-
-        {/* Center the checkbox + label */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <FormControlLabel
-            control={
-            <ListItemButton
-            onClick={() => {navigation.push('/dashboard/transfer')
-              setDeleteConfirmOpen(false)
+        <DialogContent>
+          <DialogContentText
+            sx={{
+              textAlign: 'center',
+              '& strong': { color: 'error.main' },
+              wordBreak: 'break-word'
             }}
-            selected={history.location.pathname === '/dashboard/transfer'}
-            sx={menuItemStyle(history.location.pathname === '/dashbaord/transfer')}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: history.location.pathname === '/dashboard/transfer' ? 'primary.main' : 'inherit' }}>
-              <SyncAltIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/transfer' ? 600 : 400}
+            <strong>Permanent deletion</strong>
+            <br />
+            This will erase <strong>all data</strong> and <strong>all satoshis</strong> for this
+            profile.
+            <br />
+            Are you sure you want to delete profile (
+            <code>{profileToDelete?.name?.slice(0, 10)}</code> -{' '}
+            <code>{profileToDelete?.identityKey?.slice(0, 10)}</code>)?
+            <br />
+            This action cannot be undone.
+          </DialogContentText>
+
+          {/* Center the checkbox + label */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <FormControlLabel
+              control={
+                <ListItemButton
+                  onClick={() => {
+                    navigation.push('/dashboard/transfer')
+                    setDeleteConfirmOpen(false)
+                  }}
+                  selected={history.location.pathname === '/dashboard/transfer'}
+                  sx={menuItemStyle(history.location.pathname === '/dashbaord/transfer')}
                 >
-                  Transfer
-                </Typography>
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 40,
+                      color:
+                        history.location.pathname === '/dashboard/transfer'
+                          ? 'primary.main'
+                          : 'inherit'
+                    }}
+                  >
+                    <SyncAltIcon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography
+                        variant="body1"
+                        fontWeight={history.location.pathname === '/dashboard/transfer' ? 600 : 400}
+                      >
+                        Transfer
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
               }
+              label="Would you like to transfer all funds to a profile?"
+              sx={{ '& .MuiFormControlLabel-label': { textAlign: 'center' } }}
             />
-          </ListItemButton>
-            }
-            label="Would you like to transfer all funds to a profile?"
-            sx={{ '& .MuiFormControlLabel-label': { textAlign: 'center' } }}
-          />
-        </Box>
+          </Box>
+        </DialogContent>
 
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-        <Button onClick={handleDeleteProfile} color="error">Delete</Button>
-      </DialogActions>
-    </Dialog>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteProfile} color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   )
 }

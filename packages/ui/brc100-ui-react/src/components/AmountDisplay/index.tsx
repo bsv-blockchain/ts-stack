@@ -6,11 +6,13 @@ import { ExchangeRateContext } from './ExchangeRateContextProvider'
 import { useTheme } from '@emotion/react'
 import { WalletContext } from '../../WalletContext'
 
+type FiatCurrency = 'USD' | 'EUR' | 'GBP'
+
 type Props = {
-  abbreviate?: boolean,
-  showPlus?: boolean,
-  description?: string,
-  children: ReactNode,
+  abbreviate?: boolean
+  showPlus?: boolean
+  description?: string
+  children: ReactNode
   showFiatAsInteger?: boolean
 }
 
@@ -27,9 +29,15 @@ type Props = {
  * Note: The component depends on the ExchangeRateContext for several pieces of data related to
  * currency preference, exchange rates, and formatting options.
  */
-const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, children, showFiatAsInteger }) => {
+const AmountDisplay: React.FC<Props> = ({
+  abbreviate,
+  showPlus,
+  description,
+  children,
+  showFiatAsInteger
+}) => {
   // State variables for the amount in satoshis and the corresponding formatted strings
-  const [satoshis, setSatoshis] = useState(NaN)
+  const [satoshis, setSatoshis] = useState(Number.NaN)
   const [formattedSatoshis, setFormattedSatoshis] = useState('...')
   const [formattedFiatAmount, setFormattedFiatAmount] = useState('...')
   const theme: any = useTheme()
@@ -42,11 +50,17 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
   const ctx = useContext<any>(ExchangeRateContext)
   const {
     // Exchange rate context...
-    satoshisPerUSD, eurPerUSD, gbpPerUSD,
+    satoshisPerUSD,
+    eurPerUSD,
+    gbpPerUSD,
     // Shared display format context...
-    isFiatPreferred, fiatFormatIndex, satsFormatIndex,
+    isFiatPreferred,
+    fiatFormatIndex,
+    satsFormatIndex,
     // display format update methods...
-    toggleIsFiatPreferred, cycleFiatFormat, cycleSatsFormat
+    toggleIsFiatPreferred,
+    cycleFiatFormat,
+    cycleSatsFormat
   } = ctx
 
   const opts = satoshisOptions
@@ -56,7 +70,7 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
   const [color, setColor] = useState('textPrimary')
 
   // --- helper: compute numeric fiat value for USD/EUR/GBP
-  const computeFiatNumeric = (sats: number, code: 'USD' | 'EUR' | 'GBP'): number | null => {
+  const computeFiatNumeric = (sats: number, code: FiatCurrency): number | null => {
     if (!satoshisPerUSD) return null
     const usd = sats / satoshisPerUSD // USD = sats / (sats per USD)
     if (code === 'USD') return usd
@@ -66,7 +80,7 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
   }
 
   // --- helper: smart-format small fiat numbers with 3 significant digits
-  const formatSmallFiat = (value: number, code: 'USD' | 'EUR' | 'GBP'): string => {
+  const formatSmallFiat = (value: number, code: FiatCurrency): string => {
     // Use currency style but cap to 3 significant digits; no grouping to keep it compact
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
@@ -83,7 +97,13 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
       const newSatoshis = Number(children)
       setSatoshis(newSatoshis)
       // Figure out the correctly formatted amount, prefix, and color
-      const satoshisToDisplay = formatSatoshis(newSatoshis, showPlus, abbreviate, satsFormat, settingsCurrency)
+      const satoshisToDisplay = formatSatoshis(
+        newSatoshis,
+        showPlus,
+        abbreviate,
+        satsFormat,
+        settingsCurrency
+      )
       if (description === 'Return to your Metanet Balance') {
         setFormattedSatoshis(`+${satoshisToDisplay}`)
         setColor('green')
@@ -101,24 +121,29 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
         setColor('textPrimary')
       }
     } else {
-      setSatoshis(NaN)
+      setSatoshis(Number.NaN)
       setFormattedSatoshis('...')
     }
   }, [children, showPlus, abbreviate, satsFormat, settingsCurrency, settings, theme])
 
   // When satoshis or the exchange rate context changes, update the formatted fiat amount
   useEffect(() => {
-    if (!isNaN(satoshis) && satoshisPerUSD) {
+    if (!Number.isNaN(satoshis) && satoshisPerUSD) {
       // Keep your existing formatted output first
-      const newFormattedFiat = formatSatoshisAsFiat(
-        satoshis, satoshisPerUSD, fiatFormat, settingsCurrency, eurPerUSD, gbpPerUSD, showFiatAsInteger
-      ) || '...'
+      const newFormattedFiat =
+        formatSatoshisAsFiat(
+          satoshis,
+          satoshisPerUSD,
+          fiatFormat,
+          settingsCurrency,
+          eurPerUSD,
+          gbpPerUSD,
+          showFiatAsInteger
+        ) || '...'
 
       // Determine which currency code is in play for numeric calculation
-      const code: 'USD' | 'EUR' | 'GBP' =
-        (settingsCurrency === 'EUR' ? 'EUR'
-        : settingsCurrency === 'GBP' ? 'GBP'
-        : 'USD') // default USD when settingsCurrency is empty or USD/other
+      const code =
+        settingsCurrency === 'EUR' || settingsCurrency === 'GBP' ? settingsCurrency : 'USD'
 
       const fiatNumeric = computeFiatNumeric(satoshis, code)
 
@@ -131,23 +156,31 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
     } else {
       setFormattedFiatAmount('...')
     }
-  }, [satoshis, satoshisPerUSD, fiatFormat, settingsCurrency, eurPerUSD, gbpPerUSD, showFiatAsInteger])
+  }, [
+    satoshis,
+    satoshisPerUSD,
+    fiatFormat,
+    settingsCurrency,
+    eurPerUSD,
+    gbpPerUSD,
+    showFiatAsInteger
+  ])
 
   // Create handlers for clicks with proper accessibility
   const handleFiatClick = () => {
-    cycleFiatFormat();
-  };
+    cycleFiatFormat()
+  }
 
   const handleSatsClick = () => {
-    cycleSatsFormat();
-  };
+    cycleSatsFormat()
+  }
 
   const handleTogglePreference = () => {
-    toggleIsFiatPreferred();
-  };
+    toggleIsFiatPreferred()
+  }
 
   // Accessibility improvements - make interactive elements proper buttons with aria attributes
-  const renderAccessibleAmount = (content, onClick) => (
+  const renderAccessibleAmount = (content: React.ReactNode, onClick: () => void) => (
     <Button
       onClick={onClick}
       variant="text"
@@ -165,33 +198,51 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
     >
       {content}
     </Button>
-  );
+  )
 
   // Updated component return with direct event handling
   if (settingsCurrency) {
-    return ['USD', 'EUR', 'GBP'].indexOf(settingsCurrency) > -1
-      ? (
-        <Tooltip disableInteractive title={<Typography color='inherit'>{formattedSatoshis}</Typography>} arrow>
-          <span style={{ color }}>{formattedFiatAmount}</span>
-        </Tooltip>
-      )
-      : (
-        <Tooltip disableInteractive title={<Typography color='inherit'>{formattedFiatAmount}</Typography>} arrow>
-          <span style={{ color }}>{formattedSatoshis}</span>
-        </Tooltip>
-      )
+    return ['USD', 'EUR', 'GBP'].includes(settingsCurrency) ? (
+      <Tooltip
+        disableInteractive
+        title={<Typography color="inherit">{formattedSatoshis}</Typography>}
+        arrow
+      >
+        <span style={{ color }}>{formattedFiatAmount}</span>
+      </Tooltip>
+    ) : (
+      <Tooltip
+        disableInteractive
+        title={<Typography color="inherit">{formattedFiatAmount}</Typography>}
+        arrow
+      >
+        <span style={{ color }}>{formattedSatoshis}</span>
+      </Tooltip>
+    )
   } else {
-    return isFiatPreferred
-      ? (
-        <Tooltip title={<Typography onClick={handleTogglePreference} color='inherit'>{formattedSatoshis}</Typography>} arrow>
-          {renderAccessibleAmount(formattedFiatAmount, handleFiatClick)}
-        </Tooltip>
-      )
-      : (
-        <Tooltip title={<Typography onClick={handleTogglePreference} color='inherit'>{formattedFiatAmount}</Typography>} arrow>
-          {renderAccessibleAmount(formattedSatoshis, handleSatsClick)}
-        </Tooltip>
-      )
+    return isFiatPreferred ? (
+      <Tooltip
+        title={
+          <Typography onClick={handleTogglePreference} color="inherit">
+            {formattedSatoshis}
+          </Typography>
+        }
+        arrow
+      >
+        {renderAccessibleAmount(formattedFiatAmount, handleFiatClick)}
+      </Tooltip>
+    ) : (
+      <Tooltip
+        title={
+          <Typography onClick={handleTogglePreference} color="inherit">
+            {formattedFiatAmount}
+          </Typography>
+        }
+        arrow
+      >
+        {renderAccessibleAmount(formattedSatoshis, handleSatsClick)}
+      </Tooltip>
+    )
   }
 }
 

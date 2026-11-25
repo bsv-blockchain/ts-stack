@@ -1,8 +1,5 @@
-import React from 'react'
 import ActionList from '../../../components/ActionList/index'
 
-export default ({ app }) => (
-  <ActionList
-    app={app}
-  />
-)
+export default function Actions({ app }) {
+  return <ActionList app={app} />
+}

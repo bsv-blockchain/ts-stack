@@ -1,5 +1,4 @@
 import {
-  Beef,
   BroadcastFailure,
   BroadcastResponse,
   HTTPSOverlayLookupFacilitator,
@@ -11,8 +10,7 @@ import {
   Transaction,
   Utils,
   WalletClient,
-  WalletInterface,
-  WalletProtocol
+  WalletInterface
 } from '@bsv/sdk'
 import {
   METANET_APPS_KEY_ID,
@@ -40,6 +38,7 @@ export const DEFAULT_APP_LOOKUP_HOSTS = [
   'https://overlay-us-1.bsvb.tech',
   'https://users.bapp.dev'
 ]
+const DEFAULT_FIND_OPTIONS: AppCatalogFindOptions = {}
 
 interface ParsedLookupAnswer {
   apps: PublishedApp[]
@@ -55,9 +54,9 @@ export class AppCatalog {
   private readonly overlayTopic: string
   private readonly overlayService: string
   private readonly wallet: WalletInterface
-  private readonly networkPreset: AppCatalogOptions["networkPreset"]
+  private readonly networkPreset: AppCatalogOptions['networkPreset']
   private readonly acceptDelayedBroadcast: boolean
-  private cachedNetworkPromise: Promise<"mainnet" | "testnet" | "local"> | undefined
+  private cachedNetworkPromise: Promise<'mainnet' | 'testnet' | 'local'> | undefined
   private cachedIdentityKeyPromise: Promise<string> | undefined
   private resolver: LookupResolver | undefined
   private broadcaster: TopicBroadcaster | undefined
@@ -71,16 +70,16 @@ export class AppCatalog {
     this.acceptDelayedBroadcast = opts.acceptDelayedBroadcast ?? false
   }
 
-  private async getNetwork(wallet: WalletInterface = this.wallet): Promise<NonNullable<AppCatalogOptions["networkPreset"]>> {
+  private async getNetwork(
+    wallet: WalletInterface = this.wallet
+  ): Promise<NonNullable<AppCatalogOptions['networkPreset']>> {
     if (this.networkPreset) return this.networkPreset
 
     if (wallet !== this.wallet) {
       return (await wallet.getNetwork({})).network
     }
 
-    if (!this.cachedNetworkPromise) {
-      this.cachedNetworkPromise = this.wallet.getNetwork({}).then(({ network }) => network)
-    }
+    this.cachedNetworkPromise ??= this.wallet.getNetwork({}).then(({ network }) => network)
     return this.cachedNetworkPromise
   }
 
@@ -89,11 +88,9 @@ export class AppCatalog {
       return (await wallet.getPublicKey({ identityKey: true })).publicKey
     }
 
-    if (!this.cachedIdentityKeyPromise) {
-      this.cachedIdentityKeyPromise = this.wallet
-        .getPublicKey({ identityKey: true })
-        .then(({ publicKey }) => publicKey)
-    }
+    this.cachedIdentityKeyPromise ??= this.wallet
+      .getPublicKey({ identityKey: true })
+      .then(({ publicKey }) => publicKey)
     return this.cachedIdentityKeyPromise
   }
 
@@ -220,10 +217,7 @@ export class AppCatalog {
 
     // --- 4. Produce unlocking script ------------------------------------
     const unlocker = pushdrop.unlock(METANET_APPS_PROTOCOL, this.keyID, 'anyone')
-    const unlockingScript = await unlocker.sign(
-      Transaction.fromBEEF(signableTransaction.tx),
-      0
-    )
+    const unlockingScript = await unlocker.sign(Transaction.fromBEEF(signableTransaction.tx), 0)
 
     // --- 5. Sign and finalize -------------------------------------------
     const { tx } = await this.wallet.signAction({
@@ -247,20 +241,20 @@ export class AppCatalog {
    * @param prev The previous app listing to remove.
    * @returns The BroadcastResponse or BroadcastFailure from the overlay.
    */
-  async removeApp(
-    prev: PublishedApp
-  ): Promise<BroadcastResponse | BroadcastFailure> {
+  async removeApp(prev: PublishedApp): Promise<BroadcastResponse | BroadcastFailure> {
     if (!prev.token.beef) throw new Error('App token must contain BEEF to remove')
 
     const prevOutpoint = `${prev.token.txid}.${prev.token.outputIndex}` as const
     const { signableTransaction } = await this.wallet.createAction({
       description: 'AppCatalog - remove app',
       inputBEEF: prev.token.beef,
-      inputs: [{
-        outpoint: prevOutpoint,
-        unlockingScriptLength: 74,
-        inputDescription: 'Redeem app token'
-      }],
+      inputs: [
+        {
+          outpoint: prevOutpoint,
+          unlockingScriptLength: 74,
+          inputDescription: 'Redeem app token'
+        }
+      ],
       options: { acceptDelayedBroadcast: this.acceptDelayedBroadcast, randomizeOutputs: false }
     })
     if (!signableTransaction) throw new Error('Unable to redeem app token')
@@ -302,7 +296,7 @@ export class AppCatalog {
    */
   async findApps(
     query: AppCatalogQuery = {},
-    opts: AppCatalogFindOptions = { includeBeef: true }
+    opts: AppCatalogFindOptions = DEFAULT_FIND_OPTIONS
   ): Promise<PublishedApp[]> {
     if (opts.hosts?.length) {
       return (await this.findAppsAcrossHosts(query, opts)).apps
@@ -347,38 +341,40 @@ export class AppCatalog {
       hosts: []
     }
 
-    await Promise.all(hosts.map(async host => {
-      const startedAt = Date.now()
-      try {
-        const answer = await facilitator.lookup(
-          host,
-          { service: this.overlayService, query: lookupQuery },
-          opts.timeout
-        )
-        const parsed = this.parseLookupAnswerWithStats(answer, includeBeef)
-        allApps.push(...parsed.apps)
-        diagnostics.rawOutputCount += parsed.outputCount
-        diagnostics.parsedAppCount += parsed.apps.length
-        diagnostics.hosts.push({
-          host,
-          ok: true,
-          durationMs: Date.now() - startedAt,
-          rawOutputCount: parsed.outputCount,
-          parsedAppCount: parsed.apps.length,
-          parseFailureCount: parsed.parseFailureCount
-        })
-      } catch (err) {
-        diagnostics.hosts.push({
-          host,
-          ok: false,
-          durationMs: Date.now() - startedAt,
-          rawOutputCount: 0,
-          parsedAppCount: 0,
-          parseFailureCount: 0,
-          error: this.errorMessage(err)
-        })
-      }
-    }))
+    await Promise.all(
+      hosts.map(async host => {
+        const startedAt = Date.now()
+        try {
+          const answer = await facilitator.lookup(
+            host,
+            { service: this.overlayService, query: lookupQuery },
+            opts.timeout
+          )
+          const parsed = this.parseLookupAnswerWithStats(answer, includeBeef)
+          allApps.push(...parsed.apps)
+          diagnostics.rawOutputCount += parsed.outputCount
+          diagnostics.parsedAppCount += parsed.apps.length
+          diagnostics.hosts.push({
+            host,
+            ok: true,
+            durationMs: Date.now() - startedAt,
+            rawOutputCount: parsed.outputCount,
+            parsedAppCount: parsed.apps.length,
+            parseFailureCount: parsed.parseFailureCount
+          })
+        } catch (err) {
+          diagnostics.hosts.push({
+            host,
+            ok: false,
+            durationMs: Date.now() - startedAt,
+            rawOutputCount: 0,
+            parsedAppCount: 0,
+            parseFailureCount: 0,
+            error: this.errorMessage(err)
+          })
+        }
+      })
+    )
 
     const merged = this.dedupeApps(allApps)
     diagnostics.duplicateCount = merged.duplicateCount
@@ -461,7 +457,10 @@ export class AppCatalog {
     const seen = new Set<string>()
     const normalized: string[] = []
     for (const host of hosts) {
-      const trimmed = host.trim().replace(/\/+$/, '')
+      const address = host.trim()
+      let end = address.length
+      while (end > 0 && address.charAt(end - 1) === '/') end--
+      const trimmed = address.slice(0, end)
       if (!trimmed || seen.has(trimmed)) continue
       seen.add(trimmed)
       normalized.push(trimmed)
@@ -469,7 +468,7 @@ export class AppCatalog {
     return normalized
   }
 
-  private dedupeApps(apps: PublishedApp[]): { apps: PublishedApp[], duplicateCount: number } {
+  private dedupeApps(apps: PublishedApp[]): { apps: PublishedApp[]; duplicateCount: number } {
     const unique = new Map<string, PublishedApp>()
     let duplicateCount = 0
 

@@ -1,4 +1,7 @@
-function arraysOfObjectsAreEqual(arr1, arr2): boolean {
+function arraysOfObjectsAreEqual<T extends object>(
+  arr1: readonly T[],
+  arr2: readonly T[]
+): boolean {
   if (arr1.length !== arr2.length) {
     return false
   }
@@ -7,7 +10,7 @@ function arraysOfObjectsAreEqual(arr1, arr2): boolean {
     const obj1 = arr1[i]
     const obj2 = arr2[i]
 
-    const keys1 = Object.keys(obj1)
+    const keys1 = Object.keys(obj1) as Array<keyof T>
     const keys2 = Object.keys(obj2)
 
     if (keys1.length !== keys2.length) {

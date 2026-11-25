@@ -10,6 +10,7 @@ release:
 
 Moves the UI libraries and their packaging into TS Stack. UHRP React and the
 Metanet App Catalog include the SDK 4 work from their original repositories.
+Amountinator React handles signs and digit grouping in displayed amounts.
 
 ## Migration
 

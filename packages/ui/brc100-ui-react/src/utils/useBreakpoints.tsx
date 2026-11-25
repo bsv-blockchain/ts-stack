@@ -9,7 +9,7 @@ const defaultValue: BreakpointMatches = {
   xs: false,
   sm: false,
   md: false,
-  or: false,
+  or: false
 }
 
 // Create a context with our specific type:
@@ -32,7 +32,7 @@ const BreakpointProvider: React.FC<BreakpointProviderProps> = ({ children, queri
     let isAttached = false
     const handleQueryListener = () => {
       const updatedMatches = keys.reduce((acc, media) => {
-        acc[media] = !!(mediaQueryLists[media] && mediaQueryLists[media].matches)
+        acc[media] = mediaQueryLists[media]?.matches ?? false
         return acc
       }, {} as BreakpointMatches)
       setQueryMatch(updatedMatches)
@@ -51,7 +51,7 @@ const BreakpointProvider: React.FC<BreakpointProviderProps> = ({ children, queri
       isAttached = true
       keys.forEach(media => {
         if (typeof queries[media] === 'string') {
-          mediaQueryLists[media].addListener(handleQueryListener)
+          mediaQueryLists[media].addEventListener('change', handleQueryListener)
         }
       })
     }
@@ -59,18 +59,14 @@ const BreakpointProvider: React.FC<BreakpointProviderProps> = ({ children, queri
       if (isAttached) {
         keys.forEach(media => {
           if (typeof queries[media] === 'string') {
-            mediaQueryLists[media].removeListener(handleQueryListener)
+            mediaQueryLists[media].removeEventListener('change', handleQueryListener)
           }
         })
       }
     }
   }, [queries])
 
-  return (
-    <BreakpointContext.Provider value={queryMatch}>
-      {children}
-    </BreakpointContext.Provider>
-  )
+  return <BreakpointContext.Provider value={queryMatch}>{children}</BreakpointContext.Provider>
 }
 
 const useBreakpoint = (): BreakpointMatches => {

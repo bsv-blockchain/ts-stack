@@ -1,15 +1,16 @@
-import React from 'react';
+import React from 'react'
 
 interface LogoProps {
-  className?: string;
-  rotate?: boolean;
-  size?: string | number;
-  color?: string;
+  className?: string
+  rotate?: boolean
+  size?: string | number
+  color?: string
 }
 
 const Logo: React.FC<LogoProps> = ({ className, rotate, size, color }) => {
   return (
     <svg
+      aria-hidden="true"
       width="361"
       height="361"
       viewBox="0 0 361 361"
@@ -19,7 +20,7 @@ const Logo: React.FC<LogoProps> = ({ className, rotate, size, color }) => {
       style={{
         width: size || '100%',
         height: size || '100%',
-        animation: rotate ? 'cwi-logo-rotate 3.301s linear infinite' : undefined,
+        animation: rotate ? 'cwi-logo-rotate 3.301s linear infinite' : undefined
       }}
     >
       <style>
@@ -60,7 +61,7 @@ const Logo: React.FC<LogoProps> = ({ className, rotate, size, color }) => {
         strokeWidth="16"
       />
     </svg>
-  );
-};
+  )
+}
 
-export default Logo;
+export default Logo

@@ -25,13 +25,14 @@ interface BurnProps {
   onReloadNeeded?: () => void
 }
 
-const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } }) => {
+const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => {} }) => {
   const [quantity, setQuantity] = useState('')
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const qty = Number(quantity)
-  const quantityValid = quantity.trim() !== '' && Number.isFinite(qty) && qty > 0 && qty <= asset.balance
+  const quantityValid =
+    quantity.trim() !== '' && Number.isFinite(qty) && qty > 0 && qty <= asset.balance
 
   const canBurn = asset.balance > 0 && quantityValid && !loading
 
@@ -58,7 +59,7 @@ const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } 
 
       try {
         onReloadNeeded()
-      } catch { }
+      } catch {}
 
       toast.success(`Burned ${qty} ${asset.name} successfully!`)
       setOpen(false)
@@ -84,24 +85,31 @@ const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } 
       </Button>
 
       <Dialog open={open} onClose={loading ? undefined : handleBurnCancel} maxWidth="sm" fullWidth>
-        <DialogTitle variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <DialogTitle
+          variant="h4"
+          sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}
+        >
           <LocalFireDepartmentIcon color="error" />
           Burn {asset.name}
         </DialogTitle>
 
         <DialogContent sx={{ minHeight: 200 }}>
           {loading && (
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              py: 4,
-              gap: 2
-            }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 4,
+                gap: 2
+              }}
+            >
               <CircularProgress color="error" size={48} />
               <Typography variant="body1">Processing burn...</Typography>
-              <Typography variant="body2" color="text.secondary">Removing tokens from circulation</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Removing tokens from circulation
+              </Typography>
             </Box>
           )}
 
@@ -109,7 +117,8 @@ const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } 
             <>
               <Alert severity="warning" sx={{ mb: 3 }}>
                 <Typography variant="body2">
-                  <strong>Warning:</strong> Burning tokens permanently removes them from circulation. This action cannot be undone.
+                  <strong>Warning:</strong> Burning tokens permanently removes them from
+                  circulation. This action cannot be undone.
                 </Typography>
               </Alert>
 
@@ -123,7 +132,9 @@ const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } 
                 color="error"
                 fullWidth
                 placeholder="Enter amount"
-                helperText={asset.balance > 0 ? `Available: ${asset.balance}` : 'No balance available'}
+                helperText={
+                  asset.balance > 0 ? `Available: ${asset.balance}` : 'No balance available'
+                }
                 onChange={e => setQuantity(e.target.value.replace(/\D/g, ''))}
                 sx={{ mb: 2 }}
               />
@@ -150,7 +161,9 @@ const Burn: React.FC<BurnProps> = ({ assetId, asset, onReloadNeeded = () => { } 
             color="error"
             variant="contained"
             onClick={handleBurn}
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <LocalFireDepartmentIcon />}
+            startIcon={
+              loading ? <CircularProgress size={16} color="inherit" /> : <LocalFireDepartmentIcon />
+            }
           >
             {loading ? 'Burning...' : 'Burn'}
           </Button>

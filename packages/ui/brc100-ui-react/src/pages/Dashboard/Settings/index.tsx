@@ -1,19 +1,12 @@
 import { useState, useContext, useEffect } from 'react'
-import {
-  Typography,
-  LinearProgress,
-  Box,
-  Paper,
-  Button,
-  useTheme
-} from '@mui/material'
+import { Typography, LinearProgress, Box, Paper, Button, useTheme } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { makeStyles } from '@mui/styles'
 import { toast } from 'react-toastify'
 import { WalletContext } from '../../../WalletContext'
 import { Theme } from '@mui/material/styles'
-import DarkModeImage from "../../../images/darkMode"
-import LightModeImage from "../../../images/lightMode"
+import DarkModeImage from '../../../images/darkMode'
+import LightModeImage from '../../../images/lightMode'
 import ComputerIcon from '@mui/icons-material/Computer'
 import { UserContext } from '../../../UserContext'
 import PageLoading from '../../../components/PageLoading.js'
@@ -82,110 +75,113 @@ const Settings = () => {
 
   useEffect(() => {
     if (settings?.theme?.mode) {
-      setSelectedTheme(settings.theme.mode);
+      setSelectedTheme(settings.theme.mode)
     }
     if (settings?.currency) {
-      setSelectedCurrency(settings.currency);
+      setSelectedCurrency(settings.currency)
     }
-  }, [settings]);
+  }, [settings])
 
   const handleThemeChange = async (themeOption: string) => {
-    if (selectedTheme === themeOption) return;
+    if (selectedTheme === themeOption) return
 
     try {
-      setSettingsLoading(true);
+      setSettingsLoading(true)
 
       await updateSettings({
         ...settings,
         theme: {
           mode: themeOption
         }
-      });
+      })
 
-      setSelectedTheme(themeOption);
+      setSelectedTheme(themeOption)
 
-      toast.success('Theme updated!');
+      toast.success('Theme updated!')
     } catch (e) {
-      toast.error(e.message);
-      setSelectedTheme(settings?.theme?.mode || 'system');
+      toast.error(e instanceof Error ? e.message : 'Please try again.')
+      setSelectedTheme(settings?.theme?.mode || 'system')
     } finally {
-      setSettingsLoading(false);
+      setSettingsLoading(false)
     }
   }
 
-  const handleCurrencyChange = async (currency) => {
-    if (selectedCurrency === currency) return;
+  const handleCurrencyChange = async (currency: keyof typeof currencies) => {
+    if (selectedCurrency === currency) return
 
     try {
-      setSettingsLoading(true);
-      setSelectedCurrency(currency);
+      setSettingsLoading(true)
+      setSelectedCurrency(currency)
 
       await updateSettings({
         ...settings,
-        currency,
-      });
+        currency
+      })
 
-      toast.success('Currency updated!');
+      toast.success('Currency updated!')
     } catch (e) {
-      toast.error(e.message);
-      setSelectedCurrency(settings?.currency || 'BSV');
+      toast.error(e instanceof Error ? e.message : 'Please try again.')
+      setSelectedCurrency(settings?.currency || 'BSV')
     } finally {
-      setSettingsLoading(false);
+      setSettingsLoading(false)
     }
   }
 
-  const renderThemeIcon = (themeType) => {
+  const renderThemeIcon = (themeType: string) => {
     switch (themeType) {
       case 'light':
-        return <LightModeImage />;
+        return <LightModeImage />
       case 'dark':
-        return <DarkModeImage />;
+        return <DarkModeImage />
       case 'system':
-        return <ComputerIcon sx={{ fontSize: 40 }} />;
+        return <ComputerIcon sx={{ fontSize: 40 }} />
       default:
-        return null;
+        return null
     }
-  };
+  }
 
-  const getThemeButtonStyles = (themeType) => {
+  const getThemeButtonStyles = (themeType: string) => {
     switch (themeType) {
       case 'light':
         return {
           color: 'text.primary',
-          backgroundColor: 'background.paper',
-        };
+          backgroundColor: 'background.paper'
+        }
       case 'dark':
         return {
           color: 'common.white',
-          backgroundColor: 'grey.800',
-        };
+          backgroundColor: 'grey.800'
+        }
       case 'system':
         return {
           color: theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
           backgroundColor: theme.palette.mode === 'dark' ? 'grey.800' : 'background.paper',
-          backgroundImage: theme.palette.mode === 'dark'
-            ? 'linear-gradient(135deg, #474747 0%, #111111 100%)'
-            : 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)',
-        };
+          backgroundImage:
+            theme.palette.mode === 'dark'
+              ? 'linear-gradient(135deg, #474747 0%, #111111 100%)'
+              : 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)'
+        }
       default:
-        return {};
+        return {}
     }
-  };
+  }
 
-  const getSelectedButtonStyle = (isSelected) => {
-    if (!isSelected) return {};
+  const getSelectedButtonStyle = (isSelected: boolean) => {
+    if (!isSelected) return {}
 
-    return isDarkMode ? {
-      borderColor: 'common.white',
-      borderWidth: '2px',
-      outline: '1px solid rgba(255, 255, 255, 0.5)',
-      boxShadow: 'none',
-    } : {
-      borderColor: 'primary.main',
-      borderWidth: '2px',
-      boxShadow: 3,
-    };
-  };
+    return isDarkMode
+      ? {
+          borderColor: 'common.white',
+          borderWidth: '2px',
+          outline: '1px solid rgba(255, 255, 255, 0.5)',
+          boxShadow: 'none'
+        }
+      : {
+          borderColor: 'primary.main',
+          borderWidth: '2px',
+          boxShadow: 3
+        }
+  }
 
   if (!pageLoaded) {
     return <PageLoading />
@@ -215,23 +211,23 @@ const Settings = () => {
         </Typography>
 
         <Grid container spacing={2} justifyContent="center">
-          {Object.keys(currencies).map(currency => (
+          {Object.entries(currencies).map(([currency, currencyLabel]) => (
             <Grid key={currency}>
               <Button
                 variant="outlined"
                 disabled={settingsLoading}
                 className={`${classes.currencyButton} ${selectedCurrency === currency ? 'selected' : ''}`}
-                onClick={() => handleCurrencyChange(currency)}
+                onClick={() => handleCurrencyChange(currency as keyof typeof currencies)}
                 sx={{
                   ...(selectedCurrency === currency && getSelectedButtonStyle(true)),
-                  bgcolor: selectedCurrency === currency ? 'action.selected' : 'transparent',
+                  bgcolor: selectedCurrency === currency ? 'action.selected' : 'transparent'
                 }}
               >
                 <Typography variant="body1" fontWeight="bold">
                   {currency}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  {currencies[currency]}
+                  {currencyLabel}
                 </Typography>
               </Button>
             </Grid>
@@ -256,11 +252,14 @@ const Settings = () => {
                 className={`${classes.themeButton} ${selectedTheme === themeOption ? 'selected' : ''}`}
                 sx={{
                   ...getThemeButtonStyles(themeOption),
-                  ...(selectedTheme === themeOption && getSelectedButtonStyle(true)),
+                  ...(selectedTheme === themeOption && getSelectedButtonStyle(true))
                 }}
               >
                 {renderThemeIcon(themeOption)}
-                <Typography variant="body2" sx={{ mt: 1, fontWeight: selectedTheme === themeOption ? 'bold' : 'normal' }}>
+                <Typography
+                  variant="body2"
+                  sx={{ mt: 1, fontWeight: selectedTheme === themeOption ? 'bold' : 'normal' }}
+                >
                   {themeOption.charAt(0).toUpperCase() + themeOption.slice(1)}
                 </Typography>
               </Button>

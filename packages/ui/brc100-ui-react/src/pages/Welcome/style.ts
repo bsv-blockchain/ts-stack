@@ -1,4 +1,6 @@
-export default theme => ({
+import type { Theme } from '@mui/material/styles'
+
+export default (theme: Theme) => ({
   content_wrap: {
     top: 0,
     bottom: 0,

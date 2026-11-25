@@ -1,4 +1,4 @@
-export default theme => ({
+const style = theme => ({
   icon: {
     backgroundColor: theme.palette.primary.main
   },
@@ -9,3 +9,5 @@ export default theme => ({
     ...theme.templates.boxOfChips
   }
 })
+
+export default style

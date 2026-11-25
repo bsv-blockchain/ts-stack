@@ -1,6 +1,17 @@
 // frontend/src/pages/Mint/index.tsx
 import React, { useState, useRef } from 'react'
-import { Container, Typography, Grid, Button, TextField, Paper, IconButton, CircularProgress, Backdrop, Box } from '@mui/material'
+import {
+  Container,
+  Typography,
+  Grid,
+  Button,
+  TextField,
+  Paper,
+  IconButton,
+  CircularProgress,
+  Backdrop,
+  Box
+} from '@mui/material'
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto'
 import { Link } from 'react-router-dom'
@@ -60,7 +71,7 @@ const Mint: React.FC<MintProps> = ({ history }) => {
       }
 
       // Upload image to UHRP if provided
-      let iconURL: string | null = null
+      let iconURL: string | undefined
       if (photoFile) {
         try {
           // Read file as array buffer
@@ -84,14 +95,14 @@ const Mint: React.FC<MintProps> = ({ history }) => {
           iconURL = uploadResult.uhrpURL
 
           toast.success('Image uploaded successfully!')
-        } catch (uploadErr: any) {
+        } catch {
           toast.error('Failed to upload image. Continuing without image.')
           // Continue without image rather than failing the entire mint
         }
       }
 
       const amount = Number(quantity)
-      const res = await btms.issue(amount, {
+      await btms.issue(amount, {
         name,
         description,
         iconURL
@@ -112,7 +123,7 @@ const Mint: React.FC<MintProps> = ({ history }) => {
       <Backdrop
         sx={{
           color: '#fff',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
+          zIndex: theme => theme.zIndex.drawer + 1,
           flexDirection: 'column',
           gap: 2
         }}
@@ -200,7 +211,9 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                     </Typography>
                   </Grid>
                   <Grid item>
-                    <Typography variant="body2">Total units to issue (e.g. ounces, dollars, shares)</Typography>
+                    <Typography variant="body2">
+                      Total units to issue (e.g. ounces, dollars, shares)
+                    </Typography>
                   </Grid>
                   <Grid item>
                     <TextField
@@ -246,9 +259,13 @@ const Mint: React.FC<MintProps> = ({ history }) => {
                 <Paper elevation={0} sx={{ p: 3, background: 'rgba(255, 255, 255, 0.7)' }}>
                   <Grid container direction="column" rowGap={1.5}>
                     <Typography variant="subtitle2">Asset</Typography>
-                    <Typography sx={{ wordBreak: 'break-word' }}>{name || 'Untitled Asset'}</Typography>
+                    <Typography sx={{ wordBreak: 'break-word' }}>
+                      {name || 'Untitled Asset'}
+                    </Typography>
                     <Typography variant="subtitle2">Description</Typography>
-                    <Typography sx={{ wordBreak: 'break-word' }}>{description || 'No description yet.'}</Typography>
+                    <Typography sx={{ wordBreak: 'break-word' }}>
+                      {description || 'No description yet.'}
+                    </Typography>
                     <Typography variant="subtitle2">Quantity</Typography>
                     <Typography>{quantity || '0'}</Typography>
                   </Grid>

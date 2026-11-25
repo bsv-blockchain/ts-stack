@@ -32,8 +32,7 @@
   },
   "dependencies": {
     "@bsv/sdk": "workspace:^",
-    "@bsv/uhrp-react": "workspace:^",
-    "metanet-react-prompt": "^1.0.6"
+    "@bsv/uhrp-react": "workspace:^"
   },
   "peerDependencies": {
     "@mui/icons-material": ">=5.0.0",
@@ -42,6 +41,7 @@
     "react-dom": "^18.2.0"
   },
   "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/identity-input.property.test.mjs",
     "build": "tsc",
     "lint:ci": "prettier --check src/hooks/useIdentitySearch.ts src/utils/identityUtils.ts src/components/IdentitySearchField.tsx tests vitest.config.ts .prettierrc.json scripts/check-bundled-consumer.mjs",
     "test": "vitest run",
@@ -49,11 +49,12 @@
     "test:coverage": "vitest run --coverage",
     "test:consumer": "node scripts/check-bundled-consumer.mjs",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check src tests scripts '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports IdentitySearchField,useIdentitySearch"
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^5.18.0",

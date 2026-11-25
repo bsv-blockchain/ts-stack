@@ -9,17 +9,17 @@ Identity React starts from the standalone source at
 `5d79f1add2d61b19fec344374d7ba0ddeb45279b`, matching its published 3.0.0
 baseline.
 
-| Project                              | Distribution                      |
-| ------------------------------------ | --------------------------------- |
-| Amountinator React                   | `@bsv/amountinator-react`         |
-| BRC-100 React UI                     | `@bsv/brc100-ui-react-components` |
-| BTMS permissions                     | `@bsv/btms-permission-module-ui`  |
-| Identity React                       | `@bsv/identity-react`             |
-| Metanet App Catalog                  | `metanet-apps`                    |
-| UHRP React                           | `@bsv/uhrp-react`                 |
-| BTMS frontend                        | Private browser application       |
-| Registrant                           | Private browser application       |
-| UHRP UI and WUI                      | CARS deployments                  |
+| Project             | Distribution                      |
+| ------------------- | --------------------------------- |
+| Amountinator React  | `@bsv/amountinator-react`         |
+| BRC-100 React UI    | `@bsv/brc100-ui-react-components` |
+| BTMS permissions    | `@bsv/btms-permission-module-ui`  |
+| Identity React      | `@bsv/identity-react`             |
+| Metanet App Catalog | `metanet-apps`                    |
+| UHRP React          | `@bsv/uhrp-react`                 |
+| BTMS frontend       | Private browser application       |
+| Registrant          | Private browser application       |
+| UHRP UI and WUI     | CARS deployments                  |
 
 Install from the root with the committed pnpm lockfile. For the UHRP React
 example, build the library and run the Vite development server.

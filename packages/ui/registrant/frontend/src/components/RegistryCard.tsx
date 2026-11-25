@@ -1,42 +1,39 @@
-
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Trash2, Edit, Loader2 } from "lucide-react";
-import { RegistryRecord } from "@bsv/sdk";
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Trash2, Edit, Loader2 } from 'lucide-react'
+import { RegistryRecord } from '@bsv/sdk'
 
 interface RegistryCardProps {
-  item: RegistryRecord;
-  onRevoke: () => void;
-  onEdit: () => void;
-  isRevoking?: boolean;
+  item: RegistryRecord
+  onRevoke: () => void
+  onEdit: () => void
+  isRevoking?: boolean
 }
 
 export const RegistryCard = ({ item, onRevoke, onEdit, isRevoking = false }: RegistryCardProps) => {
   const getTitle = () => {
-    if ('basketID' in item) return `Basket: ${item.basketID}`;
-    if ('protocolID' in item) return `Protocol: ${item.name}`;
-    return `Certificate: ${item.name}`;
-  };
+    if ('basketID' in item) return `Basket: ${item.basketID}`
+    if ('protocolID' in item) return `Protocol: ${item.name}`
+    return `Certificate: ${item.name}`
+  }
 
   const getSubtitle = () => {
     if ('protocolID' in item) {
       // Display the protocol ID array in a readable format
-      const [id, key] = item.protocolID;
-      return `Protocol ID: [${id}, "${key}"]`;
+      const [id, key] = item.protocolID
+      return `Protocol ID: [${id}, "${key}"]`
     }
     if ('type' in item) {
-      return `Type: ${item.type}`;
+      return `Type: ${item.type}`
     }
-    return null;
-  };
+    return null
+  }
 
   return (
     <Card className="w-full p-4 sm:p-6 backdrop-blur-sm bg-white/50 dark:bg-black/50 hover:shadow-lg transition-all duration-300">
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
         <div className="space-y-1">
-          <h3 className="text-lg sm:text-xl font-semibold break-all">
-            {getTitle()}
-          </h3>
+          <h3 className="text-lg sm:text-xl font-semibold break-all">{getTitle()}</h3>
           <p className="text-sm text-muted-foreground">{item.description}</p>
         </div>
         <div className="flex gap-2 self-end sm:self-start">
@@ -78,7 +75,7 @@ export const RegistryCard = ({ item, onRevoke, onEdit, isRevoking = false }: Reg
         )}
         {item.documentationURL && (
           <p className="text-sm break-all">
-            <span className="font-medium">Documentation:</span>{" "}
+            <span className="font-medium">Documentation:</span>{' '}
             <a
               href={item.documentationURL}
               className="text-primary hover:underline"
@@ -97,10 +94,8 @@ export const RegistryCard = ({ item, onRevoke, onEdit, isRevoking = false }: Reg
             </pre>
           </div>
         )}
-        <p className="text-xs text-muted-foreground mt-4 break-all">
-          TXID: {item.txid}
-        </p>
+        <p className="text-xs text-muted-foreground mt-4 break-all">TXID: {item.txid}</p>
       </div>
     </Card>
-  );
-};
+  )
+}

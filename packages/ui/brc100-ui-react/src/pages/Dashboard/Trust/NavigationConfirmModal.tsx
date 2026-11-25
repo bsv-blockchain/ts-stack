@@ -1,6 +1,27 @@
-import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Button } from '@mui/material'
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Button
+} from '@mui/material'
 
-const NavigationConfirmModal = ({ open, onConfirm, onCancel, children, loading }) => {
+interface NavigationConfirmModalProps {
+  open: boolean
+  onConfirm: () => void
+  onCancel: () => void
+  children?: React.ReactNode
+  loading: boolean
+}
+
+const NavigationConfirmModal = ({
+  open,
+  onConfirm,
+  onCancel,
+  children,
+  loading
+}: NavigationConfirmModalProps) => {
   return (
     <Dialog
       open={open}
@@ -13,14 +34,14 @@ const NavigationConfirmModal = ({ open, onConfirm, onCancel, children, loading }
       aria-describedby="alert-dialog-description"
       disableEscapeKeyDown={true}
     >
-      <DialogTitle id="alert-dialog-title">{"Unsaved Changes"}</DialogTitle>
+      <DialogTitle id="alert-dialog-title">{'Unsaved Changes'}</DialogTitle>
       <DialogContent>
         <DialogContentText id="alert-dialog-description">
           {children || 'You have unsaved changes. Do you want to save them before leaving?'}
         </DialogContentText>
       </DialogContent>
-      {!loading
-        ? <DialogActions>
+      {!loading ? (
+        <DialogActions>
           <Button onClick={onCancel} color="primary">
             Don't Save
           </Button>
@@ -28,11 +49,11 @@ const NavigationConfirmModal = ({ open, onConfirm, onCancel, children, loading }
             Save
           </Button>
         </DialogActions>
-        : <Button onClick={onCancel} color="primary">
+      ) : (
+        <Button onClick={onCancel} color="primary">
           Close
         </Button>
-      }
-
+      )}
     </Dialog>
   )
 }

@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2023"
-    ],
+    "lib": ["ES2023"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -13,8 +11,6 @@
     "noEmit": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "vite.config.ts"
-  ],
+  "include": ["vite.config.ts"],
   "extends": "../../../config/typescript/browser.json"
 }

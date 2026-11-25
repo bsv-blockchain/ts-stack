@@ -1,3 +1,4 @@
+import { copyToClipboard } from '../../../utils/copyToClipboard'
 import React, { useContext, useState } from 'react'
 import { makeStyles } from '@mui/styles'
 import { Theme } from '@mui/material/styles'
@@ -22,7 +23,6 @@ import RecoveryKey from '../Settings/RecoveryKey'
 import { UserContext } from '../../../UserContext'
 import PageLoading from '../../../components/PageLoading.js'
 import { useExportDataToFile } from '../../../utils/exportDataToFile.js'
-import { Utils } from '@bsv/sdk'
 import { toast } from 'react-toastify'
 
 const useStyles = makeStyles((theme: Theme) => ({
@@ -58,11 +58,12 @@ const Security: React.FC = () => {
   const exportData = useExportDataToFile()
 
   const handleCopy = (data: string) => {
-    navigator.clipboard.writeText(data)
-    setCopied(true)
-    setTimeout(() => {
-      setCopied(false)
-    }, 2000)
+    copyToClipboard(data, () => {
+      setCopied(true)
+      setTimeout(() => {
+        setCopied(false)
+      }, 2000)
+    })
   }
 
   const handleViewKey = (key: string) => {
@@ -78,7 +79,11 @@ const Security: React.FC = () => {
   const handleDownload = async (): Promise<void> => {
     const recoveryKeyData = `Metanet Recovery Key:\n\n${recoveryKey}\n\nSaved: ${new Date()}`
     // Use the hook's returned function that we defined at the component level
-    const success = await exportData({ data: recoveryKeyData, filename: 'Metanet Recovery Key.txt', type: 'text/plain' })
+    const success = await exportData({
+      data: recoveryKeyData,
+      filename: 'Metanet Recovery Key.txt',
+      type: 'text/plain'
+    })
     if (success) {
       toast.success('Recovery key downloaded successfully')
     } else {
@@ -114,24 +119,28 @@ const Security: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle id="recovery-key-dialog-title">
-          Your Recovery Key
-        </DialogTitle>
+        <DialogTitle id="recovery-key-dialog-title">Your Recovery Key</DialogTitle>
         <DialogContent>
           <DialogContentText color="textSecondary" sx={{ mb: 2 }}>
-            Please save this key in a secure location. You will need it to recover your account if you forget your password.
+            Please save this key in a secure location. You will need it to recover your account if
+            you forget your password.
           </DialogContentText>
           <Stack sx={{ my: 3 }} direction="row" alignItems="center" justifyContent="space-between">
-            <Typography className={classes.key}>
-              {recoveryKey}
-            </Typography>
-            <Stack><IconButton size='large' onClick={() => handleCopy(recoveryKey)} disabled={copied} sx={{ ml: 1 }}>
-              {copied ? <CheckIcon /> : <ContentCopyIcon fontSize='small' />}
-            </IconButton></Stack>
+            <Typography className={classes.key}>{recoveryKey}</Typography>
+            <Stack>
+              <IconButton
+                size="large"
+                onClick={() => handleCopy(recoveryKey)}
+                disabled={copied}
+                sx={{ ml: 1 }}
+              >
+                {copied ? <CheckIcon /> : <ContentCopyIcon fontSize="small" />}
+              </IconButton>
+            </Stack>
           </Stack>
           <Button
-            variant='contained'
-            color='primary'
+            variant="contained"
+            color="primary"
             startIcon={<DownloadIcon />}
             onClick={handleDownload}
             fullWidth

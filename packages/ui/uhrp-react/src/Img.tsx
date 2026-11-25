@@ -20,7 +20,7 @@ type ImgProps = {
  * @returns {JSX.Element} - The resolved image element or fallback content
  */
 
-const Img: FC<ImgProps> = ({ src, fallback, ...props }) => {
+const Img: FC<ImgProps> = ({ src, fallback, alt = '', ...props }) => {
   const resolvedUrl = useStore(state => state.urls[src] || '')
   const setResolvedURL = useStore(state => state.setResolvedURL)
 
@@ -28,9 +28,7 @@ const Img: FC<ImgProps> = ({ src, fallback, ...props }) => {
     setResolvedURL(src).catch(() => {})
   }, [src, setResolvedURL])
 
-  return resolvedUrl
-    ? <img src={resolvedUrl} {...props} />
-    : <>{fallback || null}</>
+  return resolvedUrl ? <img src={resolvedUrl} alt={alt} {...props} /> : <>{fallback || null}</>
 }
 
 export default Img

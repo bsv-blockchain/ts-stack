@@ -14,10 +14,11 @@
     }
   },
   "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/prompt-message.property.test.mjs",
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check src tests '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
     "typecheck": "tsc --noEmit",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports BtmsPermissionPrompt,BtmsPromptDialog,useBtmsPrompt",
@@ -45,6 +46,7 @@
     "@emotion/styled": "^11.0.0"
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "@bsv/uhrp-react": "workspace:^",
     "@mui/icons-material": "^6.0.0",
     "@mui/material": "^6.0.0",

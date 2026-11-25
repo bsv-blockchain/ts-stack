@@ -1,4 +1,4 @@
-import React, { FC, useEffect } from 'react'
+import React, { FC, useEffect, useRef } from 'react'
 import { useStore } from './store'
 
 /**
@@ -22,13 +22,23 @@ interface SourceProps extends React.SourceHTMLAttributes<HTMLSourceElement> {
 const Source: FC<SourceProps> = ({ src, loading, ...props }) => {
   const resolvedUrl = useStore(state => state.urls[src] || '')
   const setResolvedURL = useStore(state => state.setResolvedURL)
+  const sourceRef = useRef<HTMLSourceElement>(null)
 
   useEffect(() => {
     setResolvedURL(src).catch(() => {})
   }, [src, setResolvedURL])
 
+  useEffect(() => {
+    const media = sourceRef.current?.parentElement
+    const mediaElement = media?.ownerDocument.defaultView?.HTMLMediaElement
+    // Browsers do not restart media selection when an existing source gains a URL.
+    if (resolvedUrl && mediaElement && media instanceof mediaElement && !media.currentSrc) {
+      media.load()
+    }
+  }, [resolvedUrl])
+
   if (resolvedUrl || !loading) {
-    return <source src={resolvedUrl} {...props} />
+    return <source ref={sourceRef} src={resolvedUrl || undefined} {...props} />
   }
   return <>{loading}</>
 }

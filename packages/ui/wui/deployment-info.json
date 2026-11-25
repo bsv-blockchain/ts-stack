@@ -10,9 +10,7 @@
       "name": "Local LARS",
       "network": "mainnet",
       "provider": "LARS",
-      "run": [
-        "frontend"
-      ]
+      "run": ["frontend"]
     },
     {
       "name": "babbage",
@@ -20,9 +18,7 @@
       "CARSCloudURL": "https://cars.babbage.systems",
       "projectID": "cff8ad8b583df7254765ba47e0541a7e",
       "network": "mainnet",
-      "deploy": [
-        "frontend"
-      ],
+      "deploy": ["frontend"],
       "frontendHostingMethod": "HTTPS"
     }
   ]

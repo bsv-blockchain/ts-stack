@@ -1,57 +1,76 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Container, Typography, Tabs, Tab, Grid } from '@mui/material'
-import useAsyncEffect from 'use-async-effect'
 import DownloadForm from './components/DownloadForm.js'
 import UploadForm from './components/UploadForm.js'
 import FilesForm from './components/FilesForm.js'
 import Footer from './components/Footer.js'
-import { checkForMetaNetClient, NoMncModal } from 'metanet-react-prompt'
+import NoMncModal from './components/NoMncModal/NoMncModal'
 import { WalletClient } from '@bsv/sdk'
 import './App.scss'
 
 const App: React.FC = () => {
   const [tabIndex, setTabIndex] = useState<number>(0)
-  const [MNCmissing, setMNCMissing] = useState<boolean>(false)
+  const [walletMissing, setWalletMissing] = useState(false)
 
-  useAsyncEffect(async () => {
-    const intervalId = setInterval(async () => {
-      const hasMNC = await checkForMetaNetClient()
-      if (hasMNC === 0) {
-        setMNCMissing(true)
-      } else {
-        const walletclient = await new WalletClient()
-        await walletclient.waitForAuthentication()
-        clearInterval(intervalId)
-        setMNCMissing(false)
+  useEffect(() => {
+    let stopped = false
+    let checking = false
+
+    const checkWallet = async () => {
+      try {
+        const wallet = new WalletClient('auto')
+        try {
+          await wallet.getNetwork()
+        } catch {
+          if (!stopped) setWalletMissing(true)
+          return
+        }
+        if (stopped) return
+
+        await wallet.waitForAuthentication()
+        if (!stopped) {
+          clearInterval(intervalId)
+          setWalletMissing(false)
+        }
+      } catch {
+        // Retry if authentication is declined or the wallet disconnects.
+      } finally {
+        checking = false
       }
+    }
+    const intervalId = setInterval(() => {
+      if (checking) return
+      checking = true
+      void checkWallet()
     }, 1000)
+
     return () => {
+      stopped = true
       clearInterval(intervalId)
     }
   }, [])
-
 
   const handleTabChange = (event: React.ChangeEvent<{}>, newValue: number) => {
     setTabIndex(newValue)
   }
 
   return (
-    <Container maxWidth='md' sx={{ paddingTop: '2em', paddingBottom: '2em' }}>
-      <NoMncModal appName={'Uhrp UI'} open={MNCmissing} onClose={() => setMNCMissing(false)} />
+    <Container maxWidth="md" sx={{ paddingTop: '2em', paddingBottom: '2em' }}>
+      <NoMncModal open={walletMissing} onClose={() => setWalletMissing(false)} />
       <Grid container spacing={2}>
         <Grid item xs={12} sx={{ mb: 2 }}>
-          <Typography variant='h4' align='center' sx={{ fontWeight: 'bold', mb: 1 }}>
+          <Typography variant="h4" align="center" sx={{ fontWeight: 'bold', mb: 1 }}>
             UHRP Storage UI
           </Typography>
-          <Typography color='textSecondary' paragraph align='center' sx={{ mb: 3 }}>
+          <Typography color="textSecondary" paragraph align="center" sx={{ mb: 3 }}>
             Upload and Download Content
           </Typography>
           <Tabs
             value={tabIndex}
             onChange={handleTabChange}
-            indicatorColor='primary'
-            textColor='primary'
-            variant='fullWidth'
+            indicatorColor="primary"
+            textColor="primary"
+            variant="fullWidth"
             sx={{
               '& .MuiTab-root': {
                 borderRadius: '4px 4px 0 0',
@@ -60,9 +79,9 @@ const App: React.FC = () => {
               }
             }}
           >
-            <Tab label='Download' />
-            <Tab label='Upload' />
-            <Tab label='Files' />
+            <Tab label="Download" />
+            <Tab label="Upload" />
+            <Tab label="Files" />
           </Tabs>
         </Grid>
         <Grid item xs={12}>

@@ -31,22 +31,24 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   MXN: 'MX$'
 }
 
-const parseInputAmount = (amount: number | string): { parsedAmount: number; inputCurrency: string } | null => {
-  const amountAsString = amount.toString()
-  const parsedAmount = Number.parseFloat(amountAsString.replace(/[^0-9.-]+/g, ''))
+const parseInputAmount = (
+  amount: number | string
+): { parsedAmount: number; inputCurrency: string } | null => {
+  const parsedAmount =
+    typeof amount === 'number' ? amount : Number.parseFloat(amount.replace(/[^0-9.-]+/g, ''))
 
   if (!Number.isFinite(parsedAmount)) {
     return null
   }
 
-  let inputCurrency = amountAsString.replace(/[\d.,\s]+/g, '').trim().toUpperCase()
-  if (!inputCurrency) {
-    inputCurrency = amountAsString.includes('.') ? 'BSV' : 'SATS'
+  if (typeof amount === 'number') {
+    return { parsedAmount, inputCurrency: Number.isInteger(amount) ? 'SATS' : 'BSV' }
   }
 
   return {
     parsedAmount,
-    inputCurrency
+    inputCurrency:
+      amount.replace(/[\d.,_+\s-]+/g, '').toUpperCase() || (amount.includes('.') ? 'BSV' : 'SATS')
   }
 }
 
@@ -64,6 +66,17 @@ const getDefaultDecimalPlaces = (amount: number, currency: string): number => {
   return currency === 'BSV' ? 8 : 2
 }
 
+const groupInteger = (value: string, separator: string): string => {
+  if (!/^-?\d+$/.test(value)) return value
+  const signWidth = value.startsWith('-') ? 1 : 0
+  const firstGroupEnd = signWidth + ((value.length - signWidth) % 3 || 3)
+  const groups = [value.slice(0, firstGroupEnd)]
+  for (let index = firstGroupEnd; index < value.length; index += 3) {
+    groups.push(value.slice(index, index + 3))
+  }
+  return groups.join(separator)
+}
+
 const formatNumericPortion = (
   amount: number,
   decimals: number,
@@ -77,15 +90,15 @@ const formatNumericPortion = (
     fixedAmount = fixedAmount.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
   }
 
-  let [integerPart, decimalPart] = fixedAmount.split('.')
-
+  const [integerPart, decimalPart] = fixedAmount.split('.')
+  let grouped = integerPart
   if (useUnderscores) {
-    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '_')
+    grouped = groupInteger(integerPart, '_')
   } else if (useCommas) {
-    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    grouped = groupInteger(integerPart, ',')
   }
 
-  return decimalPart ? `${integerPart}.${decimalPart}` : integerPart
+  return decimalPart ? `${grouped}.${decimalPart}` : grouped
 }
 
 const formatCurrencyAmount = (
@@ -101,14 +114,18 @@ const formatCurrencyAmount = (
 
   const decimalPlaces = hasNoDecimals
     ? 0
-    : forcedDecimalPlaces ?? formatOptions?.decimalPlaces ?? getDefaultDecimalPlaces(amount, normalizedCurrency)
+    : (forcedDecimalPlaces ??
+      formatOptions?.decimalPlaces ??
+      getDefaultDecimalPlaces(amount, normalizedCurrency))
 
   const numericPortion = formatNumericPortion(
     amount,
     decimalPlaces,
     useCommas,
     useUnderscores,
-    formatOptions?.decimalPlaces === undefined && forcedDecimalPlaces === undefined && !hasNoDecimals
+    formatOptions?.decimalPlaces === undefined &&
+      forcedDecimalPlaces === undefined &&
+      !hasNoDecimals
   )
 
   if (normalizedCurrency === 'SATS') {
@@ -119,7 +136,8 @@ const formatCurrencyAmount = (
     return `${numericPortion} BSV`
   }
 
-  return `${CURRENCY_SYMBOLS[normalizedCurrency] || `${normalizedCurrency} `}${numericPortion}`
+  const currencyPrefix = CURRENCY_SYMBOLS[normalizedCurrency] || `${normalizedCurrency} `
+  return currencyPrefix + numericPortion
 }
 
 const getHoverPrecision = (amount: number): number => {
@@ -157,14 +175,24 @@ export const normalizeDisplayAmount = async (
 
   if (ZERO_DECIMAL_CURRENCIES.has(preferredCurrency)) {
     return {
-      formattedAmount: formatCurrencyAmount(convertedNumericAmount, preferredCurrency, formatOptions, 0)
+      formattedAmount: formatCurrencyAmount(
+        convertedNumericAmount,
+        preferredCurrency,
+        formatOptions,
+        0
+      )
     }
   }
 
   if (Math.abs(convertedNumericAmount) > 0 && Math.abs(convertedNumericAmount) < 0.01) {
     return {
       formattedAmount: convertedAmount.formattedAmount,
-      hoverText: formatCurrencyAmount(convertedNumericAmount, preferredCurrency, formatOptions, getHoverPrecision(convertedNumericAmount))
+      hoverText: formatCurrencyAmount(
+        convertedNumericAmount,
+        preferredCurrency,
+        formatOptions,
+        getHoverPrecision(convertedNumericAmount)
+      )
     }
   }
 

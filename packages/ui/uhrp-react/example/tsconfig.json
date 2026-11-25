@@ -2,19 +2,11 @@
   "extends": "../../../../config/typescript/browser.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ES2023"
-    ],
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "types": [
-      "vite/client"
-    ]
+    "types": ["vite/client"]
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

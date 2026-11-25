@@ -45,7 +45,12 @@ export { default as WalletConfig } from './components/WalletConfig'
 export { default as AccessAtAGlance } from './components/AccessAtAGlance'
 
 // Context Providers
-export { UserContext, UserContextProvider, type UserContextValue, type NativeHandlers } from './UserContext'
+export {
+  UserContext,
+  UserContextProvider,
+  type UserContextValue,
+  type NativeHandlers
+} from './UserContext'
 export { WalletContext, WalletContextProvider, type WalletContextValue } from './WalletContext'
 
 // Utility Functions

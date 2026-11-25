@@ -1,4 +1,4 @@
-export default (theme: any) => ({
+const style = (theme: any) => ({
   table_picture: {
     maxWidth: '2.5em'
     // borderRadius: '5em' /* was 3em */
@@ -11,3 +11,5 @@ export default (theme: any) => ({
     ...theme.templates.chipContainer
   }
 })
+
+export default style

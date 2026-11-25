@@ -1,6 +1,16 @@
 // React / UI (btms-ui)
 import React, { useState } from 'react'
-import { Typography, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, CircularProgress, Box } from '@mui/material'
+import {
+  Typography,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  CircularProgress,
+  Box
+} from '@mui/material'
 import { toast } from 'react-toastify'
 import useStyles from './send-style'
 import { IdentitySearchField } from '@bsv/identity-react'
@@ -15,7 +25,7 @@ interface SendProps {
   onReloadNeeded?: () => void
 }
 
-const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } }) => {
+const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => {} }) => {
   const classes = useStyles()
 
   const [recipient, setRecipient] = useState('')
@@ -30,7 +40,8 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
 
   const qty = Number(quantity)
 
-  const quantityValid = quantity.trim() !== '' && Number.isFinite(qty) && qty > 0 && qty <= asset.balance
+  const quantityValid =
+    quantity.trim() !== '' && Number.isFinite(qty) && qty > 0 && qty <= asset.balance
 
   const recipientValid = recipient.trim() !== '' && recipient.length >= 64
 
@@ -72,7 +83,7 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
 
       try {
         onReloadNeeded()
-      } catch { }
+      } catch {}
 
       toast.success(`Transferred ${qty} ${asset.name} successfully!`)
       setOpen(false)
@@ -96,37 +107,49 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
         Send
       </Button>
 
-      <Dialog open={open} onClose={loading ? undefined : handleSendCancel} color="primary" maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={loading ? undefined : handleSendCancel}
+        color="primary"
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle variant="h4" sx={{ fontWeight: 'bold' }}>
           Send {asset.name}
         </DialogTitle>
 
         <DialogContent sx={{ minHeight: loading ? 180 : 320 }}>
           {loading && (
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              py: 2,
-              gap: 2
-            }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 2,
+                gap: 2
+              }}
+            >
               <CircularProgress color="secondary" size={48} />
               <Typography variant="body1">Processing send...</Typography>
-              <Typography variant="body2" color="text.secondary">Recording on blockchain</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Recording on blockchain
+              </Typography>
             </Box>
           )}
 
           {!loading && (
             <>
-              <Typography variant="h6" sx={{ mb: 1 }}>Recipient:</Typography>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Recipient:
+              </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Search by name or paste identity key
               </Typography>
 
               <Box sx={{ mb: 4, position: 'relative', zIndex: 1000, width: '100%' }}>
                 <IdentitySearchField
-                  onIdentitySelected={(identity) => {
+                  onIdentitySelected={identity => {
                     if (identity?.identityKey) {
                       setRecipient(identity.identityKey)
                     }
@@ -137,7 +160,11 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
               </Box>
 
               {recipient && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2, wordBreak: 'break-all' }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 2, wordBreak: 'break-all' }}
+                >
                   Selected: {recipient}
                 </Typography>
               )}
@@ -152,7 +179,9 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
                 variant="outlined"
                 color="secondary"
                 fullWidth
-                helperText={asset.balance > 0 ? `Available: ${asset.balance}` : 'No balance available'}
+                helperText={
+                  asset.balance > 0 ? `Available: ${asset.balance}` : 'No balance available'
+                }
                 onChange={e => setQuantity(e.target.value.replace(/\D/g, ''))}
               />
             </>
@@ -160,7 +189,12 @@ const Send: React.FC<SendProps> = ({ assetId, asset, onReloadNeeded = () => { } 
         </DialogContent>
 
         <DialogActions className={classes.button}>
-          <Button disabled={loading} color="secondary" variant="outlined" onClick={handleSendCancel}>
+          <Button
+            disabled={loading}
+            color="secondary"
+            variant="outlined"
+            onClick={handleSendCancel}
+          >
             Cancel
           </Button>
 

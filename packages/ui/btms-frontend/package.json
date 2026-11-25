@@ -26,10 +26,9 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "lint:todo": "eslint .",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check src public '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "test": "pnpm build && node ../../../scripts/check-ui-build.mjs build"
   },
   "eslintConfig": {
@@ -54,12 +53,8 @@
     "@types/react": "18.3.1",
     "@types/react-dom": "18.3.1",
     "@types/react-router-dom": "^5.3.3",
-    "@typescript-eslint/eslint-plugin": "^6.20.0",
-    "@typescript-eslint/parser": "^6.20.0",
     "@vitejs/plugin-react": "^4.0.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
     "sass": "^1.72.0",
-    "standard": "^17.0.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "^6.0.0",
     "@typescript/native": "npm:typescript@7.0.2"

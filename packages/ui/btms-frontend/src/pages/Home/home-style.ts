@@ -1,7 +1,6 @@
 import { makeStyles } from '@mui/styles'
-import { Theme } from '@mui/material/styles'
 
-const useStyles = makeStyles((theme: Theme) => ({
+const useStyles = makeStyles({
   title: {
     paddingTop: '3.5em',
     paddingBottom: '2.5em'
@@ -27,6 +26,6 @@ const useStyles = makeStyles((theme: Theme) => ({
   send_icon: {
     paddingLeft: '0.3em'
   }
-}))
+})
 
 export default useStyles

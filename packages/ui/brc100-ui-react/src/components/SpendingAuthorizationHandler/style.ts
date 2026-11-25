@@ -1,4 +1,4 @@
-export default (theme: any) => ({
+const style = (theme: any) => ({
   app_icon: {
     minWidth: '8em',
     minHeight: '8em',
@@ -30,3 +30,5 @@ export default (theme: any) => ({
     marginRight: theme.spacing(1)
   }
 })
+
+export default style

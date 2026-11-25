@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions,
+  DialogActions
 } from '@mui/material'
 
 const Logout = () => {
@@ -35,12 +35,7 @@ const Logout = () => {
 
   return (
     <>
-      <Button
-        variant='contained'
-        color='secondary'
-        onClick={handleButtonClick}
-        disabled={loading}
-      >
+      <Button variant="contained" color="secondary" onClick={handleButtonClick} disabled={loading}>
         Exit This Metanet Portal
       </Button>
       <Dialog

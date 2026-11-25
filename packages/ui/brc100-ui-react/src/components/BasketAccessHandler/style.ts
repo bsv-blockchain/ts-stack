@@ -1,6 +1,6 @@
-import { Theme } from '@mui/material/styles';
+import { Theme } from '@mui/material/styles'
 
-export default (theme: Theme) => ({
+const style = (theme: Theme) => ({
   app_icon: {
     minWidth: '8em',
     minHeight: '8em',
@@ -14,3 +14,5 @@ export default (theme: Theme) => ({
     marginTop: theme.spacing(3)
   }
 })
+
+export default style

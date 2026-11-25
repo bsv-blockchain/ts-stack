@@ -9,37 +9,50 @@ interface FetchManifestParams {
  * - Forces `http` for `localhost`, defaults to `https` otherwise.
  * - Uses an `AbortController` to aggressively timeout stalled requests so that
  *   sites *without* a manifest don’t block the caller.
- * - Always resolves to an **object** – falling back to an empty object `{}`
+ * - Always resolves to an **object** – falling back to an empty object `{}`
  *   on any kind of failure (network error, non‑2xx status, invalid JSON, etc.).
  *
  * @param {FetchManifestParams} params – `{ domain }` to query
- * @param {number} [timeout=1500] – hard timeout in **milliseconds** before aborting
+ * @param {number} [timeout=800] – hard timeout in **milliseconds** before aborting
  */
+export function appMetadataUrl(
+  domain: string,
+  file: 'manifest.json' | 'favicon.ico'
+): URL | undefined {
+  let cleanDomain = domain
+  while (/^https?:\/\//i.test(cleanDomain)) {
+    cleanDomain = cleanDomain.slice(cleanDomain.indexOf('//') + 2)
+  }
+  if (!cleanDomain || cleanDomain.includes('\\')) return undefined
+  const protocol = cleanDomain.startsWith('localhost:') ? 'http' : 'https'
+  try {
+    const url = new URL(`${protocol}://${cleanDomain}/${file}`)
+    if (!url.username && !url.password && !url.search && !url.hash) return url
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 export default async function fetchManifest(
   { domain }: FetchManifestParams,
-  timeout = 800,
+  timeout = 800
 ): Promise<Record<string, unknown>> {
-  // 1. Normalise domain & choose protocol
-  const cleanDomain = domain.replace(/^(https?:\/\/)+/i, '')
-  const protocol = cleanDomain.startsWith('localhost:') ? 'http' : 'https'
-  const url = `${protocol}://${cleanDomain}/manifest.json`
+  const url = appMetadataUrl(domain, 'manifest.json')
+  if (!url) return {}
 
-  // 2. Setup AbortController for a hard timeout
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout)
-
   try {
-    const res = await fetch(url, { signal: controller.signal })
-
-    // Clear the timeout as soon as we get a response
-    clearTimeout(timer)
-
+    const res = await fetch(url, { signal: controller.signal, credentials: 'omit' })
     if (!res.ok) return {}
-
-    // `res.json()` throws on invalid JSON – we use that to fall back safely
-    return (await res.json()) as Record<string, unknown>
-  } catch (_) {
-    // Any error (network, timeout, bad JSON, etc.) results in a safe fallback
+    const data: unknown = await res.json()
+    return data && typeof data === 'object' && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {}
+  } catch {
     return {}
+  } finally {
+    clearTimeout(timer)
   }
 }

@@ -1,1 +1,3 @@
-export default theme => {}
+export default function styles() {
+  return {}
+}

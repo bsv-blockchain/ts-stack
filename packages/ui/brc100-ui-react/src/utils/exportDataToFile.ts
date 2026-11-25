@@ -16,7 +16,7 @@ interface ExportDataParams {
  * @returns {Function} The exportDataToFile function
  */
 export const useExportDataToFile = () => {
-  const { onDownloadFile } = useContext(UserContext);
+  const { onDownloadFile } = useContext(UserContext)
 
   /**
    * Exports data to a file with a specified format and filename.
@@ -53,7 +53,7 @@ export const useExportDataToFile = () => {
  * @returns {Function} The downloadBinaryFile function
  */
 export const useDownloadBinaryFile = () => {
-  const { onDownloadFile } = useContext(UserContext);
+  const { onDownloadFile } = useContext(UserContext)
 
   /**
    * Downloads a binary file with the specified filename and content.
@@ -65,7 +65,7 @@ export const useDownloadBinaryFile = () => {
   return async (filename: string, fileContent: number[]): Promise<boolean> => {
     try {
       // Convert array to Uint8Array for binary data
-      const content = new Uint8Array(fileContent);
+      const content = new Uint8Array(fileContent)
 
       // Create a blob from the binary data
       const blob = new Blob([content])
@@ -73,8 +73,8 @@ export const useDownloadBinaryFile = () => {
       // Use the download handler from UserContext
       return await onDownloadFile(blob, filename)
     } catch (e) {
-      console.error('Download error:', e);
-      return false;
+      console.error('Download error:', e)
+      return false
     }
   }
 }

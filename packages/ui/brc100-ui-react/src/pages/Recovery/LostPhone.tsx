@@ -1,254 +1,139 @@
-import { useState, useEffect, useContext } from 'react'
-import style from './style.js'
-// import 'react-phone-number-input/style.css'
-import {
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  AccordionActions,
-  Typography,
-  Button,
-  TextField,
-  CircularProgress
-} from '@mui/material'
-import {
-  SettingsPhone as PhoneIcon,
-  CheckCircle as CheckCircleIcon,
-  Lock as LockIcon,
-  VpnKey as KeyIcon
-} from '@mui/icons-material'
+import { useContext, useState, type FormEvent } from 'react'
+import type { History } from 'history'
+import { Box, Button, TextField, Typography } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import { toast } from 'react-toastify'
-import { WalletContext } from '../../WalletContext'
-import PhoneEntry from '../../components/PhoneEntry'
 import { Utils } from '@bsv/sdk'
+import { WalletContext } from '../../WalletContext'
+import style from './style'
 
-const useStyles = makeStyles(style as any, { name: 'RecoveryLostPhoneNumber' })
+const useStyles = makeStyles(
+  theme => {
+    const { content_wrap, back_button } = style(theme)
+    return { content_wrap, back_button }
+  },
+  { name: 'RecoveryLostPhoneNumber' }
+)
 
-const RecoveryLostPhone: React.FC<any> = ({ history }) => {
+const RecoveryLostPhone = ({ history }: { history: History }) => {
   const { managers } = useContext(WalletContext)
+  const walletManager = managers.walletManager
   const classes = useStyles()
-  const [accordianView, setAccordianView] = useState('recovery-key')
+  const [step, setStep] = useState<'recovery-key' | 'password'>('recovery-key')
   const [recoveryKey, setRecoveryKey] = useState('')
   const [password, setPassword] = useState('')
-  const [newPhone, setNewPhone] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [authenticated, setAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const authenticated = walletManager?.authenticated === true
 
-  // Ensure the correct authentication mode
-  useEffect(() => {
-    managers.walletManager!.authenticationMode = 'recovery-key-and-password'
-  }, [])
-
-  useEffect(() => {
-    setAuthenticated(managers.walletManager!.authenticated)
-  }, [])
-
-  const handleSubmitRecoveryKey = async e => {
-    e.preventDefault()
+  const handleRecoveryKey = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!walletManager || authenticated || loading) return
+    setLoading(true)
+    const previousMode = walletManager.authenticationMode
+    walletManager.authenticationMode = 'recovery-key-and-password'
     try {
-      setLoading(true)
-      await managers.walletManager!.provideRecoveryKey(Utils.toArray(recoveryKey, 'base64'))
-      setAccordianView('password')
-    } catch (e) {
-      console.error(e)
-      toast.error(e.message)
+      await walletManager.provideRecoveryKey(Utils.toArray(recoveryKey.trim(), 'base64'))
+      setRecoveryKey('')
+      setStep('password')
+    } catch {
+      toast.error('Could not verify your recovery key. Check it and try again.')
     } finally {
+      walletManager.authenticationMode = previousMode
       setLoading(false)
     }
   }
 
-  const handleSubmitPassword = async e => {
-    e.preventDefault()
+  const handlePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!walletManager || authenticated || loading) return
+    if (walletManager.authenticationFlow !== 'existing-user') {
+      setStep('recovery-key')
+      toast.error('Verify your recovery key before entering your wallet password.')
+      return
+    }
+
+    const previousMode = walletManager.authenticationMode
+    walletManager.authenticationMode = 'recovery-key-and-password'
+    setLoading(true)
     try {
-      setLoading(true)
-      await managers.walletManager!.providePassword(password)
-      setAccordianView('new-phone')
-      localStorage.snap = Utils.toBase64(managers.walletManager!.saveSnapshot())
-    } catch (e) {
-      console.error(e)
-      toast.error(e.message)
+      await walletManager.providePassword(password)
+      if (!walletManager.authenticated) {
+        toast.error('Could not open your wallet. Try again.')
+        return
+      }
+      setPassword('')
+      try {
+        localStorage.snap = Utils.toBase64(walletManager.saveSnapshot())
+      } catch {
+        toast.warn('Your wallet is open, but this device could not save the session.')
+      }
+    } catch {
+      toast.error('Could not open your wallet. Try again.')
     } finally {
+      walletManager.authenticationMode = previousMode
       setLoading(false)
     }
-  }
-
-  const handleSubmitNewPhone = async e => {
-    e.preventDefault()
-    try {
-      setLoading(true)
-      // const result = await managers.walletManager!.changePhoneNumber(newPhone)
-      // if (result === true) {
-      // TODO support this in the example wallet manager, get a code, etc.
-      toast.error('Phone is not changed (not yet supported)')
-      history.push('/dashboard/apps')
-      // }
-    } catch (e) {
-      console.error(e)
-      toast.error(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (authenticated) {
-    return (
-      <div>
-        <Typography paragraph>
-          You are currently logged in. You must log out in order to reset your password.
-        </Typography>
-        <Button
-          color='secondary'
-          onClick={async () => {
-            if (!window.confirm('Log out?')) return
-            await managers.walletManager!.destroy()
-            setAuthenticated(false)
-          }}
-        >
-          Log Out
-        </Button>
-        <Button
-          onClick={() => history.go(-1)}
-          className={classes.back_button}
-        >
-          Go Back
-        </Button>
-      </div>
-    )
   }
 
   return (
     <div className={classes.content_wrap}>
-      <Typography variant='h2' paragraph fontFamily='Helvetica' fontSize='2em'>
-        Reset Phone Number
+      <Typography variant="h2" paragraph fontFamily="Helvetica" fontSize="2em">
+        Recover Wallet Access
       </Typography>
-      <Accordion
-        expanded={accordianView === 'recovery-key'}
-      >
-        <AccordionSummary
-          className={classes.panel_header}
-        >
-          <KeyIcon className={classes.expansion_icon} />
-          <Typography
-            className={classes.panel_heading}
-          >
-            Recovery Key
+
+      {authenticated ? (
+        <>
+          <Typography paragraph>
+            Your wallet is open. This screen cannot change your phone number.
           </Typography>
-          {(accordianView === 'password') && (
-            <CheckCircleIcon className={classes.complete_icon} />
+          <Button variant="contained" onClick={() => history.push('/dashboard/apps')}>
+            Continue to wallet
+          </Button>
+        </>
+      ) : (
+        <>
+          <Typography paragraph>
+            Use your recovery key and wallet password to open your wallet. This screen cannot change
+            your phone number.
+          </Typography>
+          {step === 'recovery-key' ? (
+            <Box component="form" onSubmit={event => void handleRecoveryKey(event)}>
+              <TextField
+                value={recoveryKey}
+                onChange={event => setRecoveryKey(event.target.value)}
+                label="Recovery key"
+                type="password"
+                autoComplete="off"
+                required
+                fullWidth
+              />
+              <Button variant="contained" type="submit" disabled={loading || !walletManager}>
+                {loading ? 'Checking recovery key…' : 'Continue'}
+              </Button>
+            </Box>
+          ) : (
+            <Box component="form" onSubmit={event => void handlePassword(event)}>
+              <TextField
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                label="Wallet password"
+                type="password"
+                autoComplete="current-password"
+                required
+                fullWidth
+              />
+              <Button variant="contained" type="submit" disabled={loading || !walletManager}>
+                {loading ? 'Opening wallet…' : 'Open wallet'}
+              </Button>
+            </Box>
           )}
-        </AccordionSummary>
-        <form onSubmit={handleSubmitRecoveryKey}>
-          <AccordionDetails
-            className={classes.expansion_body}
-          >
-            <TextField
-              onChange={e => setRecoveryKey(e.target.value)}
-              label='Recovery Key'
-              fullWidth
-            />
-          </AccordionDetails>
-          <AccordionActions>
-            <Button
-              variant='contained'
-              color='primary'
-              type='submit'
-            >
-              Next
-            </Button>
-          </AccordionActions>
-        </form>
-      </Accordion>
-      <Accordion
-        expanded={accordianView === 'password'}
-      >
-        <AccordionSummary
-          className={classes.panel_header}
-        >
-          <LockIcon className={classes.expansion_icon} />
-          <Typography
-            className={classes.panel_heading}
-          >
-            Password
-          </Typography>
-        </AccordionSummary>
-        <form onSubmit={handleSubmitPassword}>
-          <AccordionDetails
-            className={classes.expansion_body}
-          >
-            <TextField
-              onChange={e => setPassword(e.target.value)}
-              label='Password'
-              fullWidth
-              type='password'
-            />
-          </AccordionDetails>
-          <AccordionActions>
-            {loading
-              ? <CircularProgress />
-              : (
-                <Button
-                  variant='contained'
-                  color='primary'
-                  type='submit'
-                >
-                  Continue
-                </Button>
-              )}
-          </AccordionActions>
-        </form>
-      </Accordion>
-      <Accordion
-        expanded={accordianView === 'new-phone'}
-      >
-        <AccordionSummary
-          className={classes.panel_header}
-        >
-          <PhoneIcon className={classes.expansion_icon} />
-          <Typography
-            className={classes.panel_heading}
-          >
-            New Phone
-          </Typography>
-        </AccordionSummary>
-        <form onSubmit={handleSubmitNewPhone}>
-          <AccordionDetails
-            className={classes.expansion_body}
-          >
-            <PhoneEntry
-              value={newPhone}
-              onChange={setNewPhone}
-            />
-          </AccordionDetails>
-          <AccordionActions>
-            {loading
-              ? <CircularProgress />
-              : (
-                <div>
-                  <Button
-                    onClick={() => history.push('/dashboard/apps')}
-                  >
-                    Skip Updating Phone
-                  </Button>
-                  <Button
-                    variant='contained'
-                    color='primary'
-                    type='submit'
-                  >
-                    Finish
-                  </Button>
-                </div>
-              )}
-          </AccordionActions>
-        </form>
-      </Accordion>
-      <Button
-        onClick={() => history.go(-1)}
-        className={classes.back_button}
-      >
+        </>
+      )}
+
+      <Button onClick={() => history.goBack()} className={classes.back_button} disabled={loading}>
         Go Back
       </Button>
-    </div >
+    </div>
   )
 }
 

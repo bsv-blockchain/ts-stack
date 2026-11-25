@@ -1,7 +1,7 @@
+import type { SelectChangeEvent } from '@mui/material/Select'
 import React, { useState, useEffect } from 'react'
 import {
   Button,
-  Grid,
   Typography,
   Table,
   TableBody,
@@ -44,25 +44,19 @@ import {
 import { toast } from 'react-toastify'
 import constants from '../utils/constants.js'
 import WalletClient from '@bsv/sdk/wallet/WalletClient'
-import { StorageUploader } from '@bsv/sdk/storage/StorageUploader'
+import {
+  StorageUploader,
+  type FindFileData,
+  type RenewFileResult
+} from '@bsv/sdk/storage/StorageUploader'
 import { StorageDownloader } from '@bsv/sdk/storage/StorageDownloader'
 
-// Define interfaces based on the types provided in your description
-interface FindFileData {
-  name: string
-  size: string
-  mimeType: string
+interface ListedUpload {
+  uhrpUrl: string
   expiryTime: number
 }
 
-interface RenewFileResult {
-  status: string
-  prevExpiryTime?: number
-  newExpiryTime?: number
-  amount?: number
-}
-
-interface FilesFormProps { }
+interface FilesFormProps {}
 
 // Helper function to format date from timestamp (Unix epoch in seconds)
 const formatDate = (timestamp: number): string => {
@@ -73,8 +67,8 @@ const formatDate = (timestamp: number): string => {
 
 // Helper function to format size from bytes
 const formatSize = (size: string): string => {
-  const sizeNum = parseInt(size, 10)
-  if (isNaN(sizeNum)) return size
+  const sizeNum = Number.parseInt(size, 10)
+  if (Number.isNaN(sizeNum)) return size
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let unitIndex = 0
@@ -90,24 +84,41 @@ const formatSize = (size: string): string => {
 
 // Helper function to shorten file name for display
 const getShortFileName = (uhrpUrl: string): string => {
-  // Extract just the file name portion if possible
-  const parts = uhrpUrl.split('/')
-  if (parts.length > 0) {
-    const fileName = parts[parts.length - 1]
-    // If the file name itself is very long, truncate it
-    if (fileName.length > 30) {
-      return fileName.substring(0, 15) + '...' + fileName.substring(fileName.length - 10)
+  const fileName = uhrpUrl.split('/').at(-1) ?? ''
+  return fileName.length > 30 ? `${fileName.slice(0, 15)}...${fileName.slice(-10)}` : fileName
+}
+
+const listUploadedFiles = (data: unknown): ListedUpload[] => {
+  if (!Array.isArray(data)) return []
+
+  const uploads = new Map<string, ListedUpload>()
+  for (const item of data as unknown[]) {
+    if (
+      typeof item !== 'object' ||
+      item === null ||
+      !('uhrpUrl' in item) ||
+      typeof item.uhrpUrl !== 'string' ||
+      !('expiryTime' in item) ||
+      typeof item.expiryTime !== 'number' ||
+      !Number.isFinite(item.expiryTime)
+    )
+      continue
+
+    const { uhrpUrl, expiryTime } = item
+    const listed = uploads.get(uhrpUrl)
+    if (listed === undefined || expiryTime > listed.expiryTime) {
+      uploads.set(uhrpUrl, { uhrpUrl, expiryTime })
     }
-    return fileName
   }
-  // Fallback to the full URL with protocol removed
-  return uhrpUrl.replace(/^(uhrp|https?):(\/\/)?/, '')
+  return [...uploads.values()]
 }
 
 const FilesForm: React.FC<FilesFormProps> = () => {
   const [storageURL, setStorageURL] = useState<string>('')
-  const [storageURLs, setStorageURLs] = useState<string[]>(constants.storageURLs.map(x => x.toString()))
-  const [files, setFiles] = useState<any[]>([])
+  const [storageURLs, setStorageURLs] = useState<string[]>(
+    constants.storageURLs.map(x => x.toString())
+  )
+  const [files, setFiles] = useState<ListedUpload[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [openRenewDialog, setOpenRenewDialog] = useState<boolean>(false)
   const [openFindDialog, setOpenFindDialog] = useState<boolean>(false)
@@ -133,16 +144,12 @@ const FilesForm: React.FC<FilesFormProps> = () => {
     setError('')
     try {
       const wallet = new WalletClient('auto', 'localhost')
-      // @ts-ignore - Using the new methods that exist at runtime but not in TypeScript definitions
       const storageUploader = new StorageUploader({
         storageURL,
         wallet
       })
 
-      // @ts-ignore - Using the new StorageUploader.listUploads() method
-      const filesList = await storageUploader.listUploads()
-      console.log('list', filesList)
-      setFiles(filesList || [])
+      setFiles(listUploadedFiles(await storageUploader.listUploads()))
     } catch (err) {
       console.error('Error loading files:', err)
       setError('Failed to load files. Please ensure your wallet is connected.')
@@ -152,7 +159,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
     }
   }
 
-  const handleSelectChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+  const handleSelectChange = (event: SelectChangeEvent<string>) => {
     const selectedValue = event.target.value as string
     if (selectedValue === 'add-new-option') {
       setOpenNewOptionDialog(true)
@@ -197,21 +204,17 @@ const FilesForm: React.FC<FilesFormProps> = () => {
     setLoading(true)
     try {
       const wallet = new WalletClient('auto', 'localhost')
-      // @ts-ignore - Using the new methods that exist at runtime but not in TypeScript definitions
       const storageUploader = new StorageUploader({
         storageURL,
         wallet
       })
-      console.log('t', selectedFile)
-      console.log(additionalMinutes)
-      // @ts-ignore - Using the new StorageUploader.renewFile() method
       const result = await storageUploader.renewFile(selectedFile, additionalMinutes)
       setRenewalResult(result)
 
       if (result.status === 'success') {
         toast.success('File renewed successfully')
         // Refresh file list after successful renewal
-        loadFiles()
+        await loadFiles()
       } else {
         toast.error('File renewal failed')
       }
@@ -224,7 +227,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
   }
 
   const handleFindFile = async () => {
-    if (!findFileUrl || !findFileUrl.trim()) {
+    if (!findFileUrl.trim()) {
       toast.error('Please enter a valid UHRP URL')
       return
     }
@@ -233,13 +236,11 @@ const FilesForm: React.FC<FilesFormProps> = () => {
     setFileDetails(null)
     try {
       const wallet = new WalletClient('auto', 'localhost')
-      // @ts-ignore - Using the new methods that exist at runtime but not in TypeScript definitions
       const storageUploader = new StorageUploader({
         storageURL,
         wallet
       })
 
-      // @ts-ignore - Using the new StorageUploader.findFile() method
       const result = await storageUploader.findFile(findFileUrl)
       setFileDetails(result)
     } catch (err) {
@@ -278,7 +279,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
       link.click()
 
       // Cleanup
-      document.body.removeChild(link)
+      link.remove()
       URL.revokeObjectURL(url)
       toast.success('File downloaded successfully')
     } catch (error) {
@@ -300,7 +301,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
         <CardContent sx={{ p: 3 }}>
           <Box display="flex" alignItems="center" mb={3}>
             <StorageIcon fontSize="large" color="primary" sx={{ mr: 2 }} />
-            <Typography variant="h5" component="h2">Manage Your Files</Typography>
+            <Typography variant="h5" component="h2">
+              Manage Your Files
+            </Typography>
           </Box>
 
           <Box sx={{ mb: 3 }}>
@@ -312,9 +315,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 label="Storage Server URL"
                 sx={{ borderRadius: 1 }}
               >
-                {storageURLs.map((url, index) => (
-                  <MenuItem key={index} value={url.toString()}>
-                    {url.toString()}
+                {storageURLs.map(url => (
+                  <MenuItem key={url} value={url}>
+                    {url}
                   </MenuItem>
                 ))}
                 <MenuItem value="add-new-option">
@@ -354,7 +357,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
 
           {error && (
             <Fade in={!!error}>
-              <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
             </Fade>
           )}
         </CardContent>
@@ -368,7 +373,10 @@ const FilesForm: React.FC<FilesFormProps> = () => {
             </Typography>
           </Box>
           <Divider />
-          <TableContainer component={Paper} sx={{ boxShadow: 'none', borderRadius: 0, width: '100%' }}>
+          <TableContainer
+            component={Paper}
+            sx={{ boxShadow: 'none', borderRadius: 0, width: '100%' }}
+          >
             <Table sx={{ width: '100%' }}>
               <TableHead sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)' }}>
                 <TableRow>
@@ -378,11 +386,15 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {files.map((file, index) => (
-                  <TableRow key={index} hover sx={{
-                    '&:last-child td, &:last-child th': { border: 0 },
-                    transition: 'background-color 0.2s'
-                  }}>
+                {files.map(file => (
+                  <TableRow
+                    key={file.uhrpUrl}
+                    hover
+                    sx={{
+                      '&:last-child td, &:last-child th': { border: 0 },
+                      transition: 'background-color 0.2s'
+                    }}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Tooltip title={file.uhrpUrl} arrow placement="top">
@@ -403,19 +415,20 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                           <IconButton
                             size="small"
                             onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(file.uhrpUrl)
+                              e.stopPropagation()
+                              navigator.clipboard
+                                .writeText(file.uhrpUrl)
                                 .then(() => {
-                                  setCopiedUrl(file.uhrpUrl);
-                                  toast.success('URL copied to clipboard');
-                                  setTimeout(() => setCopiedUrl(null), 2000);
+                                  setCopiedUrl(file.uhrpUrl)
+                                  toast.success('URL copied to clipboard')
+                                  setTimeout(() => setCopiedUrl(null), 2000)
                                 })
                                 .catch(err => {
-                                  console.error('Could not copy text: ', err);
-                                  toast.error('Failed to copy URL');
-                                });
+                                  console.error('Could not copy text: ', err)
+                                  toast.error('Failed to copy URL')
+                                })
                             }}
-                            color={copiedUrl === file.uhrpUrl ? "success" : "default"}
+                            color={copiedUrl === file.uhrpUrl ? 'success' : 'default'}
                           >
                             <ContentCopyIcon fontSize="small" />
                           </IconButton>
@@ -424,7 +437,11 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                     </TableCell>
                     <TableCell>
                       <Box display="flex" alignItems="center">
-                        <ScheduleIcon fontSize="small" color="action" sx={{ mr: 1, opacity: 0.7 }} />
+                        <ScheduleIcon
+                          fontSize="small"
+                          color="action"
+                          sx={{ mr: 1, opacity: 0.7 }}
+                        />
                         {formatDate(file.expiryTime)}
                       </Box>
                     </TableCell>
@@ -434,7 +451,13 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                           size="small"
                           variant="contained"
                           color="primary"
-                          startIcon={downloadingFiles[file.uhrpUrl] ? <CircularProgress size={16} color="inherit" /> : <CloudDownloadIcon />}
+                          startIcon={
+                            downloadingFiles[file.uhrpUrl] ? (
+                              <CircularProgress size={16} color="inherit" />
+                            ) : (
+                              <CloudDownloadIcon />
+                            )
+                          }
                           onClick={() => handleDownloadFile(file.uhrpUrl)}
                           disabled={!!downloadingFiles[file.uhrpUrl]}
                           sx={{ borderRadius: 2 }}
@@ -488,7 +511,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           sx: { borderRadius: 2 }
         }}
       >
-        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}>
+        <DialogTitle
+          sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}
+        >
           <ScheduleIcon sx={{ mr: 1 }} /> Renew File Hosting
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
@@ -496,7 +521,10 @@ const FilesForm: React.FC<FilesFormProps> = () => {
             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
               UHRP URL
             </Typography>
-            <Typography variant="body1" sx={{ wordBreak: 'break-all', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
+            <Typography
+              variant="body1"
+              sx={{ wordBreak: 'break-all', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}
+            >
               {selectedFile}
             </Typography>
           </Box>
@@ -508,7 +536,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
               label="Additional Duration"
               variant="outlined"
               value={additionalMinutes}
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => setAdditionalMinutes(Number(e.target.value))}
+              onChange={(e: SelectChangeEvent<number>) =>
+                setAdditionalMinutes(Number(e.target.value))
+              }
             >
               <MenuItem value={180}>3 Hours</MenuItem>
               <MenuItem value={1440}>1 Day</MenuItem>
@@ -523,14 +553,23 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           </FormControl>
 
           {renewalResult && (
-            <Box sx={{ p: 2, bgcolor: renewalResult.status === 'success' ? 'success.light' : 'info.light', borderRadius: 2, mt: 2 }}>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: renewalResult.status === 'success' ? 'success.light' : 'info.light',
+                borderRadius: 2,
+                mt: 2
+              }}
+            >
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                 Renewal {renewalResult.status === 'success' ? 'Successful' : 'Result'}
               </Typography>
 
               <Stack spacing={1}>
                 <Box display="flex">
-                  <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>Status:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
+                    Status:
+                  </Typography>
                   <Chip
                     size="small"
                     label={renewalResult.status}
@@ -540,21 +579,31 @@ const FilesForm: React.FC<FilesFormProps> = () => {
 
                 {renewalResult.prevExpiryTime && (
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>Previous Expiry:</Typography>
-                    <Typography variant="body2">{formatDate(renewalResult.prevExpiryTime)}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
+                      Previous Expiry:
+                    </Typography>
+                    <Typography variant="body2">
+                      {formatDate(renewalResult.prevExpiryTime)}
+                    </Typography>
                   </Box>
                 )}
 
                 {renewalResult.newExpiryTime && (
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>New Expiry:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{formatDate(renewalResult.newExpiryTime)}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
+                      New Expiry:
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                      {formatDate(renewalResult.newExpiryTime)}
+                    </Typography>
                   </Box>
                 )}
 
                 {renewalResult.amount && (
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>Amount:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 140 }}>
+                      Amount:
+                    </Typography>
                     <Typography variant="body2">{renewalResult.amount}</Typography>
                   </Box>
                 )}
@@ -563,11 +612,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={handleCloseRenewDialog}
-            variant="outlined"
-            sx={{ borderRadius: 2 }}
-          >
+          <Button onClick={handleCloseRenewDialog} variant="outlined" sx={{ borderRadius: 2 }}>
             Close
           </Button>
           <Button
@@ -594,7 +639,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           sx: { borderRadius: 2 }
         }}
       >
-        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}>
+        <DialogTitle
+          sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}
+        >
           <SearchIcon sx={{ mr: 1 }} /> Find File Information
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
@@ -628,18 +675,27 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           {fileDetails && (
             <Fade in={!!fileDetails}>
               <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 2, mt: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center' }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center' }}
+                >
                   <InfoIcon sx={{ mr: 1, fontSize: '1rem' }} /> File Details
                 </Typography>
 
                 <Stack spacing={1.5}>
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>Name:</Typography>
-                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{fileDetails.name}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
+                      Name:
+                    </Typography>
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                      {fileDetails.name}
+                    </Typography>
                   </Box>
 
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>Size:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
+                      Size:
+                    </Typography>
                     <Chip
                       size="small"
                       label={formatSize(fileDetails.size)}
@@ -649,14 +705,22 @@ const FilesForm: React.FC<FilesFormProps> = () => {
                   </Box>
 
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>Type:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
+                      Type:
+                    </Typography>
                     <Typography variant="body2">{fileDetails.mimeType}</Typography>
                   </Box>
 
                   <Box display="flex">
-                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>Expiry:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', width: 120 }}>
+                      Expiry:
+                    </Typography>
                     <Box display="flex" alignItems="center">
-                      <ScheduleIcon fontSize="small" color="action" sx={{ mr: 1, fontSize: '1rem' }} />
+                      <ScheduleIcon
+                        fontSize="small"
+                        color="action"
+                        sx={{ mr: 1, fontSize: '1rem' }}
+                      />
                       <Typography variant="body2">{formatDate(fileDetails.expiryTime)}</Typography>
                     </Box>
                   </Box>
@@ -666,11 +730,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={handleCloseFindDialog}
-            variant="outlined"
-            sx={{ borderRadius: 2 }}
-          >
+          <Button onClick={handleCloseFindDialog} variant="outlined" sx={{ borderRadius: 2 }}>
             Close
           </Button>
           <Button
@@ -697,7 +757,9 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           sx: { borderRadius: 2 }
         }}
       >
-        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}>
+        <DialogTitle
+          sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center' }}
+        >
           <CloudUploadIcon sx={{ mr: 1 }} /> Add New Server URL
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
@@ -717,11 +779,7 @@ const FilesForm: React.FC<FilesFormProps> = () => {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={handleCloseNewOptionDialog}
-            variant="outlined"
-            sx={{ borderRadius: 2 }}
-          >
+          <Button onClick={handleCloseNewOptionDialog} variant="outlined" sx={{ borderRadius: 2 }}>
             Cancel
           </Button>
           <Button

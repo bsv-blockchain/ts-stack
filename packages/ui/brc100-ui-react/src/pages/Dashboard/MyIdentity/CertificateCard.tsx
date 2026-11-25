@@ -1,3 +1,5 @@
+import { copyToClipboard } from '../../../utils/copyToClipboard'
+import { mostTrustedRecord } from '../../../components/registryMetadata'
 import React, { useState, useEffect, useContext } from 'react'
 import {
   Card,
@@ -22,17 +24,24 @@ import CounterpartyChip from '../../../components/CounterpartyChip'
 import { DEFAULT_APP_ICON } from '../../../constants/popularApps'
 import { useHistory } from 'react-router-dom'
 import { WalletContext } from '../../../WalletContext'
-import { CertificateDefinitionData, CertificateFieldDescriptor, IdentityCertificate, RegistryClient } from '@bsv/sdk'
+import {
+  CertificateDefinitionData,
+  CertificateFieldDescriptor,
+  IdentityCertificate,
+  RegistryClient,
+  type WalletCertificate
+} from '@bsv/sdk'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { Description } from '@mui/icons-material'
+
+export type DisplayedCertificate = WalletCertificate & Pick<IdentityCertificate, 'decryptedFields'>
 
 // Props for the CertificateCard component.
 interface CertificateCardProps {
-  certificate: IdentityCertificate
+  certificate: DisplayedCertificate
   onClick?: (event: React.MouseEvent<HTMLDivElement>) => void
   clickable?: boolean
   canRevoke?: boolean
-  onRevoke?: (certificate: IdentityCertificate) => void
+  onRevoke?: (certificate: DisplayedCertificate) => void
 }
 
 // Props for the CertificateDetailsModal component.
@@ -58,16 +67,21 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
   onRevoke
 }) => {
   const history = useHistory()
-  const [certName, setCertName] = useState<string>('Custom Certificate')
-  const [iconURL, setIconURL] = useState<string>(DEFAULT_APP_ICON)
-  const [description, setDescription] = useState<string>('')
-  const [fields, setFields] = useState<{ [key: string]: CertificateFieldDescriptor }>({})
   const { managers, settings, adminOriginator, activeProfile } = useContext(WalletContext)
-  const [modalOpen, setModalOpen] = useState<boolean>(false)
-  const [isRevoked, setIsRevoked] = useState<boolean>(false)
-  const [documentationURL, setDocumentationURL] = useState<string>('')
-
-  const registrant = new RegistryClient(managers.walletManager)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [isRevoked, setIsRevoked] = useState(false)
+  const [definition, setDefinition] = useState<{
+    query: string
+    result?: CertificateDefinitionData
+  }>()
+  const type = certificate.type
+  const trustedCertifiers = settings.trustSettings.trustedCertifiers
+  const query = JSON.stringify([activeProfile?.id, type, trustedCertifiers])
+  const certificateDefinition = definition?.query === query ? definition.result : undefined
+  const certName = certificateDefinition?.name ?? 'Custom Certificate'
+  const iconURL = certificateDefinition?.iconURL ?? DEFAULT_APP_ICON
+  const description = certificateDefinition?.description ?? ''
+  const fields = certificateDefinition?.fields ?? {}
 
   // Handle modal actions
   const handleModalOpen = () => {
@@ -83,11 +97,16 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
   // Handle certificate revocation
   const handleRelinquishCertificate = async () => {
     try {
-      await managers.permissionsManager.relinquishCertificate({
-        type: certificate.type,
-        serialNumber: certificate.serialNumber,
-        certifier: certificate.certifier
-      }, adminOriginator)
+      const permissionsManager = managers.permissionsManager
+      if (!permissionsManager) throw new Error('Wallet is not ready.')
+      await permissionsManager.relinquishCertificate(
+        {
+          type: certificate.type,
+          serialNumber: certificate.serialNumber,
+          certifier: certificate.certifier
+        },
+        adminOriginator
+      )
 
       // Set the certificate as revoked locally
       setIsRevoked(true)
@@ -102,57 +121,26 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
   }
 
   useEffect(() => {
-    ;(async () => {
-      try {
-        const registryOperators: string[] = settings.trustSettings.trustedCertifiers.map(
-          (x: any) => x.identityKey
+    const wallet = managers.walletManager
+    if (!wallet || !activeProfile?.id) return
+    let active = true
+    const registryOperators = trustedCertifiers.map(({ identityKey }) => identityKey)
+    const registry = new RegistryClient(wallet)
+    registry
+      .resolve('certificate', { type, registryOperators })
+      .then(records => {
+        if (!active) return
+        const matchingRecords = records.filter(
+          (record): record is CertificateDefinitionData =>
+            'type' in record && 'fields' in record && record.type === type
         )
-        const cacheKey = `certData_${certificate.type}_${registryOperators.join('_')}+${activeProfile.id}`
-        const cachedData = window.localStorage.getItem(cacheKey)
-
-        if (cachedData) {
-          const cachedCert = JSON.parse(cachedData)
-          setCertName(cachedCert.name)
-          setIconURL(cachedCert.iconURL)
-          setDescription(cachedCert.description)
-          setFields(JSON.parse(cachedCert.fields))
-        }
-        const results = (await registrant.resolve('certificate', {
-          type: certificate.type,
-          registryOperators
-        })) as CertificateDefinitionData[]
-
-        if (results && results.length > 0) {
-          // Compute the most trusted of the results
-          let mostTrustedIndex = 0
-          let maxTrustPoints = 0
-          for (let i = 0; i < results.length; i++) {
-            const resultTrustLevel =
-              settings.trustSettings.trustedCertifiers.find(
-                (x: any) => x.identityKey === results[i].registryOperator
-              )?.trust || 0
-            if (resultTrustLevel > maxTrustPoints) {
-              mostTrustedIndex = i
-              maxTrustPoints = resultTrustLevel
-            }
-          }
-          const mostTrustedCert = results[mostTrustedIndex]
-          setCertName(mostTrustedCert.name)
-          setIconURL(mostTrustedCert.iconURL)
-          setDocumentationURL(mostTrustedCert?.documentationURL)
-          setDescription(mostTrustedCert.description)
-          setFields(mostTrustedCert.fields)
-
-          // Cache the fetched data
-          window.localStorage.setItem(cacheKey, JSON.stringify(mostTrustedCert))
-        } else {
-          window.localStorage.removeItem(cacheKey)
-        }
-      } catch (error) {
-        console.error('Failed to fetch certificate details:', error)
-      }
-    })()
-  }, [certificate, settings, managers.walletManager])
+        setDefinition({ query, result: mostTrustedRecord(matchingRecords, trustedCertifiers) })
+      })
+      .catch(() => console.error('Could not load the certificate definition.'))
+    return () => {
+      active = false
+    }
+  }, [type, trustedCertifiers, managers.walletManager, activeProfile?.id, query])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (clickable) {
@@ -175,10 +163,12 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
       sx={{
         cursor: clickable ? 'pointer' : 'default',
         transition: 'all 0.3s ease',
-        '&:hover': clickable ? {
-          boxShadow: 3,
-          transform: 'translateY(-2px)'
-        } : {},
+        '&:hover': clickable
+          ? {
+              boxShadow: 3,
+              transform: 'translateY(-2px)'
+            }
+          : {},
         position: 'relative'
       }}
       onClick={handleClick}
@@ -186,18 +176,22 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
       <CardContent>
         {/* Revoke button - only shown when canRevoke is true */}
         {canRevoke && (
-          <Box sx={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            zIndex: 1
-          }}>
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 1
+            }}
+          >
             <IconButton
               color="primary"
               size="small"
-              onClick={(e) => {
+              onClick={e => {
                 e.stopPropagation() // Prevent card click
-                handleRelinquishCertificate()
+                handleRelinquishCertificate().catch(() =>
+                  console.error('Could not remove the certificate.')
+                )
               }}
               aria-label="revoke certificate"
             >
@@ -209,10 +203,7 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
         <Grid container spacing={2} alignItems="center">
           <Grid item>
             <Avatar sx={{ width: 56, height: 56 }}>
-              <Img
-                style={{ width: '75%', height: '75%' }}
-                src={iconURL}
-              />
+              <Img style={{ width: '75%', height: '75%' }} src={iconURL} />
             </Avatar>
           </Grid>
           <Grid item xs>
@@ -222,10 +213,7 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
             <Typography variant="body2" color="text.secondary" paragraph>
               {description}
             </Typography>
-            <CounterpartyChip
-              counterparty={certificate.certifier}
-              label="Issuer"
-            />
+            <CounterpartyChip counterparty={certificate.certifier} label="Issuer" />
           </Grid>
         </Grid>
         <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -241,7 +229,7 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
         <Button
           variant="outlined"
           size="small"
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation()
             handleModalOpen()
           }}
@@ -251,7 +239,7 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
 
         <CertificateDetailsModal
           open={modalOpen}
-          onClose={(event) => handleModalClose(event)}
+          onClose={event => handleModalClose(event)}
           fieldDetails={fields}
           actualData={certificate.decryptedFields || {}}
           certName={certName}
@@ -260,9 +248,10 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
           serialNumber={certificate.serialNumber}
           certificateType={certificate.type}
         />
-        {modalOpen && (() => {
-          return null
-        })()}
+        {modalOpen &&
+          (() => {
+            return null
+          })()}
       </CardContent>
     </Card>
   )
@@ -306,91 +295,102 @@ const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({
     })
   }
 
-const MetaRow: React.FC<{
-  label: React.ReactNode
-  value?: React.ReactNode
-  dividerBelow?: boolean
-}> = ({ label, value, dividerBelow = false }) => {
-  if (!value && value !== 0) return null
-  return (
-    <>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          alignItems: 'center',
-          columnGap: 1,
-          my: 0.5
-        }}
-      >
-        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-          <b>{label}</b>
-        </Typography>
-        <Box />
-        <Typography
-          variant="body2"
-          sx={{ textAlign: 'right', whiteSpace: 'nowrap' }}
-          title={typeof value === 'string' ? value : undefined}
+  const MetaRow: React.FC<{
+    label: React.ReactNode
+    value?: React.ReactNode
+    dividerBelow?: boolean
+  }> = ({ label, value, dividerBelow = false }) => {
+    if (!value && value !== 0) return null
+    return (
+      <>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto',
+            alignItems: 'center',
+            columnGap: 1,
+            my: 0.5
+          }}
         >
-          {value}
-        </Typography>
-      </Box>
-      {dividerBelow && <Divider sx={{ my: 2 }} />}
-    </>
-  )
-}
-
-const CopyableMetaRow: React.FC<{
-  label: React.ReactNode
-  value?: React.ReactNode
-  dividerBelow?: boolean
-}> = ({ label, value, dividerBelow = false }) => {
-  if (!value && value !== 0) return null
-  const copy = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    navigator.clipboard?.writeText(String(value ?? ''))
-  }
-  return (
-    <>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          alignItems: 'center',
-          columnGap: 1,
-          my: 0.5
-        }}
-      >
-        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-          <b>{label}</b>
-        </Typography>
-        <Box />
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end' }}>
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            <b>{label}</b>
+          </Typography>
+          <Box />
           <Typography
             variant="body2"
-            sx={{ whiteSpace: 'nowrap' }}
+            sx={{ textAlign: 'right', whiteSpace: 'nowrap' }}
             title={typeof value === 'string' ? value : undefined}
           >
             {value}
           </Typography>
-          <Tooltip title="Copy">
-            <IconButton size="small" onClick={copy}>
-              <ContentCopyIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
         </Box>
-      </Box>
-      {dividerBelow && <Divider sx={{ my: 2 }} />}
-    </>
-  )
-}
+        {dividerBelow && <Divider sx={{ my: 2 }} />}
+      </>
+    )
+  }
+
+  const CopyableMetaRow: React.FC<{
+    label: React.ReactNode
+    value?: React.ReactNode
+    dividerBelow?: boolean
+  }> = ({ label, value, dividerBelow = false }) => {
+    if (!value && value !== 0) return null
+    const copy = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      copyToClipboard(String(value ?? ''))
+    }
+    return (
+      <>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto',
+            alignItems: 'center',
+            columnGap: 1,
+            my: 0.5
+          }}
+        >
+          <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+            <b>{label}</b>
+          </Typography>
+          <Box />
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              justifyContent: 'flex-end'
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{ whiteSpace: 'nowrap' }}
+              title={typeof value === 'string' ? value : undefined}
+            >
+              {value}
+            </Typography>
+            <Tooltip title="Copy">
+              <IconButton size="small" onClick={copy}>
+                <ContentCopyIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+        {dividerBelow && <Divider sx={{ my: 2 }} />}
+      </>
+    )
+  }
   const CT = certificateType ?? actualData?.certType ?? actualData?.type ?? ''
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle sx={{justifySelf: 'center', textAlign: 'center', variant: 'h6', fontWeight: 'bold'}}>Certificate Details</DialogTitle>
+    <Dialog open={open} onClose={() => onClose()} fullWidth maxWidth="md">
+      <DialogTitle
+        sx={{ justifySelf: 'center', textAlign: 'center', variant: 'h6', fontWeight: 'bold' }}
+      >
+        Certificate Details
+      </DialogTitle>
 
-      <DialogContent dividers onClick={(e) => e.stopPropagation()} sx={{ cursor: 'default' }}>
+      <DialogContent dividers onClick={e => e.stopPropagation()} sx={{ cursor: 'default' }}>
         <Box
           sx={{
             display: 'grid',
@@ -404,17 +404,22 @@ const CopyableMetaRow: React.FC<{
           <Box sx={{ justifySelf: 'start' }}>
             {iconURL ? (
               <Avatar sx={{ width: 48, height: 48 }}>
-                <Img style={{ width: '100%', height: '100%', objectFit: 'contain' }} src={iconURL} />
+                <Img
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  src={iconURL}
+                />
               </Avatar>
             ) : (
-              <Avatar sx={{ width: 48, height: 48 }}>
-                {(certName?.[0] ?? 'C').toUpperCase()}
-              </Avatar>
+              <Avatar sx={{ width: 48, height: 48 }}>{(certName?.[0] ?? 'C').toUpperCase()}</Avatar>
             )}
           </Box>
 
           {/* Center: Name */}
-          <Typography variant="h6" fontWeight={700} sx={{ justifySelf: 'center', textAlign: 'center' }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{ justifySelf: 'center', textAlign: 'center' }}
+          >
             {certName || 'Certificate'}
           </Typography>
 
@@ -423,26 +428,36 @@ const CopyableMetaRow: React.FC<{
         </Box>
 
         <Box sx={{ mt: 1 }}>
-        {(() => {
-          const rows = [
-            { key: 'ct',     comp: 'copy' as const, label: 'Certificate Type:', value: CT },
-            { key: 'serial', comp: 'copy' as const, label: 'Serial Number:',    value: serialNumber },
-            { key: 'desc',   comp: 'plain' as const, label: 'Description:',     value: description },
-          ].filter(r => r.value !== undefined && r.value !== null && r.value !== '')
+          {(() => {
+            const rows = [
+              { key: 'ct', comp: 'copy' as const, label: 'Certificate Type:', value: CT },
+              {
+                key: 'serial',
+                comp: 'copy' as const,
+                label: 'Serial Number:',
+                value: serialNumber
+              },
+              { key: 'desc', comp: 'plain' as const, label: 'Description:', value: description }
+            ].filter(r => r.value !== undefined && r.value !== null && r.value !== '')
 
-          return rows.map((r, i) => {
-            const dividerBelow = i < rows.length - 1
-            return r.comp === 'copy' ? (
-              <CopyableMetaRow key={r.key} label={r.label} value={r.value} dividerBelow={dividerBelow} />
-            ) : (
-              <MetaRow key={r.key} label={r.label} value={r.value} dividerBelow={dividerBelow} />
-            )
-          })
-        })()}
-      </Box>
+            return rows.map((r, i) => {
+              const dividerBelow = i < rows.length - 1
+              return r.comp === 'copy' ? (
+                <CopyableMetaRow
+                  key={r.key}
+                  label={r.label}
+                  value={r.value}
+                  dividerBelow={dividerBelow}
+                />
+              ) : (
+                <MetaRow key={r.key} label={r.label} value={r.value} dividerBelow={dividerBelow} />
+              )
+            })
+          })()}
+        </Box>
         <Divider sx={{ my: 2 }} />
         {/* FIELDS */}
-          <Box
+        <Box
           sx={{
             display: 'grid',
             gridTemplateColumns: 'auto 1fr auto',
@@ -452,7 +467,11 @@ const CopyableMetaRow: React.FC<{
           }}
         >
           <Box sx={{ width: 48 }} />
-          <Typography variant="h6" fontWeight={700} sx={{ justifySelf: 'center', textAlign: 'center' }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{ justifySelf: 'center', textAlign: 'center' }}
+          >
             Fields
           </Typography>
           <Box sx={{ width: 48 }} />
@@ -464,9 +483,9 @@ const CopyableMetaRow: React.FC<{
           </Typography>
         ) : (
           <Stack spacing={2}>
-            {Object.entries(mergedFields).map(([key, value], index) => (
+            {Object.entries(mergedFields).map(([key, value]) => (
               <Stack
-                key={index}
+                key={key}
                 direction="row"
                 spacing={2}
                 alignItems="flex-start"
@@ -544,7 +563,7 @@ const CopyableMetaRow: React.FC<{
       </DialogContent>
       <DialogActions>
         <Button
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation()
             onClose(e)
           }}

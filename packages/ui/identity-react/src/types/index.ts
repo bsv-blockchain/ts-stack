@@ -1,12 +1,17 @@
-import { DisplayableIdentity, WalletInterface, IdentityClientOptions, OriginatorDomainNameStringUnder250Bytes } from "@bsv/sdk"
-import { Dispatch, SetStateAction } from "react"
+import {
+  DisplayableIdentity,
+  WalletInterface,
+  IdentityClientOptions,
+  OriginatorDomainNameStringUnder250Bytes
+} from '@bsv/sdk'
+import { Dispatch, SetStateAction } from 'react'
 
 export interface DecryptedField {
   profilePhoto: string
   firstName?: string
   lastName?: string
   userName?: string
-  name?: string,
+  name?: string
   email?: string
   phoneNumber?: string
 }
@@ -18,7 +23,7 @@ export interface Certifier {
 
 export interface IdentityProps {
   identityKey: string
-  themeMode?: "light" | "dark"
+  themeMode?: 'light' | 'dark'
 }
 
 export interface IdentityStore {

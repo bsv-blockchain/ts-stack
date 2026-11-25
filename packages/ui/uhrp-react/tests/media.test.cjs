@@ -36,8 +36,42 @@ test('passes plain image and media URLs through and preserves their attributes',
   source.unmount()
 })
 
+test('restarts an empty media element as soon as its async source becomes available', async () => {
+  class TestMediaElement {
+    ownerDocument = { defaultView: { HTMLMediaElement: TestMediaElement } }
+    currentSrc = ''
+    loads = 0
+
+    load() {
+      this.loads += 1
+    }
+  }
+  const pendingMedia = new TestMediaElement()
+  const playingMedia = new TestMediaElement()
+  playingMedia.currentSrc = 'https://cdn.example/other-video.webm'
+
+  let pendingSource
+  let playingSource
+  await act(async () => {
+    pendingSource = create(React.createElement(Source, { src: 'https://cdn.example/video.webm' }), {
+      createNodeMock: () => ({ parentElement: pendingMedia })
+    })
+    playingSource = create(
+      React.createElement(Source, { src: 'https://cdn.example/alternate.webm' }),
+      {
+        createNodeMock: () => ({ parentElement: playingMedia })
+      }
+    )
+  })
+
+  assert.equal(pendingMedia.loads, 1)
+  assert.equal(playingMedia.loads, 0)
+  pendingSource.unmount()
+  playingSource.unmount()
+})
+
 test('shows fallbacks, retries unavailable UHRP content and shares each lookup', async t => {
-  const src = StorageUtils.getURLForHash(new Array(32).fill(3))
+  const src = StorageUtils.getURLForHash(Array.from({ length: 32 }, () => 3))
   const resolved = 'https://cdn.example/content'
   const fallback = React.createElement('span', null, 'Loading media')
   let attempts = 0
@@ -64,6 +98,7 @@ test('shows fallbacks, retries unavailable UHRP content and shares each lookup',
   await resolve(src)
   assert.equal(lookup.mock.callCount(), 3)
   assert.equal(image.toJSON().props.src, resolved)
+  assert.equal(image.toJSON().props.alt, '')
   assert.equal(source.toJSON().props.src, resolved)
   assert.equal(JSON.parse(storage.get('uhrp-react-session')).state.urls[src], resolved)
   image.unmount()

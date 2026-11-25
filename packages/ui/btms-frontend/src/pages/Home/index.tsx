@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -58,7 +57,10 @@ const parseIncomingMetadata = (metadata: unknown): Record<string, unknown> | und
   return undefined
 }
 
-const getMetadataString = (metadata: Record<string, unknown> | undefined, key: string): string | undefined => {
+const getMetadataString = (
+  metadata: Record<string, unknown> | undefined,
+  key: string
+): string | undefined => {
   const value = metadata?.[key]
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined
 }
@@ -71,7 +73,12 @@ const truncateAssetId = (assetId: string, prefix = 8, suffix = 8): string => {
 const Home: React.FC<HomeProps> = ({ history }) => {
   const classes = useStyles()
 
-  const { assets: walletTokens, loading: assetsLoading, error: assetsError, refresh: refreshAssets } = useBtmsAssets()
+  const {
+    assets: walletTokens,
+    loading: assetsLoading,
+    error: assetsError,
+    refresh: refreshAssets
+  } = useBtmsAssets()
   const {
     incoming,
     error: incomingError,
@@ -96,7 +103,10 @@ const Home: React.FC<HomeProps> = ({ history }) => {
   }, [incoming])
 
   const incomingMetadataByAsset = useMemo(() => {
-    const metadataMap: Record<string, { metadata?: Record<string, unknown>, name?: string, description?: string, iconURL?: string }> = {}
+    const metadataMap: Record<
+      string,
+      { metadata?: Record<string, unknown>; name?: string; description?: string; iconURL?: string }
+    > = {}
 
     for (const msg of incoming) {
       if (metadataMap[msg.assetId]) continue
@@ -223,7 +233,10 @@ const Home: React.FC<HomeProps> = ({ history }) => {
   }, [mergedTokens])
 
   const totalIncoming = useMemo(() => {
-    return Object.values(incomingAmountsByAsset).reduce((sum, amount) => sum + (Number(amount) || 0), 0)
+    return Object.values(incomingAmountsByAsset).reduce(
+      (sum, amount) => sum + (Number(amount) || 0),
+      0
+    )
   }, [incomingAmountsByAsset])
 
   const copyAssetId = async (event: React.MouseEvent, value: string) => {
@@ -254,7 +267,10 @@ const Home: React.FC<HomeProps> = ({ history }) => {
             </Box>
           </Grid>
           <Grid item xs={12} md={5}>
-            <Paper elevation={0} sx={{ p: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(16px)' }}>
+            <Paper
+              elevation={0}
+              sx={{ p: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(16px)' }}
+            >
               <Typography variant="overline" color="text.secondary">
                 Portfolio Overview
               </Typography>
@@ -275,7 +291,12 @@ const Home: React.FC<HomeProps> = ({ history }) => {
           </Grid>
         </Grid>
 
-        <Grid container alignItems="center" className={classes.table_title} justifyContent="space-between">
+        <Grid
+          container
+          alignItems="center"
+          className={classes.table_title}
+          justifyContent="space-between"
+        >
           <Grid item>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               My Assets
@@ -294,15 +315,9 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                   <TableCell align="left" colSpan={2}>
                     Asset
                   </TableCell>
-                  <TableCell align="right">
-                    Balance
-                  </TableCell>
-                  <TableCell align="right">
-                    Transfer
-                  </TableCell>
-                  <TableCell align="right">
-                    Incoming
-                  </TableCell>
+                  <TableCell align="right">Balance</TableCell>
+                  <TableCell align="right">Transfer</TableCell>
+                  <TableCell align="right">Incoming</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -312,7 +327,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                 </TableBody>
               ) : (
                 <TableBody>
-                  {mergedTokens.map((token, i) => {
+                  {mergedTokens.map(token => {
                     const incomingCount = incomingByAsset[token.assetId] || 0
                     const incomingAmount = incomingAmountsByAsset[token.assetId] || 0
 
@@ -335,7 +350,7 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                     const iconURL = token.iconURL
 
                     return (
-                      <TableRow key={i} className={classes.link}>
+                      <TableRow key={token.assetId} className={classes.link}>
                         <TableCell
                           align="left"
                           style={{ cursor: 'pointer' }}
@@ -355,7 +370,11 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                               }}
                             >
                               {iconURL ? (
-                                <Img src={iconURL} alt={token.name || token.assetId} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Img
+                                  src={iconURL}
+                                  alt={token.name || token.assetId}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
                               ) : (
                                 <Typography variant="subtitle2" color="text.secondary">
                                   {(token.name || token.assetId).slice(0, 2).toUpperCase()}
@@ -367,15 +386,19 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                                 {token.name || token.assetId}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box
+                                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                                >
                                   <Tooltip title={token.assetId}>
-                                    <span style={{ fontFamily: 'monospace' }}>{truncateAssetId(token.assetId)}</span>
+                                    <span style={{ fontFamily: 'monospace' }}>
+                                      {truncateAssetId(token.assetId)}
+                                    </span>
                                   </Tooltip>
                                   <Tooltip title="Copy Asset ID">
                                     <IconButton
                                       size="small"
                                       sx={{ p: 0.25 }}
-                                      onClick={(event) => void copyAssetId(event, token.assetId)}
+                                      onClick={event => void copyAssetId(event, token.assetId)}
                                     >
                                       <ContentCopyIcon sx={{ fontSize: 12 }} />
                                     </IconButton>
@@ -383,7 +406,11 @@ const Home: React.FC<HomeProps> = ({ history }) => {
                                 </Box>
                               </Typography>
                               {token.description && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block' }}
+                                >
                                   {token.description}
                                 </Typography>
                               )}

@@ -1,5 +1,5 @@
-import React, { useContext } from 'react'
-import { Typography, Divider } from '@mui/material'
+import { useContext } from 'react'
+import { Typography } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import style from './style'
 import { WalletContext } from '../../../../UserInterface'
@@ -14,7 +14,7 @@ const About = () => {
 
   return (
     <div className={classes.content_wrap}>
-      <Typography variant='h2' paragraph color='textPrimary'>
+      <Typography variant="h2" paragraph color="textPrimary">
         Software Versions
       </Typography>
       <Typography paragraph>

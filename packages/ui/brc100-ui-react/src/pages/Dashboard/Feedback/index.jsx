@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react'
+import { useState } from 'react'
 import { useBreakpoint } from '../../../utils/useBreakpoints.js'
 import { TextField, Button, Typography, LinearProgress } from '@mui/material'
 import { makeStyles } from '@mui/styles'
@@ -8,12 +8,11 @@ import { toast } from 'react-toastify'
 const useStyles = makeStyles(style, {
   name: 'Feedback'
 })
-const Feedback = ({ history }) => {
+const Feedback = () => {
   const classes = useStyles()
   const [feedback, setFeedback] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tabValue, setTabValue] = useState(2)
   const submitFeedback = async e => {
     e.preventDefault()
     try {
@@ -22,7 +21,7 @@ const Feedback = ({ history }) => {
         return
       }
       setLoading(true)
-      let result = await fetch('https://usercom.babbage.systems/submit', {
+      const response = await fetch('https://usercom.babbage.systems/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -31,11 +30,9 @@ const Feedback = ({ history }) => {
           email
         })
       })
-      result = await result.json()
-      if (result.status === 'error') {
-        const e = new Error(result.description)
-        e.code = result.code
-        throw e
+      const result = await response.json()
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.description || 'Feedback could not be submitted. Please try again.')
       }
       toast.dark('Feedback submitted!')
       setLoading(false)
@@ -52,11 +49,14 @@ const Feedback = ({ history }) => {
   return (
     <div className={classes.fixed_nav}>
       <form className={classes.content_wrap} onSubmit={submitFeedback}>
-        {(!breakpoints.sm && !breakpoints.xs) &&
-          <Typography variant='h1' paragraph>Leave Feedback</Typography>
-        }
+        {!breakpoints.sm && !breakpoints.xs && (
+          <Typography variant="h1" paragraph>
+            Leave Feedback
+          </Typography>
+        )}
         <Typography paragraph>
-          We want to hear what you think! Post your ideas here to help improve Project Babbage and our ecosystem of apps.
+          We want to hear what you think! Post your ideas here to help improve Project Babbage and
+          our ecosystem of apps.
         </Typography>
         <TextField
           fullWidth
@@ -64,7 +64,7 @@ const Feedback = ({ history }) => {
           value={email}
           disabled={loading}
           onChange={e => setEmail(e.target.value)}
-          placeholder='Email (optional)'
+          placeholder="Email (optional)"
         />
         <br />
         <br />
@@ -75,26 +75,22 @@ const Feedback = ({ history }) => {
           value={feedback}
           disabled={loading}
           onChange={e => setFeedback(e.target.value)}
-          placeholder='Tell us your thoughts...'
+          placeholder="Tell us your thoughts..."
         />
         <br />
         <br />
-        {loading
-          ? <LinearProgress />
-          : (
-            <Button
-              type='submit'
-              variant='contained'
-              color='primary'
-              disabled={feedback.length < 10}
-            >
-              Submit Feedback
-            </Button>
-          )}
+        {loading ? (
+          <LinearProgress />
+        ) : (
+          <Button type="submit" variant="contained" color="primary" disabled={feedback.length < 10}>
+            Submit Feedback
+          </Button>
+        )}
         <br />
         <br />
         <Typography>
-          You can also <a href='mailto:hello@projectbabbage.com'>email us</a> with any questions or concerns. We're always happy to discuss new projects and ways we can improve.
+          You can also <a href="mailto:hello@projectbabbage.com">email us</a> with any questions or
+          concerns. We're always happy to discuss new projects and ways we can improve.
         </Typography>
       </form>
     </div>

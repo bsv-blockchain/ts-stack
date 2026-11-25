@@ -1,5 +1,3 @@
-import React from 'react'
-
-export default () => (
-  <center>Spending & usage trends coming soon!</center>
-)
+export default function Trends() {
+  return <center>Spending & usage trends coming soon!</center>
+}

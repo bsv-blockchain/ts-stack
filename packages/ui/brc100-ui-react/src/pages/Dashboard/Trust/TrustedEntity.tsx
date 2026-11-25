@@ -1,5 +1,6 @@
+import { copyToClipboard } from '../../../utils/copyToClipboard'
 /* eslint-disable react/prop-types */
-import React, { useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import {
   Typography,
   Box,
@@ -14,8 +15,7 @@ import {
   Card,
   CardContent,
   Divider,
-  Collapse,
-  Link
+  Collapse
 } from '@mui/material'
 import Delete from '@mui/icons-material/Close'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -26,42 +26,46 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import CustomDialog from '../../../components/CustomDialog'
 import { Certifier } from '@bsv/wallet-toolbox-client'
 
-const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { history: any, classes: any, setTrustedEntities: Function, entity: Certifier, trustedEntities: Certifier[] }) => {
+interface TrustedEntityProps {
+  entity: Certifier
+  className?: string
+  setTrustedEntities: Dispatch<SetStateAction<Certifier[]>>
+}
+
+const TrustedEntity = ({ entity, setTrustedEntities, className }: TrustedEntityProps) => {
   const [trust, setTrust] = useState(entity.trust)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const handleTrustChange = (e, v) => {
+  const handleTrustChange = (_event: Event, v: number | number[]) => {
+    if (typeof v !== 'number') return
     setTrust(v)
-    setTrustedEntities(old => {
-      const newEntities = [...old]
-      newEntities[newEntities.indexOf(entity)].trust = v
-      return newEntities
-    })
+    setTrustedEntities(old =>
+      old.map(certifier =>
+        certifier.identityKey === entity.identityKey ? { ...certifier, trust: v } : certifier
+      )
+    )
   }
 
   const handleDelete = () => {
-    setTrustedEntities(old => {
-      const newEntities = [...old]
-      newEntities.splice(newEntities.indexOf(entity), 1)
-      return newEntities
-    })
+    setTrustedEntities(old => old.filter(certifier => certifier.identityKey !== entity.identityKey))
     setDeleteOpen(false)
   }
 
   const handleCopyIdentityKey = () => {
-    navigator.clipboard.writeText(entity.identityKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(entity.identityKey, () => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   // Format identity key for display
-  const formatIdentityKey = (key) => {
-    if (!key) return '';
-    const start = key.substring(0, 8);
-    const end = key.substring(key.length - 8);
-    return `${start}...${end}`;
+  const formatIdentityKey = (key: string) => {
+    if (!key) return ''
+    const start = key.substring(0, 8)
+    const end = key.substring(key.length - 8)
+    return `${start}...${end}`
   }
 
   return (
@@ -73,7 +77,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
           borderRadius: 2,
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
-            boxShadow: 3,
+            boxShadow: 3
           }
         }}
       >
@@ -81,7 +85,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
           <Box
             sx={{
               position: 'relative',
-              p: 2,
+              p: 2
             }}
           >
             {/* Delete Button - Positioned absolutely in the top right */}
@@ -101,7 +105,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
                 }
               }}
             >
-              <Delete fontSize='small' />
+              <Delete fontSize="small" />
             </IconButton>
 
             {/* Entity Information */}
@@ -115,7 +119,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
             >
               <img
                 src={entity.iconUrl}
-                className={classes.entity_icon}
+                className={className}
                 alt={`${entity.name} icon`}
                 style={{
                   width: '48px',
@@ -166,13 +170,9 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
                   >
                     {formatIdentityKey(entity.identityKey)}
                   </Typography>
-                  <Tooltip title={copied ? "Copied!" : "Copy Identity Key"}>
-                    <IconButton
-                      size="small"
-                      onClick={handleCopyIdentityKey}
-                      sx={{ ml: 1 }}
-                    >
-                      <ContentCopyIcon fontSize="small" color={copied ? "success" : "action"} />
+                  <Tooltip title={copied ? 'Copied!' : 'Copy Identity Key'}>
+                    <IconButton size="small" onClick={handleCopyIdentityKey} sx={{ ml: 1 }}>
+                      <ContentCopyIcon fontSize="small" color={copied ? 'success' : 'action'} />
                     </IconButton>
                   </Tooltip>
                 </Box>
@@ -180,7 +180,7 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
                 {/* Trust Level Chip */}
                 <Chip
                   label={`Trust Level: ${trust}/10`}
-                  color={trust > 7 ? "success" : trust > 4 ? "primary" : "default"}
+                  color={trust > 7 ? 'success' : trust > 4 ? 'primary' : 'default'}
                   size="small"
                   sx={{ mr: 1 }}
                 />
@@ -252,28 +252,51 @@ const TrustedEntity = ({ entity, setTrustedEntities, classes, history }: { histo
         </CardContent>
       </Card>
 
-      <CustomDialog title='Delete Trust Relationship' open={deleteOpen} onClose={() => setDeleteOpen(false)}>
+      <CustomDialog
+        title="Delete Trust Relationship"
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+      >
         <DialogContent>
           <DialogContentText>
             Are you sure you want to delete this trust relationship? This action cannot be undone.
           </DialogContentText>
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mt: 2,
+              p: 2,
+              bgcolor: 'background.paper',
+              borderRadius: 1
+            }}
+          >
             <img
               src={entity.iconUrl}
-              className={classes.entity_icon}
+              className={className}
               alt={`${entity.name} icon`}
               style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '16px' }}
             />
             <Box>
-              <Typography variant="subtitle1"><strong>{entity.name}</strong></Typography>
-              <Typography variant="body2" color="textSecondary">{formatIdentityKey(entity.identityKey)}</Typography>
-              <Typography variant="caption" color="textSecondary">{entity.description}</Typography>
+              <Typography variant="subtitle1">
+                <strong>{entity.name}</strong>
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                {formatIdentityKey(entity.identityKey)}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {entity.description}
+              </Typography>
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)} color="primary">Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">Delete</Button>
+          <Button onClick={() => setDeleteOpen(false)} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete
+          </Button>
         </DialogActions>
       </CustomDialog>
     </>

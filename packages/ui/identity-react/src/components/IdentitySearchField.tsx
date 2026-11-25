@@ -17,12 +17,12 @@ import {
 } from '@mui/material'
 import { Theme, useTheme } from '@mui/material/styles'
 import { Search as SearchIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material'
-import { NoMncModal } from 'metanet-react-prompt'
 import { DisplayableIdentity } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
 import { isIdentityKey } from '../utils/identityUtils.js'
 import { useIdentitySearch } from '../hooks/useIdentitySearch.js'
 import { DEFAULT_IDENTITY } from '../types/index.js'
+import { WalletRequiredDialog } from './WalletRequiredDialog.js'
 
 // Create a global event system without causing re-renders in React components
 const copyEvents = {
@@ -172,7 +172,8 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
   width = '250px',
   deduplicate = true
 }) => {
-  const theme = themeProp || useTheme()
+  const inheritedTheme = useTheme()
+  const theme = themeProp ?? inheritedTheme
 
   // Use the optimized hook for identity search
   const {
@@ -189,6 +190,10 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
 
   const [mncMissing, setMncMissing] = useState(false)
   const [autocompleteOpen, setAutocompleteOpen] = useState(false)
+  const emptyMessage = inputValue.trim()
+    ? 'No identities found'
+    : 'Start typing to search for identities'
+  const noOptionsText = isLoading ? 'Searching identities…' : searchError || emptyMessage
 
   // ─────────── Handlers & helpers ───────────
   // Input change and select handlers are now provided by the hook
@@ -272,7 +277,11 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
           p: 2.5
         }}
       >
-        <NoMncModal appName={appName} open={mncMissing} onClose={() => setMncMissing(false)} />
+        <WalletRequiredDialog
+          appName={appName}
+          open={mncMissing}
+          onClose={() => setMncMissing(false)}
+        />
         <Box sx={{ position: 'relative', width: 'fit-content', boxShadow: 3 }}>
           <Autocomplete
             options={filteredIdentities}
@@ -282,14 +291,7 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
             onChange={handleSelect}
             getOptionLabel={(o) => (typeof o === 'string' ? o : o.name)}
             filterOptions={filterOptions}
-            noOptionsText={
-              isLoading
-                ? 'Searching identities…'
-                : searchError ||
-                  (inputValue.trim()
-                    ? 'No identities found'
-                    : 'Start typing to search for identities')
-            }
+            noOptionsText={noOptionsText}
             loading={isLoading}
             loadingText="Searching identities…"
             open={autocompleteOpen}
@@ -297,17 +299,17 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
             onClose={() => setAutocompleteOpen(false)}
             clearOnBlur={false}
             selectOnFocus={false}
-            PaperComponent={({ children }) => (
-              <Box
-                sx={{
-                  bgcolor: theme?.palette.background.paper,
-                  color: theme?.palette.text.primary,
+            slotProps={{
+              paper: {
+                elevation: 0,
+                square: true,
+                sx: {
+                  bgcolor: theme.palette.background.paper,
+                  color: theme.palette.text.primary,
                   '& ul': { p: 0 }
-                }}
-              >
-                {children}
-              </Box>
-            )}
+                }
+              }
+            }}
             renderOption={(props, option: DisplayableIdentity) => (
               <IdentityItem key={option.identityKey} option={option} props={props} />
             )}

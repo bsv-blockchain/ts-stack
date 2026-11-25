@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { normalizeDisplayAmount } = require('../out/src/utils/amountDisplayFormatting.js')
+const { CurrencyConverter } = require('@bsv/amountinator')
 
 test('shows whole satoshis with grouping and forwards the original amount to the converter', async () => {
   const converter = {
@@ -28,4 +29,14 @@ test('preserves the regular text and adds more precision for small fiat amounts'
   const display = await normalizeDisplayAmount(converter, '1 SATS')
   assert.equal(display.formattedAmount, '$0.00')
   assert.equal(display.hoverText, '$0.00125')
+})
+
+test('preserves the sign of grouped satoshis and supports tiny numeric BSV amounts', async () => {
+  const converter = new CurrencyConverter(0, { get: async () => ({ currency: 'SATS' }) })
+  assert.deepEqual(await normalizeDisplayAmount(converter, '-1_234 SATS'), {
+    formattedAmount: '-1,234 satoshis'
+  })
+  assert.deepEqual(await normalizeDisplayAmount(converter, 1e-8), {
+    formattedAmount: '1 satoshis'
+  })
 })

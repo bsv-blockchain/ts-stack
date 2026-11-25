@@ -1,11 +1,11 @@
-import React from 'react';
-import { Avatar, SxProps } from '@mui/material';
+import React from 'react'
+import { Avatar, SxProps } from '@mui/material'
 
 interface PlaceholderAvatarProps {
-  name: string;
-  variant?: 'circular' | 'rounded' | 'square';
-  size?: number;
-  sx?: SxProps;
+  name: string
+  variant?: 'circular' | 'rounded' | 'square'
+  size?: number
+  sx?: SxProps
 }
 
 /**
@@ -14,18 +14,19 @@ interface PlaceholderAvatarProps {
  * @returns Hex color code
  */
 function stringToColor(str: string): string {
-  let hash = 0;
+  let hash = 0
   for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const codeUnit = str.slice(i, i + 1).codePointAt(0) ?? 0
+    hash = codeUnit + ((hash << 5) - hash)
   }
 
-  let color = '#';
+  let color = '#'
   for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xFF;
-    color += ('00' + value.toString(16)).slice(-2);
+    const value = (hash >> (i * 8)) & 0xff
+    color += ('00' + value.toString(16)).slice(-2)
   }
 
-  return color;
+  return color
 }
 
 /**
@@ -34,23 +35,23 @@ function stringToColor(str: string): string {
  * @returns Up to 2 characters representing the input
  */
 function getInitials(name: string): string {
-  if (!name) return '?';
+  if (!name) return '?'
 
   // For domain names (e.g., example.com)
   if (name.includes('.')) {
-    const parts = name.split('.');
-    return parts[0].charAt(0).toUpperCase();
+    const parts = name.split('.')
+    return parts[0].charAt(0).toUpperCase()
   }
 
   // For regular names or identifiers
-  const parts = name.split(/[\s-_]/);
+  const parts = name.split(/[\s-_]/)
 
   if (parts.length > 1) {
-    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
   }
 
   // If it's a single word, return first character
-  return name.charAt(0).toUpperCase();
+  return name.charAt(0).toUpperCase()
 }
 
 /**
@@ -63,8 +64,8 @@ const PlaceholderAvatar: React.FC<PlaceholderAvatarProps> = ({
   size = 40,
   sx = {}
 }) => {
-  const bgColor = stringToColor(name);
-  const initials = getInitials(name);
+  const bgColor = stringToColor(name)
+  const initials = getInitials(name)
 
   return (
     <Avatar
@@ -79,7 +80,7 @@ const PlaceholderAvatar: React.FC<PlaceholderAvatarProps> = ({
     >
       {initials}
     </Avatar>
-  );
-};
+  )
+}
 
-export default PlaceholderAvatar;
+export default PlaceholderAvatar

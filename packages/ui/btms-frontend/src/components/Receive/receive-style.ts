@@ -1,7 +1,6 @@
 import { makeStyles } from '@mui/styles'
-import { Theme } from '@mui/material/styles'
 
-const useStyles = makeStyles((theme: Theme) => ({
+const useStyles = makeStyles({
   no_tokens: {
     paddingTop: '1.5em',
     paddingBottom: '1.5em'
@@ -13,6 +12,6 @@ const useStyles = makeStyles((theme: Theme) => ({
     gridTemplateColumns: 'auto 1fr',
     gridColumnGap: '1.5em'
   }
-}))
+})
 
 export default useStyles

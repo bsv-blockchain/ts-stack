@@ -11,7 +11,7 @@
  *
  * @returns {Array} An array of objects, each representing a domain with its unique permissions
  */
-const sortPermissions = (permissions) => {
+const sortPermissions = permissions => {
   const groupedPermissions = permissions.reduce((acc, curr) => {
     // Check if the domain already exists in the accumulator
     if (!acc[curr.domain]) {
@@ -19,13 +19,13 @@ const sortPermissions = (permissions) => {
       acc[curr.domain] = [curr]
     } else {
       // If it exists, add the counterparty and permission grant if it's not already there
-      const existingEntry = acc[curr.domain].find(entry => entry.originator === curr.originator)
+      const existingEntry = acc[curr.domain].some(entry => entry.originator === curr.originator)
       if (!existingEntry) {
         acc[curr.domain].push(curr)
       }
     }
     return acc
-  }, {})
+  }, Object.create(null))
 
   // Convert the grouped permissions object to the desired array format
   return Object.entries(groupedPermissions).map(([originator, permissions]) => ({

@@ -36,7 +36,7 @@ const PageHeader: FC<PageHeaderProps> = ({
   history,
   showButton = true,
   showBackButton = true,
-  onBackClick,
+  onBackClick
 }) => {
   const classes = useStyles()
 
@@ -59,7 +59,7 @@ const PageHeader: FC<PageHeaderProps> = ({
             className={(classes as any).app_icon}
             src={icon}
             alt={title}
-          // poster={title}
+            // poster={title}
           />
         </div>
         <div>

@@ -16,11 +16,12 @@
     "test": "tests"
   },
   "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/amount-display.property.test.mjs",
     "test": "pnpm build && node --test tests/*.test.cjs",
     "test:watch": "jest --watch",
     "build": "tsc --build",
     "lint": "oxlint . --deny-warnings",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check src tests '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
     "typecheck": "tsc --noEmit",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports AmountDisplay,AmountInputField,useCurrencyDisplay",
@@ -45,6 +46,7 @@
     "use-async-effect": "^2.2.7"
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "@types/jest": "^29.5.12",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",

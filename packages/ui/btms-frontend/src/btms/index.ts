@@ -5,23 +5,21 @@
 // This module wires BTMS Core with WalletClient + MessageBoxClient.
 // It exposes a ready-to-use BTMSCore instance for UI code.
 
-import {
-  BTMS as BTMSCore,
-  type BTMSAsset,
-  type BTMSTransaction,
-  type IncomingToken
-} from '@bsv/btms'
+import { BTMS as BTMSCore } from '@bsv/btms'
 import { type WalletInterface, PubKeyHex, CommsLayer, WalletClient } from '@bsv/sdk'
 import { MessageBoxClient } from '@bsv/message-box-client'
 
-export type { BTMSAsset, IncomingToken, BTMSTransaction }
+export type { BTMSAsset, IncomingToken, BTMSTransaction } from '@bsv/btms'
 
 const DEFAULT_MESSAGEBOX_HOST = 'https://messagebox.babbage.systems'
 
 /**
  * Adapter to make MessageBoxClient compatible with CommsLayer interface.
  */
-function createCommsAdapter(messageBoxClient: MessageBoxClient, wallet: WalletInterface): CommsLayer {
+function createCommsAdapter(
+  messageBoxClient: MessageBoxClient,
+  wallet: WalletInterface
+): CommsLayer {
   let cachedIdentityKey: PubKeyHex | null = null
 
   const getIdentityKey = async (): Promise<PubKeyHex> => {
@@ -32,7 +30,11 @@ function createCommsAdapter(messageBoxClient: MessageBoxClient, wallet: WalletIn
   }
 
   return {
-    async sendMessage(args: { recipient: PubKeyHex; messageBox: string; body: string }): Promise<string> {
+    async sendMessage(args: {
+      recipient: PubKeyHex
+      messageBox: string
+      body: string
+    }): Promise<string> {
       const result = await messageBoxClient.sendMessage(args)
       return result.messageId
     },

@@ -1,3 +1,4 @@
+import type { SelectChangeEvent } from '@mui/material/Select'
 import React, { FormEvent, useState, useEffect } from 'react'
 import {
   Button,
@@ -14,9 +15,9 @@ import { CloudDownload } from '@mui/icons-material'
 import { toast } from 'react-toastify'
 import { StorageDownloader } from '@bsv/sdk/storage/StorageDownloader'
 
-interface DownloadFormProps { }
+interface DownloadFormProps {}
 
-type NetworkType = 'mainnet' | 'testnet' | 'local';
+type NetworkType = 'mainnet' | 'testnet' | 'local'
 
 const DownloadForm: React.FC<DownloadFormProps> = () => {
   const [downloadURL, setDownloadURL] = useState<string>('')
@@ -57,7 +58,7 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
       link.click()
 
       // Cleanup
-      document.body.removeChild(link)
+      link.remove()
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error(error)
@@ -71,8 +72,10 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
     <form onSubmit={handleDownload}>
       <Grid container spacing={3} sx={{ py: 2 }}>
         <Grid item xs={12}>
-          <Typography variant='h5' gutterBottom sx={{ fontWeight: 'medium' }}>Download Form</Typography>
-          <Typography color='textSecondary' paragraph sx={{ mb: 3 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'medium' }}>
+            Download Form
+          </Typography>
+          <Typography color="textSecondary" paragraph sx={{ mb: 3 }}>
             Download files from UHRP Storage
           </Typography>
         </Grid>
@@ -80,40 +83,40 @@ const DownloadForm: React.FC<DownloadFormProps> = () => {
         <Grid item xs={12}>
           <TextField
             fullWidth
-            variant='outlined'
-            label='UHRP URL'
-            placeholder='Enter UHRP URL to download'
+            variant="outlined"
+            label="UHRP URL"
+            placeholder="Enter UHRP URL to download"
             value={downloadURL}
-            onChange={(e) => setDownloadURL(e.target.value)}
+            onChange={e => setDownloadURL(e.target.value)}
             sx={{ mb: 2 }}
           />
         </Grid>
 
         <Grid item xs={12}>
-          <FormControl fullWidth variant='outlined' sx={{ mb: 3 }}>
-            <InputLabel id='network-select-label'>Network</InputLabel>
+          <FormControl fullWidth variant="outlined" sx={{ mb: 3 }}>
+            <InputLabel id="network-select-label">Network</InputLabel>
             <Select
-              labelId='network-select-label'
+              labelId="network-select-label"
               value={network}
-              label='Network'
-              onChange={(event: React.ChangeEvent<{ value: unknown }>) => {
-                const value = event.target.value as string;
-                setNetwork(value as NetworkType);
+              label="Network"
+              onChange={(event: SelectChangeEvent<'local' | 'mainnet' | 'testnet'>) => {
+                const value = event.target.value as string
+                setNetwork(value as NetworkType)
               }}
             >
-              <MenuItem value='mainnet'>Mainnet</MenuItem>
-              <MenuItem value='testnet'>Testnet</MenuItem>
-              <MenuItem value='local'>Local</MenuItem>
+              <MenuItem value="mainnet">Mainnet</MenuItem>
+              <MenuItem value="testnet">Testnet</MenuItem>
+              <MenuItem value="local">Local</MenuItem>
             </Select>
           </FormControl>
         </Grid>
 
         <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
           <Button
-            variant='contained'
-            color='primary'
-            size='large'
-            type='submit'
+            variant="contained"
+            color="primary"
+            size="large"
+            type="submit"
             disabled={loading || !inputsValid}
             startIcon={<CloudDownload />}
             sx={{ borderRadius: 2, px: 3, py: 1 }}

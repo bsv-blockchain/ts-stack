@@ -8,7 +8,7 @@ import style from './style'
 import PlaceholderAvatar from '../PlaceholderAvatar'
 import deterministicImage from '../../utils/deterministicImage'
 import { WalletContext } from '../../WalletContext'
-import { IdentityClient } from '@bsv/sdk'
+import { DisplayableIdentity, IdentityClient } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
 
 const useStyles = makeStyles(style, {
@@ -33,128 +33,141 @@ const CounterpartyChip: React.FC<CounterpartyChipProps> = ({
   size = 1.3,
   onClick,
   expires,
-  onCloseClick = () => { },
+  onCloseClick = () => {},
   canRevoke = false,
   label = 'Counterparty'
 }) => {
   const theme = useTheme()
   const classes = useStyles()
-  const [identity, setIdentity] = useState({
-    name: 'Unknown',
-    badgeLabel: 'Unknown',
-    abbreviatedKey: counterparty.substring(0, 10),
-    badgeIconURL: 'https://bsvblockchain.org/favicon.ico',
-    avatarURL: deterministicImage(counterparty)
-  })
-  const [resolvedCounterparty, setResolvedCounterparty] = useState(counterparty)
-
-  const [avatarError, setAvatarError] = useState(false)
-  const [badgeError, setBadgeError] = useState(false)
-
-  const { managers, adminOriginator } = useContext(WalletContext)
-
-  // Handle image loading errors
-  const handleAvatarError = () => {
-    setAvatarError(true)
-  }
-
-  const handleBadgeError = () => {
-    setBadgeError(true)
-  }
-
+  const { managers, adminOriginator, activeProfile, settings } = useContext(WalletContext)
+  const permissionsManager = managers.permissionsManager
+  const trustedCertifiers = settings.trustSettings.trustedCertifiers
+  const queryKey = JSON.stringify([
+    counterparty,
+    activeProfile?.id,
+    adminOriginator,
+    trustedCertifiers
+  ])
+  const [lookup, setLookup] = useState<{
+    key: string
+    resolvedKey: string
+    identity?: DisplayableIdentity
+  }>()
+  const [brokenAvatar, setBrokenAvatar] = useState<string>()
+  const current = lookup?.key === queryKey ? lookup : undefined
+  const resolvedCounterparty = current?.resolvedKey ?? counterparty
+  const name = counterparty === 'self' ? 'Self' : current?.identity?.name || 'Unknown'
+  const abbreviatedKey = current?.identity?.abbreviatedKey || resolvedCounterparty.slice(0, 10)
+  const avatarURL = current?.identity?.avatarURL || deterministicImage(resolvedCounterparty)
 
   useEffect(() => {
-    // Function to load and potentially update identity for a specific counterparty
-    const loadIdentity = async (counterpartyKey) => {
-      let actualCounterpartyKey = counterpartyKey // Store the actual key
+    if (!permissionsManager) return
 
-      // Initial load from local storage for a specific counterparty
-      const cachedIdentity = window.localStorage.getItem(`identity_${counterpartyKey}`)
-      if (cachedIdentity) {
-        setIdentity(JSON.parse(cachedIdentity))
-      }
-
+    let cancelled = false
+    const loadIdentity = async () => {
       try {
-        // Resolve the counterparty key for 'self' or 'anyone'
-        if (counterpartyKey === 'self') {
-          actualCounterpartyKey = (await managers.permissionsManager.getPublicKey({ identityKey: true }, adminOriginator)).publicKey
-          setResolvedCounterparty(actualCounterpartyKey) // Update resolved counterparty
-        } else if (counterpartyKey === 'anyone') {
-          actualCounterpartyKey = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-          setResolvedCounterparty(actualCounterpartyKey) // Update resolved counterparty
-        } else {
-          setResolvedCounterparty(counterpartyKey) // Keep original for regular counterparties
-        }
+        const resolvedKey = await resolveCounterpartyKey()
+        if (cancelled) return
+        setLookup({ key: queryKey, resolvedKey })
 
-        // Fetch the latest identity info from the server
-        const identityClient = new IdentityClient(managers.permissionsManager, undefined, adminOriginator)
-        const results = await identityClient.resolveByIdentityKey({ identityKey: actualCounterpartyKey })
-        if (results && results.length > 0) {
-          setIdentity(results[0])
-          // Update component state and cache in local storage
-          window.localStorage.setItem(`identity_${actualCounterpartyKey}`, JSON.stringify(results[0]))
-        }
-      } catch (e) {
-        console.error(e)
+        const identityClient = new IdentityClient(permissionsManager, undefined, adminOriginator)
+        const results = await identityClient.resolveByIdentityKey({ identityKey: resolvedKey })
+        const identity = results.find(
+          result => result.identityKey.toLowerCase() === resolvedKey.toLowerCase()
+        )
+        if (!cancelled && identity) setLookup({ key: queryKey, resolvedKey, identity })
+      } catch (error) {
+        console.error('Failed to resolve counterparty details:', error)
       }
     }
 
-    // Execute the loading function with the initial counterparty
-    loadIdentity(counterparty)
-  }, [counterparty, managers.permissionsManager, adminOriginator])
+    const resolveCounterpartyKey = async () => {
+      if (counterparty === 'self') {
+        const result = await permissionsManager.getPublicKey({ identityKey: true }, adminOriginator)
+        return result.publicKey
+      }
+      if (counterparty === 'anyone') {
+        return '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+      }
+      return counterparty
+    }
+
+    void loadIdentity()
+    return () => {
+      cancelled = true
+    }
+  }, [counterparty, permissionsManager, adminOriginator, queryKey])
 
   return (
     <>
       <Divider />
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{
-        height: '3em', width: '100%'
-      }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{
+          height: '3em',
+          width: '100%'
+        }}
+      >
         <Typography variant="body1" fontWeight="bold">
           {label}:
         </Typography>
         <Chip
-          style={theme.templates?.chip ? theme.templates.chip({ size }) : {
-            height: `${size * 32}px`,
-            minHeight: `${size * 32}px`,
-            backgroundColor: 'transparent',
-            borderRadius: '16px',
-            padding: '8px',
-            margin: '4px'
-          }}
+          style={
+            theme.templates?.chip
+              ? theme.templates.chip({ size })
+              : {
+                  height: `${size * 32}px`,
+                  minHeight: `${size * 32}px`,
+                  backgroundColor: 'transparent',
+                  borderRadius: '16px',
+                  padding: '8px',
+                  margin: '4px'
+                }
+          }
           onDelete={onCloseClick}
           deleteIcon={canRevoke ? <CloseIcon /> : <></>}
           sx={{ '& .MuiTouchRipple-root': { display: clickable ? 'block' : 'none' } }}
           icon={
-            identity.avatarURL && !avatarError ? (
-              <Avatar alt={identity.name} sx={{ width: '2.5em', height: '2.5em' }}>
+            avatarURL !== brokenAvatar ? (
+              <Avatar alt={name} sx={{ width: '2.5em', height: '2.5em' }}>
                 <Img
-                  src={identity.avatarURL}
-                  alt={identity.name}
+                  src={avatarURL}
+                  alt={name}
                   className={classes.table_picture}
-                  onError={handleAvatarError}
+                  onError={() => setBrokenAvatar(avatarURL)}
                   loading="lazy"
                 />
               </Avatar>
             ) : (
-              <PlaceholderAvatar
-                name={identity.name}
-                sx={{ width: '2.5em', height: '2.5em' }}
-              />
+              <PlaceholderAvatar name={name} sx={{ width: '2.5em', height: '2.5em' }} />
             )
           }
           label={
             <div style={theme.templates?.chipLabel || { display: 'flex', flexDirection: 'column' }}>
-              <span style={theme.templates?.chipLabelTitle ? theme.templates.chipLabelTitle({ size }) : {
-                fontSize: `${Math.max(size * 0.8, 0.8)}rem`,
-                fontWeight: '500'
-              }}>
-                {counterparty === 'self' ? 'Self' : identity.name}
+              <span
+                style={
+                  theme.templates?.chipLabelTitle
+                    ? theme.templates.chipLabelTitle({ size })
+                    : {
+                        fontSize: `${Math.max(size * 0.8, 0.8)}rem`,
+                        fontWeight: '500'
+                      }
+                }
+              >
+                {name}
               </span>
-              <span style={theme.templates?.chipLabelSubtitle || {
-                fontSize: '0.7rem',
-                opacity: 0.7
-              }}>
-                {counterparty === 'self' ? '' : (identity.abbreviatedKey || `${counterparty.substring(0, 10)}...`)}
+              <span
+                style={
+                  theme.templates?.chipLabelSubtitle || {
+                    fontSize: '0.7rem',
+                    opacity: 0.7
+                  }
+                }
+              >
+                {counterparty === 'self' ? '' : abbreviatedKey}
               </span>
             </div>
           }
@@ -173,11 +186,20 @@ const CounterpartyChip: React.FC<CounterpartyChipProps> = ({
           }}
         />
       </Stack>
-      {expires && <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{
-        height: '2.5em', width: '100%'
-      }}>
-        <span className={classes.expiryHoverText}>{expires}</span>
-      </Stack>}
+      {expires && (
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{
+            height: '2.5em',
+            width: '100%'
+          }}
+        >
+          <span className={classes.expiryHoverText}>{expires}</span>
+        </Stack>
+      )}
     </>
   )
 }

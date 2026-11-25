@@ -35,7 +35,15 @@ import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import { IdentityCard } from '@bsv/identity-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ChartTooltip,
+  ResponsiveContainer
+} from 'recharts'
 import { toast } from 'react-toastify'
 import useStyles from './tokens-style'
 import Send from '../../components/Send'
@@ -98,6 +106,36 @@ const shortTxid = (txid: string) => {
   return `${txid.slice(0, 8)}...${txid.slice(-6)}`
 }
 
+const transactionPresentation = (tx: TokenTransaction) => {
+  const iconSize = { fontSize: 16 }
+  switch (tx.type) {
+    case 'issue':
+      return { label: 'Issued', icon: <AddCircleOutlineIcon sx={iconSize} /> }
+    case 'send':
+      return { label: 'Sent', icon: <SendIcon sx={iconSize} /> }
+    case 'receive':
+      return { label: 'Received', icon: <CallReceivedIcon sx={iconSize} /> }
+    case 'burn':
+      return { label: 'Burned', icon: <LocalFireDepartmentIcon sx={iconSize} /> }
+    default:
+      return tx.direction === 'incoming'
+        ? { label: 'Received', icon: <CallReceivedIcon sx={iconSize} /> }
+        : { label: 'Sent', icon: <SendIcon sx={iconSize} /> }
+  }
+}
+
+const reportRemovedOutputs = (removedCount: number, failedCount: number) => {
+  if (removedCount === 0 && failedCount === 0) {
+    toast.info('No corrupted outputs found')
+  }
+  if (removedCount > 0) {
+    toast.success(`Removed ${removedCount} corrupted output${removedCount === 1 ? '' : 's'}`)
+  }
+  if (failedCount > 0) {
+    toast.error(`Failed to remove ${failedCount} output${failedCount === 1 ? '' : 's'}`)
+  }
+}
+
 const Tokens: React.FC = () => {
   const classes = useStyles()
   const history = useHistory()
@@ -108,7 +146,12 @@ const Tokens: React.FC = () => {
     tokenID = tokenID.replace(/_/g, '.')
   }
 
-  const { assets: walletTokens, loading: assetsLoading, error: assetsError, refresh: refreshAssets } = useBtmsAssets()
+  const {
+    assets: walletTokens,
+    loading: assetsLoading,
+    error: assetsError,
+    refresh: refreshAssets
+  } = useBtmsAssets()
   const [token, setToken] = useState<AssetView | null>(null)
   const [transactions, setTransactions] = useState<TokenTransaction[]>([])
   const [error, setError] = useState(false)
@@ -116,18 +159,22 @@ const Tokens: React.FC = () => {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [balanceHistory, setBalanceHistory] = useState<Array<{ date: string; balance: number; timestamp: number }>>([])
+  const [balanceHistory, setBalanceHistory] = useState<
+    Array<{ date: string; balance: number; timestamp: number }>
+  >([])
   const [balanceRange, setBalanceRange] = useState<BalanceRange>('1M')
 
   // Calculate balance history from transactions
   const calculateBalanceHistory = (txs: TokenTransaction[], currentBalance: number) => {
     const normalizedCurrentBalance = Number(currentBalance) || 0
     if (txs.length === 0) {
-      return [{
-        date: new Date().toLocaleDateString(),
-        balance: normalizedCurrentBalance,
-        timestamp: Date.now()
-      }]
+      return [
+        {
+          date: new Date().toLocaleDateString(),
+          balance: normalizedCurrentBalance,
+          timestamp: Date.now()
+        }
+      ]
     }
 
     // Sort by timestamp ascending (oldest first)
@@ -166,23 +213,16 @@ const Tokens: React.FC = () => {
 
   const handleCleanBadOutputs = async () => {
     if (cleaningBadOutputs) return
-    const confirmed = window.confirm('Remove corrupted token outputs from your wallet? This cannot be undone.')
+    const confirmed = window.confirm(
+      'Remove corrupted token outputs from your wallet? This cannot be undone.'
+    )
     if (!confirmed) return
 
     try {
       setCleaningBadOutputs(true)
       const result = await btms.relinquishBadOutputs()
 
-      if (result.relinquished.length === 0 && result.failed.length === 0) {
-        toast.info('No corrupted outputs found')
-      } else {
-        if (result.relinquished.length > 0) {
-          toast.success(`Removed ${result.relinquished.length} corrupted output${result.relinquished.length === 1 ? '' : 's'}`)
-        }
-        if (result.failed.length > 0) {
-          toast.error(`Failed to remove ${result.failed.length} output${result.failed.length === 1 ? '' : 's'}`)
-        }
-      }
+      reportRemovedOutputs(result.relinquished.length, result.failed.length)
 
       await refresh()
     } catch (err) {
@@ -192,7 +232,11 @@ const Tokens: React.FC = () => {
     }
   }
 
-  const { transactions: coreTransactions, loading: transactionsLoading, error: transactionsError } = useBtmsTransactions(tokenID, 100, 0)
+  const {
+    transactions: coreTransactions,
+    loading: transactionsLoading,
+    error: transactionsError
+  } = useBtmsTransactions(tokenID, 100, 0)
 
   useEffect(() => {
     void refresh()
@@ -327,7 +371,11 @@ const Tokens: React.FC = () => {
                   }}
                 >
                   {iconURL ? (
-                    <Img src={iconURL} alt={token.name || token.assetId} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <Img
+                      src={iconURL}
+                      alt={token.name || token.assetId}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                   ) : (
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>
                       {(token.name || token.assetId).slice(0, 1).toUpperCase()}
@@ -345,7 +393,11 @@ const Tokens: React.FC = () => {
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
                 <Tooltip title={token.assetId}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
+                  >
                     {token.assetId.slice(0, 8)}...{token.assetId.slice(-8)}
                   </Typography>
                 </Tooltip>
@@ -357,7 +409,7 @@ const Tokens: React.FC = () => {
                       try {
                         await navigator.clipboard.writeText(token.assetId)
                         toast.success('Asset ID copied')
-                      } catch (error) {
+                      } catch {
                         toast.error('Failed to copy Asset ID')
                       }
                     }}
@@ -370,7 +422,11 @@ const Tokens: React.FC = () => {
               <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <Send assetId={token.assetId} asset={token} onReloadNeeded={refresh} />
                 <Receive assetId={token.assetId} asset={token} onReloadNeeded={refresh} />
-                <Burn assetId={token.assetId} asset={token} onReloadNeeded={() => history.push('/')} />
+                <Burn
+                  assetId={token.assetId}
+                  asset={token}
+                  onReloadNeeded={() => history.push('/')}
+                />
               </Box>
               {SHOW_TEST_CLEAN_BAD_OUTPUTS && (
                 <Box sx={{ mt: 2 }}>
@@ -390,7 +446,14 @@ const Tokens: React.FC = () => {
 
             {/* Right side - Balance history graph */}
             <Grid item xs={12} md={8}>
-              <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  mb: 1,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   Balance history
                 </Typography>
@@ -439,8 +502,12 @@ const Tokens: React.FC = () => {
                     />
                     <ChartTooltip
                       contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc' }}
-                      formatter={(value: number) => [`${value} units`, 'Balance']}
-                      labelFormatter={(label: number) => new Date(label).toLocaleDateString()}
+                      formatter={value =>
+                        typeof value === 'number' ? [`${value} units`, 'Balance'] : value
+                      }
+                      labelFormatter={label =>
+                        typeof label === 'number' ? new Date(label).toLocaleDateString() : label
+                      }
                     />
                     <Line
                       type="monotone"
@@ -454,7 +521,16 @@ const Tokens: React.FC = () => {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <Box sx={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Box
+                  sx={{
+                    height: 160,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'grey.50',
+                    borderRadius: 1
+                  }}
+                >
                   <Typography variant="body2" color="text.secondary">
                     No transaction history available
                   </Typography>
@@ -465,7 +541,10 @@ const Tokens: React.FC = () => {
         </Paper>
 
         <Grid container direction="column" sx={{ pt: 2 }}>
-          <Grid item sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Grid
+            item
+            sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               Transactions
             </Typography>
@@ -506,105 +585,108 @@ const Tokens: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {transactions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((tx, i) => {
-                  const isCredit = tx.amount > 0
-                  const typeLabel = tx.type === 'issue' ? 'Issued'
-                    : tx.type === 'send' ? 'Sent'
-                      : tx.type === 'receive' ? 'Received'
-                        : tx.type === 'burn' ? 'Burned'
-                          : tx.direction === 'incoming' ? 'Received' : 'Sent'
+                {transactions
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map(tx => {
+                    const isCredit = tx.amount > 0
+                    const { label, icon } = transactionPresentation(tx)
+                    const isTransfer =
+                      tx.type === 'send' || (tx.direction === 'outgoing' && tx.type !== 'burn')
+                    const debitColor = isTransfer ? 'warning' : 'error'
 
-                  const getTypeIcon = () => {
-                    if (tx.type === 'issue') return <AddCircleOutlineIcon sx={{ fontSize: 16 }} />
-                    if (tx.type === 'send') return <SendIcon sx={{ fontSize: 16 }} />
-                    if (tx.type === 'receive') return <CallReceivedIcon sx={{ fontSize: 16 }} />
-                    if (tx.type === 'burn') return <LocalFireDepartmentIcon sx={{ fontSize: 16 }} />
-                    return tx.direction === 'incoming' ? <CallReceivedIcon sx={{ fontSize: 16 }} /> : <SendIcon sx={{ fontSize: 16 }} />
-                  }
+                    const txidLabel = shortTxid(tx.txid)
+                    const wocUrl = `${WOC_BASE_URL}${tx.txid}`
 
-                  const txidLabel = shortTxid(tx.txid)
-                  const wocUrl = `${WOC_BASE_URL}${tx.txid}`
-
-                  return (
-                    <TableRow key={i}>
-                      <TableCell align="left" style={{ width: '0.1em' }}>
-                        {formatDate(tx)}
-                      </TableCell>
-                      <TableCell align="left">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Chip
-                            icon={getTypeIcon()}
-                            label={typeLabel}
-                            size="small"
-                            color={isCredit ? 'success' : (tx.type === 'send' || (tx.direction === 'outgoing' && tx.type !== 'burn')) ? 'warning' : 'error'}
-                            sx={{ minWidth: 90, fontWeight: 500 }}
-                          />
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {isCredit ? <TrendingUpIcon sx={{ fontSize: 18, color: 'success.main' }} /> : <TrendingDownIcon sx={{ fontSize: 18, color: 'error.main' }} />}
-                            <Typography
-                              sx={{
-                                fontWeight: 600,
-                                color: isCredit ? 'success.main' : 'error.main',
-                                fontSize: '0.95rem'
-                              }}
-                            >
-                              {isCredit ? '+' : ''}{tx.amount}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </TableCell>
-                      <TableCell align="left">
-                        {tx.counterparty && tx.counterparty !== 'N/A' ? (
-                          <Box
-                            sx={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              maxWidth: 280,
-                              '& .MuiTypography-body2': {
-                                color: 'text.secondary !important'
-                              }
-                            }}
-                          >
-                            <IdentityCard identityKey={tx.counterparty} />
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            System
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-                          <Typography
-                            component="a"
-                            href={wocUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            variant="body2"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'primary.main', textDecoration: 'none' }}
-                          >
-                            {txidLabel}
-                          </Typography>
-                          <Tooltip title="Copy TXID">
-                            <IconButton
+                    return (
+                      <TableRow key={tx.txid}>
+                        <TableCell align="left" style={{ width: '0.1em' }}>
+                          {formatDate(tx)}
+                        </TableCell>
+                        <TableCell align="left">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Chip
+                              icon={icon}
+                              label={label}
                               size="small"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(tx.txid)
-                                  toast.success('TXID copied')
-                                } catch (error) {
-                                  toast.error('Failed to copy TXID')
+                              color={isCredit ? 'success' : debitColor}
+                              sx={{ minWidth: 90, fontWeight: 500 }}
+                            />
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {isCredit ? (
+                                <TrendingUpIcon sx={{ fontSize: 18, color: 'success.main' }} />
+                              ) : (
+                                <TrendingDownIcon sx={{ fontSize: 18, color: 'error.main' }} />
+                              )}
+                              <Typography
+                                sx={{
+                                  fontWeight: 600,
+                                  color: isCredit ? 'success.main' : 'error.main',
+                                  fontSize: '0.95rem'
+                                }}
+                              >
+                                {isCredit ? '+' : ''}
+                                {tx.amount}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="left">
+                          {tx.counterparty && tx.counterparty !== 'N/A' ? (
+                            <Box
+                              sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                maxWidth: 280,
+                                '& .MuiTypography-body2': {
+                                  color: 'text.secondary !important'
                                 }
                               }}
                             >
-                              <ContentCopyIcon fontSize="inherit" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                              <IdentityCard identityKey={tx.counterparty} />
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              System
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography
+                              component="a"
+                              href={wocUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              variant="body2"
+                              sx={{
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                color: 'primary.main',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              {txidLabel}
+                            </Typography>
+                            <Tooltip title="Copy TXID">
+                              <IconButton
+                                size="small"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(tx.txid)
+                                    toast.success('TXID copied')
+                                  } catch {
+                                    toast.error('Failed to copy TXID')
+                                  }
+                                }}
+                              >
+                                <ContentCopyIcon fontSize="inherit" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
               </TableBody>
             </Table>
             <TablePagination
@@ -614,8 +696,8 @@ const Tokens: React.FC = () => {
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={(e, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10))
+              onRowsPerPageChange={e => {
+                setRowsPerPage(Number.parseInt(e.target.value, 10))
                 setPage(0)
               }}
             />

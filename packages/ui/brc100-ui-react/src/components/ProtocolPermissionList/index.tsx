@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
-import { useHistory } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react'
+import { useHistory } from 'react-router-dom'
 import {
   List,
   ListItem,
@@ -13,21 +13,21 @@ import {
   ListSubheader,
   Divider,
   CircularProgress,
-  Box,
-} from '@mui/material';
-import makeStyles from '@mui/styles/makeStyles';
-import { toast } from 'react-toastify';
-import { formatDistance } from 'date-fns';
+  Box
+} from '@mui/material'
+import makeStyles from '@mui/styles/makeStyles'
+import { toast } from 'react-toastify'
+import { formatDistance } from 'date-fns'
 
 // Local components & utilities
-import ProtoChip from '../ProtoChip';
-import AppChip from '../AppChip';
-import CounterpartyChip from '../CounterpartyChip';
+import ProtoChip from '../ProtoChip'
+import AppChip from '../AppChip'
+import CounterpartyChip from '../CounterpartyChip'
 
 // Wallet context (replace with the actual path)
-import { WalletContext } from '../../WalletContext';
-import { PermissionToken } from '@bsv/wallet-toolbox-client';
-import AppLogo from '../AppLogo';
+import { WalletContext } from '../../WalletContext'
+import { PermissionToken } from '@bsv/wallet-toolbox-client'
+import AppLogo from '../AppLogo'
 /* -------------------------------------------------------------------------- */
 /*                              Types & Helpers                               */
 /* -------------------------------------------------------------------------- */
@@ -37,9 +37,9 @@ import AppLogo from '../AppLogo';
  */
 interface AppPermissionGroup {
   /** Application (originator) domain */
-  originator: string;
+  originator: string
   /** All permissions for this application (unique counterparties) */
-  permissions: PermissionToken[];
+  permissions: PermissionToken[]
 }
 
 /**
@@ -47,48 +47,48 @@ interface AppPermissionGroup {
  */
 interface ProtocolPermissionGroup {
   /** Protocol identifier (e.g. "todo tokens") */
-  protocolName: string;
+  protocolName: string
   /** Associated security level */
-  securityLevel: number;
+  securityLevel: number
   /** All permissions for this protocol/security level (unique counterparties) */
-  permissions: PermissionToken[];
+  permissions: PermissionToken[]
   /** Preserved original app name for display consistency */
-  _displayOriginator?: string;
+  _displayOriginator?: string
 }
 
 /**
  * Union type to cover both grouping modes so we can share state easily
  */
-type PermissionGroup = AppPermissionGroup | ProtocolPermissionGroup;
+type PermissionGroup = AppPermissionGroup | ProtocolPermissionGroup
 
 /**
  * Props for <ProtocolPermissionList />
  */
 export interface ProtocolPermissionListProps {
   /** App domain to filter permissions by (mutually exclusive with `protocol`) */
-  app?: string;
+  app?: string
   /** Maximum number of groups to display */
-  limit?: number;
+  limit?: number
   /** Protocol ID to filter permissions by (mutually exclusive with `app`) */
-  protocol?: string;
+  protocol?: string
   /** Optional security level filter */
-  securityLevel?: number;
+  securityLevel?: number
   /** Counter‑party DID / address to filter by */
-  counterparty?: string;
+  counterparty?: string
   /** Choose whether the list is grouped by protocol or by application */
-  itemsDisplayed?: 'protocols' | 'apps';
+  itemsDisplayed?: 'protocols' | 'apps'
   /** Show revoke buttons */
-  canRevoke?: boolean;
+  canRevoke?: boolean
   /** Display a numeric total below the list */
-  displayCount?: boolean;
+  displayCount?: boolean
   /** Optional header text */
-  listHeaderTitle?: string;
+  listHeaderTitle?: string
   /** Render an empty placeholder instead of returning `null` */
-  showEmptyList?: boolean;
+  showEmptyList?: boolean
   /** Make the list items clickable */
-  clickable?: boolean;
+  clickable?: boolean
   /** Callback when the list is empty (e.g. collapse parent) */
-  onEmptyList?: () => void;
+  onEmptyList?: () => void
 }
 
 /* -------------------------------------------------------------------------- */
@@ -99,25 +99,25 @@ export interface ProtocolPermissionListProps {
 // `./style` export you want to build upon.
 const useStyles = makeStyles(() => ({
   appList: {
-    marginBottom: '1em',
+    marginBottom: '1em'
   },
   counterpartyContainer: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '0.5em',
-    width: '100%',
+    width: '100%'
   },
   gridItem: {
-    flex: '0 0 auto',
+    flex: '0 0 auto'
   },
   revokeButton: {
-    textTransform: 'none',
+    textTransform: 'none'
   },
   buttonProgress: {
     marginLeft: '8px',
-    position: 'relative',
-  },
-}));
+    position: 'relative'
+  }
+}))
 
 /* -------------------------------------------------------------------------- */
 /*                                Utilities                                    */
@@ -128,23 +128,23 @@ const useStyles = makeStyles(() => ({
  * is kept per counter‑party to avoid duplicates.
  */
 function groupPermissionsByApp(tokens: PermissionToken[]): AppPermissionGroup[] {
-  const map = new Map<string, PermissionToken[]>();
+  const map = new Map<string, PermissionToken[]>()
 
-  tokens.forEach((token) => {
-    const key = token.originator;
+  tokens.forEach(token => {
+    const key = token.originator
 
-    const list = map.get(key) ?? [];
+    const list = map.get(key) ?? []
     // Only add if this counterparty hasn't already been seen for the app
-    if (!list.some((p) => p.counterparty === token.counterparty)) {
-      list.push(token);
-      map.set(key, list);
+    if (!list.some(p => p.counterparty === token.counterparty)) {
+      list.push(token)
+      map.set(key, list)
     }
-  });
+  })
 
   return Array.from(map.entries()).map(([originator, permissions]) => ({
     originator,
-    permissions,
-  }));
+    permissions
+  }))
 }
 
 /**
@@ -153,35 +153,37 @@ function groupPermissionsByApp(tokens: PermissionToken[]): AppPermissionGroup[] 
  */
 function groupPermissionsByProtocol(tokens: PermissionToken[]): ProtocolPermissionGroup[] {
   // Composite key ensures uniqueness for protocol + security level combo
-  const map = new Map<string, ProtocolPermissionGroup>();
+  const map = new Map<string, ProtocolPermissionGroup>()
 
-  tokens.forEach((token) => {
-    const key = JSON.stringify({ protocol: token.protocol, securityLevel: token.securityLevel });
+  tokens.forEach(token => {
+    if (token.protocol === undefined) return
+    const key = JSON.stringify({ protocol: token.protocol, securityLevel: token.securityLevel })
 
-    let entry = map.get(key);
+    let entry = map.get(key)
     if (!entry) {
       entry = {
         protocolName: token.protocol,
         securityLevel: token.securityLevel ?? 0,
-        permissions: [],
-      };
-      map.set(key, entry);
+        permissions: []
+      }
+      map.set(key, entry)
     }
 
     // Deduplicate by counterparty
-    if (!entry.permissions.some((p) => p.counterparty === token.counterparty)) {
-      entry.permissions.push(token);
+    if (!entry.permissions.some(p => p.counterparty === token.counterparty)) {
+      entry.permissions.push(token)
     }
-  });
+  })
 
-  return Array.from(map.values());
+  return Array.from(map.values())
 }
 
 /* -------------------------------------------------------------------------- */
 /*                            Simple In-Memory Cache                           */
 /* -------------------------------------------------------------------------- */
 // Keyed by a JSON-stringified query descriptor
-const PERM_CACHE = new Map<string, PermissionGroup[]>();
+const handleEmptyList = () => {}
+const PERM_CACHE = new Map<string, PermissionGroup[]>()
 
 /* -------------------------------------------------------------------------- */
 /*                              Main Component                                 */
@@ -204,186 +206,193 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
   displayCount = true,
   listHeaderTitle,
   showEmptyList = false,
-  onEmptyList = () => {
-    /* noop */
-  },
+  onEmptyList = handleEmptyList
 }) => {
+  const { managers, activeProfile } = useContext(WalletContext)
   /* ---------------------------- Memo Key ---------------------------- */
   const queryKey = useMemo(
     () =>
-      JSON.stringify({ app, protocol, securityLevel, counterparty, itemsDisplayed, limit }),
-    [app, protocol, securityLevel, counterparty, itemsDisplayed, limit]
-  );
+      JSON.stringify({
+        app,
+        protocol,
+        securityLevel,
+        counterparty,
+        itemsDisplayed,
+        limit,
+        profile: activeProfile?.id
+      }),
+    [app, protocol, securityLevel, counterparty, itemsDisplayed, limit, activeProfile?.id]
+  )
 
   /* ---------------------------- Runtime state ---------------------------- */
-  const [perms, setPerms] = useState<PermissionGroup[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogLoading, setDialogLoading] = useState(false);
-  const [toRevoke, setToRevoke] = useState<PermissionToken | PermissionGroup | null>(null);
+  const [perms, setPerms] = useState<PermissionGroup[]>([])
+  const [loading, setLoading] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogLoading, setDialogLoading] = useState(false)
+  const [toRevoke, setToRevoke] = useState<PermissionToken | PermissionGroup | null>(null)
 
   /* ----------------------------- Context ------------------------------ */
-  const { managers } = useContext(WalletContext);
 
   /* -----------------------------  Hooks  ------------------------------ */
-  const classes = useStyles();
-  const history = useHistory();
+  const classes = useStyles()
+  const history = useHistory()
 
   /* ---------------------------  Helpers  ----------------------------- */
   const refreshPerms = useCallback(async () => {
-    if (!managers?.permissionsManager) return;
+    if (!managers?.permissionsManager) return
 
     // Return cached results if present
     if (PERM_CACHE.has(queryKey)) {
-      setPerms(PERM_CACHE.get(queryKey)!);
-      return;
+      setPerms(PERM_CACHE.get(queryKey)!)
+      return
     }
 
     try {
-      setLoading(true);
+      setLoading(true)
       // Fetch permission tokens from wallet SDK
-       const normalizedApp = app ? app.replace(/^https?:\/\//, '') : app;
+      const normalizedApp = app ? app.replace(/^https?:\/\//, '') : app
       const raw = await managers.permissionsManager.listProtocolPermissions({
         originator: normalizedApp,
-        // privileged: false, // TODO: add support at the component level
         protocolName: protocol,
         protocolSecurityLevel: securityLevel,
         counterparty
-      });
+      })
 
       // Group & optionally limit results
       const grouped: PermissionGroup[] =
-        itemsDisplayed === 'apps'
-          ? groupPermissionsByApp(raw)
-          : groupPermissionsByProtocol(raw);
+        itemsDisplayed === 'apps' ? groupPermissionsByApp(raw) : groupPermissionsByProtocol(raw)
 
-      const finalGroups = limit ? grouped.slice(0, limit) : grouped;
-      setPerms(finalGroups);
+      const finalGroups = limit ? grouped.slice(0, limit) : grouped
+      setPerms(finalGroups)
       // Cache the result
-      PERM_CACHE.set(queryKey, finalGroups);
-      if (grouped.length === 0) onEmptyList();
+      PERM_CACHE.set(queryKey, finalGroups)
+      if (grouped.length === 0) onEmptyList()
     } catch (err) {
       console.error(err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [app, protocol, securityLevel, counterparty, limit, itemsDisplayed]);
+  }, [
+    app,
+    protocol,
+    securityLevel,
+    counterparty,
+    limit,
+    itemsDisplayed,
+    managers.permissionsManager,
+    onEmptyList,
+    queryKey
+  ])
 
   /**
    * Optimistically update the UI by removing revoked permissions from the current state
    * without refetching from the API. This provides instant feedback to the user.
    */
-  const updateUIAfterRevoke = useCallback((revokedPermissions: PermissionToken[]) => {
-    if (revokedPermissions.length === 0) return;
+  const updateUIAfterRevoke = useCallback(
+    (revokedPermissions: PermissionToken[]) => {
+      if (revokedPermissions.length === 0) return
 
-    const updatedPerms = perms.map(group => {
-      if (isAppGroup(group) || isProtocolGroup(group)) {
-        // For grouped permissions, filter out revoked ones
-        const remainingPermissions = group.permissions.filter(perm =>
-          !revokedPermissions.some(revoked =>
-            revoked.txid === perm.txid && revoked.counterparty === perm.counterparty
-          )
-        );
+      const updatedPerms = perms
+        .map(group => {
+          if (isAppGroup(group) || isProtocolGroup(group)) {
+            // For grouped permissions, filter out revoked ones
+            const remainingPermissions = group.permissions.filter(
+              perm =>
+                !revokedPermissions.some(
+                  revoked =>
+                    revoked.txid === perm.txid && revoked.counterparty === perm.counterparty
+                )
+            )
 
-        // If no permissions remain in this group, it will be filtered out below
-        return {
-          ...group,
-          permissions: remainingPermissions
-        };
-      } else {
-        // This should never happen with current types, but handle individual permissions
-        // by treating the group as a PermissionToken
-        const permissionToken = group as PermissionToken;
-        const shouldRemove = revokedPermissions.some(revoked =>
-          revoked.txid === permissionToken.txid && revoked.counterparty === permissionToken.counterparty
-        );
-        return shouldRemove ? null : group;
+            // If no permissions remain in this group, it will be filtered out below
+            return {
+              ...group,
+              permissions: remainingPermissions
+            }
+          } else {
+            // This should never happen with current types, but handle individual permissions
+            // by treating the group as a PermissionToken
+            const permissionToken = group as PermissionToken
+            const shouldRemove = revokedPermissions.some(
+              revoked =>
+                revoked.txid === permissionToken.txid &&
+                revoked.counterparty === permissionToken.counterparty
+            )
+            return shouldRemove ? null : group
+          }
+        })
+        .filter((group): group is PermissionGroup => {
+          // Remove null entries and groups with no remaining permissions
+          if (!group) return false
+          if (isAppGroup(group) || isProtocolGroup(group)) {
+            return group.permissions.length > 0
+          }
+          return true
+        })
+
+      setPerms(updatedPerms)
+      // Update cache with the new state
+      PERM_CACHE.set(queryKey, updatedPerms)
+
+      // Check if list is now empty and call callback
+      if (updatedPerms.length === 0) {
+        onEmptyList()
       }
-    }).filter((group): group is PermissionGroup => {
-      // Remove null entries and groups with no remaining permissions
-      if (!group) return false;
-      if (isAppGroup(group) || isProtocolGroup(group)) {
-        return group.permissions.length > 0;
-      }
-      return true;
-    });
-
-    setPerms(updatedPerms);
-    // Update cache with the new state
-    PERM_CACHE.set(queryKey, updatedPerms);
-
-    // Check if list is now empty and call callback
-    if (updatedPerms.length === 0) {
-      onEmptyList();
-    }
-  }, [perms, queryKey, onEmptyList]);
+    },
+    [perms, queryKey, onEmptyList]
+  )
 
   const openRevokeDialog = (item: PermissionToken | PermissionGroup) => {
-    setToRevoke(item);
-    setDialogOpen(true);
-  };
+    setToRevoke(item)
+    setDialogOpen(true)
+  }
 
   const handleConfirmRevoke = async () => {
-    if (!managers?.permissionsManager || !toRevoke) return;
+    const manager = managers.permissionsManager
+    if (!manager || !toRevoke) return
 
-    // Store the original permissions for potential rollback
-    const originalPerms = [...perms];
-    const revokedPermissions: PermissionToken[] = [];
-
+    const originalPerms = [...perms]
+    const targets = 'permissions' in toRevoke ? toRevoke.permissions : [toRevoke]
+    const revokedPermissions: PermissionToken[] = []
     try {
-      setDialogLoading(true);
+      setDialogLoading(true)
 
-      if ('permissions' in toRevoke) {
-        console.log('revoking group', toRevoke)
-        // Revoke permissions sequentially to avoid overwhelming the service
-        const results = [];
-        for (const perm of toRevoke.permissions) {
-          try {
-            console.log('revoking individual permission in group:', perm.txid)
-            await managers.permissionsManager.revokePermission(perm);
-            console.log('successfully revoked:', perm.txid)
-            results.push({ success: true, permission: perm });
-            revokedPermissions.push(perm);
-          } catch (error) {
-            console.error('failed to revoke permission:', perm.txid, error);
-            results.push({ success: false, permission: perm, error });
-            // Continue with other permissions even if one fails
-          }
+      // Serialize wallet mutations, retaining a partial result when one fails.
+      await targets.reduce(async (previous, permission) => {
+        await previous
+        try {
+          await manager.revokePermission(permission)
+          revokedPermissions.push(permission)
+        } catch {
+          // Keep the failed permission visible so the user can retry.
         }
+      }, Promise.resolve())
 
-        const failed = results.filter(r => !r.success);
-        if (failed.length > 0) {
-          console.warn(`${failed.length} out of ${results.length} permissions failed to revoke`);
-        }
-      } else {
-        console.log('revoking single permission', toRevoke)
-        await managers.permissionsManager.revokePermission(toRevoke);
-        revokedPermissions.push(toRevoke);
+      const failures = targets.length - revokedPermissions.length
+      if (failures > 0) {
+        toast.error(`Could not revoke ${failures} of ${targets.length} permissions`)
       }
-
-      // Optimistically update the UI by removing revoked permissions
-      updateUIAfterRevoke(revokedPermissions);
-
+      updateUIAfterRevoke(revokedPermissions)
     } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      toast.error(`Permission may not have been revoked: ${errorMessage}`);
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred'
+      toast.error(`Permission may not have been revoked: ${errorMessage}`)
       // Rollback to original state on error
-      setPerms(originalPerms);
-      PERM_CACHE.set(queryKey, originalPerms);
+      setPerms(originalPerms)
+      PERM_CACHE.set(queryKey, originalPerms)
     } finally {
-      setDialogLoading(false);
-      setDialogOpen(false);
-      setToRevoke(null);
+      setDialogLoading(false)
+      setDialogOpen(false)
+      setToRevoke(null)
     }
-  };
+  }
 
   /* ---------------------------- Lifecycle ---------------------------- */
   useEffect(() => {
-    refreshPerms();
-  }, [refreshPerms]);
+    void refreshPerms()
+  }, [refreshPerms])
 
   /* ---------------------------- Early exit ---------------------------- */
-  if (perms.length === 0 && !showEmptyList) return null;
+  if (perms.length === 0 && !showEmptyList) return null
 
   /* ---------------------------  Render  ------------------------------ */
   return (
@@ -417,33 +426,49 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
 
         {loading ? (
           <Box display="flex" justifyContent="center" alignItems="center" py={4}>
-            <Box p={3} display="flex" justifyContent="center" alignItems="center"><AppLogo rotate size={50} /></Box>
+            <Box p={3} display="flex" justifyContent="center" alignItems="center">
+              <AppLogo rotate size={50} />
+            </Box>
             <Typography variant="body2" color="textSecondary" sx={{ ml: 2 }}>
               Loading permissions...
             </Typography>
           </Box>
         ) : (
-          perms.map((group, i) => (
-            <React.Fragment key={i}>
+          perms.map(group => (
+            <React.Fragment
+              key={
+                'originator' in group
+                  ? `app:${group.originator}`
+                  : JSON.stringify([group.protocolName, group.securityLevel])
+              }
+            >
               {/* --------------------------------------------------------- */}
               {/*                       APP‑CENTRIC                        */}
               {/* --------------------------------------------------------- */}
               {itemsDisplayed === 'apps' && isAppGroup(group) && (
                 <div className={classes.appList} key={`app-group-${group.originator}`}>
                   {/* Group header (App domain) */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingRight: '1em', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      paddingRight: '1em',
+                      alignItems: 'center'
+                    }}
+                  >
                     <AppChip
                       backgroundColor="default"
                       label={group.originator}
                       showDomain
                       onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
+                        e.stopPropagation()
                         history.push({
                           pathname: `/dashboard/app/${encodeURIComponent(group.originator)}`,
                           state: {
                             domain: group.originator,
-                            appName:group.originator },
-                        });
+                            appName: group.originator
+                          }
+                        })
                       }}
                     />
 
@@ -462,15 +487,22 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
                   <ListItem>
                     <div className={classes.counterpartyContainer}>
                       {group.permissions
-                        .filter((x) => x.counterparty)
-                        .map((permission) => (
-                          <div className={classes.gridItem} key={`${permission.counterparty}-${permission.txid}`}>
+                        .filter(x => x.counterparty)
+                        .map(permission => (
+                          <div
+                            className={classes.gridItem}
+                            key={`${permission.counterparty}-${permission.txid}`}
+                          >
                             <CounterpartyChip
                               counterparty={permission.counterparty!}
                               size={1.1}
-                              expires={formatDistance(new Date(permission.expiry * 1000), new Date(), {
-                                addSuffix: true,
-                              })}
+                              expires={formatDistance(
+                                new Date(permission.expiry * 1000),
+                                new Date(),
+                                {
+                                  addSuffix: true
+                                }
+                              )}
                               onCloseClick={() => openRevokeDialog(permission)}
                               clickable
                               canRevoke={canRevoke}
@@ -486,9 +518,19 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
               {/*                     PROTOCOL‑CENTRIC                      */}
               {/* --------------------------------------------------------- */}
               {itemsDisplayed === 'protocols' && isProtocolGroup(group) && (
-                <div className={classes.appList} key={`protocol-${group.protocolName}-${group.securityLevel}`}>
+                <div
+                  className={classes.appList}
+                  key={`protocol-${group.protocolName}-${group.securityLevel}`}
+                >
                   {/* Group header (Protocol) */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingRight: '1em', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      paddingRight: '1em',
+                      alignItems: 'center'
+                    }}
+                  >
                     <ProtoChip
                       backgroundColor="default"
                       protocolID={group.protocolName}
@@ -512,8 +554,11 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
                   {/* Counterparties (or apps if `counterparty` filter is provided) */}
                   <ListItem key={group.permissions[0].txid}>
                     <div className={classes.counterpartyContainer}>
-                      {group.permissions.map((permission) => (
-                        <div className={classes.gridItem} key={`${permission.counterparty}-${permission.txid}`}>
+                      {group.permissions.map(permission => (
+                        <div
+                          className={classes.gridItem}
+                          key={`${permission.counterparty}-${permission.txid}`}
+                        >
                           {counterparty ? (
                             <AppChip
                               backgroundColor="default"
@@ -521,10 +566,13 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
                               showDomain
                               key={`app-${permission.txid}-${permission.originator}`}
                               onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                history.push(`/dashboard/app/${encodeURIComponent(permission.originator)}`, {
-                                  state: { domain: permission.originator },
-                                });
+                                e.stopPropagation()
+                                history.push(
+                                  `/dashboard/app/${encodeURIComponent(permission.originator)}`,
+                                  {
+                                    state: { domain: permission.originator }
+                                  }
+                                )
                               }}
                               onCloseClick={() => openRevokeDialog(permission)}
                             />
@@ -532,9 +580,13 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
                             <CounterpartyChip
                               counterparty={permission.counterparty!}
                               size={1.1}
-                              expires={formatDistance(new Date(permission.expiry * 1000), new Date(), {
-                                addSuffix: true,
-                              })}
+                              expires={formatDistance(
+                                new Date(permission.expiry * 1000),
+                                new Date(),
+                                {
+                                  addSuffix: true
+                                }
+                              )}
                               onCloseClick={() => openRevokeDialog(permission)}
                               clickable
                               canRevoke={canRevoke}
@@ -561,18 +613,18 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
         </center>
       )}
     </>
-  );
-};
+  )
+}
 
-export default ProtocolPermissionList;
+export default ProtocolPermissionList
 
 /* -------------------------------------------------------------------------- */
 /*                          Type‑Guard Helper Fns                              */
 /* -------------------------------------------------------------------------- */
 function isAppGroup(group: PermissionGroup): group is AppPermissionGroup {
-  return (group as AppPermissionGroup).originator !== undefined;
+  return (group as AppPermissionGroup).originator !== undefined
 }
 
 function isProtocolGroup(group: PermissionGroup): group is ProtocolPermissionGroup {
-  return (group as ProtocolPermissionGroup).protocolName !== undefined;
+  return (group as ProtocolPermissionGroup).protocolName !== undefined
 }

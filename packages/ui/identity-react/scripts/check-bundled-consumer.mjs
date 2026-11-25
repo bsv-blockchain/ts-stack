@@ -28,7 +28,6 @@ try {
       if (level === 'warn') console.warn(`[${log.code}] ${log.message}`)
       else handler(level, log)
     },
-    moduleTypes: { '.css': 'empty' },
     external: /^(react(?:-dom)?(?:\/|$)|@bsv\/sdk$)/
   })
   const artifact = join(temporary, 'consumer.mjs')

@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  ChangeEvent,
-  useContext
-} from 'react'
+import React, { useEffect, useState, useRef, ChangeEvent, useContext } from 'react'
 import {
   Typography,
   Container,
@@ -84,15 +78,8 @@ const Apps: React.FC = () => {
       // Update the app in localStorage
       const updatedApps = await updateRecentApp(Utils.toBase64(activeProfile.id), updatedApp)
 
-      // Update local state
+      if (updatedApps.length === 0) return
       setApps(updatedApps)
-
-      // If we're currently searching, re-apply the search to update filtered results
-      if (search.trim() !== '') {
-        applySearch(search, updatedApps, fuseInstance)
-      } else {
-        setFilteredApps(updatedApps)
-      }
     } catch (error) {
       console.error('Error toggling pin status:', error)
     }
@@ -111,9 +98,10 @@ const Apps: React.FC = () => {
       setFilteredApps(results.map(result => result.item))
     } else {
       // Fallback to simple string matching when Fuse isn't ready
-      const filtered = appList.filter(app =>
-        app.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-        app.domain.toLowerCase().includes(searchValue.toLowerCase())
+      const filtered = appList.filter(
+        app =>
+          app.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+          app.domain.toLowerCase().includes(searchValue.toLowerCase())
       )
       setFilteredApps(filtered)
     }
@@ -136,16 +124,7 @@ const Apps: React.FC = () => {
 
   // On mount, load the apps & recent apps
   useEffect(() => {
-    const loadApps = () => {
-      if (activeProfile) {
-        console.log('Apps loading with active profile', activeProfile)
-        const recentApps = getRecentApps(Utils.toBase64(activeProfile.id))
-        setApps(recentApps)
-        setFilteredApps(recentApps)
-      }
-    }
-
-    loadApps()
+    setApps(activeProfile ? getRecentApps(Utils.toBase64(activeProfile.id)) : [])
   }, [activeProfile])
 
   // Listen for recent apps updates from wallet requests
@@ -154,24 +133,11 @@ const Apps: React.FC = () => {
       const { profileId } = event.detail
 
       // Only reload if the update is for the current profile
-      console.log('apps incoming request', profileId)
-      console.log('apps active profile id', activeProfile)
-      // Note: This is a bit hacking. Figure out why the active profile is not set.
       if (!activeProfile) {
-        setActiveProfile(managers.walletManager?.listProfiles().find(p => p.active))
+        setActiveProfile(managers.walletManager?.listProfiles().find(p => p.active) ?? null)
       }
       if (activeProfile && profileId === Utils.toBase64(activeProfile.id)) {
-        console.log('Received handler and now updating apps with active profile', activeProfile)
-        const recentApps = getRecentApps(profileId)
-        setApps(recentApps)
-        setFilteredApps(recentApps)
-
-        // If we're currently searching, re-apply the search
-        if (search.trim() !== '') {
-          applySearch(search, recentApps, fuseInstance)
-        } else {
-          setFilteredApps(recentApps)
-        }
+        setApps(getRecentApps(profileId))
       }
     }
 
@@ -180,7 +146,7 @@ const Apps: React.FC = () => {
     return () => {
       window.removeEventListener('recentAppsUpdated', handleRecentAppsUpdate as EventListener)
     }
-  }, [managers.walletManager, search, fuseInstance])
+  }, [activeProfile, managers.walletManager, setActiveProfile])
 
   // Update search results when apps or search changes
   useEffect(() => {
@@ -222,17 +188,19 @@ const Apps: React.FC = () => {
           View App Catalog
         </Button>
 
-        <FormControl sx={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
+        <FormControl
+          sx={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
           <TextField
-            variant='outlined'
+            variant="outlined"
             value={search}
             onChange={handleSearchChange}
-            placeholder='Search'
+            placeholder="Search"
             onFocus={handleFocus}
             onBlur={handleBlur}
             inputRef={inputRef}
@@ -304,12 +272,16 @@ const Apps: React.FC = () => {
                     <Grid2
                       container
                       spacing={3}
-                      alignItems='center'
-                      justifyContent='left'
+                      alignItems="center"
+                      justifyContent="left"
                       className={classes.apps_view}
                     >
-                      {pinnedFilteredApps.map((app) => (
-                        <Grid2 key={app.domain} size={{ xs: 6, sm: 6, md: 3, lg: 2 }} className={classes.gridItem}>
+                      {pinnedFilteredApps.map(app => (
+                        <Grid2
+                          key={app.domain}
+                          size={{ xs: 6, sm: 6, md: 3, lg: 2 }}
+                          className={classes.gridItem}
+                        >
                           <Box sx={{ position: 'relative' }}>
                             <MetanetApp
                               appName={app.name}
@@ -318,17 +290,18 @@ const Apps: React.FC = () => {
                             />
                             <Tooltip title="Unpin app" placement="top">
                               <Box
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation()
-                                  togglePin(app.domain)
+                                  void togglePin(app.domain)
                                 }}
                                 sx={{
                                   position: 'absolute',
                                   top: 6,
                                   right: 6,
-                                  backgroundColor: (theme) => theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.15)'
-                                    : 'rgba(0, 0, 0, 0.7)',
+                                  backgroundColor: theme =>
+                                    theme.palette.mode === 'dark'
+                                      ? 'rgba(255, 255, 255, 0.15)'
+                                      : 'rgba(0, 0, 0, 0.7)',
                                   borderRadius: '50%',
                                   width: 28,
                                   height: 28,
@@ -339,22 +312,25 @@ const Apps: React.FC = () => {
                                   opacity: 1,
                                   transition: 'all 0.2s ease',
                                   backdropFilter: 'blur(4px)',
-                                  border: (theme) => theme.palette.mode === 'dark'
-                                    ? '1px solid rgba(255, 255, 255, 0.2)'
-                                    : 'none',
+                                  border: theme =>
+                                    theme.palette.mode === 'dark'
+                                      ? '1px solid rgba(255, 255, 255, 0.2)'
+                                      : 'none',
                                   '&:hover': {
-                                    backgroundColor: (theme) => theme.palette.mode === 'dark'
-                                      ? 'rgba(255, 255, 255, 0.25)'
-                                      : 'rgba(0, 0, 0, 0.85)',
+                                    backgroundColor: theme =>
+                                      theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 255, 255, 0.25)'
+                                        : 'rgba(0, 0, 0, 0.85)',
                                     transform: 'scale(1.05)'
                                   }
                                 }}
                               >
                                 <PushPinIcon
                                   sx={{
-                                    color: (theme) => theme.palette.mode === 'dark'
-                                      ? 'rgba(255, 255, 255, 0.9)'
-                                      : 'white',
+                                    color: theme =>
+                                      theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 255, 255, 0.9)'
+                                        : 'white',
                                     fontSize: '1rem'
                                   }}
                                 />
@@ -392,12 +368,16 @@ const Apps: React.FC = () => {
                     <Grid2
                       container
                       spacing={3}
-                      alignItems='center'
-                      justifyContent='left'
+                      alignItems="center"
+                      justifyContent="left"
                       className={classes.apps_view}
                     >
-                      {unpinnedFilteredApps.map((app) => (
-                        <Grid2 key={app.domain} size={{ xs: 6, sm: 6, md: 3, lg: 2 }} className={classes.gridItem}>
+                      {unpinnedFilteredApps.map(app => (
+                        <Grid2
+                          key={app.domain}
+                          size={{ xs: 6, sm: 6, md: 3, lg: 2 }}
+                          className={classes.gridItem}
+                        >
                           <Box
                             sx={{
                               position: 'relative',
@@ -415,17 +395,18 @@ const Apps: React.FC = () => {
                             <Tooltip title="Pin app" placement="top">
                               <Box
                                 className="pin-button"
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation()
-                                  togglePin(app.domain)
+                                  void togglePin(app.domain)
                                 }}
                                 sx={{
                                   position: 'absolute',
                                   top: 6,
                                   right: 6,
-                                  backgroundColor: (theme) => theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.15)'
-                                    : 'rgba(0, 0, 0, 0.7)',
+                                  backgroundColor: theme =>
+                                    theme.palette.mode === 'dark'
+                                      ? 'rgba(255, 255, 255, 0.15)'
+                                      : 'rgba(0, 0, 0, 0.7)',
                                   borderRadius: '50%',
                                   width: 28,
                                   height: 28,
@@ -437,22 +418,25 @@ const Apps: React.FC = () => {
                                   transform: 'scale(0.8)',
                                   transition: 'all 0.2s ease',
                                   backdropFilter: 'blur(4px)',
-                                  border: (theme) => theme.palette.mode === 'dark'
-                                    ? '1px solid rgba(255, 255, 255, 0.2)'
-                                    : 'none',
+                                  border: theme =>
+                                    theme.palette.mode === 'dark'
+                                      ? '1px solid rgba(255, 255, 255, 0.2)'
+                                      : 'none',
                                   '&:hover': {
-                                    backgroundColor: (theme) => theme.palette.mode === 'dark'
-                                      ? 'rgba(255, 255, 255, 0.25)'
-                                      : 'rgba(0, 0, 0, 0.85)',
+                                    backgroundColor: theme =>
+                                      theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 255, 255, 0.25)'
+                                        : 'rgba(0, 0, 0, 0.85)',
                                     transform: 'scale(1.05)'
                                   }
                                 }}
                               >
                                 <PushPinOutlinedIcon
                                   sx={{
-                                    color: (theme) => theme.palette.mode === 'dark'
-                                      ? 'rgba(255, 255, 255, 0.9)'
-                                      : 'white',
+                                    color: theme =>
+                                      theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 255, 255, 0.9)'
+                                        : 'white',
                                     fontSize: '1rem'
                                   }}
                                 />

@@ -1,5 +1,9 @@
-export const formatBtmsError = (error: unknown, fallback: string = 'Something went wrong!'): string => {
-  const rawMessage = error instanceof Error ? error.message : String(error || '')
+export const formatBtmsError = (
+  error: unknown,
+  fallback: string = 'Something went wrong!'
+): string => {
+  const text = typeof error === 'string' ? error : ''
+  const rawMessage = error instanceof Error ? error.message : text
   if (!rawMessage) return fallback
 
   const lower = rawMessage.toLowerCase()
@@ -25,7 +29,7 @@ export const formatBtmsError = (error: unknown, fallback: string = 'Something we
     return 'Invalid transaction details. Please check and try again.'
   }
 
-  const messageMatch = rawMessage.match(/"message"\s*:\s*"([^"]+)"/)
+  const messageMatch = /"message"\s*:\s*"([^"]+)"/.exec(rawMessage)
   if (messageMatch?.[1]) {
     return messageMatch[1]
   }

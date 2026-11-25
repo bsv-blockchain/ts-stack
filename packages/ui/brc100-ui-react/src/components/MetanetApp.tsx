@@ -1,11 +1,9 @@
 import React from 'react'
 import { Card, CardContent, Typography, Box } from '@mui/material'
 import { withRouter, RouteComponentProps } from 'react-router-dom'
-import isImageUrl from '../utils/isImageUrl'
 import { useTheme } from '@mui/styles'
 import { generateDefaultIcon } from '../constants/popularApps'
 import { Img } from '@bsv/uhrp-react'
-
 
 interface MetanetAppProps extends RouteComponentProps {
   iconImageUrl?: string
@@ -21,13 +19,13 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
   appName,
   history,
   onClick,
-  clickable = true,
+  clickable = true
 }) => {
   const theme = useTheme()
 
   // Although TypeScript enforces the domain type, this runtime check preserves original logic.
   if (typeof domain !== 'string') {
-    throw new Error('Error in MetanetApp Component: domain prop must be a string!')
+    throw new TypeError('Error in MetanetApp Component: domain prop must be a string!')
   }
 
   // Fallback to domain if appName is not provided.
@@ -47,7 +45,7 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
             domain,
             appName: displayName,
             iconImageUrl: iconImageUrl
-          },
+          }
         })
       }
     }
@@ -69,7 +67,7 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
           sm: '110px', // Medium on tablets
           md: '130px', // Larger on desktop
           lg: '140px', // Even larger on big screens
-          xl: '150px', // Extra large screens
+          xl: '150px' // Extra large screens
         },
         justifyContent: 'center',
         transition: 'background 0.3s ease',
@@ -78,7 +76,7 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
         margin: '0 auto', // Center the card
         '&:hover': {
           backgroundColor: (theme as any).palette.action?.hover || 'rgba(0, 0, 0, 0.04)'
-        },
+        }
       }}
       onClick={handleClick}
     >
@@ -92,22 +90,22 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
               paddingTop: '0.4em',
               // Responsive container sizing
               width: {
-                xs: '48px',  // Smaller on mobile
-                sm: '56px',  // Medium on tablets
-                md: '72px',  // Larger on desktop
-                lg: '80px',  // Even larger on big screens
-                xl: '84px',  // Extra large screens
+                xs: '48px', // Smaller on mobile
+                sm: '56px', // Medium on tablets
+                md: '72px', // Larger on desktop
+                lg: '80px', // Even larger on big screens
+                xl: '84px' // Extra large screens
               },
               height: {
                 xs: '48px',
                 sm: '56px',
                 md: '72px',
                 lg: '80px',
-                xl: '84px',
+                xl: '84px'
               },
-              maxWidth: '96px',  // Increased maximum size
+              maxWidth: '96px', // Increased maximum size
               maxHeight: '96px',
-              margin: '0 auto',
+              margin: '0 auto'
             }}
           >
             <Img
@@ -116,14 +114,11 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
               style={{
                 objectFit: 'contain',
                 width: '100%',
-                height: '100%',
+                height: '100%'
               }}
             />
           </Box>
         </div>
-        {/*
-          TODO: Remove references to webkit once browsers mature to a good level
-        */}
         <Typography
           variant="body2"
           sx={{
@@ -136,10 +131,10 @@ const MetanetApp: React.FC<MetanetAppProps> = ({
             fontSize: {
               xs: '0.75rem',
               sm: '0.8rem',
-              md: '0.875rem',
+              md: '0.875rem'
             },
             width: '100%',
-            textAlign: 'center',
+            textAlign: 'center'
           }}
         >
           {displayName}

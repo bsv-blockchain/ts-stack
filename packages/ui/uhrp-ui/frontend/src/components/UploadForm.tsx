@@ -1,3 +1,4 @@
+import type { SelectChangeEvent } from '@mui/material/Select'
 import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react'
 import {
   Button,
@@ -20,11 +21,13 @@ import constants from '../utils/constants.js'
 import WalletClient from '@bsv/sdk/wallet/WalletClient'
 import { StorageUploader } from '@bsv/sdk/storage/StorageUploader'
 
-interface UploadFormProps { }
+interface UploadFormProps {}
 
 const UploadForm: React.FC<UploadFormProps> = () => {
   const [storageURL, setStorageURL] = useState<string>('')
-  const [storageURLs, setStorageURLs] = useState<string[]>(constants.storageURLs.map(x => x.toString()))
+  const [storageURLs, setStorageURLs] = useState<string[]>(
+    constants.storageURLs.map(x => x.toString())
+  )
   const [hostingMinutes, setHostingMinutes] = useState<number>(180) // Default: 3 Hours (180 minutes)
   const [loading, setLoading] = useState<boolean>(false)
   const [file, setFile] = useState<File | null>(null)
@@ -32,13 +35,8 @@ const UploadForm: React.FC<UploadFormProps> = () => {
   const [isFormValid, setIsFormValid] = useState<boolean>(false)
   const [results, setResults] = useState<{ uhrpURL: string } | null>(null)
   const [actionTXID, setActionTXID] = useState('')
-  const [inputsValid, setInputsValid] = useState<boolean>(false)
   const [openDialog, setOpenDialog] = useState<boolean>(false)
   const [newOption, setNewOption] = useState<string>('')
-
-  useEffect(() => {
-    setInputsValid(storageURL.trim() !== '' && storageURL.trim() !== '')
-  }, [storageURL])
 
   useEffect(() => {
     if (constants.storageURLs && constants.storageURLs.length > 0) {
@@ -47,9 +45,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
   }, [])
 
   useEffect(() => {
-    setIsFormValid(
-      storageURL.trim() !== '' && hostingMinutes >= 15 && file !== null
-    )
+    setIsFormValid(storageURL.trim() !== '' && hostingMinutes >= 15 && file !== null)
   }, [storageURL, hostingMinutes, file])
 
   const handleUpload = async (e: FormEvent<HTMLFormElement>) => {
@@ -116,7 +112,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
     }
   }
 
-  const handleSelectChange = (event: any) => {
+  const handleSelectChange = (event: SelectChangeEvent<string>) => {
     const selectedValue = event.target.value
     if (selectedValue === 'add-new-option') {
       setOpenDialog(true)
@@ -130,7 +126,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
   }
 
   const handleAddOption = () => {
-    if (newOption.trim() !== '' && !constants.storageURLs.includes(newOption)) {
+    if (newOption.trim() !== '' && !storageURLs.includes(newOption)) {
       setStorageURLs(prevStorageURLs => [...prevStorageURLs, newOption])
       setStorageURL(newOption)
       setNewOption('')
@@ -142,37 +138,35 @@ const UploadForm: React.FC<UploadFormProps> = () => {
     <form onSubmit={handleUpload}>
       <Grid container spacing={3} sx={{ py: 2 }}>
         <Grid item xs={12}>
-          <Typography variant='h5' gutterBottom sx={{ fontWeight: 'medium' }}>Upload Form</Typography>
-          <Typography color='textSecondary' paragraph sx={{ mb: 3 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'medium' }}>
+            Upload Form
+          </Typography>
+          <Typography color="textSecondary" paragraph sx={{ mb: 3 }}>
             Upload files to UHRP Storage
           </Typography>
         </Grid>
         <Grid item xs={12}>
-          <FormControl fullWidth variant='outlined' sx={{ mb: 2 }}>
+          <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
             <InputLabel>UHRP Storage Server URL</InputLabel>
-            <Select
-              value={storageURL}
-              onChange={handleSelectChange}
-              label='Storage Server URL'
-            >
-              {storageURLs.map((url, index) => (
-                <MenuItem key={index} value={url.toString()}>
-                  {url.toString()}
+            <Select value={storageURL} onChange={handleSelectChange} label="Storage Server URL">
+              {storageURLs.map(url => (
+                <MenuItem key={url} value={url}>
+                  {url}
                 </MenuItem>
               ))}
-              <MenuItem value='add-new-option'>+ Add New Option</MenuItem>
+              <MenuItem value="add-new-option">+ Add New Option</MenuItem>
             </Select>
           </FormControl>
         </Grid>
         <Grid item xs={12}>
-          <FormControl fullWidth variant='outlined' sx={{ mb: 2 }}>
+          <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
             <InputLabel>Duration</InputLabel>
             <Select
               fullWidth
-              label='Duration'
-              variant='outlined'
+              label="Duration"
+              variant="outlined"
               value={hostingMinutes}
-              onChange={(e: React.ChangeEvent<{ value: unknown }>) => setHostingMinutes(Number(e.target.value))}
+              onChange={(e: SelectChangeEvent<number>) => setHostingMinutes(Number(e.target.value))}
             >
               <MenuItem value={15}>15min</MenuItem>
               <MenuItem value={180}>3 Hours</MenuItem>
@@ -193,12 +187,12 @@ const UploadForm: React.FC<UploadFormProps> = () => {
           </FormControl>
         </Grid>
         <Grid item xs={12} sx={{ mb: 3 }}>
-          <Typography variant='body2' color='textSecondary' gutterBottom>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
             Select a file to upload
           </Typography>
           <input
-            type='file'
-            name='file'
+            type="file"
+            name="file"
             onChange={handleFileChange}
             style={{
               padding: '10px 0',
@@ -221,30 +215,26 @@ const UploadForm: React.FC<UploadFormProps> = () => {
             <DialogContent sx={{ pt: 3, pb: 2, px: 3, mt: 1 }}>
               <TextField
                 autoFocus
-                margin='dense'
-                label='URL'
-                type='text'
+                margin="dense"
+                label="URL"
+                type="text"
                 fullWidth
                 value={newOption}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOption(e.target.value)}
-                placeholder='Enter complete URL including http:// or https://'
+                placeholder="Enter complete URL including http:// or https://"
               />
-              <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 Enter the full URL of the UHRP storage server you want to add
               </Typography>
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
-              <Button
-                onClick={handleCloseDialog}
-                variant='outlined'
-                sx={{ borderRadius: 2 }}
-              >
+              <Button onClick={handleCloseDialog} variant="outlined" sx={{ borderRadius: 2 }}>
                 Cancel
               </Button>
               <Button
                 onClick={handleAddOption}
-                variant='contained'
-                color='primary'
+                variant="contained"
+                color="primary"
                 sx={{ borderRadius: 2 }}
                 disabled={!newOption.trim()}
               >
@@ -255,10 +245,10 @@ const UploadForm: React.FC<UploadFormProps> = () => {
         </Grid>
         <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
           <Button
-            variant='contained'
-            color='primary'
-            size='large'
-            type='submit'
+            variant="contained"
+            color="primary"
+            size="large"
+            type="submit"
             disabled={loading || !isFormValid}
             startIcon={<CloudUpload />}
             sx={{ borderRadius: 2, px: 3, py: 1 }}
@@ -277,19 +267,21 @@ const UploadForm: React.FC<UploadFormProps> = () => {
         )}
         {results && (
           <Grid item xs={12} sx={{ mt: 3, p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
-            <Typography variant='h6' sx={{ color: 'success.dark', mb: 2 }}>Upload Successful!</Typography>
+            <Typography variant="h6" sx={{ color: 'success.dark', mb: 2 }}>
+              Upload Successful!
+            </Typography>
 
             {actionTXID && (
-              <Typography variant='body2' sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
                 <b>Payment TXID:</b> {actionTXID}
               </Typography>
             )}
 
-            <Typography variant='body2' sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
               <b>UHRP URL (can never change, works with all nodes):</b>
             </Typography>
             <Typography
-              variant='body1'
+              variant="body1"
               sx={{
                 p: 1.5,
                 bgcolor: 'background.paper',
@@ -302,11 +294,11 @@ const UploadForm: React.FC<UploadFormProps> = () => {
               {results.uhrpURL}
             </Typography>
 
-            <Typography variant='body2' sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
               <b>Legacy HTTPS URL (only for this node and commitment, may expire):</b>
             </Typography>
             <Typography
-              variant='body1'
+              variant="body1"
               sx={{
                 p: 1.5,
                 bgcolor: 'background.paper',
@@ -315,7 +307,7 @@ const UploadForm: React.FC<UploadFormProps> = () => {
                 fontFamily: 'monospace'
               }}
             >
-              <a href={results.uhrpURL} target='_blank' rel='noopener noreferrer'>
+              <a href={results.uhrpURL} target="_blank" rel="noopener noreferrer">
                 {results.uhrpURL}
               </a>
             </Typography>

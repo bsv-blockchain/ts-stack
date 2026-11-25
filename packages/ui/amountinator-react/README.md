@@ -146,6 +146,8 @@ export const CustomAmount = () => {
 ## Amount input notes
 
 `paymentAmount` supports both `number` and `string` values.
+Integer numbers default to satoshis and fractional numbers default to BSV.
+Signed amounts and explicit currency codes work with comma or underscore grouping.
 
 For explicit behavior, prefer string values with currency codes, for example:
 

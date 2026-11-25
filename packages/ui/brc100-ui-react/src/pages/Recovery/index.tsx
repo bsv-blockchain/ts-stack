@@ -1,12 +1,7 @@
 import style from './style'
 import { makeStyles } from '@mui/styles'
-import {
-  Lock as LockIcon,
-  SettingsPhone as PhoneIcon
-} from '@mui/icons-material'
-import {
-  List, ListItem, ListItemIcon, ListItemText, Button, Typography
-} from '@mui/material'
+import { Lock as LockIcon, SettingsPhone as PhoneIcon } from '@mui/icons-material'
+import { List, ListItem, ListItemIcon, ListItemText, Button, Typography } from '@mui/material'
 
 const useStyles = makeStyles(style as any, {
   name: 'Recovery'
@@ -17,7 +12,7 @@ const Recovery: React.FC<any> = ({ history }) => {
   return (
     <div className={classes.content_wrap}>
       <div className={classes.panel_body}>
-        <Typography variant='h2' paragraph fontFamily='Helvetica' fontSize='2em'>
+        <Typography variant="h2" paragraph fontFamily="Helvetica" fontSize="2em">
           Account Recovery
         </Typography>
         <List style={{ marginTop: '1rem', marginBottom: '1rem' }}>
@@ -28,9 +23,7 @@ const Recovery: React.FC<any> = ({ history }) => {
             <ListItemIcon>
               <PhoneIcon />
             </ListItemIcon>
-            <ListItemText>
-              Lost Phone
-            </ListItemText>
+            <ListItemText>Lost Phone</ListItemText>
           </ListItem>
           <ListItem
             // button
@@ -39,9 +32,7 @@ const Recovery: React.FC<any> = ({ history }) => {
             <ListItemIcon>
               <LockIcon />
             </ListItemIcon>
-            <ListItemText>
-              Lost Password
-            </ListItemText>
+            <ListItemText>Lost Password</ListItemText>
           </ListItem>
         </List>
         <Button
