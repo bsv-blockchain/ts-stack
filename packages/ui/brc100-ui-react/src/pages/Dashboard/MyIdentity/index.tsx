@@ -97,9 +97,11 @@ const MyIdentity = () => {
         const proofs: Array<Promise<DisplayedCertificate | undefined>> = []
         for (const certificate of certs?.certificates ?? []) {
           // Each pending proof waits for its slot, while the results keep wallet order.
-          const slot = proofs[proofs.length - MAX_CONCURRENT_CERTIFICATE_PROOFS]
+          const slotIndex = proofs.length - MAX_CONCURRENT_CERTIFICATE_PROOFS
           proofs.push(
-            slot ? slot.then(() => proveCertificate(certificate)) : proveCertificate(certificate)
+            slotIndex >= 0
+              ? proofs[slotIndex].then(() => proveCertificate(certificate))
+              : proveCertificate(certificate)
           )
         }
         const proven = await Promise.all(proofs)

@@ -76,6 +76,10 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
   const { logout, managers, activeProfile, setActiveProfile } = useContext(WalletContext)
   const { appName, appVersion } = useContext(UserContext)
 
+  const activeRoute = history.location.pathname
+  const routeColor = (route: string) => (activeRoute === route ? 'primary.main' : 'inherit')
+  const routeWeight = (route: string) => (activeRoute === route ? 600 : 400)
+
   // Profile management state
   const [profilesOpen, setProfilesOpen] = useState(false)
   const [profiles, setProfiles] = useState<WalletProfile[]>([])
@@ -562,17 +566,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color: history.location.pathname === '/dashboard/apps' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/apps')
               }}
             >
               <BrowseIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/apps' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/apps')}>
                   Apps
                 </Typography>
               }
@@ -587,18 +588,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color:
-                  history.location.pathname === '/dashboard/identity' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/identity')
               }}
             >
               <IdentityIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/identity' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/identity')}>
                   Identity
                 </Typography>
               }
@@ -613,17 +610,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color: history.location.pathname === '/dashboard/trust' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/trust')
               }}
             >
               <VerifiedUserIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/trust' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/trust')}>
                   Trust
                 </Typography>
               }
@@ -638,18 +632,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color:
-                  history.location.pathname === '/dashboard/security' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/security')
               }}
             >
               <SecurityIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/security' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/security')}>
                   Security
                 </Typography>
               }
@@ -664,18 +654,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color:
-                  history.location.pathname === '/dashboard/settings' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/settings')
               }}
             >
               <SettingsIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/settings' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/settings')}>
                   Settings
                 </Typography>
               }
@@ -690,18 +676,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
             <ListItemIcon
               sx={{
                 minWidth: 40,
-                color:
-                  history.location.pathname === '/dashboard/transfer' ? 'primary.main' : 'inherit'
+                color: routeColor('/dashboard/transfer')
               }}
             >
               <SyncAltIcon />
             </ListItemIcon>
             <ListItemText
               primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={history.location.pathname === '/dashboard/transfer' ? 600 : 400}
-                >
+                <Typography variant="body1" fontWeight={routeWeight('/dashboard/transfer')}>
                   Transfer
                 </Typography>
               }
@@ -816,20 +798,14 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: Readonly<MenuPr
                   <ListItemIcon
                     sx={{
                       minWidth: 40,
-                      color:
-                        history.location.pathname === '/dashboard/transfer'
-                          ? 'primary.main'
-                          : 'inherit'
+                      color: routeColor('/dashboard/transfer')
                     }}
                   >
                     <SyncAltIcon />
                   </ListItemIcon>
                   <ListItemText
                     primary={
-                      <Typography
-                        variant="body1"
-                        fontWeight={history.location.pathname === '/dashboard/transfer' ? 600 : 400}
-                      >
+                      <Typography variant="body1" fontWeight={routeWeight('/dashboard/transfer')}>
                         Transfer
                       </Typography>
                     }

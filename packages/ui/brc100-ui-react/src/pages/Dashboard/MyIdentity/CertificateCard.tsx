@@ -338,8 +338,8 @@ function CertificateFieldValue({
     )
   }
 
+  const text = typeof value === 'string' ? value : formatCertificateFieldValue(value)
   if (fieldType === 'other' || typeof value === 'object') {
-    const text = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
     return (
       <Box
         sx={{
@@ -362,10 +362,15 @@ function CertificateFieldValue({
     <Stack direction="row" spacing={1} alignItems="baseline">
       <Typography variant="body1">Value:</Typography>
       <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>
-        {String(value)}
+        {text}
       </Typography>
     </Stack>
   )
+}
+
+function formatCertificateFieldValue(value: unknown): string | undefined {
+  if (typeof value === 'number' || typeof value === 'bigint') return value.toString()
+  return JSON.stringify(value, null, 2)
 }
 
 const CertificateDetailsModal: React.FC<CertificateDetailsModalProps> = ({

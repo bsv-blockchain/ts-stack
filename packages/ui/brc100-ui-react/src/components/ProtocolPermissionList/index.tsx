@@ -46,7 +46,7 @@ interface AppPermissionGroup {
  * Grouped permission when the list is rendered in **protocol‑centric** view
  */
 interface ProtocolPermissionGroup {
-  /** Protocol identifier (e.g. "todo tokens") */
+  /** Protocol identifier (e.g. "contact exchange") */
   protocolName: string
   /** Associated security level */
   securityLevel: number
