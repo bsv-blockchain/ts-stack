@@ -15,6 +15,7 @@ import { toast } from 'react-toastify'
 import { WalletContext } from '../WalletContext'
 
 type VerifyPassword = (candidate: string) => boolean | Promise<boolean>
+type FocusRelease = () => Promise<void>
 type PasswordRetriever = (reason: string, verify: VerifyPassword) => Promise<string>
 
 interface PasswordRequest {
@@ -32,7 +33,7 @@ const PasswordHandler: React.FC = () => {
   const [verifying, setVerifying] = useState(false)
   const request = useRef<PasswordRequest | null>(null)
   const queue = useRef<PasswordRequest[]>([])
-  const focus = useRef<Promise<boolean> | null>(null)
+  const focus = useRef<Promise<FocusRelease | null> | null>(null)
   const verificationInProgress = useRef(false)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -40,28 +41,28 @@ const PasswordHandler: React.FC = () => {
 
   const requestFocus = useCallback(async () => {
     try {
-      if (await isFocused()) return false
+      if (await isFocused()) return null
       await onFocusRequested()
-      return true
+      return onFocusRelinquished
     } catch {
       // Focus assistance can fail while the password form remains usable.
-      return false
+      return null
     }
-  }, [isFocused, onFocusRequested])
+  }, [isFocused, onFocusRequested, onFocusRelinquished])
 
   const releaseFocus = useCallback(() => {
     const requested = focus.current
     if (!requested) return
     void requested
-      .then(async acquired => {
+      .then(async release => {
         if (focus.current !== requested || request.current) return
         focus.current = null
-        if (acquired) await onFocusRelinquished()
+        await release?.()
       })
       .catch(() => {
         // The password request has already settled.
       })
-  }, [onFocusRelinquished])
+  }, [])
 
   const showPrompt = useCallback((pending: PasswordRequest) => {
     request.current = pending
