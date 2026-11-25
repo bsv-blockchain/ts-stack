@@ -279,10 +279,13 @@ test('every official frontend uses the shared build, runtime proof and immutable
   ])
   for (const workflow of [ci, release]) {
     assert.match(workflow, /packages\/ui\/Dockerfile/)
-    assert.match(workflow, /scripts\/check-ui-image\.sh/)
     assert.match(workflow, /UI_WORKSPACE/)
     assert.match(workflow, /UI_PATH/)
   }
+  assert.match(ci, /scripts\/check-ui-image\.sh/)
+  assert.match(release, /install -m 0555 scripts\/check-ui-image\.sh/)
+  assert.match(release, /bash "\$RUNNER_TEMP\/frontend-image-contract\.sh"/)
+  assert.doesNotMatch(release, /cache-(?:from|to): type=gha/)
   assert.match(release, /tag="rev-\$SOURCE_SHA"/)
   assert.match(ci, /- frontend-images/)
 })

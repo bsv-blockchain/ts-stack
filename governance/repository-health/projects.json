@@ -353,7 +353,7 @@
     },
     "deployment-project": {
       "description": "Private development entry point for a browser application published as an image",
-      "requiredScripts": ["build", "format:check", "start"],
+      "requiredScripts": ["format:check", "start"],
       "requiresReadme": true
     }
   },

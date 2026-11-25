@@ -5,7 +5,6 @@
   "description": "wui browser application",
   "scripts": {
     "start": "pnpm --filter @bsv/wui-frontend dev",
-    "build": "pnpm --filter @bsv/wui-frontend build",
     "format:check": "prettier --check package.json README.md"
   },
   "keywords": [],

@@ -5,7 +5,6 @@
   "description": "uhrp-ui browser application",
   "scripts": {
     "start": "pnpm --filter uhrp-example-ui dev",
-    "build": "pnpm --filter uhrp-example-ui build",
     "format:check": "prettier --check package.json README.md"
   },
   "keywords": [],

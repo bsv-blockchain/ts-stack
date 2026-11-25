@@ -128,13 +128,11 @@ candidate; this record does not claim a publication or deployment. A deployed
 rollback uses a previously verified complete image digest; it must not restore
 the vulnerable base libraries by removing the pins.
 
-The wallet infrastructure and frontend images install nginx. Their pins live
-in their Dockerfiles. `wallet-infra` installs
-`nginx=1.30.7-r0` from Alpine v3.24 main, which fixes the HTTP/2 RCEs
-CVE-2026-123633 and CVE-2026-123007, and its `nginx.conf` sets `http2 off` on
-the cleartext 8080 listener so the image never accepts h2c. A base refresh to a
-newer Alpine branch must update each nginx pin to that branch's fixed build.
-The frontend image uses `nginx=1.30.8-r0` and serves HTTP on port 8080.
+Wallet Infrastructure and the frontend images use `nginx=1.30.8-r0`
+from Alpine v3.24 main. That build includes the HTTP/2 fixes for
+CVE-2026-123633 and CVE-2026-123007. Wallet Infrastructure explicitly disables
+h2c. The frontend serves HTTP on port 8080. Keep the pins current when Alpine
+replaces a build or the governed base moves to another Alpine branch.
 
 The frontend build uses the frozen workspace `pnpm-lock.yaml` and builds its
 workspace dependencies from the same checkout. Its `rev-<source-commit>` tag

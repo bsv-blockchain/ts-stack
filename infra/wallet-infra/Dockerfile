@@ -17,9 +17,9 @@ RUN npm run build \
 FROM node@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 # Install the reviewed Alpine libcrypto3/libssl3 3.5.9-r0 pin for
-# CVE-2026-84782, and nginx 1.30.7-r0 for the HTTP/2 fixes in
+# CVE-2026-84782, and nginx 1.30.8-r0 for the HTTP/2 fixes in
 # CVE-2026-123633 and CVE-2026-123007.
-RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 nginx=1.30.7-r0 \
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 nginx=1.30.8-r0 \
  && chown -R node:node /var/lib/nginx
 
 COPY ./nginx.conf /etc/nginx/nginx.conf

@@ -192,8 +192,18 @@ jobs:
         component: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.component.kind == 'frontend'
+        with:
+          persist-credentials: false
+
+      - name: Retain the runtime verifier from the workflow revision
+        if: matrix.component.kind == 'frontend'
+        run: install -m 0555 scripts/check-ui-image.sh "$RUNNER_TEMP/frontend-image-contract.sh"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ needs.discover.outputs.source-sha }}
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -249,14 +259,12 @@ jobs:
             APP_COMMIT=${{ needs.discover.outputs.source-sha }}
             APP_VERSION=${{ matrix.component.version }}
             SOURCE_DATE_EPOCH=${{ steps.source.outputs.source_date_epoch }}
-          cache-from: type=gha,scope=infra-${{ matrix.component.name }}
-          cache-to: type=gha,mode=max,scope=infra-${{ matrix.component.name }}
 
       - name: Exercise the frontend image before publication
         if: matrix.component.kind == 'frontend'
         env:
           IMAGE: ${{ matrix.component.image }}:${{ matrix.component.tag }}
-        run: bash scripts/check-ui-image.sh "$IMAGE"
+        run: bash "$RUNNER_TEMP/frontend-image-contract.sh" "$IMAGE"
 
       - name: Reject high and critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

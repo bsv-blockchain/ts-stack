@@ -99,7 +99,7 @@ the separately released and verified image digest.
 | BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.63` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
 | UHRP UI | `uhrp-example-ui` | `0.2.45` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/uhrp-ui/frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-ui/frontend) |
 | Wallet Authentication Backend | `@bsv/wab-server` | `1.8.22` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
-| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.60` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.61` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
 | BSV WebRTPay Signalling Relay | `@bsv/webrtpay-relay` | `0.2.6` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/webrtpay-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay) |
 | Wallet UI | `@bsv/wui-frontend` | `1.0.0` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/wui/frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/wui/frontend) |
 
