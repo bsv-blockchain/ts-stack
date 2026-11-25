@@ -179,10 +179,11 @@ export class CurrencyConverter {
       const fiatRates = await this.services.getFiatExchangeRates(fiatTargets)
 
       const fiatPerUsd = Object.fromEntries(
-        SUPPORTED_FIAT_CURRENCY_CODES.map(code => [
-          code,
-          code === 'USD' ? 1 : requirePositiveRate(fiatRates.rates?.[code], `${code} per USD`)
-        ])
+        SUPPORTED_FIAT_CURRENCY_CODES.map(code => {
+          if (code === 'USD') return [code, 1]
+          const rate = fiatRates.rates[code]
+          return [code, rate === undefined ? 0 : requirePositiveRate(rate, `${code} per USD`)]
+        })
       ) as Record<FiatCurrencyCode, number>
 
       const rates = { usdPerBsv, fiatPerUsd }
@@ -287,6 +288,15 @@ export class CurrencyConverter {
     const from = normalizeCurrencyArgument(fromCurrency, 'fromCurrency')
     const to = normalizeCurrencyArgument(toCurrency, 'toCurrency')
     if (from === to) return amount
+    if (from === 'SATS' && to === 'BSV') return amount / 100_000_000
+    if (from === 'BSV' && to === 'SATS') {
+      // Scale the number's decimal representation before rounding to whole satoshis.
+      const [coefficient, exponent = '0'] = amount.toString().split('e')
+      return requireFiniteNumber(
+        Number(`${coefficient}e${Number(exponent) + 8}`),
+        'converted amount'
+      )
+    }
 
     const usdPerBsv = requirePositiveRate(this.exchangeRates.usdPerBsv, 'usdPerBsv')
 
