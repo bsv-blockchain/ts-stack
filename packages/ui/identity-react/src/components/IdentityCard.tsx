@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react'
 import { DEFAULT_IDENTITY, IdentityProps } from '../types/index.js'
 import { IdentityClient, DisplayableIdentity } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
-import { ContentCopy as ContentCopyIcon } from '@mui/icons-material'
+import { ContentCopyIcon } from './identityIcons.js'
 
 // Create an IdentityClient instance
 const identityClient = new IdentityClient()
@@ -29,8 +29,9 @@ class IdentityCache {
   constructor() {
     // Hydrate once from sessionStorage on init
     this.cache = new Map()
+    if (typeof window === 'undefined') return
     try {
-      const stored = sessionStorage.getItem(CACHE_KEY)
+      const stored = window.sessionStorage.getItem(CACHE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
         for (const [key, value] of Object.entries(parsed)) {
@@ -43,8 +44,9 @@ class IdentityCache {
   }
 
   private persist(): void {
+    if (typeof window === 'undefined') return
     try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(this.cache)))
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(this.cache)))
     } catch (e) {
       console.warn('Failed to save identity cache to sessionStorage:', e)
     }

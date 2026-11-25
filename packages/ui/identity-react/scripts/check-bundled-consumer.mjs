@@ -20,10 +20,15 @@ try {
       .stdout
   )[0]
   await execFile('tar', ['-xzf', join(temporary, packed.filename), '-C', temporary])
+  const entry = join(temporary, 'package/dist/index.js')
+  const nativeExports = await import(pathToFileURL(entry).href)
+  assert.equal(typeof nativeExports.IdentitySearchField, 'function')
+  assert.equal(typeof nativeExports.useIdentitySearch, 'function')
+
   const bundle = await rolldown({
-    input: join(temporary, 'package/dist/index.js'),
+    input: entry,
     platform: 'browser',
-    // Retain every warning without source-frame expansion for thousands of MUI icons.
+    // Retain dependency warnings without expanding their source frames.
     onLog(level, log, handler) {
       if (level === 'warn') console.warn(`[${log.code}] ${log.message}`)
       else handler(level, log)
@@ -55,7 +60,7 @@ try {
   assert.match(rendered, /Search Identity/)
   assert.match(rendered, /role="combobox"/)
   console.log(
-    `Packed ${packed.name}@${packed.version} browser component renders with React18 and MUI5`
+    `Packed ${packed.name}@${packed.version} imports in Node and renders with React 18 and MUI 5`
   )
 } finally {
   dom?.window.close()

@@ -13,16 +13,18 @@ import {
   Snackbar,
   TextField,
   Tooltip,
-  Typography
+  Typography,
+  useTheme,
+  type AutocompleteRenderInputParams,
+  type Theme
 } from '@mui/material'
-import { Theme, useTheme } from '@mui/material/styles'
-import { Search as SearchIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material'
 import { DisplayableIdentity } from '@bsv/sdk'
 import { Img } from '@bsv/uhrp-react'
 import { isIdentityKey } from '../utils/identityUtils.js'
 import { useIdentitySearch } from '../hooks/useIdentitySearch.js'
 import { DEFAULT_IDENTITY } from '../types/index.js'
 import { WalletRequiredDialog } from './WalletRequiredDialog.js'
+import { SearchIcon, ContentCopyIcon } from './identityIcons.js'
 
 // Create a global event system without causing re-renders in React components
 const copyEvents = {
@@ -69,6 +71,16 @@ export interface IdentitySearchFieldProps {
   /** Remove duplicate identityKeys from result list */
   deduplicate?: boolean
 }
+
+type SearchInputParams =
+  | AutocompleteRenderInputParams
+  | (Pick<AutocompleteRenderInputParams, 'id' | 'disabled' | 'fullWidth' | 'size'> & {
+      slotProps: {
+        input: AutocompleteRenderInputParams['InputProps']
+        inputLabel: AutocompleteRenderInputParams['InputLabelProps']
+        htmlInput: AutocompleteRenderInputParams['inputProps']
+      }
+    })
 
 // Memoized component for individual list items to prevent re-rendering the entire list on hover
 interface IdentityItemProps {
@@ -313,33 +325,45 @@ const IdentitySearchField: React.FC<IdentitySearchFieldProps> = ({
             renderOption={(props, option: DisplayableIdentity) => (
               <IdentityItem key={option.identityKey} option={option} props={props} />
             )}
-            renderInput={(params) => (
-              <Box>
-                <TextField
-                  {...params}
-                  label="Search Identity"
-                  variant="filled"
-                  error={Boolean(searchError)}
-                  onFocus={handleFocus}
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: adornment,
-                    sx: {
-                      color: theme?.palette.text.primary,
-                      bgcolor: theme?.palette.mode === 'light' ? 'white' : theme?.palette.grey[900]
+            renderInput={(params: SearchInputParams) => {
+              const inputOptions = {
+                startAdornment: adornment,
+                sx: {
+                  color: theme.palette.text.primary,
+                  bgcolor: theme.palette.mode === 'light' ? 'white' : theme.palette.grey[900]
+                }
+              }
+              const fieldProps =
+                'slotProps' in params
+                  ? {
+                      ...params,
+                      slotProps: {
+                        ...params.slotProps,
+                        input: { ...params.slotProps.input, ...inputOptions }
+                      }
                     }
-                  }}
-                  sx={{
-                    '& .MuiFilledInput-underline:after': { borderBottomColor: '#FC433F' }
-                  }}
-                />
-                {isLoading && (
-                  <LinearProgress
-                    sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2 }}
+                  : { ...params, InputProps: { ...params.InputProps, ...inputOptions } }
+
+              return (
+                <Box>
+                  <TextField
+                    {...fieldProps}
+                    label="Search Identity"
+                    variant="filled"
+                    error={Boolean(searchError)}
+                    onFocus={handleFocus}
+                    sx={{
+                      '& .MuiFilledInput-underline:after': { borderBottomColor: '#FC433F' }
+                    }}
                   />
-                )}
-              </Box>
-            )}
+                  {isLoading && (
+                    <LinearProgress
+                      sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2 }}
+                    />
+                  )}
+                </Box>
+              )
+            }}
             sx={{ width, bgcolor: theme?.palette.background.paper }}
           />
           {searchError && (

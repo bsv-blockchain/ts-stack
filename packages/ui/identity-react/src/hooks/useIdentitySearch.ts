@@ -5,7 +5,7 @@ import {
   IdentityClientOptions,
   OriginatorDomainNameStringUnder250Bytes
 } from '@bsv/sdk'
-import type { AutocompleteInputChangeReason } from '@mui/material/Autocomplete'
+import type { AutocompleteInputChangeReason } from '@mui/material'
 import { fetchIdentities } from '../utils/identityUtils.js'
 
 export interface UseIdentitySearchProps {
