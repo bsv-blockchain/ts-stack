@@ -144,6 +144,44 @@ function normalizePaymentParams(value: unknown): PaymentParams {
   return { recipient, amount: payment.amount }
 }
 
+const MAX_PAYMENT_NOTE_CHARACTERS = 500
+const MAX_PAYMENT_NOTE_BYTES = 2000
+const MAX_PAYMENT_PAYMAIL_BYTES = 254
+const PAYMAIL_ADDRESS_PATTERN = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$/
+
+/**
+ * Returns the sender's note when it is bounded text, otherwise `undefined`.
+ * An invalid note is dropped, never thrown: a throw would lose the payment.
+ */
+function optionalNote(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    Array.from(value).length > MAX_PAYMENT_NOTE_CHARACTERS ||
+    new TextEncoder().encode(value).byteLength > MAX_PAYMENT_NOTE_BYTES ||
+    hasControlCharacters(value)
+  ) {
+    return undefined
+  }
+  return value
+}
+
+/**
+ * Returns the sender's paymail address when it is well formed, otherwise
+ * `undefined`. An invalid value is dropped, never thrown.
+ */
+function optionalPaymail(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    new TextEncoder().encode(value).byteLength > MAX_PAYMENT_PAYMAIL_BYTES ||
+    !PAYMAIL_ADDRESS_PATTERN.test(value) ||
+    hasControlCharacters(value)
+  ) {
+    return undefined
+  }
+  return value
+}
+
 function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToken {
   const token = dataRecord(value)
   const customInstructions = dataRecord(token?.customInstructions)
@@ -177,6 +215,8 @@ function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToke
   ) {
     throw new TypeError('Incoming payment output index is invalid')
   }
+  const note = optionalNote(token.note)
+  const paymail = optionalPaymail(token.paymail)
   return {
     customInstructions: {
       derivationPrefix: validateBase64String(
@@ -190,7 +230,9 @@ function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToke
     },
     transaction: Array.from(transaction),
     amount: token.amount,
-    outputIndex
+    outputIndex,
+    ...(note !== undefined ? { note } : {}),
+    ...(paymail !== undefined ? { paymail } : {})
   }
 }
 
@@ -389,6 +431,16 @@ export interface PaymentToken {
   transaction: AtomicBEEF
   amount: number
   outputIndex?: number
+  /**
+   * Sender's note. Optional, at most 500 characters and 2,000 bytes, no control
+   * characters. Unverified text from the sender.
+   */
+  note?: string
+  /**
+   * Sender's paymail address (`name@domain`), as sent by a legacy paymail
+   * wallet. Optional and unverified: the sender controls this text.
+   */
+  paymail?: string
 }
 
 /**
