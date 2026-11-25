@@ -1,0 +1,55 @@
+{
+  "name": "@bsv/wui-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint:todo": "eslint .",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --build --pretty false",
+    "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs build"
+  },
+  "dependencies": {
+    "@bsv/message-box-client": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox-client": "workspace:^",
+    "@emotion/react": "^11.10.8",
+    "@emotion/styled": "^11.10.8",
+    "@mui/icons-material": "^5.11.0",
+    "@mui/material": "^5.11.0",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@types/react-router-dom": "^5.3.3",
+    "idb": "^8.0.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.0",
+    "web-vitals": "^3.3.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "^8.18.2",
+    "vite": "^6.0.5",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/wui/frontend"
+  },
+  "author": "BSV Association"
+}

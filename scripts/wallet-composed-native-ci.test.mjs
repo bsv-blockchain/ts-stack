@@ -602,7 +602,7 @@ test('all39 original integrity comparisons retain names, multiplicities and disj
   const names = [...declared.matchAll(/kind: '(metadata|binary|text)',\s*table: '([^']+)'/g)]
     .map(([, kind, table]) => `complete current comparison rejects ${kind} mutation in ${table}`)
     .sort()
-  assert.equal(names.length, 39)
+  assert.equal(names.length, 45)
   assert.deepEqual(nativeRouting.nativeIntegrityCaseNames, names)
   assert.match(source, /const nativeFixtureCaseTimeoutMs = 180000 \+ 30000/)
   assert.equal(nativeRouting.nativeIntegrityCohorts.length, 6)

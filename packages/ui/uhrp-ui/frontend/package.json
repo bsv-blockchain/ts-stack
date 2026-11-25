@@ -1,0 +1,74 @@
+{
+  "name": "uhrp-example-ui",
+  "version": "0.2.45",
+  "private": true,
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.13.6",
+    "@mui/styled-engine": "^6.4.8",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.11.0",
+    "@types/react": "^17.0.0",
+    "filereader": "^0.10.3",
+    "metanet-react-prompt": "^1.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-redux": "^9.1.0",
+    "react-router": "^5.3.4",
+    "react-router-dom": "^5.3.4",
+    "react-toastify": "^8.2.0",
+    "use-async-effect": "^2.2.7"
+  },
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs build"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.47",
+    "@types/react-dom": "^18.2.18",
+    "@types/react-router-dom": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^6.20.0",
+    "@typescript-eslint/parser": "^6.20.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "interpolate-html-plugin": "^4.0.0",
+    "sass-embedded": "^1.86.0",
+    "standard": "^17.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "^6.2.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/uhrp-ui/frontend"
+  },
+  "author": "BSV Association"
+}

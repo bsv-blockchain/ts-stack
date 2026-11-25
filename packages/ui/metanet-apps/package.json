@@ -1,0 +1,91 @@
+{
+  "name": "metanet-apps",
+  "version": "2.0.0",
+  "description": "Publish and find Metanet apps with ease",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/metanet-apps"
+  },
+  "type": "module",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "PATENTS",
+    "NOTICE",
+    "dist",
+    "src",
+    "mod.ts",
+    "LICENSE",
+    "UPSTREAM_NOTICE"
+  ],
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand --coverage --coverageReporters=lcov --coverageReporters=text",
+    "lint": "oxlint . --deny-warnings",
+    "build": "pnpm run build:ts && pnpm run build:umd",
+    "build:ts": "tsc -b && node scripts/build-commonjs.mjs",
+    "build:umd": "webpack --config webpack.config.js",
+    "dev": "tsc -b -w",
+    "doc": "ts2md",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.base.json",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs,esm --exports AppCatalog,DEFAULT_APP_LOOKUP_HOSTS --entry-exports './mod.ts=AppCatalog|DEFAULT_APP_LOOKUP_HOSTS'",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs ."
+  },
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.14",
+    "eslint": "^9.23.0",
+    "globals": "^16.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.3.1",
+    "ts-loader": "^9.5.2",
+    "ts-standard": "^12.0.2",
+    "ts2md": "^0.2.8",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "^8.29.0",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "@bsv/sdk": "workspace:^"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./mod.ts": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/metanet-apps#readme",
+  "keywords": [
+    "bsv",
+    "ui"
+  ],
+  "sideEffects": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

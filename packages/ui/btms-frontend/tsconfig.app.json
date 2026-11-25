@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "btms-core/dist/frontend/src/btms": ["./src/btms/index.ts"],
+      "btms-core/dist/frontend/src/btms/index.js": ["./src/btms/index.ts"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "extends": "../../../config/typescript/browser.json"
+}

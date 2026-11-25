@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/uhrp-react",
+  "entry": ".",
+  "requiredExports": ["Img", "Source"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 1500000, "gzip": 450000, "brotli": 375000 },
+    "esbuild": { "raw": 1500000, "gzip": 450000, "brotli": 375000 }
+  }
+}

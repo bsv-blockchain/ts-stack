@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/identity-react",
+  "entry": ".",
+  "requiredExports": ["IdentitySearchField", "useIdentitySearch"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 2500000,
+      "gzip": 650000,
+      "brotli": 550000
+    },
+    "esbuild": {
+      "raw": 2500000,
+      "gzip": 650000,
+      "brotli": 550000
+    }
+  }
+}

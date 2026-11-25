@@ -1,0 +1,42 @@
+{
+  "schema": "bsv-app",
+  "schemaVersion": "1.0",
+  "topicManagers": {},
+  "lookupServices": {},
+  "frontend": {
+    "language": "react",
+    "sourceDirectory": "./frontend"
+  },
+  "configs": [
+    {
+      "name": "Local LARS",
+      "network": "mainnet",
+      "provider": "LARS",
+      "run": [
+        "frontend"
+      ]
+    },
+    {
+      "name": "PeerPay App (CARS)",
+      "provider": "CARS",
+      "network": "mainnet",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "f1dc9a42ebab03915c809881f75d7e09",
+      "frontendHostingMethod": "HTTPS",
+      "deploy": [
+        "frontend"
+      ]
+    },
+    {
+      "name": "chibby",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.metanet.club",
+      "projectID": "509e069abdfa8f6d54bc2d3dac464e49",
+      "network": "mainnet",
+      "deploy": [
+        "frontend"
+      ],
+      "frontendHostingMethod": "HTTPS"
+    }
+  ]
+}

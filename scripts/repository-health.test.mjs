@@ -74,11 +74,11 @@ test('workspace inventory ignores generated mutation sandboxes while retaining n
   )
 })
 
-test('workspace discovery exactly matches the 48-project registry', () => {
+test('workspace discovery exactly matches the 64-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 48)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 39)
+  assert.equal(discovered.length, 64)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 45)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -114,8 +114,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 48)
-  assert.equal(result.publicPackages, 39)
+  assert.equal(result.projects.length, 64)
+  assert.equal(result.publicPackages, 45)
   assert.equal(result.findings.length, 0)
 })
 
@@ -262,7 +262,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 39)
+  assert.equal(publicPackages.length, 45)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -316,7 +316,12 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 39)
+  assert.equal(publicProjects.length, 45)
+  assert.equal(
+    publicProjects.find(project => project.name === 'metanet-apps')?.path,
+    'packages/ui/metanet-apps'
+  )
+  assert.ok(publicProjects.every(project => project.name !== '@bsv/metanet-apps'))
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),

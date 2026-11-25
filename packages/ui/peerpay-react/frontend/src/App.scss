@@ -1,0 +1,324 @@
+:root {
+  --peerpay-bg-1: #040913;
+  --peerpay-bg-2: #0a172a;
+  --peerpay-bg-3: #0e2a2f;
+  --peerpay-glass: rgba(16, 28, 44, 0.58);
+  --peerpay-glass-strong: rgba(17, 33, 49, 0.76);
+  --peerpay-outline: rgba(168, 205, 242, 0.26);
+  --peerpay-shadow: 0 28px 62px rgba(3, 6, 12, 0.55);
+  --peerpay-accent: #5fe2c4;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(96, 227, 194, 0.18), transparent 35%),
+    radial-gradient(circle at 78% 26%, rgba(101, 150, 255, 0.12), transparent 30%),
+    linear-gradient(155deg, var(--peerpay-bg-2), var(--peerpay-bg-1) 48%, #03070f);
+  background-attachment: fixed;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.peerpay-app {
+  position: relative;
+  min-height: 100vh;
+  z-index: 1;
+}
+
+.peerpay-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: 56px 0 42px;
+  animation: shell-enter 420ms ease-out;
+}
+
+.peerpay-shell::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 84px;
+  width: 420px;
+  height: 420px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(95, 226, 196, 0.18) 0%, rgba(95, 226, 196, 0) 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.peerpay-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.peerpay-logo {
+  width: 286px;
+  max-width: 85vw;
+  filter: drop-shadow(0 10px 24px rgba(62, 192, 159, 0.24));
+}
+
+.peerpay-subtitle {
+  margin: 0;
+  font-size: 1.18rem;
+  color: rgba(223, 238, 255, 0.8);
+}
+
+.peerpay-panel {
+  background: linear-gradient(170deg, var(--peerpay-glass-strong), var(--peerpay-glass));
+  border: 1px solid var(--peerpay-outline);
+  border-radius: 22px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--peerpay-shadow);
+}
+
+.peerpay-section {
+  margin-top: 24px;
+  padding: 18px 20px 14px;
+}
+
+.peerpay-section-title {
+  margin-bottom: 12px;
+}
+
+.payment-form-root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recipient-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recipient-option-btn {
+  min-height: 70px;
+  border-radius: 16px !important;
+  border: 1px solid rgba(169, 201, 233, 0.35) !important;
+  background: linear-gradient(160deg, rgba(236, 242, 248, 0.12), rgba(255, 255, 255, 0.05)) !important;
+  color: #edf5ff !important;
+  justify-content: flex-start !important;
+  padding: 10px 14px !important;
+  font-size: 1.04rem !important;
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease !important;
+}
+
+.recipient-option-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(95, 226, 196, 0.7) !important;
+  background: linear-gradient(160deg, rgba(95, 226, 196, 0.24), rgba(132, 162, 255, 0.14)) !important;
+}
+
+.recipient-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(95, 226, 196, 0.4);
+  background: linear-gradient(170deg, rgba(11, 26, 33, 0.75), rgba(14, 31, 50, 0.66));
+  padding: 14px;
+}
+
+.search-shell > div {
+  justify-content: stretch !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+.search-shell > div > div {
+  width: 100% !important;
+}
+
+.search-shell .MuiAutocomplete-root {
+  width: 100% !important;
+}
+
+.search-shell .MuiFilledInput-root {
+  border-radius: 14px !important;
+  border: 1px solid rgba(168, 205, 242, 0.26);
+  background: rgba(9, 18, 33, 0.85) !important;
+}
+
+.search-shell .MuiFilledInput-root::before,
+.search-shell .MuiFilledInput-root::after {
+  display: none !important;
+}
+
+.search-shell .MuiInputLabel-root {
+  color: rgba(198, 215, 236, 0.72);
+}
+
+.amount-shell .MuiTextField-root {
+  background: transparent !important;
+}
+
+.amount-shell .MuiInputBase-root {
+  background: rgba(9, 18, 33, 0.85) !important;
+}
+
+.amount-shell .MuiInputBase-input {
+  color: #eaf4ff !important;
+  font-size: 1.18rem;
+  font-weight: 600;
+}
+
+.amount-shell .MuiInputLabel-root {
+  color: rgba(198, 215, 236, 0.72) !important;
+}
+
+.amount-shell .MuiInputAdornment-root p {
+  color: rgba(234, 244, 255, 0.84);
+}
+
+.send-payment-btn {
+  min-height: 54px;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #62e6ca, #53d7b8) !important;
+  color: #091512 !important;
+  font-size: 1.02rem !important;
+}
+
+.send-payment-btn:hover {
+  background: linear-gradient(90deg, #75efd6, #5ce2c2) !important;
+}
+
+.soft-note {
+  font-size: 0.88rem;
+  margin: 0;
+  color: rgba(198, 215, 236, 0.74);
+}
+
+.list-surface {
+  border: 1px solid rgba(168, 205, 242, 0.16);
+  border-radius: 15px;
+  background: rgba(10, 20, 33, 0.74);
+}
+
+.amount-inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.amount-inline .MuiTypography-root {
+  display: inline;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.amount-sign {
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.amount-inline-total .MuiTypography-root {
+  font-weight: 600;
+  color: rgba(227, 240, 255, 0.92);
+}
+
+.amount-inline-positive .MuiTypography-root {
+  color: #7ff0d6;
+}
+
+.amount-inline-negative .MuiTypography-root {
+  color: rgba(228, 237, 248, 0.94);
+}
+
+.amount-inline-sent .MuiTypography-root {
+  font-size: 2.05rem;
+  font-weight: 700;
+}
+
+.Toastify__toast-container {
+  width: min(92vw, 420px);
+  padding-top: 10px;
+}
+
+.peerpay-toast {
+  border-radius: 16px !important;
+  border: 1px solid rgba(168, 205, 242, 0.24) !important;
+  background: linear-gradient(170deg, rgba(15, 30, 47, 0.95), rgba(9, 20, 34, 0.96)) !important;
+  color: #eaf4ff !important;
+  box-shadow: 0 22px 42px rgba(3, 8, 16, 0.58) !important;
+  backdrop-filter: blur(10px);
+}
+
+.peerpay-toast-body {
+  font-family: '"Sora', 'Avenir Next', 'Segoe UI', sans-serif;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.peerpay-toast .Toastify__close-button {
+  color: rgba(223, 239, 255, 0.82);
+  opacity: 1;
+}
+
+.peerpay-toast .Toastify__close-button:hover {
+  color: #ffffff;
+}
+
+.peerpay-toast .Toastify__toast-icon svg {
+  fill: currentColor;
+}
+
+.peerpay-toast.Toastify__toast--success .Toastify__toast-icon {
+  color: #62e6ca;
+}
+
+.peerpay-toast.Toastify__toast--error .Toastify__toast-icon {
+  color: #ff7684;
+}
+
+.peerpay-toast.Toastify__toast--info .Toastify__toast-icon {
+  color: #8fb4ff;
+}
+
+.peerpay-toast.Toastify__toast--warning .Toastify__toast-icon {
+  color: #ffd16a;
+}
+
+.peerpay-toast-progress {
+  height: 4px !important;
+  background: linear-gradient(90deg, #62e6ca, #53d7b8) !important;
+}
+
+@keyframes shell-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 620px) {
+  .peerpay-shell {
+    padding-top: 38px;
+  }
+
+  .peerpay-logo {
+    width: 248px;
+  }
+
+  .peerpay-subtitle {
+    font-size: 1rem;
+  }
+
+  .recipient-options-grid {
+    grid-template-columns: 1fr;
+  }
+}

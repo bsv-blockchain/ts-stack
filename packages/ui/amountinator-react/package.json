@@ -1,0 +1,73 @@
+{
+  "name": "@bsv/amountinator-react",
+  "version": "1.0.1",
+  "description": "Currency amount display components",
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "LICENSE",
+    "PATENTS",
+    "NOTICE",
+    "out"
+  ],
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "pnpm build && node --test tests/*.test.cjs",
+    "test:watch": "jest --watch",
+    "build": "tsc --build",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports AmountDisplay,AmountInputField,useCurrencyDisplay",
+    "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/amountinator-react"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/amountinator-react#readme",
+  "dependencies": {
+    "@bsv/amountinator": "workspace:^",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.13.6",
+    "react": "^18.2.0",
+    "use-async-effect": "^2.2.7"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./out/src/index.d.ts",
+      "default": "./out/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "bsv",
+    "ui"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,107 @@
+name: UI CARS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: UI application
+        type: choice
+        options: [peerpay-react, registrant, uhrp-ui, wui]
+        required: true
+      target:
+        description: CARS configuration index
+        type: choice
+        options: ['1', '2']
+        default: '1'
+      publish:
+        description: Request release approval after staging the artifact
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-cars-${{ inputs.project }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  UI_PROJECT: ${{ inputs.project }}
+  CARS_TARGET: ${{ inputs.target }}
+
+jobs:
+  stage:
+    name: Build CARS candidate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm rebuild esbuild
+      - name: Build from workspace lock and assemble frontend
+        run: |
+          set -euo pipefail
+          case "$UI_PROJECT" in peerpay-react|registrant|uhrp-ui|wui) ;; *) exit 1 ;; esac
+          case "$CARS_TARGET" in 1|2) ;; *) exit 1 ;; esac
+          project="packages/ui/$UI_PROJECT"
+          jq -e --argjson target "$CARS_TARGET" '
+            .frontend.language == "react" and
+            .configs[$target].deploy == ["frontend"] and
+            (.configs[$target].projectID | type == "string" and length > 0)
+          ' "$project/deployment-info.json" > /dev/null
+          pnpm --filter "{./$project/frontend}..." run build
+          test -s "$project/frontend/build/index.html"
+          mkdir -p "$RUNNER_TEMP/cars-stage"
+          cp "$project/deployment-info.json" "$project/package.json" "$RUNNER_TEMP/cars-stage/"
+          cp -R "$project/frontend/build" "$RUNNER_TEMP/cars-stage/frontend"
+          mkdir -p "$RUNNER_TEMP/cars-candidate"
+          tar -czf "$RUNNER_TEMP/cars-candidate/cars_artifact_1.tgz" -C "$RUNNER_TEMP/cars-stage" .
+          cd "$RUNNER_TEMP/cars-candidate"
+          sha256sum cars_artifact_1.tgz > SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cars-${{ inputs.project }}-${{ inputs.target }}
+          path: ${{ runner.temp }}/cars-candidate
+          if-no-files-found: error
+
+  release:
+    name: Release the staged CARS artifact
+    needs: stage
+    if: github.ref == 'refs/heads/main' && inputs.publish
+    environment: release-approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: cars-${{ inputs.project }}-${{ inputs.target }}
+          path: ${{ runner.temp }}/cars-candidate
+      - name: Verify and release the exact artifact
+        env:
+          CARS_PRIVATE_KEY: ${{ secrets[format('CARS_{0}_{1}_PRIVATE_KEY', fromJSON('{"peerpay-react":"PEERPAY_REACT","registrant":"REGISTRANT","uhrp-ui":"UHRP_UI","wui":"WUI"}')[inputs.project], inputs.target)] }}
+        run: |
+          set -euo pipefail
+          case "$UI_PROJECT" in peerpay-react|registrant|uhrp-ui|wui) ;; *) exit 1 ;; esac
+          case "$CARS_TARGET" in 1|2) ;; *) exit 1 ;; esac
+          : "${CARS_PRIVATE_KEY:?Configure the selected CARS project and target in release-approval}"
+          project="packages/ui/$UI_PROJECT"
+          (cd "$RUNNER_TEMP/cars-candidate" && sha256sum -c SHA256SUMS)
+          cp "$RUNNER_TEMP/cars-candidate/cars_artifact_1.tgz" "$project/"
+          pnpm --dir "$project" exec cars release now "$CARS_TARGET" --key "$CARS_PRIVATE_KEY"

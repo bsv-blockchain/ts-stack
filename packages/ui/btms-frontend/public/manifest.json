@@ -1,0 +1,39 @@
+{
+  "short_name": "BTMS",
+  "name": "BTMS",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "babbage": {
+    "groupPermissions": {
+      "protocolPermissions": [
+        {
+          "protocolID": [0, "p btms"],
+          "description": "Allow BTMS protocol operations"
+        },
+        {
+          "protocolID": [1, "messagebox"],
+          "description": "Allow MessageBox operations"
+        },
+        {
+          "protocolID": [2, "specific linkage revelation 0 p btms"],
+          "description": "Allow BTMS ownership proof decryption/reveal operations"
+        }
+      ],
+      "basketAccess": [
+        {
+          "basket": "p btms",
+          "description": "Access BTMS token basket"
+        }
+      ]
+    }
+  }
+}

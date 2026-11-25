@@ -1,0 +1,38 @@
+{
+  "name": "uhrp-react-example",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check .",
+    "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs dist"
+  },
+  "dependencies": {
+    "@bsv/uhrp-react": "workspace:^",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.1",
+    "vite": "^8.3.8",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not ie <= 11",
+    "not op_mini all"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/uhrp-react/example"
+  },
+  "author": "BSV Association"
+}

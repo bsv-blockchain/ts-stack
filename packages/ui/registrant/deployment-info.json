@@ -1,0 +1,43 @@
+{
+  "schema": "bsv-app",
+  "schemaVersion": "1.0",
+  "topicManagers": {},
+  "lookupServices": {},
+  "frontend": {
+    "language": "react",
+    "sourceDirectory": "./frontend"
+  },
+  "contracts": {},
+  "configs": [
+    {
+      "name": "Local LARS",
+      "network": "mainnet",
+      "provider": "LARS",
+      "run": [
+        "frontend"
+      ]
+    },
+    {
+      "name": "atx",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.atx.systems",
+      "projectID": "",
+      "network": "mainnet",
+      "deploy": [
+        "frontend"
+      ],
+      "frontendHostingMethod": "HTTPS"
+    },
+    {
+      "name": "babbage",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "cd9cf18bc6e1695c768f2c2617f6cf03",
+      "network": "mainnet",
+      "deploy": [
+        "frontend"
+      ],
+      "frontendHostingMethod": "HTTPS"
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "short_name": "PeerPay",
+  "name": "PeerPay",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "metanet": {
+    "groupPermissions": {
+      "protocolPermissions": [
+        {
+          "protocolID": [2, "3241645161d8"],
+          "counterparty": "self",
+          "description": "Needs permission to derive a public key used in payment to a peer."
+        },
+        {
+          "protocolID": [2, "messagebox"],
+          "counterparty": "self",
+          "description": "Needs permission for message delivery."
+        },
+        {
+          "protocolID": [2, "auth message signature"],
+          "counterparty": "028155878063d691f01cfc0eeb626404ebe9303ec50f9542c234c5c85100a98ca1",
+          "description": "Needs permission for secure communication with messagebox backend."
+        },
+        {
+          "protocolID": [1, "identity resolution"],
+          "description": "Needs permission for identity resolution."
+        },
+        {
+          "protocolID": [1, "messagebox advertisement"],
+          "description": "Required for messagebox advertisement."
+        },
+        {
+          "protocolID": [1, "identity key retrieval"],
+          "description": "Needs permission for retrieving identity key."
+        },
+        {
+          "protocolID": [1, "action label peerpay"],
+          "description": "Labeling actions"
+        },
+        {
+          "protocolID": [2, "wallet settings"],
+          "counterparty": "self",
+          "description": "Needs permission for accessing default currency preference."
+        },
+        {
+          "protocolID": [2, "server hmac"],
+          "counterparty": "self",
+          "description": "Needs permission for key derivation relating to hmac generation."
+        },
+        {
+          "protocolID": [2, "contact"],
+          "counterparty": "self",
+          "description": "Needs permission for accessing contact list."
+        },
+        {
+          "protocolID": [1, "messagebox"],
+          "description": "Needs permission for message delivery."
+        }
+      ],
+      "basketAccess": [
+        {
+          "basket": "contacts",
+          "description": "To check local contacts"
+        },
+        {
+          "basket": "wallet settings",
+          "description": "To save preferences for ammountinator"
+        }
+      ],
+      "spendingAuthorization": {
+        "amount": 1000000,
+        "description": "To authorize spending up to a certain amount"
+      }
+    },
+    "counterpartyPermissions": {
+      "protocols": [
+        {
+          "protocolName": "messagebox",
+          "description": "Communicate using MessageBox."
+        },
+        {
+          "protocolName": "3241645161d8",
+          "description": "Facilitate payment to peer."
+        }
+      ]
+    }
+  }
+}

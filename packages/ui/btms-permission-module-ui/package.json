@@ -1,0 +1,75 @@
+{
+  "name": "@bsv/btms-permission-module-ui",
+  "version": "1.0.0",
+  "description": "React/MUI UI components for BTMS Permission Module",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports BtmsPermissionPrompt,BtmsPromptDialog,useBtmsPrompt",
+    "test": "pnpm build && node --test tests/*.test.mjs",
+    "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.mjs"
+  },
+  "keywords": [
+    "btms",
+    "tokens",
+    "permissions",
+    "wallet",
+    "react",
+    "mui",
+    "ui",
+    "bsv"
+  ],
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "@bsv/uhrp-react": "^1.0.5 || ^2.0.0",
+    "@mui/icons-material": ">=5.0.0",
+    "@mui/material": ">=5.0.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@bsv/uhrp-react": "workspace:^",
+    "@mui/icons-material": "^6.0.0",
+    "@mui/material": "^6.0.0",
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/btms-permission-module-ui"
+  },
+  "files": [
+    "LICENSE",
+    "NOTICE",
+    "PATENTS",
+    "dist"
+  ],
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/btms-permission-module-ui#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

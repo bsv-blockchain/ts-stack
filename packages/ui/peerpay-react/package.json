@@ -1,0 +1,30 @@
+{
+  "name": "@bsv/peerpay-react",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Peerpay project using CARS and LARS",
+  "dependencies": {
+    "@bsv/cars-cli": "^1.2.9",
+    "@bsv/lars": "^1.5.8"
+  },
+  "scripts": {
+    "lars": "lars",
+    "cars": "cars",
+    "lars:config": "lars config",
+    "start": "lars start",
+    "deploy": "cars deploy now 1",
+    "build:cars": "cars build 1",
+    "format:check": "prettier --check package.json deployment-info.json README.md"
+  },
+  "devDependencies": {
+    "sass": "^1.89.2",
+    "sass-embedded": "^1.89.2"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/peerpay-react"
+  },
+  "author": "BSV Association"
+}

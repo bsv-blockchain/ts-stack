@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **39 public packages**. Versions
+The release graph currently contains **45 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -67,6 +67,12 @@ authorized release action.
 | overlays | `@bsv/overlay-topics` | `2.0.4` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
 | sdk | `@bsv/sdk` | `4.1.2` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
 | sdk | `@bsv/verifast` | `0.3.10` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
+| ui | `@bsv/amountinator-react` | `1.0.1` | browser-library | browser-bundler, node-cjs | browser, node | `>=22` | [packages/ui/amountinator-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/amountinator-react) |
+| ui | `@bsv/brc100-ui-react-components` | `0.2.3` | browser-library | browser-bundler, node-cjs | browser, node | `>=22` | [packages/ui/brc100-ui-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/brc100-ui-react) |
+| ui | `@bsv/btms-permission-module-ui` | `1.0.0` | browser-library | browser-bundler, node-esm | browser, node | `>=22` | [packages/ui/btms-permission-module-ui](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/btms-permission-module-ui) |
+| ui | `@bsv/identity-react` | `3.0.0` | browser-library | browser-bundler, node-esm | browser, node | `>=22` | [packages/ui/identity-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/identity-react) |
+| ui | `@bsv/uhrp-react` | `2.0.0` | browser-library | browser-bundler, node-cjs | browser, node | `>=22` | [packages/ui/uhrp-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-react) |
+| ui | `metanet-apps` | `2.0.0` | browser-library | browser-bundler, node-cjs, node-esm | browser, node | `>=22` | [packages/ui/metanet-apps](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/metanet-apps) |
 | wallet | `@bsv/btms` | `1.2.7` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.2.5` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
 | wallet | `@bsv/color-permission-module` | `0.2.2` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/color-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/color-permission-module) |
@@ -97,10 +103,10 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 48 |
-| Package-area projects | 42 |
-| Public npm packages | 39 |
-| Private package-area projects | 3 |
+| Governed projects | 64 |
+| Package-area projects | 58 |
+| Public npm packages | 45 |
+| Private package-area projects | 13 |
 | Standalone infrastructure projects | 8 |
 
 Public packages use the `npm-oidc` release route. Other workspace projects are
@@ -134,7 +140,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 41 | current package manifests |
+| Projects with a test:coverage script | 47 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |

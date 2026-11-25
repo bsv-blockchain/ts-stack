@@ -332,6 +332,11 @@
       "description": "Private examples or test applications",
       "requiredScripts": ["build", "format:check", "lint", "test", "typecheck"],
       "requiresReadme": true
+    },
+    "deployment-project": {
+      "description": "Private remote deployment configuration for a separate browser application workspace",
+      "requiredScripts": ["format:check", "deploy"],
+      "requiresReadme": true
     }
   },
   "projects": [
@@ -747,6 +752,172 @@
       "criticality": "tier-0",
       "runtimeTargets": ["browser", "node", "umd", "wasm", "worker"],
       "release": "npm-oidc"
+    },
+    {
+      "path": "packages/ui/amountinator-react",
+      "name": "@bsv/amountinator-react",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-cjs"]
+    },
+    {
+      "path": "packages/ui/brc100-ui-react",
+      "name": "@bsv/brc100-ui-react-components",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-cjs"]
+    },
+    {
+      "path": "packages/ui/btms-frontend",
+      "name": "@bsv/btms-frontend",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/btms-permission-module-ui",
+      "name": "@bsv/btms-permission-module-ui",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-esm"]
+    },
+    {
+      "path": "packages/ui/identity-react",
+      "name": "@bsv/identity-react",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-esm"]
+    },
+    {
+      "path": "packages/ui/metanet-apps",
+      "name": "metanet-apps",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-cjs", "node-esm"]
+    },
+    {
+      "path": "packages/ui/peerpay-react",
+      "name": "@bsv/peerpay-react",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "deployment-project",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/peerpay-react/frontend",
+      "name": "peerpay-react",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/registrant",
+      "name": "@bsv/registrant",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "deployment-project",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/registrant/frontend",
+      "name": "registrant",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/uhrp-react",
+      "name": "@bsv/uhrp-react",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "browser-library",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc",
+      "consumerProfiles": ["browser-bundler", "node-cjs"]
+    },
+    {
+      "path": "packages/ui/uhrp-react/example",
+      "name": "uhrp-react-example",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/uhrp-ui",
+      "name": "@bsv/uhrp-ui",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "deployment-project",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/uhrp-ui/frontend",
+      "name": "uhrp-example-ui",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/wui",
+      "name": "@bsv/wui",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "deployment-project",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
+    },
+    {
+      "path": "packages/ui/wui/frontend",
+      "name": "@bsv/wui-frontend",
+      "owner": "ts-stack-maintainers",
+      "area": "ui",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": ["browser"],
+      "release": "none"
     },
     {
       "path": "packages/wallet/btms",
