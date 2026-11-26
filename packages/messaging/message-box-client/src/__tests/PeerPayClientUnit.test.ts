@@ -666,7 +666,10 @@ describe('PeerPayClient Unit Tests', () => {
       // Each address here is one that parsePaymail in @bsv/ts-paymail accepts.
       it.each([
         ['a percent sign in the alias', 'alice%tag@example.com'],
-        ['four 50-character labels (209 bytes)', `a@${Array(4).fill('b'.repeat(50)).join('.')}.com`],
+        [
+          'four 50-character labels (209 bytes)',
+          `a@${Array(4).fill('b'.repeat(50)).join('.')}.com`
+        ],
         ['a 63-character label', `rosa@${'b'.repeat(63)}.io`],
         ['a hyphen inside a label', 'rosa@hand-cash.io'],
         ['a single-label domain', 'rosa@handcash']
