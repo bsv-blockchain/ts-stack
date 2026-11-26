@@ -616,6 +616,162 @@ describe('PeerPayClient Unit Tests', () => {
 
       await expect(peerPayClient.listIncomingPayments()).resolves.toEqual([])
     })
+
+    describe('note and paymail', () => {
+      const baseToken = {
+        customInstructions: { derivationPrefix: 'cHJlZml4', derivationSuffix: 'c3VmZml4' },
+        transaction: [1, 2, 3],
+        amount: 7
+      }
+      const oldShape = { ...baseToken, outputIndex: 0 }
+
+      async function listWith(extra: Record<string, unknown>) {
+        jest.spyOn(peerPayClient, 'listMessages').mockResolvedValue([
+          {
+            messageId: 'm1',
+            sender: PAYMENT_SENDER,
+            created_at: '2025-03-05T12:00:00Z',
+            updated_at: '2025-03-05T12:05:00Z',
+            body: JSON.stringify({ ...baseToken, ...extra })
+          }
+        ])
+        return await peerPayClient.listIncomingPayments()
+      }
+
+      it('keeps a bounded note and paymail on the token', async () => {
+        const payments = await listWith({ note: 'Lunch', paymail: 'rosa@handcash.io' })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].token).toEqual({
+          ...oldShape,
+          note: 'Lunch',
+          paymail: 'rosa@handcash.io'
+        })
+      })
+
+      it.each(['a'.repeat(500), '\u{1F600}'.repeat(500)])(
+        'keeps a note at the character and byte limits %#',
+        async atLimit => {
+          const payments = await listWith({ note: atLimit })
+          expect(payments[0].token.note).toBe(atLimit)
+        }
+      )
+
+      it('keeps a paymail of exactly 254 bytes', async () => {
+        const paymail = `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(61)}`
+        expect(new TextEncoder().encode(paymail).byteLength).toBe(254)
+        const payments = await listWith({ paymail })
+        expect(payments[0].token.paymail).toBe(paymail)
+      })
+
+      // Each address here is one that parsePaymail in @bsv/ts-paymail accepts.
+      it.each([
+        ['a percent sign in the alias', 'alice%tag@example.com'],
+        [
+          'four 50-character labels (209 bytes)',
+          `a@${Array(4).fill('b'.repeat(50)).join('.')}.com`
+        ],
+        ['a 63-character label', `rosa@${'b'.repeat(63)}.io`],
+        ['a hyphen inside a label', 'rosa@hand-cash.io'],
+        ['a single-label domain', 'rosa@handcash']
+      ])('keeps a paymail that parsePaymail accepts (%s)', async (_name, paymail) => {
+        const payments = await listWith({ paymail })
+        expect(payments[0].token.paymail).toBe(paymail)
+      })
+
+      it.each([
+        ['empty', ''],
+        ['whitespace only', '   '],
+        ['501 characters', 'a'.repeat(501)],
+        ['501 emoji', '\u{1F600}'.repeat(501)],
+        ['a number', 5],
+        ['a NUL character', 'hi\u0000there'],
+        ['a newline', 'hi\nthere']
+      ])('drops a bad note (%s) and still returns the payment', async (_name, note) => {
+        const payments = await listWith({ note })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].token).toEqual(oldShape)
+        expect('note' in payments[0].token).toBe(false)
+      })
+
+      it.each([
+        ['no at sign', 'rosa'],
+        ['a space', 'a b@c.io'],
+        ['255 bytes', `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(62)}`],
+        ['a number', 5],
+        ['a trailing newline', 'rosa@handcash.io\n'],
+        ['a NUL character', 'ro\u0000sa@handcash.io'],
+        ['two at signs', 'ro@sa@handcash.io'],
+        ['an empty alias', '@handcash.io'],
+        ['an empty domain', 'rosa@'],
+        ['a 65-character alias', `${'a'.repeat(65)}@handcash.io`],
+        ['a 64-character label', `rosa@${'b'.repeat(64)}.io`],
+        ['an empty label', 'rosa@handcash..io'],
+        ['a trailing dot', 'rosa@handcash.io.'],
+        ['a label that starts with a hyphen', 'rosa@-handcash.io'],
+        ['a label that ends with a hyphen', 'rosa@handcash-.io'],
+        ['an underscore in the domain', 'rosa@hand_cash.io'],
+        ['a non-ASCII alias', 'r\u00f6sa@handcash.io']
+      ])('drops a bad paymail (%s) and still returns the payment', async (_name, paymail) => {
+        const payments = await listWith({ paymail })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].token).toEqual(oldShape)
+        expect('paymail' in payments[0].token).toBe(false)
+      })
+
+      it('keeps a valid note when the paymail is bad, and the reverse', async () => {
+        const a = await listWith({ note: 'Lunch', paymail: 'rosa' })
+        expect(a[0].token).toEqual({ ...oldShape, note: 'Lunch' })
+        const b = await listWith({ note: '', paymail: 'rosa@handcash.io' })
+        expect(b[0].token).toEqual({ ...oldShape, paymail: 'rosa@handcash.io' })
+      })
+
+      it('an old token keeps exactly its old shape', async () => {
+        const payments = await listWith({})
+        expect(payments[0].token).toEqual(oldShape)
+        expect(Object.keys(payments[0].token).sort()).toEqual([
+          'amount',
+          'customInstructions',
+          'outputIndex',
+          'transaction'
+        ])
+      })
+
+      it('a token with a sender field still drops the message', async () => {
+        const payments = await listWith({
+          sender: PrivateKey.fromRandom().toPublicKey().toString(),
+          note: 'Lunch'
+        })
+        expect(payments).toEqual([])
+      })
+
+      it('live payments carry note and paymail', async () => {
+        const listen = jest.spyOn(peerPayClient, 'listenForLiveMessages').mockResolvedValue()
+        const onPayment = jest.fn()
+        await peerPayClient.listenForLivePayments({ onPayment })
+        const onMessage = listen.mock.calls[0][0].onMessage
+        onMessage({
+          messageId: 'live1',
+          sender: PAYMENT_SENDER,
+          created_at: '2025-03-05T12:00:00Z',
+          updated_at: '2025-03-05T12:05:00Z',
+          body: { ...baseToken, note: 'Lunch', paymail: 'rosa@handcash.io' }
+        })
+        onMessage({
+          messageId: 'live2',
+          sender: PAYMENT_SENDER,
+          created_at: '2025-03-05T12:00:00Z',
+          updated_at: '2025-03-05T12:05:00Z',
+          body: { ...baseToken, note: 5, paymail: 'nope' }
+        })
+        expect(onPayment).toHaveBeenCalledTimes(2)
+        expect(onPayment.mock.calls[0][0].token).toEqual({
+          ...oldShape,
+          note: 'Lunch',
+          paymail: 'rosa@handcash.io'
+        })
+        expect(onPayment.mock.calls[1][0].token).toEqual(oldShape)
+      })
+    })
   })
 
   // Test: listIncomingPaymentRequests
