@@ -1170,7 +1170,7 @@ function parsePairingUri(
 
 Parses and validates a `bsv-browser://pair?…` QR code URI. Returns `{ params, error: null }` on success or `{ params: null, error: string }` on failure.
 
-Pass `ANY_PAIRING_SCHEME` as `acceptedSchemas` so the wallet can pair with apps whose QR targets another wallet's scheme (for example `example-wallet://pair?…`). It accepts any scheme except web and executable ones (`http`, `https`, `javascript`, `vbscript`, `data`, `blob`, `file`, `ftp`). The scheme is not covered by the pairing signature; the HTTPS origin lookup in `resolveRelay()` is what authenticates the backend, so accepting other schemes does not weaken pairing. A wallet still receives OS deep links only for the schemes it registers.
+Pass `ANY_PAIRING_SCHEME` as `acceptedSchemas` so the wallet can pair with apps whose QR targets another wallet's scheme (for example `example-wallet://pair?…`). It accepts any scheme except web and executable ones (`http`, `https`, `javascript`, `vbscript`, `data`, `blob`, `file`, `ftp`). The scheme is not covered by the pairing signature and is discarded after parsing; the signature and origin checks in `resolveRelay()` are unchanged, so accepting other schemes does not weaken pairing. A wallet still receives OS deep links only for the schemes it registers.
 
 Validations performed:
 

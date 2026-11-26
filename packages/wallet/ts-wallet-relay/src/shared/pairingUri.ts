@@ -20,8 +20,8 @@ export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-brows
 
 /**
  * Pass as `acceptedSchemas` to accept any non-web deep-link scheme, so a wallet can
- * pair with apps that target other wallets. The scheme is not covered by the pairing
- * signature; trust comes from the HTTPS origin lookup in `resolveRelay()`.
+ * pair with apps that target other wallets. The scheme is outside the pairing signature
+ * and discarded after parsing; the checks in `resolveRelay()` are unchanged.
  */
 export const ANY_PAIRING_SCHEME: unique symbol = Symbol.for('@bsv/wallet-relay/any-pairing-scheme')
 const textEncoder = new TextEncoder()

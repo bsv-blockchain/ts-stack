@@ -76,8 +76,14 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
 
   it('applies the route and field checks with ANY_PAIRING_SCHEME', () => {
     const query = new URL(buildPairingUri(VALID_BUILD_PARAMS)).search
-    expect(parsePairingUri(`example://notpair${query}`, ANY_PAIRING_SCHEME).params).toBeNull()
-    expect(parsePairingUri('example://pair?topic=abc', ANY_PAIRING_SCHEME).params).toBeNull()
+    expect(parsePairingUri(`example://notpair${query}`, ANY_PAIRING_SCHEME)).toEqual({
+      params: null,
+      error: 'QR code must use the exact wallet://pair route'
+    })
+    expect(parsePairingUri('example://pair?topic=abc', ANY_PAIRING_SCHEME)).toEqual({
+      params: null,
+      error: 'QR code contains a missing or duplicate security field'
+    })
   })
 
   it('is a registry symbol so CJS and ESM copies of the package agree', () => {
