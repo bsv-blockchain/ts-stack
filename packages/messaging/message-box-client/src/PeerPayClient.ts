@@ -144,6 +144,59 @@ function normalizePaymentParams(value: unknown): PaymentParams {
   return { recipient, amount: payment.amount }
 }
 
+const MAX_PAYMENT_NOTE_CHARACTERS = 500
+const MAX_PAYMENT_NOTE_BYTES = 2000
+const MAX_PAYMENT_PAYMAIL_BYTES = 254
+// Same grammar as parsePaymail in @bsv/ts-paymail (src/paymailAddress.ts).
+// Keep the two in step: a paymail that parser accepts must keep its label here.
+const PAYMAIL_ALIAS_PATTERN = /^[a-z0-9._%+-]{1,64}$/i
+const PAYMAIL_DOMAIN_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
+const MAX_PAYMAIL_DOMAIN_CHARACTERS = 253
+
+function isPaymailAddress(value: string): boolean {
+  const separator = value.indexOf('@')
+  if (separator <= 0 || separator !== value.lastIndexOf('@')) return false
+  const domain = value.slice(separator + 1)
+  return (
+    PAYMAIL_ALIAS_PATTERN.test(value.slice(0, separator)) &&
+    domain.length > 0 &&
+    domain.length <= MAX_PAYMAIL_DOMAIN_CHARACTERS &&
+    domain.split('.').every(label => PAYMAIL_DOMAIN_LABEL_PATTERN.test(label))
+  )
+}
+
+/**
+ * Returns the sender's note when it is bounded text, otherwise `undefined`.
+ * An invalid note is dropped, never thrown: a throw would lose the payment.
+ */
+function optionalNote(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    Array.from(value).length > MAX_PAYMENT_NOTE_CHARACTERS ||
+    new TextEncoder().encode(value).byteLength > MAX_PAYMENT_NOTE_BYTES ||
+    hasControlCharacters(value)
+  ) {
+    return undefined
+  }
+  return value
+}
+
+/**
+ * Returns the sender's paymail address when it is well formed, otherwise
+ * `undefined`. An invalid value is dropped, never thrown.
+ */
+function optionalPaymail(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    new TextEncoder().encode(value).byteLength > MAX_PAYMENT_PAYMAIL_BYTES ||
+    !isPaymailAddress(value)
+  ) {
+    return undefined
+  }
+  return value
+}
+
 function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToken {
   const token = dataRecord(value)
   const customInstructions = dataRecord(token?.customInstructions)
@@ -177,6 +230,8 @@ function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToke
   ) {
     throw new TypeError('Incoming payment output index is invalid')
   }
+  const note = optionalNote(token.note)
+  const paymail = optionalPaymail(token.paymail)
   return {
     customInstructions: {
       derivationPrefix: validateBase64String(
@@ -190,7 +245,9 @@ function normalizePaymentToken(value: unknown, allowBase64 = false): PaymentToke
     },
     transaction: Array.from(transaction),
     amount: token.amount,
-    outputIndex
+    outputIndex,
+    ...(note !== undefined ? { note } : {}),
+    ...(paymail !== undefined ? { paymail } : {})
   }
 }
 
@@ -389,6 +446,16 @@ export interface PaymentToken {
   transaction: AtomicBEEF
   amount: number
   outputIndex?: number
+  /**
+   * Sender's note. Optional, at most 500 characters and 2,000 bytes, no control
+   * characters. Unverified text from the sender.
+   */
+  note?: string
+  /**
+   * Sender's paymail address (`name@domain`), as sent by a legacy paymail
+   * wallet. Optional and unverified: the sender controls this text.
+   */
+  paymail?: string
 }
 
 /**
