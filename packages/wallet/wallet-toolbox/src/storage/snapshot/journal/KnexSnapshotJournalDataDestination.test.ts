@@ -1512,6 +1512,8 @@ test('authenticated primary control RPC resolves the actual profile and refuses 
   }
 })
 
+// Shard-1 coverage completed both handoffs in 100.6s (Actions run 45522778551).
+// The 120s cap then failed run 45874331869, so keep twice that measured time.
 test('wallet manager completes an authenticated HTTP primary handoff in both directions with real destination ACKs', async () => {
   const f = await fixture()
   try {
@@ -1543,7 +1545,7 @@ test('wallet manager completes an authenticated HTTP primary handoff in both dir
   } finally {
     await f.close()
   }
-}, 120000)
+}, 240000)
 
 test('mobile client negotiates the same authenticated durable control without exposing SQL capabilities', async () => {
   const f = await fixture()
