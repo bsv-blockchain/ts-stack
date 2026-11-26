@@ -4,10 +4,10 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 48,
-    "packageAreaProjects": 42,
-    "publicPackages": 39,
-    "privatePackageAreaProjects": 3
+    "projects": 61,
+    "packageAreaProjects": 55,
+    "publicPackages": 45,
+    "privatePackageAreaProjects": 10
   },
   "ci": {
     "mergeGateSeconds": 295,
@@ -335,6 +335,12 @@
     "@bsv/wallet-toolbox-mobile": "2.18.0",
     "@bsv/wallet-toolbox": "2.18.0",
     "@bsv/output-knowledge": "0.1.1",
-    "@bsv/color-permission-module": "0.2.2"
+    "@bsv/color-permission-module": "0.2.2",
+    "@bsv/amountinator-react": "1.0.1",
+    "@bsv/brc100-ui-react-components": "0.2.3",
+    "@bsv/btms-permission-module-ui": "1.0.0",
+    "@bsv/identity-react": "3.0.0",
+    "metanet-apps": "2.0.0",
+    "@bsv/uhrp-react": "2.0.0"
   }
 }

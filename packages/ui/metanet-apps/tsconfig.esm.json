@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./",
+    "outDir": "./dist/esm",
+    "allowSyntheticDefaultImports": true,
+    "tsBuildInfoFile": "./node_modules/.cache/metanet-apps-esm.tsbuildinfo"
+  }
+}

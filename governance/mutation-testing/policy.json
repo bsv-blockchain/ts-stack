@@ -2187,6 +2187,76 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "ui-amount-display",
+      "manifest": "packages/ui/amountinator-react/package.json",
+      "propertyTest": "packages/ui/amountinator-react/tests/property/amount-display.property.test.mjs",
+      "risk": "high",
+      "boundary": "Signed and grouped application amounts entering the shared React payment display",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-spending-tier",
+      "manifest": "packages/ui/brc100-ui-react/package.json",
+      "propertyTest": "packages/ui/brc100-ui-react/tests/property/spending-tier.property.test.mjs",
+      "risk": "high",
+      "boundary": "Previous authorized satoshis and exchange rates used to suggest the next wallet permission amount",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-prompt-message",
+      "manifest": "packages/ui/btms-permission-module-ui/package.json",
+      "propertyTest": "packages/ui/btms-permission-module-ui/tests/property/prompt-message.property.test.mjs",
+      "risk": "high",
+      "boundary": "Application-supplied token operation details displayed in the wallet permission prompt",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-identity-input",
+      "manifest": "packages/ui/identity-react/package.json",
+      "propertyTest": "packages/ui/identity-react/tests/property/identity-input.property.test.mjs",
+      "risk": "high",
+      "boundary": "User-supplied identity queries selecting exact-key versus public attribute lookup",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-app-metadata",
+      "manifest": "packages/ui/metanet-apps/package.json",
+      "propertyTest": "packages/ui/metanet-apps/tests/property/app-metadata.property.test.mjs",
+      "risk": "high",
+      "boundary": "Application listing metadata admitted to the App Catalog publication and discovery surfaces",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-media-resolution",
+      "manifest": "packages/ui/uhrp-react/package.json",
+      "propertyTest": "packages/ui/uhrp-react/tests/property/media-resolution.property.test.mjs",
+      "risk": "high",
+      "boundary": "Untrusted media URLs whose resolution is cached for React consumers within a browsing session",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "ui-wallet-input",
+      "manifest": "packages/ui/wui/frontend/package.json",
+      "propertyTest": "packages/ui/wui/frontend/tests/property/wallet-input.property.test.mjs",
+      "risk": "high",
+      "boundary": "Direct browser input for the wallet key field and configured storage hostname display",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -27,14 +27,14 @@ multi-platform digest before merge.
 The infrastructure images are deployable artifacts, so their build inputs,
 review gates, provenance, and rollback identity are part of the public release
 contract. The controls here do not create another service. They make the
-existing eight images auditable and ensure the artifact reviewed by CI is the
+eight service images and four frontend images auditable and ensure the artifact reviewed by CI is the
 artifact that reaches a registry.
 
 ## Sources of truth
 
 `governance/container-images.json` is the complete release inventory. It owns:
 
-- the eight Docker build contexts and their `linux/amd64` platform;
+- the service Docker build contexts, the four frontend workspaces served by a shared Dockerfile, and their `linux/amd64` platform;
 - the exact digest-pinned Node base and its human-readable expected version;
 - the reviewed runtime-package pins needed to remediate vulnerabilities still
   present in that immutable base;
@@ -128,12 +128,15 @@ candidate; this record does not claim a publication or deployment. A deployed
 rollback uses a previously verified complete image digest; it must not restore
 the vulnerable base libraries by removing the pins.
 
-`wallet-infra` is the only image that installs nginx, so its pin lives in that
-Dockerfile rather than in the base-wide `runtimePackagePins`. It installs
-`nginx=1.30.7-r0` from Alpine v3.24 main, which fixes the HTTP/2 RCEs
-CVE-2026-123633 and CVE-2026-123007, and its `nginx.conf` sets `http2 off` on
-the cleartext 8080 listener so the image never accepts h2c. A base refresh to a
-newer Alpine branch must update the nginx pin to that branch's fixed build.
+Wallet Infrastructure and the frontend images use `nginx=1.30.8-r0`
+from Alpine v3.24 main. That build includes the HTTP/2 fixes for
+CVE-2026-123633 and CVE-2026-123007. Wallet Infrastructure explicitly disables
+h2c. The frontend serves HTTP on port 8080. Keep the pins current when Alpine
+replaces a build or the governed base moves to another Alpine branch.
+
+The frontend build uses the frozen workspace `pnpm-lock.yaml` and builds its
+workspace dependencies from the same checkout. Its `rev-<source-commit>` tag
+advances with the source even when its private package version is unchanged.
 
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore

@@ -1,0 +1,60 @@
+{
+  "name": "uhrp-example-ui",
+  "version": "0.2.45",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.6.0",
+    "@mui/material": "^9.6.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-toastify": "^11.2.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check src public '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "pnpm build && node ../../../../scripts/check-ui-build.mjs build"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "sass-embedded": "^1.108.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "^8.3.8",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@types/node": "^26.6.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/uhrp-ui/frontend"
+  },
+  "author": "BSV Association"
+}

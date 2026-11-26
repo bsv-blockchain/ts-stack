@@ -1,0 +1,73 @@
+{
+  "name": "@bsv/amountinator-react",
+  "version": "1.0.1",
+  "description": "Currency amount display components",
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "LICENSE",
+    "PATENTS",
+    "NOTICE",
+    "out"
+  ],
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/amount-display.property.test.mjs",
+    "test": "pnpm build && node --test tests/*.test.cjs",
+    "test:watch": "jest --watch",
+    "build": "tsc --build",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check src tests '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports AmountDisplay,AmountInputField,useCurrencyDisplay",
+    "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/amountinator-react"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/amountinator-react#readme",
+  "dependencies": {
+    "@bsv/amountinator": "workspace:^",
+    "use-async-effect": "^2.2.7"
+  },
+  "devDependencies": {
+    "fast-check": "^4.9.0",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.15",
+    "ts-node": "^10.9.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@types/react": "^19.3.3",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.6.0",
+    "@mui/material": "^9.6.0",
+    "react": "^19.3.1"
+  },
+  "keywords": [
+    "bsv",
+    "ui"
+  ],
+  "sideEffects": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.11.16 || ^6 || ^7 || ^8 || ^9",
+    "@mui/material": "^5.13.6 || ^6 || ^7 || ^8 || ^9",
+    "react": "^18.2.0 || ^19"
+  }
+}

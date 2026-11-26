@@ -1074,7 +1074,7 @@ function collectFileFindings(project, profile, root) {
 const PUBLIC_REPOSITORY_URL = 'git+https://github.com/bsv-blockchain/ts-stack.git'
 const PUBLIC_BUGS_URL = 'https://github.com/bsv-blockchain/ts-stack/issues'
 
-function publicManifestChecks(manifest, projectPath) {
+function publicManifestChecks(manifest, projectPath, profile) {
   const expectedHomepage = `https://github.com/bsv-blockchain/ts-stack/tree/main/${projectPath}#readme`
   return [
     [
@@ -1120,7 +1120,7 @@ function publicManifestChecks(manifest, projectPath) {
     ],
     [
       'unsupported-node-engine',
-      manifest.engines?.node !== '>=22',
+      profile.requiresNodeEngine !== false && manifest.engines?.node !== '>=22',
       'Public package requires engines.node >=22'
     ],
     [
@@ -1146,7 +1146,7 @@ function publicManifestChecks(manifest, projectPath) {
 function collectPublicManifestFindings(project, profile) {
   const findings = []
   const manifest = project.manifest
-  for (const [rule, failed, message] of publicManifestChecks(manifest, project.path)) {
+  for (const [rule, failed, message] of publicManifestChecks(manifest, project.path, profile)) {
     if (failed) findings.push(finding(project, rule, message))
   }
   if (profile.requiresExports && !manifest.exports) {

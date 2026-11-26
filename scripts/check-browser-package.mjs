@@ -10,7 +10,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
-import { governedWorkspacePackages, workspaceRuntimeClosure } from './lib/workspace-packages.mjs'
+import {
+  governedWorkspacePackages,
+  reactHostDependencies,
+  workspaceRuntimeClosure
+} from './lib/workspace-packages.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
@@ -579,7 +583,11 @@ export async function checkBrowserPackage(
         await packPackage(dependency.directory, dependency.manifest.name, packDirectory)
       )
     }
-    consumerDirectory = await installConsumer([tarballPath, ...dependencyTarballs])
+    consumerDirectory = await installConsumer([
+      tarballPath,
+      ...dependencyTarballs,
+      ...reactHostDependencies(manifest)
+    ])
     const contracts = [budget, ...(budget.additionalEntries ?? [])]
     const measurements = []
     for await (const contract of Readable.from(contracts)) {

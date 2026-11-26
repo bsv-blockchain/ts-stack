@@ -1,0 +1,14 @@
+{
+  "extends": "../../../../config/typescript/browser.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": ["vite.config.js"]
+}

@@ -1,0 +1,89 @@
+{
+  "name": "@bsv/identity-react",
+  "version": "3.0.0",
+  "description": "React components for resolving identity information on the MetaNet.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/identity-react"
+  },
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "files": [
+    "LICENSE",
+    "PATENTS",
+    "NOTICE",
+    "dist/**/*",
+    "CHANGELOG.md",
+    "UPSTREAM_NOTICE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@bsv/uhrp-react": "workspace:^"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^4.1.2",
+    "@emotion/react": "^11.0.0",
+    "@emotion/styled": "^11.0.0",
+    "@mui/material": ">=5.0.0",
+    "react": "^18.2.0 || ^19"
+  },
+  "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/identity-input.property.test.mjs",
+    "build": "tsc",
+    "lint:ci": "prettier --check src/hooks/useIdentitySearch.ts src/utils/identityUtils.ts src/components/IdentitySearchField.tsx tests vitest.config.ts .prettierrc.json scripts/check-bundled-consumer.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:coverage": "vitest run --coverage",
+    "test:consumer": "node scripts/check-bundled-consumer.mjs",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check src tests scripts '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports IdentitySearchField,useIdentitySearch"
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "fast-check": "^4.9.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.6.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.10",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.1.2",
+    "jsdom": "^31.0.1",
+    "prettier": "^3.10.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "rolldown": "^1.3.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vitest": "^5.1.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/identity-react#readme",
+  "keywords": [
+    "bsv",
+    "ui"
+  ],
+  "sideEffects": true
+}

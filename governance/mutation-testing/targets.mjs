@@ -6962,6 +6962,53 @@ function vitestTarget(configFile) {
   }
 }
 
+function uiPropertyTargets(repositoryRoot) {
+  const config = 'config/testing/ui-property.config.mjs'
+  const suites = [
+    [
+      'amountinator-react',
+      'amount-display',
+      'src/utils/amountDisplayFormatting.ts',
+      ['const parseInputAmount =', 'const getDefaultDecimalPlaces =']
+    ],
+    ['brc100-ui-react', 'spending-tier', 'src/utils/determineUpgradeAmount.ts'],
+    [
+      'btms-permission-module-ui',
+      'prompt-message',
+      'src/BtmsPrompt/utils.ts',
+      ['export const parseTokenMessage =', 'export const formatAmount =']
+    ],
+    [
+      'identity-react',
+      'identity-input',
+      'src/utils/identityUtils.ts',
+      ['export const isIdentityKey =', 'export const fetchIdentities =']
+    ],
+    ['metanet-apps', 'app-metadata', 'src/metadata.ts'],
+    ['uhrp-react', 'media-resolution', 'src/store.ts'],
+    ['wui/frontend', 'wallet-input', 'src/utils/miscHelpers.ts']
+  ]
+  return Object.fromEntries(
+    suites.map(([directory, suite, source, range]) => {
+      const packageDirectory = `packages/ui/${directory}`
+      const relativeConfig = `${'../'.repeat(packageDirectory.split('/').length)}${config}`
+      return [
+        `ui-${suite}`,
+        {
+          packageDirectory,
+          manifest: `${packageDirectory}/package.json`,
+          propertyTest: `${packageDirectory}/tests/property/${suite}.property.test.mjs`,
+          mutate: [
+            range ? sourceLineRange(repositoryRoot, packageDirectory, source, ...range) : source
+          ],
+          configurationInputs: [config, 'config/testing/property-replay.mjs'],
+          ...vitestTarget(relativeConfig)
+        }
+      ]
+    })
+  )
+}
+
 function lookupProviderTarget(
   property,
   files,
@@ -7451,6 +7498,7 @@ export function buildMutationTargets(repositoryRoot) {
     sessionRecordTests
   )
   const targets = {
+    ...uiPropertyTargets(repositoryRoot),
     'sdk-paid-lookup-funding': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

@@ -24,6 +24,11 @@ function governedWorkspaceRuntimeDependencies(manifest, manifestsByName) {
   ]
 }
 
+export function reactHostDependencies(manifest) {
+  const peers = manifest.peerDependencies ?? {}
+  return ['react', 'react-dom'].flatMap(name => (peers[name] ? [`${name}@${peers[name]}`] : []))
+}
+
 export function workspaceRuntimeClosure(rootManifest, manifestsByName) {
   const selected = new Set()
   const queue = governedWorkspaceRuntimeDependencies(rootManifest, manifestsByName)

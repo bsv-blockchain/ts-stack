@@ -1,0 +1,122 @@
+{
+  "name": "@bsv/brc100-ui-react-components",
+  "version": "0.2.3",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "A library of reusable React components for building wallet UIs.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/brc100-ui-react"
+  },
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "LICENSE",
+    "PATENTS",
+    "NOTICE",
+    "dist/**/*"
+  ],
+  "exports": {
+    ".": {
+      "node": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "dependencies": {
+    "@bsv/message-box-client": "workspace:^",
+    "@bsv/uhrp-react": "workspace:^",
+    "@bsv/amountinator": "workspace:^",
+    "history": "^4.10.1",
+    "libphonenumber-js": "^1.13.17",
+    "metanet-apps": "workspace:^",
+    "react-router": "^5.3.4",
+    "use-async-effect": "^2.2.7"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^4.1.2",
+    "@bsv/wallet-toolbox-client": "^2.18.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.3",
+    "@mui/material": "^6.4.3",
+    "@mui/styles": "^6.4.3",
+    "@tauri-apps/plugin-opener": "^2.4.0",
+    "date-fns": "^4.1.0",
+    "fuse.js": "^7.1.0",
+    "iso-3166-ts": "^2.2.0",
+    "jdenticon": "^3.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^5.2.0",
+    "react-toastify": "^11.0.3"
+  },
+  "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/spending-tier.property.test.mjs",
+    "build": "tsdown src/index.ts --format cjs,esm --platform neutral --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.json",
+    "test": "pnpm build && node --test tests/*.test.cjs && vitest run --environment jsdom tests/wallet-operations.test.tsx",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check src tests '*.{json,js,html,md,ts,tsx,cjs,mjs}'",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs,esm --exports UserInterface,ProtocolPermissionHandler",
+    "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "fast-check": "^4.9.0",
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox-client": "workspace:^",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^6.4.3",
+    "@mui/material": "^6.4.3",
+    "@mui/styles": "^6.4.8",
+    "@tauri-apps/plugin-opener": "^2.7.3",
+    "date-fns": "^4.4.0",
+    "fuse.js": "^7.5.0",
+    "iso-3166-ts": "^2.2.0",
+    "jdenticon": "^3.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^5.3.4",
+    "react-toastify": "^11.2.0",
+    "@types/history": "^4.7.11",
+    "@types/node": "^26.6.10",
+    "@types/react": "^18.2.47",
+    "@types/react-dom": "^18.2.18",
+    "@types/react-router": "^5.1.20",
+    "@types/react-router-dom": "^5.3.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "tsdown": "^0.23.7",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^31.0.1"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/brc100-ui-react#readme",
+  "keywords": [
+    "bsv",
+    "ui"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": true,
+  "module": "dist/index.mjs"
+}

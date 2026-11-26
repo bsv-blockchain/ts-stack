@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { RUNTIME_COMPONENTS } from './ci-affected-scope.mjs'
+import { FRONTEND_COMPONENTS, RUNTIME_COMPONENTS } from './ci-affected-scope.mjs'
 import { OCI_LICENSE_REFERENCE } from './package-license-policy.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
@@ -40,10 +40,14 @@ function readRepositoryFile(path) {
 
 test('container registry exactly owns every release Dockerfile and immutable base', () => {
   const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
-  const registeredDockerfiles = registry.components
-    .map(component => `${component.path}/Dockerfile`)
-    .sort()
-  const trackedDockerfiles = trackedFiles('infra/**/Dockerfile')
+  const dockerfileFor = component =>
+    component.kind === 'frontend' ? 'packages/ui/Dockerfile' : `${component.path}/Dockerfile`
+  const registeredDockerfiles = [...new Set(registry.components.map(dockerfileFor))].sort()
+  const trackedDockerfiles = trackedFiles(
+    'infra/**/Dockerfile',
+    'packages/ui/Dockerfile',
+    'packages/ui/**/Dockerfile'
+  )
 
   assert.equal(registry.schemaVersion, 1)
   assert.equal(registry.platform, 'linux/amd64')
@@ -87,9 +91,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     assert.match(component.documentation, /^https:\/\/github\.com\/bsv-blockchain\/ts-stack\//)
     assert.ok(component.title.length > 0)
     assert.ok(component.description.length > 0)
-    assert.ok(existsSync(join(REPOSITORY_ROOT, component.path, 'package-lock.json')))
-
-    const dockerfile = readRepositoryFile(`${component.path}/Dockerfile`)
+    const dockerfile = readRepositoryFile(dockerfileFor(component))
+    if (component.kind === 'frontend') {
+      const manifest = JSON.parse(readRepositoryFile(`${component.path}/package.json`))
+      assert.equal(component.workspace, manifest.name)
+      assert.equal(manifest.private, true, 'frontend distribution is an image')
+      assert.match(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/)
+    } else {
+      assert.ok(existsSync(join(REPOSITORY_ROOT, component.path, 'package-lock.json')))
+    }
     assert.match(
       dockerfile,
       /COPY LICENSE NOTICE PATENTS THIRD_PARTY_NOTICES\.md \/usr\/share\/licenses\/ts-stack\//
@@ -176,7 +186,7 @@ test('container release workflows scan before push and publish signed evidence',
   assert.doesNotMatch(marketplaceRelease, /npm install --package-lock-only/)
   assert.match(infraRelease, /Manual infrastructure releases must run from main/)
   assert.match(marketplaceRelease, /Manual Marketplace releases must run from main/)
-  assert.match(infraRelease, /type=sha,prefix=sha-,format=short/)
+  assert.match(infraRelease, /type=raw,value=sha-\$\{\{ steps\.source\.outputs\.short-sha \}\}/)
   assert.match(infraRelease, /SOURCE_DATE_EPOCH=/)
   assert.match(infraRelease, /artifact-metadata: write/)
   assert.match(infraRelease, /attestations: write/)
@@ -251,8 +261,34 @@ test('hosted CI exercises every governed image through the complete runtime cont
   assert.match(workflow, /matrix: \$\{\{ fromJSON\(needs\.scope\.outputs\.matrix\) \}\}/)
   assert.deepEqual(
     RUNTIME_COMPONENTS.map(component => component.name).sort(),
-    registry.components.map(component => component.name).sort()
+    registry.components
+      .filter(component => component.kind !== 'frontend')
+      .map(component => component.name)
+      .sort()
   )
+})
+
+test('every official frontend uses the shared build, runtime proof and immutable release', () => {
+  const ci = readFileSync(CI_PATH, 'utf8')
+  const release = readFileSync(INFRA_RELEASE_PATH, 'utf8')
+  assert.deepEqual(FRONTEND_COMPONENTS.map(component => component.name).sort(), [
+    'btms-frontend',
+    'registrant',
+    'uhrp-ui',
+    'wui'
+  ])
+  for (const workflow of [ci, release]) {
+    assert.match(workflow, /packages\/ui\/Dockerfile/)
+    assert.match(workflow, /UI_WORKSPACE/)
+    assert.match(workflow, /UI_PATH/)
+  }
+  assert.match(ci, /scripts\/check-ui-image\.sh/)
+  assert.match(release, /git archive "\$SOURCE_SHA" \| tar -x -C "\$root"/)
+  assert.match(release, /bash scripts\/check-ui-image\.sh "\$IMAGE"/)
+  assert.doesNotMatch(release, /ref: \$\{\{ needs\.discover\.outputs\.source-sha/)
+  assert.doesNotMatch(release, /cache-(?:from|to): type=gha/)
+  assert.match(release, /tag="rev-\$SOURCE_SHA"/)
+  assert.match(ci, /- frontend-images/)
 })
 
 test('Docker refreshes and OpenSSF posture checks remain automated', () => {
@@ -276,7 +312,8 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
     'Dependabot must not reinterpret digest-only runtime Node bases as the mutable latest tag'
   )
   for (const component of registry.components) {
-    assert.match(dependabot, new RegExp(`- /${component.path.replaceAll('/', '\\/')}`))
+    const directory = component.kind === 'frontend' ? 'packages/ui' : component.path
+    assert.match(dependabot, new RegExp(`- /${directory.replaceAll('/', '\\/')}`))
   }
   const deploymentDirectories = new Set(
     trackedFiles('infra/**/*.yml', 'infra/**/*.yaml')

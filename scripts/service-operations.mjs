@@ -80,7 +80,10 @@ const validateContainer = (container, prefix, errors) => {
 
 const validateRegistryShape = (registry, containers, errors) => {
   if (registry.schemaVersion !== 2) errors.push('service-operations schemaVersion must be 2')
-  const governedNames = containers.components.map(component => component.name).sort()
+  const governedNames = containers.components
+    .filter(component => component.kind !== 'frontend')
+    .map(component => component.name)
+    .sort()
   const serviceNames = registry.services.map(service => service.name).sort()
   if (JSON.stringify(governedNames) !== JSON.stringify(serviceNames)) {
     errors.push('service-operations services must exactly match container-images components')

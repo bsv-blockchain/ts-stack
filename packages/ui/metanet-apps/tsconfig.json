@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "esModuleInterop": true
+  },
+  "references": [
+    {
+      "path": "tsconfig.esm.json"
+    },
+    {
+      "path": "tsconfig.types.json"
+    }
+  ],
+  "extends": "../../../config/typescript/browser.json"
+}

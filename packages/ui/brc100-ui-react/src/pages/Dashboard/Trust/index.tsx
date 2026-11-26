@@ -1,0 +1,273 @@
+/* eslint-disable indent */
+import { useState, useContext, useEffect } from 'react'
+import type { History, Location } from 'history'
+import { Prompt } from 'react-router-dom'
+import type { Certifier } from '@bsv/wallet-toolbox-client'
+import {
+  Typography,
+  Button,
+  Slider,
+  TextField,
+  LinearProgress,
+  Snackbar,
+  Box,
+  Paper
+} from '@mui/material'
+import { makeStyles } from '@mui/styles'
+import style from './style'
+import AddIcon from '@mui/icons-material/Add'
+import SearchIcon from '@mui/icons-material/Search'
+import { toast } from 'react-toastify'
+import { WalletContext } from '../../../WalletContext'
+
+import TrustedEntity from './TrustedEntity.js'
+import arraysOfObjectsAreEqual from '../../../utils/arraysOfObjectsAreEqual.js'
+import AddEntityModal from './AddEntityModal.js'
+import NavigationConfirmModal from './NavigationConfirmModal.js'
+
+const useStyles = makeStyles(style as any, {
+  name: 'Trust'
+})
+
+const Trust = ({ history }: { history: History }) => {
+  const { settings, updateSettings } = useContext(WalletContext)
+
+  // These are some hard-coded defaults, if the user doesn't have any in Settings.
+  const [trustLevel, setTrustLevel] = useState(settings.trustSettings.trustLevel || 2)
+  const [trustedEntities, setTrustedEntities] = useState<Certifier[]>(() =>
+    settings.trustSettings.trustedCertifiers.map(certifier => ({ ...certifier }))
+  )
+  const [search, setSearch] = useState('')
+  const [addEntityModalOpen, setAddEntityModalOpen] = useState(false)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsNeedsUpdate, setSettingsNeedsUpdate] = useState(true)
+  const [nextLocation, setNextLocation] = useState<Location | null>(null)
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const classes = useStyles()
+  const totalTrustPoints = trustedEntities.reduce((a, e) => a + e.trust, 0)
+
+  useEffect(() => {
+    if (trustLevel > totalTrustPoints) {
+      setTrustLevel(totalTrustPoints)
+    }
+  }, [totalTrustPoints])
+
+  useEffect(() => {
+    setSettingsNeedsUpdate(
+      settings.trustSettings.trustLevel !== trustLevel ||
+        !arraysOfObjectsAreEqual(settings.trustSettings.trustedCertifiers, trustedEntities)
+    )
+  }, [trustedEntities, totalTrustPoints, trustLevel, settings])
+
+  useEffect(() => {
+    const unblock = history.block(location => {
+      // Block navigation when saving settings
+      if (settingsNeedsUpdate) {
+        setNextLocation(location)
+        setSaveModalOpen(true)
+        return false
+      }
+      return undefined
+    })
+    return () => {
+      unblock()
+    }
+  }, [settingsNeedsUpdate, history])
+
+  const searchText = search.toLowerCase()
+  const shownTrustedEntities = trustedEntities.filter(
+    entity =>
+      !searchText ||
+      entity.name.toLowerCase().includes(searchText) ||
+      entity.description.toLowerCase().includes(searchText)
+  )
+
+  const handleSave = async () => {
+    try {
+      setSettingsLoading(true)
+      const save = updateSettings(
+        structuredClone({
+          ...settings,
+          trustSettings: {
+            trustLevel,
+            trustedCertifiers: trustedEntities
+          }
+        })
+      )
+      if (!saveModalOpen) {
+        await toast.promise(save, {
+          pending: 'Saving settings...',
+          success: {
+            render: 'Trust relationships updated!',
+            autoClose: 2000
+          },
+          error: 'Failed to save settings.'
+        })
+      } else {
+        await save
+        toast.success('Trust relationships updated!')
+      }
+      setSettingsNeedsUpdate(false)
+      return true
+    } catch (e) {
+      if (saveModalOpen) toast.error(e instanceof Error ? e.message : 'Please try again.')
+      return false
+    } finally {
+      setSettingsLoading(false)
+    }
+  }
+
+  return (
+    <div className={classes.root}>
+      <Typography variant="h1" color="textPrimary" sx={{ mb: 2 }}>
+        Trust
+      </Typography>
+      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+        Give points to show which certifiers you trust the most to confirm the identity of
+        counterparties. More points mean a higher priority.
+      </Typography>
+
+      {settingsLoading && (
+        <Box sx={{ width: '100%', mb: 2 }}>
+          <LinearProgress />
+        </Box>
+      )}
+
+      <Paper elevation={0} className={classes.section} sx={{ p: 3, bgcolor: 'background.paper' }}>
+        <Typography variant="h4" sx={{ mb: 2 }}>
+          Trust Threshold
+        </Typography>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+          You've given out a total of{' '}
+          <b>
+            {totalTrustPoints} {totalTrustPoints === 1 ? 'point' : 'points'}
+          </b>
+          . Set the minimum points any counterparty must have across your trust network to be shown
+          in any apps you use.
+        </Typography>
+        <Box className={classes.trust_threshold}>
+          <Box className={classes.slider_label_grid}>
+            <Typography>
+              <b>{trustLevel}</b> / {totalTrustPoints}
+            </Typography>
+            <Slider
+              min={1}
+              max={totalTrustPoints}
+              step={1}
+              onChange={(e, v) => setTrustLevel(v as number)}
+              value={trustLevel}
+            />
+          </Box>
+        </Box>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        className={classes.section}
+        sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}
+      >
+        <Typography variant="h4" sx={{ mb: 2 }}>
+          Certifier Network
+        </Typography>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
+          People, businesses, and websites will need endorsement by these certifiers to show up in
+          your apps. Otherwise, you'll see them as "Unknown Identity".
+        </Typography>
+
+        {/* UI Controls - Search and Add Buttons */}
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, mb: 2 }}>
+          <TextField
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            label="Search"
+            placeholder="Filter providers..."
+            fullWidth
+            sx={{ flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />
+              }
+            }}
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setAddEntityModalOpen(true)}
+            startIcon={<AddIcon />}
+            sx={{ minWidth: '200px' }}
+          >
+            Add Search Provider
+          </Button>
+        </Box>
+        <Box flex={1}>
+          {shownTrustedEntities.map(entity => (
+            <Box key={`${entity.name}.${entity.description}.${entity.identityKey}`}>
+              <TrustedEntity
+                entity={entity}
+                setTrustedEntities={setTrustedEntities}
+                className={classes.entity_icon}
+              />
+            </Box>
+          ))}
+        </Box>
+      </Paper>
+
+      <NavigationConfirmModal
+        open={saveModalOpen}
+        onConfirm={async () => {
+          setSettingsNeedsUpdate(false)
+          if (!(await handleSave())) {
+            setSettingsNeedsUpdate(true)
+            return
+          }
+          setSaveModalOpen(false)
+          if (nextLocation) history.push(nextLocation)
+        }}
+        onCancel={() => {
+          setSettingsNeedsUpdate(false)
+          // Make sure state updates complete first
+          setTimeout(() => {
+            if (nextLocation) history.push(nextLocation)
+          }, 100)
+        }}
+        loading={settingsLoading}
+      >
+        {settingsLoading ? (
+          <div>
+            <Typography>Saving settings...</Typography>
+            <LinearProgress style={{ paddingTop: '1em' }} />
+          </div>
+        ) : (
+          'You have unsaved changes. Do you want to save them before leaving?'
+        )}
+      </NavigationConfirmModal>
+
+      <Prompt
+        when={settingsNeedsUpdate}
+        message="You have unsaved changes, are you sure you want to leave?"
+      />
+
+      <AddEntityModal
+        open={addEntityModalOpen}
+        setOpen={setAddEntityModalOpen}
+        setTrustedEntities={setTrustedEntities}
+      />
+
+      <Snackbar
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center'
+        }}
+        open={settingsNeedsUpdate}
+        message="You have unsaved changes!"
+        action={
+          <Button disabled={settingsLoading} color="secondary" size="small" onClick={handleSave}>
+            {settingsLoading ? 'Saving...' : 'Save'}
+          </Button>
+        }
+      />
+    </div>
+  )
+}
+
+export default Trust

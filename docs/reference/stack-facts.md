@@ -22,8 +22,8 @@ manifests, `governance/repository-health/projects.json`,
 | Profile | Current contract | Authority |
 | --- | --- | --- |
 | Repository contributors, CI, releases | Node.js >=24.11; pnpm >=10 (pnpm@10.33.2) | root package.json |
-| Published npm packages | >=22 for Node consumers; browser/mobile targets remain package-specific | public package manifests |
-| Standalone infrastructure | >=24 <25 | service manifests and digest-pinned Dockerfiles |
+| Published npm packages | >=22,  for Node consumers; browser/mobile targets remain package-specific | public package manifests |
+| Standalone infrastructure | , >=24 <25 | service manifests and digest-pinned Dockerfiles |
 | TypeScript compiler | npm:typescript@7.0.2 compiler; npm:@typescript/typescript6@6.0.2 tooling API | @bsv/sdk package.json and TypeScript toolchain policy |
 
 Node engine declarations on browser and React Native packages govern package tooling and
@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **39 public packages**. Versions
+The release graph currently contains **45 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -67,6 +67,12 @@ authorized release action.
 | overlays | `@bsv/overlay-topics` | `2.0.4` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
 | sdk | `@bsv/sdk` | `4.1.2` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
 | sdk | `@bsv/verifast` | `0.3.10` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
+| ui | `@bsv/amountinator-react` | `1.0.1` | legacy-browser-library | browser-bundler, node-cjs | browser, node | — | [packages/ui/amountinator-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/amountinator-react) |
+| ui | `@bsv/brc100-ui-react-components` | `0.2.3` | browser-library | browser-bundler, node-cjs | browser, node | `>=22` | [packages/ui/brc100-ui-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/brc100-ui-react) |
+| ui | `@bsv/btms-permission-module-ui` | `1.0.0` | browser-library | browser-bundler, node-cjs, node-esm | browser, node | `>=22` | [packages/ui/btms-permission-module-ui](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/btms-permission-module-ui) |
+| ui | `@bsv/identity-react` | `3.0.0` | browser-library | browser-bundler, node-esm | browser, node | `>=22` | [packages/ui/identity-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/identity-react) |
+| ui | `@bsv/uhrp-react` | `2.0.0` | browser-library | browser-bundler, node-cjs | browser, node | `>=22` | [packages/ui/uhrp-react](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-react) |
+| ui | `metanet-apps` | `2.0.0` | browser-library | browser-bundler, node-cjs, node-esm | browser, node | `>=22` | [packages/ui/metanet-apps](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/metanet-apps) |
 | wallet | `@bsv/btms` | `1.2.7` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.2.5` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
 | wallet | `@bsv/color-permission-module` | `0.2.2` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/color-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/color-permission-module) |
@@ -77,35 +83,40 @@ authorized release action.
 | wallet | `@bsv/wallet-toolbox-client` | `2.18.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
 | wallet | `@bsv/wallet-toolbox-mobile` | `2.18.0` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
 
-## Standalone infrastructure manifests
+## Container release inventory
 
-These versions identify the checked-in service manifests; production identity is
+These versions identify the checked-in manifests; production identity is
 the separately released and verified image digest.
 
 | Service | Package | Manifest version | Node engine | Runtime targets | Release | Source |
 | --- | --- | --- | --- | --- | --- | --- |
+| BTMS | `@bsv/btms-frontend` | `0.0.1` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/btms-frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/btms-frontend) |
 | BSV Chaintracks Server | `chaintracks-server` | `1.1.37` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
 | BSV Message Box Server | `@bsv/messagebox-server` | `1.1.62` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
 | BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.57` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
+| Registrant | `registrant` | `1.0.0` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/registrant/frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/registrant/frontend) |
 | BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.58` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
 | BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.63` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
+| UHRP UI | `uhrp-example-ui` | `0.2.45` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/uhrp-ui/frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-ui/frontend) |
 | Wallet Authentication Backend | `@bsv/wab-server` | `1.8.22` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
-| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.60` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.61` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
 | BSV WebRTPay Signalling Relay | `@bsv/webrtpay-relay` | `0.2.6` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/webrtpay-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay) |
+| Wallet UI | `@bsv/wui-frontend` | `1.0.0` | — | browser, linux/amd64 | ghcr-keyless | [packages/ui/wui/frontend](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/wui/frontend) |
 
 ## Governed project and release inventory
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 48 |
-| Package-area projects | 42 |
-| Public npm packages | 39 |
-| Private package-area projects | 3 |
+| Governed projects | 61 |
+| Package-area projects | 55 |
+| Public npm packages | 45 |
+| Private package-area projects | 10 |
 | Standalone infrastructure projects | 8 |
+| Frontend images | 4 |
 
 Public packages use the `npm-oidc` release route. Other workspace projects are
 private packages or documentation/conformance tooling. Standalone infrastructure
-components are governed separately by `governance/container-images.json` and use their
+and frontend images are governed separately by `governance/container-images.json` and use their
 recorded container release route; they are not published by the public-package job.
 
 ## Conformance corpus
@@ -134,7 +145,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 41 | current package manifests |
+| Projects with a test:coverage script | 47 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |

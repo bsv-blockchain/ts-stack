@@ -1,0 +1,21 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "btms-core/dist/frontend/src/btms": ["./src/btms/index.ts"],
+      "btms-core/dist/frontend/src/btms/index.js": ["./src/btms/index.ts"]
+    },
+    "skipLibCheck": true,
+    "allowJs": true
+  },
+  "extends": "../../../config/typescript/browser.json"
+}

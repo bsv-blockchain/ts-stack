@@ -15,7 +15,10 @@ test('container runtime contracts exactly cover the governed service inventory',
   )
   assert.deepEqual(
     contractNames().sort(),
-    registry.components.map(component => component.name).sort()
+    registry.components
+      .filter(component => component.kind !== 'frontend')
+      .map(component => component.name)
+      .sort()
   )
 })
 

@@ -1,0 +1,71 @@
+{
+  "name": "@bsv/uhrp-react",
+  "version": "2.0.0",
+  "description": "UHRP-enabled React components for images, video, and audio",
+  "main": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "LICENSE",
+    "PATENTS",
+    "NOTICE",
+    "dist/**/*",
+    "UPSTREAM_NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/ui/uhrp-react"
+  },
+  "author": "BSV Association",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test:property": "vitest run --config ../../../config/testing/ui-property.config.mjs tests/property/media-resolution.property.test.mjs",
+    "clean": "rm -rf dist",
+    "build": "tsc",
+    "test": "pnpm build && node --test tests/*.test.cjs",
+    "lint": "oxlint . --deny-warnings",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{cjs,ts,tsx}\" package.json tsconfig.json README.md",
+    "typecheck": "tsc --noEmit",
+    "test:coverage": "pnpm build && mkdir -p coverage && node --experimental-test-coverage --test --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info tests/*.test.cjs",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Img,Source",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs ."
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "fast-check": "^4.9.0",
+    "@types/react": "^19.3.3",
+    "react": "^19.3.1",
+    "react-test-renderer": "^19.3.1",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@typescript/native": "npm:typescript@7.0.2"
+  },
+  "dependencies": {
+    "zustand": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "peerDependencies": {
+    "@bsv/sdk": "^4.1.2",
+    "react": ">=18"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/ui/uhrp-react#readme",
+  "keywords": [
+    "bsv",
+    "ui"
+  ]
+}

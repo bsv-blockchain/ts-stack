@@ -1,0 +1,14 @@
+.git
+artifacts
+secrets
+**/.git
+**/node_modules
+**/coverage
+**/dist
+**/out
+**/build
+**/.cache
+**/.env
+**/.env.*
+**/.DS_Store
+**/*.log

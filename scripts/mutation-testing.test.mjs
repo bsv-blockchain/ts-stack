@@ -83,7 +83,7 @@ test('every core overlay profile fingerprints its canonical and native fixture i
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 217)
+  assert.equal(Object.keys(configured).length, 224)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -1194,7 +1194,7 @@ test('relocated LCH overlay tests retain their independent application dependenc
     )
     assert.equal(new RegExp(mappings[0][0]).test('../src/overlayAcquisition.js'), false)
   }
-  assert.equal(Object.keys(configured).length, 217)
+  assert.equal(Object.keys(configured).length, 224)
 })
 
 test('compound private builds retain every dependency and append the sequential helper input', () => {
@@ -1711,7 +1711,7 @@ test('additional package-relative fixture inputs select their target without rep
   )
 
   const canonical = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(canonical).length, 217)
+  assert.equal(Object.keys(canonical).length, 224)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',

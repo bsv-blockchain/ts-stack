@@ -49,7 +49,14 @@
       "packages/application/output-knowledge/package.json",
       "packages/messaging/webrtpay/package.json",
       "packages/messaging/group-messaging/package.json",
-      "packages/overlays/eqc/package.json"
+      "packages/overlays/eqc/package.json",
+      "packages/ui/amountinator-react/package.json",
+      "packages/ui/brc100-ui-react/package.json",
+      "packages/ui/btms-permission-module-ui/package.json",
+      "packages/ui/identity-react/package.json",
+      "packages/ui/metanet-apps/package.json",
+      "packages/ui/uhrp-react/package.json",
+      "packages/ui/wui/frontend/package.json"
     ],
     "suites": [
       {
@@ -2650,6 +2657,90 @@
           "Generated overload/cancellation yields exactly the independent admitted FIFO, with correct typed refusals and no simultaneous exclusive owners.",
           "Release is idempotent; all admitted operations drain to zero active owners and subsequent admission remains possible."
         ]
+      },
+      {
+        "path": "packages/ui/amountinator-react/tests/property/amount-display.property.test.mjs",
+        "manifest": "packages/ui/amountinator-react/package.json",
+        "risk": "high",
+        "boundary": "Signed and grouped application amounts entering the shared React payment display",
+        "target": "Lossless signed grouping and consistent numeric denomination through the real converter",
+        "invariants": [
+          "Supported signs and thousands separators preserve the exact whole satoshi amount.",
+          "Fractional numeric BSV values preserve their denomination when JavaScript uses exponent notation."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/brc100-ui-react/tests/property/spending-tier.property.test.mjs",
+        "manifest": "packages/ui/brc100-ui-react/package.json",
+        "risk": "high",
+        "boundary": "Previous authorized satoshis and exchange rates used to suggest the next wallet permission amount",
+        "target": "Exact spending tier selection and conversion at each established threshold",
+        "invariants": [
+          "Every bounded prior amount selects the established next dollar tier.",
+          "The corresponding satoshi amount preserves the dollar tier at exactly representable rates."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/btms-permission-module-ui/tests/property/prompt-message.property.test.mjs",
+        "manifest": "packages/ui/btms-permission-module-ui/package.json",
+        "risk": "high",
+        "boundary": "Application-supplied token operation details displayed in the wallet permission prompt",
+        "target": "Structured token request fidelity and legacy permission message amount and asset parsing",
+        "invariants": [
+          "Generated structured spend, burn, and access requests preserve their exact operation and details.",
+          "Legacy messages preserve the amount, name, and asset ID while unsupported JSON types do not supply a spend amount."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/identity-react/tests/property/identity-input.property.test.mjs",
+        "manifest": "packages/ui/identity-react/package.json",
+        "risk": "high",
+        "boundary": "User-supplied identity queries selecting exact-key versus public attribute lookup",
+        "target": "Compressed identity key shape recognition and rejection of malformed search candidates",
+        "invariants": [
+          "Each supported prefix and exact-width mixed-case hexadecimal body takes the key path.",
+          "Unsupported prefixes, wrong widths, non-hex characters, and leading whitespace take the attribute path."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/metanet-apps/tests/property/app-metadata.property.test.mjs",
+        "manifest": "packages/ui/metanet-apps/package.json",
+        "risk": "high",
+        "boundary": "Application listing metadata admitted to the App Catalog publication and discovery surfaces",
+        "target": "Canonical metadata value preservation and typed version and shape validation",
+        "invariants": [
+          "Each generated canonical record preserves its values with either supported asset URL field.",
+          "An unsupported version yields a distinct error from malformed required fields, arrays, or omitted asset URLs."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/uhrp-react/tests/property/media-resolution.property.test.mjs",
+        "manifest": "packages/ui/uhrp-react/package.json",
+        "risk": "high",
+        "boundary": "Untrusted media URLs whose resolution is cached for React consumers within a browsing session",
+        "target": "Direct HTTPS passthrough and isolated concurrent resolution for distinct hashes",
+        "invariants": [
+          "Each plain HTTPS source is preserved without starting UHRP discovery.",
+          "Duplicate callers share one lookup, and independent content hashes retain distinct results in memory and session storage."
+        ],
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "path": "packages/ui/wui/frontend/tests/property/wallet-input.property.test.mjs",
+        "manifest": "packages/ui/wui/frontend/package.json",
+        "risk": "high",
+        "boundary": "Direct browser input for the wallet key field and configured storage hostname display",
+        "target": "Precise hexadecimal key-entry shape and hostname extraction from storage URLs",
+        "invariants": [
+          "Exactly 64 lowercase hexadecimal characters satisfy the local key input format check.",
+          "Generated HTTPS storage URLs display their host alone without port or path while bare labels pass through."
+        ],
+        "reviewBy": "2026-12-25"
       }
     ],
     "exclusions": [
@@ -2666,6 +2757,48 @@
         "rationale": "This private documentation example has no reusable runtime boundary; the Paymail address and protocol parser is governed in the parent package.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-12"
+      },
+      {
+        "manifest": "packages/ui/btms-frontend/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "The private token-management app wires the wallet, BTMS, and Message Box clients together. Token validation, action construction, and message framing belong to those governed libraries.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "manifest": "packages/ui/registrant/frontend/package.json",
+        "kind": "example-or-platform",
+        "rationale": "The browser form assembles and submits protocol, basket, and certificate definitions through the SDK. Registry validation and the signed registration contract live in the SDK.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "manifest": "packages/ui/uhrp-react/example/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This Vite example renders the Img and Source components with demonstration URLs. The React parent package governs URL and cache behavior and the SDK governs UHRP resolution.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "manifest": "packages/ui/uhrp-ui/frontend/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "The browser frontend collects a file and retention settings and calls SDK storage operations. The SDK owns the generated UHRP identifiers, request formats, and downloaded content validation.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "manifest": "packages/ui/uhrp-ui/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This workspace delegates development and build commands to the UHRP frontend. It owns no application runtime or independent input parser.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
+      },
+      {
+        "manifest": "packages/ui/wui/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This workspace delegates development and build commands to the wallet frontend. The frontend owns wallet input behavior and has its own governed property suite.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-12-25"
       },
       {
         "manifest": "packages/wallet/wallet-toolbox-examples/package.json",
