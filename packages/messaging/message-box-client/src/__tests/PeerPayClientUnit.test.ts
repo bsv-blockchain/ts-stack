@@ -657,8 +657,20 @@ describe('PeerPayClient Unit Tests', () => {
       )
 
       it('keeps a paymail of exactly 254 bytes', async () => {
-        const paymail = `${'a'.repeat(60)}@${'b'.repeat(190)}.io`
+        const paymail = `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(61)}`
         expect(new TextEncoder().encode(paymail).byteLength).toBe(254)
+        const payments = await listWith({ paymail })
+        expect(payments[0].token.paymail).toBe(paymail)
+      })
+
+      // Each address here is one that parsePaymail in @bsv/ts-paymail accepts.
+      it.each([
+        ['a percent sign in the alias', 'alice%tag@example.com'],
+        ['four 50-character labels (209 bytes)', `a@${Array(4).fill('b'.repeat(50)).join('.')}.com`],
+        ['a 63-character label', `rosa@${'b'.repeat(63)}.io`],
+        ['a hyphen inside a label', 'rosa@hand-cash.io'],
+        ['a single-label domain', 'rosa@handcash']
+      ])('keeps a paymail that parsePaymail accepts (%s)', async (_name, paymail) => {
         const payments = await listWith({ paymail })
         expect(payments[0].token.paymail).toBe(paymail)
       })
@@ -681,11 +693,21 @@ describe('PeerPayClient Unit Tests', () => {
       it.each([
         ['no at sign', 'rosa'],
         ['a space', 'a b@c.io'],
-        ['255 bytes', `${'a'.repeat(61)}@${'b'.repeat(190)}.io`],
+        ['255 bytes', `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(62)}`],
         ['a number', 5],
         ['a trailing newline', 'rosa@handcash.io\n'],
-        ['no top-level label', 'rosa@handcash'],
-        ['a NUL character', 'ro\u0000sa@handcash.io']
+        ['a NUL character', 'ro\u0000sa@handcash.io'],
+        ['two at signs', 'ro@sa@handcash.io'],
+        ['an empty alias', '@handcash.io'],
+        ['an empty domain', 'rosa@'],
+        ['a 65-character alias', `${'a'.repeat(65)}@handcash.io`],
+        ['a 64-character label', `rosa@${'b'.repeat(64)}.io`],
+        ['an empty label', 'rosa@handcash..io'],
+        ['a trailing dot', 'rosa@handcash.io.'],
+        ['a label that starts with a hyphen', 'rosa@-handcash.io'],
+        ['a label that ends with a hyphen', 'rosa@handcash-.io'],
+        ['an underscore in the domain', 'rosa@hand_cash.io'],
+        ['a non-ASCII alias', 'r\u00f6sa@handcash.io']
       ])('drops a bad paymail (%s) and still returns the payment', async (_name, paymail) => {
         const payments = await listWith({ paymail })
         expect(payments).toHaveLength(1)

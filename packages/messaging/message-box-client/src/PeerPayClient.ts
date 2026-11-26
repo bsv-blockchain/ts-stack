@@ -147,7 +147,23 @@ function normalizePaymentParams(value: unknown): PaymentParams {
 const MAX_PAYMENT_NOTE_CHARACTERS = 500
 const MAX_PAYMENT_NOTE_BYTES = 2000
 const MAX_PAYMENT_PAYMAIL_BYTES = 254
-const PAYMAIL_ADDRESS_PATTERN = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$/
+// Same grammar as parsePaymail in @bsv/ts-paymail (src/paymailAddress.ts).
+// Keep the two in step: a paymail that parser accepts must keep its label here.
+const PAYMAIL_ALIAS_PATTERN = /^[a-z0-9._%+-]{1,64}$/i
+const PAYMAIL_DOMAIN_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
+const MAX_PAYMAIL_DOMAIN_CHARACTERS = 253
+
+function isPaymailAddress(value: string): boolean {
+  const separator = value.indexOf('@')
+  if (separator <= 0 || separator !== value.lastIndexOf('@')) return false
+  const domain = value.slice(separator + 1)
+  return (
+    PAYMAIL_ALIAS_PATTERN.test(value.slice(0, separator)) &&
+    domain.length > 0 &&
+    domain.length <= MAX_PAYMAIL_DOMAIN_CHARACTERS &&
+    domain.split('.').every(label => PAYMAIL_DOMAIN_LABEL_PATTERN.test(label))
+  )
+}
 
 /**
  * Returns the sender's note when it is bounded text, otherwise `undefined`.
@@ -174,8 +190,7 @@ function optionalPaymail(value: unknown): string | undefined {
   if (
     typeof value !== 'string' ||
     new TextEncoder().encode(value).byteLength > MAX_PAYMENT_PAYMAIL_BYTES ||
-    !PAYMAIL_ADDRESS_PATTERN.test(value) ||
-    hasControlCharacters(value)
+    !isPaymailAddress(value)
   ) {
     return undefined
   }
