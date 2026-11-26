@@ -13,7 +13,7 @@ Currency amount conversion and display for BSV wallet UIs. Convert between satos
 npm install @bsv/amountinator
 ```
 
-Peer dependencies: `@bsv/sdk`, `@bsv/wallet-toolbox-client`.
+Use Node.js 22 or later and a supported `@bsv/sdk` peer version. Wallet Toolbox provides wallet settings and fiat exchange rates.
 
 ## Quick start
 
@@ -52,6 +52,23 @@ const { formattedAmount, hoverText } = formatAmountWithCurrency(value, converter
 const sats = converter.convertCurrency(9.99, 'USD', 'SATS')
 // pass `sats` to a wallet action / payment output
 ```
+
+### Work in BSV or satoshis without an exchange rate
+
+Use the BSV and SATS units directly when a user enters a cryptocurrency amount.
+Fiat conversion requires a successful rate refresh. For payment amounts,
+`convertToSatoshis` preserves a whole satoshi and rounds up a genuine fraction.
+
+```ts
+const converter = new CurrencyConverter(0)
+converter.preferredCurrency = 'BSV'
+
+console.log(converter.convertCurrency(7, 'SATS', 'BSV')) // 0.00000007
+console.log(await converter.convertToSatoshis(0.00000007)) // 7
+console.log(await converter.convertToSatoshis(0.000000075)) // 8
+```
+
+A payment UI should show the final whole-satoshi amount before the user approves.
 
 ### Format with custom separators
 

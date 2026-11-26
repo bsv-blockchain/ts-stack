@@ -99,7 +99,7 @@ describe('CurrencyConverter cache behaviour', () => {
     expect(getBsvExchangeRateMock).toHaveBeenCalledTimes(2)
   })
 
-  test('rejects incomplete or non-finite rate snapshots without replacing the last known rates', async () => {
+  test('rejects malformed or non-finite rate snapshots without replacing the last known rates', async () => {
     getBsvExchangeRateMock.mockReset().mockResolvedValue(Number.POSITIVE_INFINITY)
     cc = new CurrencyConverter(500)
     const originalRates = cc.exchangeRates
@@ -132,4 +132,20 @@ describe('CurrencyConverter cache behaviour', () => {
       expect(() => new CurrencyConverter(interval)).toThrow('refreshInterval')
     }
   )
+
+  test('uses partial fiat responses without quoting missing currencies', async () => {
+    cc = new CurrencyConverter(0)
+    getFiatExchangeRatesMock.mockResolvedValueOnce({
+      timestamp: new Date(),
+      base: 'USD',
+      rates: { EUR: 0.9, GBP: 0.8 }
+    })
+    await expect(cc.initialize()).resolves.toBeUndefined()
+    expect(cc.convertCurrency(1, 'BSV', 'USD')).toBe(62)
+    expect(cc.convertCurrency(1, 'USD', 'EUR')).toBe(0.9)
+    expect(() => cc.convertCurrency(1, 'JPY', 'SATS')).toThrow('JPY per USD')
+    expect(() => cc.convertCurrency(1, 'SATS', 'JPY')).toThrow('JPY per USD')
+    await cc.fetchExchangeRates(true)
+    expect(cc.convertCurrency(1, 'USD', 'JPY')).toBe(1)
+  })
 })
