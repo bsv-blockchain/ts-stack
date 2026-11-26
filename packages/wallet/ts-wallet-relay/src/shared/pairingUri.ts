@@ -2,6 +2,7 @@ import type { PairingParams, ParseResult } from '../types.js'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { hmac } from '@noble/hashes/hmac.js'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { WEB_URL_SCHEMES } from './artifacts.js'
 import { base64urlToBytes } from './encoding.js'
 import {
   type LocalNetworkHttpOptions,
@@ -16,6 +17,13 @@ import {
 
 /** Default accepted URI schemes for parsePairingUri. */
 export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-browser:'])
+
+/**
+ * Pass as `acceptedSchemas` to accept any non-web deep-link scheme, so a wallet can
+ * pair with apps that target other wallets. The scheme is not covered by the pairing
+ * signature; trust comes from the HTTPS origin lookup in `resolveRelay()`.
+ */
+export const ANY_PAIRING_SCHEME: unique symbol = Symbol.for('@bsv/wallet-relay/any-pairing-scheme')
 const textEncoder = new TextEncoder()
 
 // ── Internal helper ───────────────────────────────────────────────────────────
@@ -46,7 +54,8 @@ function scalar(bytes: Uint8Array): bigint {
  * Parse and validate a bsv-browser://pair?… QR code URI.
  *
  * Checks performed:
- *   - protocol is in acceptedSchemas (default: bsv-browser:)
+ *   - protocol is in acceptedSchemas (default: bsv-browser:), or any non-web
+ *     scheme with ANY_PAIRING_SCHEME
  *   - all required fields present
  *   - expiry not passed
  *   - origin is HTTPS, or HTTP on a loopback host for local development
@@ -61,14 +70,15 @@ function scalar(bytes: Uint8Array): bigint {
  * @param raw - The raw URI string to parse.
  * @param acceptedSchemas - Set of accepted URI schemes (e.g. `new Set(['my-app:'])`).
  *   Defaults to `DEFAULT_ACCEPTED_SCHEMAS`. Pass your own set to support custom deep-link
- *   schemes used by third-party wallet apps.
+ *   schemes used by third-party wallet apps, or `ANY_PAIRING_SCHEME` to accept any
+ *   non-web scheme.
  * @param options - `allowLocalNetworkHttp: true` accepts `http://` origins on
  *   private-network IP addresses. Development wallet builds only: such origins
  *   are unauthenticated. Pass the same value to `WalletPairingSession`.
  */
 export function parsePairingUri(
   raw: string,
-  acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS,
+  acceptedSchemas: ReadonlySet<string> | typeof ANY_PAIRING_SCHEME = DEFAULT_ACCEPTED_SCHEMAS,
   options: LocalNetworkHttpOptions = {}
 ): ParseResult {
   let allowLocalNetworkHttp: boolean
@@ -82,7 +92,11 @@ export function parsePairingUri(
   }
   try {
     const url = new URL(raw)
-    if (!acceptedSchemas.has(url.protocol))
+    const schemeAccepted =
+      acceptedSchemas === ANY_PAIRING_SCHEME
+        ? !WEB_URL_SCHEMES.has(url.protocol.slice(0, -1))
+        : acceptedSchemas.has(url.protocol)
+    if (!schemeAccepted)
       return { params: null, error: 'URI scheme is not a recognised wallet pairing scheme' }
     if (
       url.username !== '' ||

@@ -417,12 +417,15 @@ If you are building a BSV wallet app and want to support QR pairing with desktop
 ```ts
 import { WalletClient } from '@bsv/sdk'
 import {
+  ANY_PAIRING_SCHEME,
   WalletPairingSession,
   parsePairingUri,
   verifyPairingSignature
 } from '@bsv/wallet-relay/client'
 
-const result = parsePairingUri(scannedUri)
+// ANY_PAIRING_SCHEME accepts QRs built for other wallets' schemes (any non-web scheme).
+// Omit it to accept only bsv-browser://, or pass a Set such as new Set(['my-wallet:']).
+const result = parsePairingUri(scannedUri, ANY_PAIRING_SCHEME)
 if (result.error) {
   showError(result.error)
   return

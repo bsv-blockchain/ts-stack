@@ -19,22 +19,24 @@ function boundedString(value: unknown, context: string, maximum: number): string
   return value
 }
 
+/** Lowercase schemes (without `:`) a wallet pairing deep link must never use. */
+export const WEB_URL_SCHEMES: ReadonlySet<string> = new Set([
+  'blob',
+  'data',
+  'file',
+  'ftp',
+  'http',
+  'https',
+  'javascript',
+  'vbscript'
+])
+
 /** Reject browser-executable URLs before a server-provided pairing artifact reaches UI code. */
 export function requirePairingUri(value: unknown, context = 'pairing URI'): string {
   const uri = boundedString(value, context, 8_192)
   const match = /^([a-z][a-z0-9+.-]{0,31}):\/\/pair\?[^#]+$/iu.exec(uri)
   if (match == null) throw new TypeError(`${context} must be a bounded non-web pair deep link`)
-  const scheme = match[1]!.toLowerCase()
-  if (
-    scheme === 'blob' ||
-    scheme === 'data' ||
-    scheme === 'file' ||
-    scheme === 'ftp' ||
-    scheme === 'http' ||
-    scheme === 'https' ||
-    scheme === 'javascript' ||
-    scheme === 'vbscript'
-  ) {
+  if (WEB_URL_SCHEMES.has(match[1]!.toLowerCase())) {
     throw new TypeError(`${context} must use a non-web wallet deep-link scheme`)
   }
   return uri

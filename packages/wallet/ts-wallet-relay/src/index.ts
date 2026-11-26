@@ -26,7 +26,8 @@ export {
   parsePairingUri,
   buildPairingUri,
   verifyPairingSignature,
-  DEFAULT_ACCEPTED_SCHEMAS
+  DEFAULT_ACCEPTED_SCHEMAS,
+  ANY_PAIRING_SCHEME
 } from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
