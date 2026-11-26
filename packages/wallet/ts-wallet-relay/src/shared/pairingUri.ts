@@ -92,96 +92,122 @@ export function parsePairingUri(
   }
   try {
     const url = new URL(raw)
-    const schemeAccepted =
-      acceptedSchemas === ANY_PAIRING_SCHEME
-        ? !WEB_URL_SCHEMES.has(url.protocol.slice(0, -1))
-        : acceptedSchemas.has(url.protocol)
-    if (!schemeAccepted)
-      return { params: null, error: 'URI scheme is not a recognised wallet pairing scheme' }
-    if (
-      url.username !== '' ||
-      url.password !== '' ||
-      url.hostname !== 'pair' ||
-      url.port !== '' ||
-      (url.pathname !== '' && url.pathname !== '/') ||
-      url.hash !== ''
-    ) {
-      return { params: null, error: 'QR code must use the exact wallet://pair route' }
-    }
-
-    const requiredFields = ['topic', 'backendIdentityKey', 'protocolID', 'origin', 'expiry']
-    if (
-      requiredFields.some(field => url.searchParams.getAll(field).length !== 1) ||
-      url.searchParams.getAll('sig').length > 1
-    ) {
-      return { params: null, error: 'QR code contains a missing or duplicate security field' }
-    }
-
-    const topic = url.searchParams.get('topic')!
-    const backendIdentityKey = url.searchParams.get('backendIdentityKey')!
-    const protocolID = url.searchParams.get('protocolID')!
-    const origin = url.searchParams.get('origin')!
-    const expiry = url.searchParams.get('expiry')!
-    const sig = url.searchParams.get('sig') ?? undefined
-
-    if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
-      return { params: null, error: 'QR code is missing required fields' }
-    }
-
-    try {
-      requirePairingTopic(topic, 'pairing topic')
-    } catch {
-      return { params: null, error: 'QR code topic is not a bounded URL-safe identifier' }
-    }
-
-    if (!/^(0|[1-9]\d*)$/.test(expiry) || !Number.isSafeInteger(Number(expiry))) {
-      return { params: null, error: 'QR code expiry is not a valid Unix timestamp' }
-    }
-    if (Date.now() / 1000 > Number(expiry)) {
-      return {
-        params: null,
-        error: 'This QR code has expired — ask the desktop to generate a new one'
-      }
-    }
-    try {
-      normalizeHttpOrigin(origin, 'origin', { allowLocalNetworkHttp })
-    } catch (error) {
-      return {
-        params: null,
-        error: error instanceof Error ? error.message : 'Origin URL is not valid'
-      }
-    }
-
-    try {
-      requirePublicKey(backendIdentityKey, 'Backend identity key')
-    } catch {
-      return { params: null, error: 'Backend identity key is not a valid compressed public key' }
-    }
-
-    let proto: unknown
-    try {
-      proto = JSON.parse(protocolID)
-    } catch {
-      return { params: null, error: 'protocolID is not valid JSON' }
-    }
-    try {
-      requireProtocolId(proto)
-    } catch {
-      return { params: null, error: 'protocolID must be the mobile wallet session protocol' }
-    }
-
-    if (sig !== undefined) {
-      try {
-        const signature = requireBoundedString(sig, 'pairing signature', 1, 128)
-        const decoded = base64urlToBytes(signature)
-        if (decoded.length < 1 || decoded.length > 80) throw new TypeError()
-      } catch {
-        return { params: null, error: 'QR code contains a malformed security field' }
-      }
-    }
-    return { params: { topic, backendIdentityKey, protocolID, origin, expiry, sig }, error: null }
+    const params = readPairingFields(url, acceptedSchemas)
+    if (typeof params === 'string') return { params: null, error: params }
+    const error = findPairingValueError(params, allowLocalNetworkHttp)
+    return error === null ? { params, error: null } : { params: null, error }
   } catch {
     return { params: null, error: 'Could not read QR code' }
+  }
+}
+
+/** True when `check` throws. */
+function throws(check: () => unknown): boolean {
+  try {
+    check()
+    return false
+  } catch {
+    return true
+  }
+}
+
+/** Check scheme, route and field multiplicity; return the raw fields or an error. */
+function readPairingFields(
+  url: URL,
+  acceptedSchemas: ReadonlySet<string> | typeof ANY_PAIRING_SCHEME
+): PairingParams | string {
+  const schemeAccepted =
+    acceptedSchemas === ANY_PAIRING_SCHEME
+      ? !WEB_URL_SCHEMES.has(url.protocol.slice(0, -1))
+      : acceptedSchemas.has(url.protocol)
+  if (!schemeAccepted) return 'URI scheme is not a recognised wallet pairing scheme'
+  if (
+    url.username !== '' ||
+    url.password !== '' ||
+    url.hostname !== 'pair' ||
+    url.port !== '' ||
+    (url.pathname !== '' && url.pathname !== '/') ||
+    url.hash !== ''
+  ) {
+    return 'QR code must use the exact wallet://pair route'
+  }
+
+  const query = url.searchParams
+  const requiredFields = ['topic', 'backendIdentityKey', 'protocolID', 'origin', 'expiry']
+  if (
+    requiredFields.some(field => query.getAll(field).length !== 1) ||
+    query.getAll('sig').length > 1
+  ) {
+    return 'QR code contains a missing or duplicate security field'
+  }
+
+  const topic = query.get('topic')!
+  const backendIdentityKey = query.get('backendIdentityKey')!
+  const protocolID = query.get('protocolID')!
+  const origin = query.get('origin')!
+  const expiry = query.get('expiry')!
+  const sig = query.get('sig') ?? undefined
+  if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
+    return 'QR code is missing required fields'
+  }
+  return { topic, backendIdentityKey, protocolID, origin, expiry, sig }
+}
+
+/** Validate each field's value in order; return the first error or null. */
+function findPairingValueError(
+  params: PairingParams,
+  allowLocalNetworkHttp: boolean
+): string | null {
+  const { topic, backendIdentityKey, protocolID, origin, expiry, sig } = params
+  if (throws(() => requirePairingTopic(topic, 'pairing topic'))) {
+    return 'QR code topic is not a bounded URL-safe identifier'
+  }
+  if (!/^(0|[1-9]\d*)$/.test(expiry) || !Number.isSafeInteger(Number(expiry))) {
+    return 'QR code expiry is not a valid Unix timestamp'
+  }
+  if (Date.now() / 1000 > Number(expiry)) {
+    return 'This QR code has expired — ask the desktop to generate a new one'
+  }
+  const originError = findOriginError(origin, allowLocalNetworkHttp)
+  if (originError !== null) return originError
+  if (throws(() => requirePublicKey(backendIdentityKey, 'Backend identity key'))) {
+    return 'Backend identity key is not a valid compressed public key'
+  }
+  const protocolError = findProtocolError(protocolID)
+  if (protocolError !== null) return protocolError
+  if (sig !== undefined && throws(() => requirePairingSignature(sig))) {
+    return 'QR code contains a malformed security field'
+  }
+  return null
+}
+
+/** Origin errors reach wallet users verbatim, so pass the validator's message through. */
+function findOriginError(origin: string, allowLocalNetworkHttp: boolean): string | null {
+  try {
+    normalizeHttpOrigin(origin, 'origin', { allowLocalNetworkHttp })
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Origin URL is not valid'
+  }
+}
+
+function findProtocolError(protocolID: string): string | null {
+  let proto: unknown
+  try {
+    proto = JSON.parse(protocolID)
+  } catch {
+    return 'protocolID is not valid JSON'
+  }
+  if (throws(() => requireProtocolId(proto))) {
+    return 'protocolID must be the mobile wallet session protocol'
+  }
+  return null
+}
+
+function requirePairingSignature(sig: string): void {
+  const decoded = base64urlToBytes(requireBoundedString(sig, 'pairing signature', 1, 128))
+  if (decoded.length < 1 || decoded.length > 80) {
+    throw new TypeError('pairing signature must decode to 1-80 bytes')
   }
 }
 

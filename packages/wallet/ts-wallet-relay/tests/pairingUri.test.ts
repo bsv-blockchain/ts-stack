@@ -134,6 +134,45 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
 })
 
 describe('parsePairingUri validation', () => {
+  it('reports field errors in a fixed order', () => {
+    const fields: Record<string, string> = {
+      topic: '!!',
+      backendIdentityKey: 'nope',
+      protocolID: '{',
+      origin: 'http://app.example.com',
+      expiry: 'soon',
+      sig: ''
+    }
+    const parse = () => parsePairingUri(`bsv-browser://pair?${new URLSearchParams(fields)}`)
+    const steps: Array<[string, string, string]> = [
+      ['QR code topic is not a bounded URL-safe identifier', 'topic', 'session-abc-123'],
+      ['QR code expiry is not a valid Unix timestamp', 'expiry', '1'],
+      ['This QR code has expired — ask the desktop to generate a new one', 'expiry', '9999999999'],
+      [
+        'origin must be HTTPS, except for loopback development',
+        'origin',
+        'https://app.example.com'
+      ],
+      [
+        'Backend identity key is not a valid compressed public key',
+        'backendIdentityKey',
+        BACKEND_KEY
+      ],
+      ['protocolID is not valid JSON', 'protocolID', '[9,"x"]'],
+      [
+        'protocolID must be the mobile wallet session protocol',
+        'protocolID',
+        JSON.stringify(PROTOCOL_ID)
+      ],
+      ['QR code contains a malformed security field', 'sig', 'AQ']
+    ]
+    for (const [error, field, fix] of steps) {
+      expect(parse()).toEqual({ params: null, error })
+      fields[field] = fix
+    }
+    expect(parse().error).toBeNull()
+  })
+
   it('rejects an unrecognised URI scheme', () => {
     const result = parsePairingUri('https://example.com/pair?foo=bar')
     expect(result.error).toBeTruthy()
