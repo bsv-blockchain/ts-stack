@@ -2,6 +2,10 @@ import { GraphNode, OverlayGASPStorage } from '../GASP/OverlayGASPStorage'
 import { Transaction, MerklePath, Script, UnlockingScript } from '@bsv/sdk'
 import { GASPNode } from '@bsv/gasp'
 
+function spend(sourceTransaction: Transaction, sourceOutputIndex: number) {
+  return { sourceTransaction, sourceOutputIndex, unlockingScript: new UnlockingScript() }
+}
+
 describe('OverlayGASPStorage', () => {
   let overlayStorage: OverlayGASPStorage
   let mockEngine: any
@@ -724,6 +728,61 @@ describe('OverlayGASPStorage', () => {
       )
     })
 
+    it('replays a transaction once when both its outputs fund the same spender', async () => {
+      const output = (satoshis: number) => ({ satoshis, lockingScript: Script.fromASM('OP_TRUE') })
+      const funding = [1, 2].map(lockTime => new Transaction(1, [], [output(5)], lockTime))
+      const parent = new Transaction(
+        1,
+        funding.map(tx => spend(tx, 0)),
+        [output(4), output(4)],
+        0
+      )
+      const tip = new Transaction(1, [spend(parent, 0), spend(parent, 1)], [output(7)], 0)
+      const graphID = `${tip.id('hex')}.0`
+      const node = (tx: Transaction, outputIndex: number) => ({
+        graphID,
+        rawTx: tx.toHex(),
+        outputIndex,
+        proof: tx.merklePath?.toHex()
+      })
+      await overlayStorage.appendToGraph(node(tip, 0))
+      for (const [index, tx] of funding.entries()) {
+        tx.merklePath = new MerklePath(100 + index, [
+          [{ offset: 0, hash: tx.id('hex'), txid: true }]
+        ])
+        await overlayStorage.appendToGraph(node(parent, index), graphID)
+        // Each output node carries a different part of the parent's history.
+        await overlayStorage.appendToGraph(node(tx, 0), `${parent.id('hex')}.${index}`)
+      }
+      mockEngine.chainTracker = {
+        currentHeight: async () => 300,
+        isValidRootForHeight: async (root: string, height: number) =>
+          root === funding[height - 100]?.id('hex')
+      }
+      const admitted: string[] = []
+      const admittedInputs: number[][] = []
+      const submitted: string[] = []
+      mockEngine.managers['test-topic'] = {
+        identifyAdmissibleOutputs: async (beef: number[], previousCoins: number[]) => {
+          const tx = Transaction.fromBEEF(beef)
+          admitted.push(tx.id('hex'))
+          admittedInputs.push(previousCoins)
+          return { outputsToAdmit: tx.outputs.map((_, index) => index), coinsToRetain: [] }
+        }
+      }
+      mockEngine.submit = async ({ beef }: { beef: number[] }) => {
+        submitted.push(Transaction.fromBEEF(beef).id('hex'))
+      }
+
+      await overlayStorage.validateGraphAnchor(graphID)
+      await overlayStorage.finalizeGraph(graphID)
+
+      expect(admitted.slice(0, 2).sort()).toEqual(funding.map(tx => tx.id('hex')).sort())
+      expect(admitted.slice(2)).toEqual([parent.id('hex'), tip.id('hex')])
+      expect(admittedInputs).toEqual([[], [], [0, 1], [0, 1]])
+      expect(submitted).toEqual(admitted)
+    })
+
     it('rejects conflicting spends within one historical graph', async () => {
       overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
       const verify = jest.fn().mockResolvedValue(true)
@@ -803,6 +862,33 @@ describe('OverlayGASPStorage', () => {
   })
 
   describe('finalizeGraph', () => {
+    it('submits a proven input first when its other output was fetched on a separate branch', async () => {
+      const output = { satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') }
+      const funding = new Transaction(1, [], [output, output], 0)
+      const parent = new Transaction(1, [spend(funding, 0)], [output], 0)
+      const tip = new Transaction(1, [spend(parent, 0), spend(funding, 1)], [output], 0)
+      const graphID = `${tip.id('hex')}.0`
+      await overlayStorage.appendToGraph({ graphID, rawTx: tip.toHex(), outputIndex: 0 })
+      for (const [tx, outputIndex, height] of [
+        [parent, 0, 101],
+        [funding, 1, 100]
+      ] as const) {
+        const proof = new MerklePath(height, [[{ offset: 0, hash: tx.id('hex'), txid: true }]])
+        await overlayStorage.appendToGraph(
+          { graphID, rawTx: tx.toHex(), outputIndex, proof: proof.toHex() },
+          graphID
+        )
+      }
+      const submitted: string[] = []
+      mockEngine.submit = async ({ beef }: { beef: number[] }) => {
+        submitted.push(Transaction.fromBEEF(beef).id('hex'))
+      }
+
+      await overlayStorage.finalizeGraph(graphID)
+
+      expect(submitted).toEqual([funding.id('hex'), parent.id('hex'), tip.id('hex')])
+    })
+
     it('releases temporary graph state after successful finalization', async () => {
       const graphID = '11'.repeat(32) + '.0'
       const root: GraphNode = {

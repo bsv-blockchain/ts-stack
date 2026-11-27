@@ -33,6 +33,11 @@ export interface GraphNode {
   parent?: GraphNode
 }
 
+interface GraphTransaction {
+  node: GraphNode
+  inputs: Set<string>
+}
+
 export class OverlayGASPStorage implements GASPStorage {
   readonly temporaryGraphNodeRefs: Record<string, GraphNode> = Object.create(null) as Record<
     string,
@@ -550,39 +555,62 @@ export class OverlayGASPStorage implements GASPStorage {
     }
   }
 
-  /**
-   * Computes an ordered set of BEEFs for the graph with the given graph IDs
-   * @param {string} graphID — The ID of the graph for which BEEFs are required
-   * @returns Ordered BEEFs for the graph
-   */
+  /** Groups the graph's output nodes and their dependencies by transaction. */
+  private indexGraphTransactions(root: GraphNode): Map<string, GraphTransaction> {
+    const transactions = new Map<string, GraphTransaction>()
+    const visited = new Set<GraphNode>()
+    const pending = [root]
+    while (pending.length > 0) {
+      const node = pending.pop()!
+      if (visited.has(node)) continue
+      visited.add(node)
+      let transaction = transactions.get(node.txid)
+      if (transaction === undefined) {
+        const inputs = new Set<string>()
+        // A proven input may already be in another branch of this graph.
+        for (const input of Transaction.fromHex(node.rawTx).inputs) {
+          if (input.sourceTXID !== undefined) inputs.add(input.sourceTXID)
+        }
+        transaction = { node, inputs }
+        transactions.set(node.txid, transaction)
+      }
+      for (const child of node.children) {
+        transaction.inputs.add(child.txid)
+        pending.push(child)
+      }
+    }
+    return transactions
+  }
+
+  /** Emits each transaction once, after its inputs that are present in this graph. */
   private computeOrderedBEEFsForGraph(graphID: string): number[][] {
     const beefs: number[][] = []
     const foundRoot = this.graphNode(graphID, graphID)
     if (foundRoot == null) {
       throw new Error('Unable to find root node in graph for finalization!')
     }
+    const transactions = this.indexGraphTransactions(foundRoot)
     const complete = new Set<string>()
     const visiting = new Set<string>()
-    const stack: Array<{ node: GraphNode; expanded: boolean }> = [
-      { node: foundRoot, expanded: false }
+    const stack: Array<{ tx: GraphTransaction; expanded: boolean }> = [
+      { tx: transactions.get(foundRoot.txid)!, expanded: false }
     ]
     while (stack.length > 0) {
       const current = stack.pop()!
-      const nodeID = `${current.node.txid}.${current.node.outputIndex}`
+      const txid = current.tx.node.txid
       if (current.expanded) {
-        visiting.delete(nodeID)
-        if (!complete.has(nodeID)) {
-          beefs.push(this.getBEEFForNode(current.node))
-          complete.add(nodeID)
-        }
+        visiting.delete(txid)
+        beefs.push(this.getBEEFForNode(current.tx.node))
+        complete.add(txid)
         continue
       }
-      if (complete.has(nodeID)) continue
-      if (visiting.has(nodeID)) throw new Error('Cycle detected in temporary GASP graph')
-      visiting.add(nodeID)
-      stack.push({ node: current.node, expanded: true })
-      for (let index = current.node.children.length - 1; index >= 0; index--) {
-        stack.push({ node: current.node.children[index], expanded: false })
+      if (complete.has(txid)) continue
+      if (visiting.has(txid)) throw new Error('Cycle detected in temporary GASP graph')
+      visiting.add(txid)
+      stack.push({ tx: current.tx, expanded: true })
+      for (const input of Array.from(current.tx.inputs).reverse()) {
+        const source = transactions.get(input)
+        if (source !== undefined) stack.push({ tx: source, expanded: false })
       }
     }
     return beefs
