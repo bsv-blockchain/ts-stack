@@ -372,15 +372,16 @@ class ActionBatchWorkspace {
    * Outpoints among `outpoints` that this wallet stores. `findOutputs` is the
    * user-scoped lookup that every `StorageServer` version serves; the batch
    * `findOutputsByOutpoints` is not exposed through the manager or remote
-   * storage. Lookups run one at a time so a remote storage sees no burst.
+   * storage. Each lookup starts only after the previous one settles, so a
+   * remote storage sees no burst.
    */
   private async storedOutpoints(outpoints: Array<{ txid: string; vout: number }>): Promise<Set<string>> {
-    const stored = new Set<string>()
-    for (const { txid, vout } of outpoints) {
+    return await outpoints.reduce<Promise<Set<string>>>(async (previous, { txid, vout }) => {
+      const stored = await previous
       const rows = await this.wallet.storage.findOutputs({ partial: { txid, vout }, noScript: true })
       if (rows.length > 0) stored.add(`${txid}.${vout}`)
-    }
-    return stored
+      return stored
+    }, Promise.resolve(new Set<string>()))
   }
 
   private extend(
