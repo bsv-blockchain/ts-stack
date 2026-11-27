@@ -67,6 +67,16 @@ export default class Script {
   /**
    * @method fromASM
    * Static method to construct a Script instance from an ASM (Assembly) formatted string.
+   *
+   * The empty string is the empty script, so `fromASM(toASM(script))` holds when
+   * `script` has no chunks. That matches `toASM()` and go-sdk `NewFromASM("")`.
+   * Tokens are separated by one space. An empty token — a leading, trailing, or
+   * repeated space — is refused with `invalid ASM: empty token` instead of being
+   * read as an empty push. Spell an intentional empty push as `0`, `OP_0`, or
+   * `OP_FALSE`. `toASM()` writes a zero-length push the same way, including a
+   * non-minimal `OP_PUSHDATA*` of length 0, so a blank is never required to
+   * round-trip.
+   *
    * A final `0x<hex>` token immediately after a top-level OP_RETURN supplies
    * the entire suffix as raw bytes. A plain hex token represents a data push.
    * @param asm - The script in ASM string format.
@@ -75,6 +85,9 @@ export default class Script {
    * const script = Script.fromASM("OP_DUP OP_HASH160 abcd... OP_EQUALVERIFY OP_CHECKSIG")
    */
   static fromASM(asm: string): Script {
+    // ''.split(' ') is [''], which would otherwise decode as one empty push.
+    if (asm.length === 0) return new Script()
+    if (asm.trim() !== asm || asm.includes('  ')) throw new Error('invalid ASM: empty token')
     const chunks: ScriptChunk[] = []
     const tokens = asm.split(' ')
     let i = 0
@@ -703,15 +716,15 @@ export default class Script {
       return ` OP_RETURN${Script.#disassembleReturnSuffix(chunk.data)}`
     }
 
-    const op = chunk.op
-    let str = ''
-    if (chunk.data === undefined) {
-      const val = OP[op] as string
-      str = `${str} ${val}`
-    } else {
-      str = `${str} ${toHex(chunk.data)}`
+    let op = chunk.op
+    let data = chunk.data
+    // A zero-length push is OP_0. A blank token would be read back as another push.
+    if (data?.length === 0 && op <= OP.OP_PUSHDATA4) {
+      op = 0
+      data = undefined
     }
-    return str
+    if (data === undefined) return ` ${OP[op] as string}`
+    return ` ${toHex(data)}`
   }
 
   /**

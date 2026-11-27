@@ -666,6 +666,13 @@ Argument Details
 
 #### Method fromASM
 
+Constructs a script from an ASM string. The empty string is the empty script, so
+`fromASM(toASM(script))` holds for a script with no chunks. Tokens are separated
+by one space. An empty token (a leading, trailing, or repeated space) throws
+`invalid ASM: empty token` instead of becoming an empty push. Spell an
+intentional empty push as `0`, `OP_0`, or `OP_FALSE`. `toASM()` writes a
+zero-length push, including a non-minimal `OP_PUSHDATA*` of length 0, as `OP_0`.
+
 ```ts
 static fromASM(asm: string): Script
 ```
@@ -678,7 +685,7 @@ A new Script instance.
 Argument Details
 
 + **asm**
-  + The script in ASM string format.
+  + The script in ASM string format. `''` is the empty script. Blank tokens are refused.
 
 Example
 

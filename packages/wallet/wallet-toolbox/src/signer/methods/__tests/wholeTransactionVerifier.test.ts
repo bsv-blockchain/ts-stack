@@ -17,10 +17,10 @@ function fixture(invalidSecondInput = false, unresolvedInput = false): { beef: B
   })
   const tx = new Transaction()
   for (const sourceOutputIndex of [0, 1]) {
-    tx.addInput({ sourceTransaction: source, sourceOutputIndex, unlockingScript: Script.fromASM('') })
+    tx.addInput({ sourceTransaction: source, sourceOutputIndex, unlockingScript: Script.fromASM('OP_0') })
   }
   if (unresolvedInput) {
-    tx.addInput({ sourceTXID: '22'.repeat(32), sourceOutputIndex: 0, unlockingScript: Script.fromASM('') })
+    tx.addInput({ sourceTXID: '22'.repeat(32), sourceOutputIndex: 0, unlockingScript: Script.fromASM('OP_0') })
   }
   tx.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
   const beef = new Beef()
