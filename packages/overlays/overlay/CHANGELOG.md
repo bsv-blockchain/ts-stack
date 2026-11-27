@@ -112,6 +112,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [2.8.1] - 2026-11-26
+
+- Proof ingest now records a Merkle proof for a transaction a topic applied without storing any of its outputs (for example a spend accepted only for the coin it consumed), so its applied rows become proven and enter BRC-136 anchors instead of handleNewMerkleProof throwing and /arc-ingest answering 400.
+
+  Migration: No consumer migration is required.
+
+- Stores an ancestor's Merkle proof when a descendant output's stored BEEF already ends at a proven transaction that spends the ancestor or a bound descendant of it, skipping that descendant instead of throwing and leaving the ancestor's proof unstored; a BEEF that carries the ancestor is updated as before and other incomplete BEEFs still fail without writing.
+
+  Migration: No consumer migration is required.
+
+- Knex storage widens outputs.satoshis to a 64-bit integer on MySQL and Postgres, so an admitted output above 2,147,483,647 satoshis is stored exactly instead of being clamped (MySQL) or failing to insert after broadcast (Postgres).
+
+  Migration: Run the new satoshis-width migration from KnexStorageMigrations (overlay-express runs them at start). MySQL and Postgres rewrite the outputs table to change the column type, and Postgres blocks reads and writes on it meanwhile. Outputs MySQL already clamped to 2,147,483,647 satoshis are not corrected. No API or wire change.
+
 ## [2.1.1] - 2026-06-27
 
 ### Added
