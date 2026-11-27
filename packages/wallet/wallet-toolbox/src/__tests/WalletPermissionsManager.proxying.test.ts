@@ -5,7 +5,12 @@ import {
   MockedBSV_SDK,
   MockTransaction
 } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager, PermissionsManagerConfig, withBrc205Capabilities } from '../WalletPermissionsManager'
+import {
+  WalletPermissionsManager,
+  PermissionsManagerConfig,
+  withBrc205Capabilities,
+  withBrc263Flags
+} from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -811,30 +816,66 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     expect(underlying.getNetwork).toHaveBeenCalledTimes(1)
   })
 
-  it('should proxy getVersion, advertising the built-in BRC-177 module per BRC-205', async () => {
+  it('should proxy getVersion, setting the built-in BRC-177 module flag per BRC-263', async () => {
     const result = await manager.getVersion({}, 'someone.com')
-    expect(result.version).toBe('vendor-1.0.0; brc177-nosend=2;')
+    expect(result.version).toBe('vendor-1.0.0~I')
     expect(underlying.getVersion).toHaveBeenCalledTimes(1)
   })
 
-  it('getVersion lists every module capability by scheme id and key, without repeating a key', async () => {
-    const module = (capabilities: Record<string, string>) => ({
+  it('getVersion sets every module flag and keeps the flags of the underlying string', async () => {
+    const module = (flags: number[], capabilities?: Record<string, string>) => ({
+      flags,
       capabilities,
       onRequest: async (req: { args: object }) => ({ args: req.args }),
       onResponse: async (res: unknown) => res
     })
     const withModules = new WalletPermissionsManager(underlying, 'admin.com', {
       permissionModules: {
-        zeta: module({ 'brc999-zeta': '1', 'brc177-nosend': '9' }),
-        color: module({ 'brc207-color': '5', 'brc207-color-attested': '1' })
+        zeta: module([47, 3]),
+        color: module([0, 1], { 'brc207-color': '4' })
       }
     })
-    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
-      'vendor-1.0.0; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
-    )
-    underlying.getVersion.mockResolvedValueOnce({ version: 'vendor-1.0.0; account-label=Pocket%20Photos;' })
-    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
-      'vendor-1.0.0; account-label=Pocket%20Photos; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
+    // Flags 0, 1, 3 and 47; no BRC-205 attribute is advertised.
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe('vendor-1.0.0~LAAAAAAg')
+    underlying.getVersion.mockResolvedValueOnce({ version: 'vendor-1.0.0~AB' })
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe('vendor-1.0.0~LBAAAAAg')
+  })
+
+  it('getVersion returns a legacy underlying string unchanged', async () => {
+    for (const version of ['wallet-brc100-1.0.0', 'vendor-1.0.0; brc177-nosend=2;', 'vendor-1.0.0-beta']) {
+      underlying.getVersion.mockResolvedValueOnce({ version })
+      expect((await manager.getVersion({}, 'someone.com')).version).toBe(version)
+    }
+  })
+
+  it('withBrc263Flags keeps BRC-100 bounds and leaves invalid flags out', () => {
+    const module = (flags: number[]) => ({
+      flags,
+      onRequest: async (req: { args: object }) => ({ args: req.args }),
+      onResponse: async (res: unknown) => res
+    })
+    const all = Array.from({ length: 48 }, (_, i) => i)
+    // A 12-byte vendor and an 8-byte version leave room for all 48 flags in 30 bytes.
+    expect(withBrc263Flags('abcdefghijkl-10.20.30', { m: module(all) })).toBe('abcdefghijkl-10.20.30~________')
+    expect(withBrc263Flags('vendor-1.0.0', {})).toBe('vendor-1.0.0')
+    expect(withBrc263Flags('vendor-1.0.0', { m: module([]) })).toBe('vendor-1.0.0')
+    expect(withBrc263Flags('vendor-1.0.0', { m: module([-1, 48, 1.5, Number.NaN]) })).toBe('vendor-1.0.0')
+    expect(withBrc263Flags('vendor-1.0.0~IAA', { m: module([3]) })).toBe('vendor-1.0.0~IAA')
+    expect(withBrc263Flags('vendor-1.0.0~IAA', { m: module([0]) })).toBe('vendor-1.0.0~J')
+    // Legacy strings: no flags are added.
+    for (const legacy of [
+      'wallet-brc100-1.0.0',
+      'Vendor-1.0.0',
+      'vendor-01.0.0',
+      'vendor-100.200.300',
+      'vendor-1.0.0~'
+    ]) {
+      expect(withBrc263Flags(legacy, { m: module([0]) })).toBe(legacy)
+    }
+    expect(withBrc263Flags('abcdefghijkl-10.20.30~AAAAAAAB', { m: module([0]) })).toBe('abcdefghijkl-10.20.30~BAAAAAAB')
+    // A result beyond 30 bytes leaves the string unchanged.
+    expect(withBrc263Flags('abcdefghijkl-10.20.30~AAAAAAAAB', { m: module([0]) })).toBe(
+      'abcdefghijkl-10.20.30~AAAAAAAAB'
     )
   })
 

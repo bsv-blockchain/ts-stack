@@ -3,7 +3,8 @@
   "id": "wallet.brc100.getversion",
   "name": "BRC-100 getversion",
   "brc": [
-    "BRC-100"
+    "BRC-100",
+    "BRC-263"
   ],
   "version": "2.0.0",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
@@ -84,6 +85,41 @@
       },
       "tags": [
         "brc-100",
+        "getVersion",
+        "schema",
+        "edge-case"
+      ]
+    },
+    {
+      "id": "wallet.brc100.getversion.6",
+      "description": "getVersion with BRC-263 capability flags (flags 0 and 3)",
+      "input": {
+        "args": {},
+        "_schema_note": "BRC-263 format: [vendor]-[major].[minor].[patch]~[flags], still 7-30 bytes"
+      },
+      "expected": {
+        "version": "bsvwt-1.0.0~J"
+      },
+      "tags": [
+        "brc-100",
+        "brc-263",
+        "getVersion",
+        "schema"
+      ]
+    },
+    {
+      "id": "wallet.brc100.getversion.7",
+      "description": "getVersion maximum length version with all 48 BRC-263 flags (30 chars)",
+      "input": {
+        "args": {},
+        "_schema_note": "maximum 30 chars: 12-byte vendor, 8-byte version, 8 flag characters"
+      },
+      "expected": {
+        "version": "abcdefghijkl-10.20.30~________"
+      },
+      "tags": [
+        "brc-100",
+        "brc-263",
         "getVersion",
         "schema",
         "edge-case"

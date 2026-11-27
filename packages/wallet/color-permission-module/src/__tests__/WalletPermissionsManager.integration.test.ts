@@ -185,7 +185,8 @@ describe('color module registered on a WalletPermissionsManager', () => {
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: 180, outputs: [] })
-    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=4')
+    // BRC-263 flags 0 (this module, BRC-207 revision 4) and 3 (the built-in BRC-177 module).
+    expect((await manager.getVersion({}, APP)).version).toBe('fake-1.0.0~J')
   })
 
   it('aborts a declined send, so the inputs it reserved are spendable again', async () => {

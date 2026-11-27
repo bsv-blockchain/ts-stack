@@ -113,10 +113,10 @@ recorded container release route; they are not published by the public-package j
 | Metric | Current value |
 | --- | --- |
 | Vector files | 79 |
-| Vectors | 6724 |
-| Structurally passed | 6511 |
+| Vectors | 6726 |
+| Structurally passed | 6513 |
 | Governed skips | 213 |
-| Required parity vectors | 6518 |
+| Required parity vectors | 6520 |
 | Intended parity vectors | 206 |
 | Explicitly skipped vector entries | 7 |
 | Corpus metadata revision | 2026-10-28 |
