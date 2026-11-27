@@ -892,7 +892,13 @@ export default class Transaction {
   }
 
   #benfordNumber(min: number, max: number): number {
-    const d = (Random(1)[0] % 9) + 1
+    // 256 = 9 * 28 + 4, so a raw byte modulo 9 makes digits 1-4 more common
+    // than 5-9. Discard bytes at or above 9 * 28 and the residue is uniform.
+    let byte: number
+    do {
+      byte = Random(1)[0]
+    } while (byte >= 252)
+    const d = (byte % 9) + 1
     return Math.floor(min + ((max - min) * Math.log10(1 + 1 / d)) / Math.log10(10))
   }
 
