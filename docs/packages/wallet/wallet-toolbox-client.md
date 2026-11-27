@@ -41,6 +41,34 @@ be funded from unproven change when the wallet holds no confirmed coins, instead
 of failing with an invalid output amount. No API, wire or schema migration is
 required. Source is not publication or deployment.
 
+## Key-linkage permission
+
+The next minor release publishes the same `WalletPermissionsManager` as
+the core package, including independent gates for
+`revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage`.
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is
+omitted it follows `seekPermissionsForKeyLinkageRevelation`, still the legacy
+combined default (`true`).
+
+Counterparty linkage reveals the root ECDH shared secret with a counterparty.
+Specific linkage reveals one per-invoice HMAC. Protocol ID strings and the
+reserved-protocol guard are unchanged. Prompts use
+`counterpartyLinkageRevelation` and `specificLinkageRevelation`.
+`ensureProtocolPermission` still accepts the legacy `linkageRevelation` usage.
+
+```ts
+import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+
+declare const wallet: ConstructorParameters<typeof WalletPermissionsManager>[0]
+new WalletPermissionsManager(wallet, 'wallet.example', {
+  seekPermissionsForCounterpartyKeyLinkageRevelation: true,
+  seekPermissionsForSpecificKeyLinkageRevelation: false
+})
+```
+
+No BRC-100 wire or stored-permission migration is required.
+
 ## Certificate pagination
 
 The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as

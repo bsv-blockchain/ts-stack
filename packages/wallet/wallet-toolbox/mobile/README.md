@@ -1,5 +1,18 @@
 # @bsv/wallet-toolbox-mobile
 
+## Key-linkage permission
+
+`WalletPermissionsManager` can gate `revealCounterpartyKeyLinkage` and
+`revealSpecificKeyLinkage` separately.
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is
+omitted it follows `seekPermissionsForKeyLinkageRevelation`, still the legacy
+combined default (`true`). Counterparty linkage reveals the root ECDH shared
+secret for a counterparty. Specific linkage reveals one per-invoice HMAC.
+Protocol ID strings and the reserved-protocol guard are unchanged. This package
+stays in version lockstep with the core and browser client. Existing configs
+need no migration.
+
 ## Optional durable profile state (2.18.0 source candidate)
 
 `CWIStyleWalletManager` and its `WalletAuthenticationManager` subclass accept an

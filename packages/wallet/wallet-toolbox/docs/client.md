@@ -6387,6 +6387,10 @@ either grant or deny. The manager can then create on-chain tokens (PushDrop outp
 if permission is granted. Denying requests cause the underlying operation to throw,
 and no token is created. An "ephemeral" grant is also possible, denoting a one-time
 authorization without an associated persistent on-chain token.
+`usageType` tells the wallet UI which check produced the prompt.
+`revealCounterpartyKeyLinkage` sends `counterpartyLinkageRevelation` and
+`revealSpecificKeyLinkage` sends `specificLinkageRevelation`.
+`ensureProtocolPermission` still accepts the legacy `linkageRevelation` usage.
 
 ```ts
 export interface PermissionRequest {
@@ -6610,6 +6614,8 @@ Configuration object for the WalletPermissionsManager. If a given option is `fal
 the manager will skip or alter certain permission checks or behaviors.
 
 By default, all of these are `true` unless specified otherwise. This is the most secure configuration.
+The two specific key-linkage flags are the exception: when they are omitted they
+follow `seekPermissionsForKeyLinkageRevelation` rather than forcing their own default.
 
 ```ts
 export interface PermissionsManagerConfig {
@@ -6619,6 +6625,8 @@ export interface PermissionsManagerConfig {
   seekProtocolPermissionsForEncrypting?: boolean
   seekProtocolPermissionsForHMAC?: boolean
   seekPermissionsForKeyLinkageRevelation?: boolean
+  seekPermissionsForCounterpartyKeyLinkageRevelation?: boolean
+  seekPermissionsForSpecificKeyLinkageRevelation?: boolean
   seekPermissionsForPublicKeyRevelation?: boolean
   seekPermissionsForIdentityKeyRevelation?: boolean
   seekPermissionsForIdentityResolution?: boolean
@@ -6764,6 +6772,18 @@ When listActions is called with labels, do we ask for "label usage" permission?
 seekPermissionWhenListingActionsByLabel?: boolean
 ```
 
+###### Property seekPermissionsForCounterpartyKeyLinkageRevelation
+
+Whether `revealCounterpartyKeyLinkage` requires permission.
+
+When this is omitted, the call follows
+`seekPermissionsForKeyLinkageRevelation`. Counterparty linkage reveals the
+root ECDH shared secret for that counterparty.
+
+```ts
+seekPermissionsForCounterpartyKeyLinkageRevelation?: boolean
+```
+
 ###### Property seekPermissionsForIdentityKeyRevelation
 
 If getPublicKey is requested with `identityKey=true`, do we require permission?
@@ -6785,8 +6805,19 @@ seekPermissionsForIdentityResolution?: boolean
 
 ###### Property seekPermissionsForKeyLinkageRevelation
 
-For revealing counterparty-level or specific key linkage revelation information,
-should we require permission?
+Legacy combined default for key-linkage revelation permission.
+
+When `true` (the default), both `revealCounterpartyKeyLinkage` and
+`revealSpecificKeyLinkage` require permission unless the matching flag
+below is explicitly `false`. When `false`, both skip permission unless the
+matching flag below is explicitly `true`.
+
+Counterparty linkage reveals the root ECDH shared secret with a
+counterparty. Every BRC-2 symmetric encryption key and HMAC for that pair,
+for any protocol and any key ID, is computable from that secret. Specific
+linkage reveals only one per-invoice HMAC. Set the two flags below when
+those risks should be gated separately. Existing configs that set only
+this flag keep their current behavior.
 
 ```ts
 seekPermissionsForKeyLinkageRevelation?: boolean
@@ -6799,6 +6830,19 @@ should we require permission?
 
 ```ts
 seekPermissionsForPublicKeyRevelation?: boolean
+```
+
+###### Property seekPermissionsForSpecificKeyLinkageRevelation
+
+Whether `revealSpecificKeyLinkage` requires permission.
+
+When this is omitted, the call follows
+`seekPermissionsForKeyLinkageRevelation`. Specific linkage reveals one
+per-invoice HMAC, not the root shared secret. The reserved-protocol guard
+on that call is unchanged.
+
+```ts
+seekPermissionsForSpecificKeyLinkageRevelation?: boolean
 ```
 
 ###### Property seekProtocolPermissionsForEncrypting
@@ -21995,7 +22039,7 @@ export class WalletPermissionsManager implements WalletInterface {
     counterparty: string
     reason?: string
     seekPermission?: boolean
-    usageType: 'signing' | 'encrypting' | 'hmac' | 'publicKey' | 'identityKey' | 'linkageRevelation' | 'generic'
+    usageType: ProtocolPermissionUsageType
   }): Promise<boolean>
   public async ensureBasketAccess({
     originator,
@@ -22304,7 +22348,7 @@ public async ensureProtocolPermission({ originator, privileged, protocolID, coun
     counterparty: string;
     reason?: string;
     seekPermission?: boolean;
-    usageType: "signing" | "encrypting" | "hmac" | "publicKey" | "identityKey" | "linkageRevelation" | "generic";
+    usageType: ProtocolPermissionUsageType;
 }): Promise<boolean>
 ```
 
@@ -30055,7 +30099,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [EnqueueHandler](#type-enqueuehandler)                                         | [MonitorStorage](#type-monitorstorage)                               | [ValidatedJsonRpcResponse](#type-validatedjsonrpcresponse)             |
 | [EntityStorage](#type-entitystorage)                                           | [OutputUtxoVerdict](#type-outpututxoverdict)                         | [WABClientErrorCode](#type-wabclienterrorcode)                         |
 | [ErrorHandler](#type-errorhandler)                                             | [PermissionEventHandler](#type-permissioneventhandler)               | [WalletLoggerLevel](#type-walletloggerlevel)                           |
-| [FiatCurrencyCode](#type-fiatcurrencycode)                                     | [PermissionsModuleNext](#type-permissionsmodulenext)                 |                                                                        |
+| [FiatCurrencyCode](#type-fiatcurrencycode)                                     | [PermissionsModuleNext](#type-permissionsmodulenext)                 | [ProtocolPermissionUsageType](#type-protocolpermissionusagetype)       |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -30627,6 +30671,32 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export type PreparedBeefState = 'ready' | 'stale' | 'failed'
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+
+##### Type: ProtocolPermissionUsageType
+
+Usage accepted by `ensureProtocolPermission`.
+
+`linkageRevelation` is the legacy combined key-linkage usage and consults only
+`seekPermissionsForKeyLinkageRevelation`. The two reveal methods send
+`counterpartyLinkageRevelation` or `specificLinkageRevelation` so each can
+follow its own flag.
+
+```ts
+export type ProtocolPermissionUsageType =
+  | 'signing'
+  | 'encrypting'
+  | 'hmac'
+  | 'publicKey'
+  | 'identityKey'
+  | 'linkageRevelation'
+  | 'counterpartyLinkageRevelation'
+  | 'specificLinkageRevelation'
+  | 'generic'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

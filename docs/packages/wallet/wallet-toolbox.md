@@ -41,6 +41,40 @@ be funded from unproven change when the wallet holds no confirmed coins, instead
 of failing with an invalid output amount. No API, wire or schema migration is
 required. Source is not publication or deployment.
 
+## Key-linkage permission
+
+The next minor release can ask for permission on
+`revealCounterpartyKeyLinkage` and `revealSpecificKeyLinkage` separately.
+`seekPermissionsForCounterpartyKeyLinkageRevelation` and
+`seekPermissionsForSpecificKeyLinkageRevelation` are optional. When either is
+omitted it follows `seekPermissionsForKeyLinkageRevelation`, still the legacy
+combined default (`true`). Existing configs therefore keep today's behavior.
+
+Counterparty linkage reveals the root ECDH shared secret with a counterparty.
+Every BRC-2 symmetric encryption key and HMAC for that pair, at any protocol
+and key ID, can be computed from it. Specific linkage reveals one per-invoice
+HMAC. A wallet that wants a prompt only for the root secret sets the
+counterparty flag to `true` and the specific flag to `false`.
+
+```ts
+import { WalletPermissionsManager } from '@bsv/wallet-toolbox'
+
+declare const wallet: ConstructorParameters<typeof WalletPermissionsManager>[0]
+new WalletPermissionsManager(wallet, 'wallet.example', {
+  seekPermissionsForCounterpartyKeyLinkageRevelation: true,
+  seekPermissionsForSpecificKeyLinkageRevelation: false
+})
+```
+
+The protocol ID strings stay `counterparty key linkage revelation …` and
+`specific key linkage revelation …`. `revealSpecificKeyLinkage` still refuses
+reserved admin and permission-module protocol names for a non-admin originator.
+Permission prompts use `counterpartyLinkageRevelation` and
+`specificLinkageRevelation`. `ensureProtocolPermission` still accepts the
+legacy `linkageRevelation` usage, which follows only the combined flag.
+No BRC-100 wire or stored-permission migration is required. The browser client
+and mobile packages publish the same manager and stay on this version.
+
 ## Certificate pagination
 
 The 2.17.0 source candidate reports `listCertificates` `totalCertificates` as
