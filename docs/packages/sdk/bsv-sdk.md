@@ -65,6 +65,15 @@ reads `competingTxs: null`, which ARC sends when no transaction competes, as no
 competing transactions; it used to refuse that response with
 `ERR_INVALID_RESPONSE`. No code migration is required.
 
+## createAction unlockingScriptLength
+
+The next SDK patch release refuses a `createAction` input that omits
+`unlockingScript` and sets `unlockingScriptLength` to 0. BRC-100 and
+`CreateActionInput` type that field as `PositiveInteger` (minimum 1). An empty
+`unlockingScript` is still refused as a hexadecimal string, before the length
+check. Callers that already pass a script or a length of at least 1 are
+unchanged.
+
 ## Script ASM for data outputs
 
 The 4.1.2 source candidate prints the top-level `OP_RETURN` when a script read

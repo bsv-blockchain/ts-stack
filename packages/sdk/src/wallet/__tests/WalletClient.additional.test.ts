@@ -270,6 +270,41 @@ describe('WalletClient – createAction validation', () => {
     )
   })
 
+  it('throws WERR_INVALID_PARAMETER when unlockingScript is omitted and unlockingScriptLength is 0', async () => {
+    await expectInvalidParam(
+      () =>
+        client.createAction({
+          description: 'hello world',
+          inputs: [
+            {
+              outpoint: 'a'.repeat(64) + '.0',
+              inputDescription: 'my input',
+              unlockingScriptLength: 0
+            }
+          ]
+        }),
+      'unlockingScriptLength'
+    )
+  })
+
+  it('refuses an empty unlockingScript before the length check', async () => {
+    await expectInvalidParam(
+      () =>
+        client.createAction({
+          description: 'hello world',
+          inputs: [
+            {
+              outpoint: 'a'.repeat(64) + '.0',
+              inputDescription: 'my input',
+              unlockingScript: '',
+              unlockingScriptLength: 0
+            }
+          ]
+        }),
+      'unlockingScript'
+    )
+  })
+
   it('throws WERR_INVALID_PARAMETER when input unlockingScript is odd-length', async () => {
     await expectInvalidParam(
       () =>
