@@ -4,6 +4,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from '@jest/globals'
 import { PeerLink } from '../src/channel/PeerLink.js'
 import { DirectPayClient } from '../src/client/DirectPayClient.js'
+import { authenticate } from '../src/session/handshake.js'
 import type { DirectPayClientOptions, ReceiveHandlers } from '../src/client/DirectPayClient.js'
 import { ReplayCache, openSignal, sealSignal } from '../src/signaling/envelope.js'
 import { createMemoryHub } from '../src/signaling/MemorySignaler.js'
@@ -617,5 +618,140 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     expect(() => new DirectPayClient({ wallet: w.wallet, timeouts: { dialMs: NaN } })).toThrow(
       RangeError
     )
+  })
+})
+
+describe('DirectPayClient dial without a knock (MemoryHub, loopback WebRTC)', () => {
+  /** A signaler for `w` on `hub` that counts what it posts, after `delayMs`. */
+  function counting(
+    hub: MemoryHub,
+    w: TestWallet,
+    delayMs = 0
+  ): { signaler: DirectPayClientOptions['signaler']; posted: () => number } {
+    const base = hub.signaler(w.identityKey)
+    let posted = 0
+    return {
+      signaler: {
+        send: async (to, e) => {
+          if (delayMs > 0) await sleep(delayMs)
+          await base.send(to, e)
+          posted++
+        },
+        listen: fn => base.listen(fn)
+      },
+      posted: () => posted
+    }
+  }
+
+  it('posts the offer alone, then connects and pays', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    await hubClient(hub, payee).startReceiving(accepting)
+    const carrier = counting(hub, payer)
+    const sender = hubClient(hub, payer, { signaler: carrier.signaler })
+    const peer = await sender.connect(payee.identityKey, { knock: false })
+    expect(carrier.posted()).toBe(1)
+    const { token } = await makeToken(payer, payee.identityKey, 1000)
+    expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
+  })
+
+  it('posts the knock and the offer by default', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    await hubClient(hub, payee).startReceiving(accepting)
+    const carrier = counting(hub, payer)
+    const sender = hubClient(hub, payer, { signaler: carrier.signaler })
+    const peer = await sender.connect(payee.identityKey)
+    expect(carrier.posted()).toBe(2)
+    peer.close()
+  })
+
+  it('times out at the dial timer when nothing answers, with no presence window', async () => {
+    const hub = createMemoryHub()
+    const absent = await makeWallet()
+    const hand = await handSignaler(hub, absent)
+    const sender = hubClient(hub, await makeWallet())
+    const started = Date.now()
+    const e = await failure(
+      sender.connect(absent.identityKey, {
+        knock: false,
+        presenceTimeoutMs: 200,
+        dialTimeoutMs: 1000
+      })
+    )
+    const elapsed = Date.now() - started
+    expect(e).toMatchObject({
+      code: 'timeout',
+      message: 'Connection not established within 1000 ms of the carrier taking the offer'
+    })
+    expect(elapsed).toBeGreaterThanOrEqual(1000)
+    // the gather (at most 1.5 s) comes before the offer, then the dial timer
+    expect(elapsed).toBeLessThan(3500)
+    expect(hand.received.map(p => p.kind)).toEqual(['offer'])
+  })
+
+  it('starts the dial timer when the carrier takes the offer', async () => {
+    const hub = createMemoryHub()
+    const absent = await makeWallet()
+    stops.push(await hub.signaler(absent.identityKey).listen(() => undefined))
+    const payer = await makeWallet()
+    const sender = hubClient(hub, payer, { signaler: counting(hub, payer, 800).signaler })
+    const started = Date.now()
+    const e = await failure(
+      sender.connect(absent.identityKey, { knock: false, dialTimeoutMs: 500 })
+    )
+    expect(e.code).toBe('timeout')
+    expect(Date.now() - started).toBeGreaterThanOrEqual(1300)
+  })
+
+  it('carries a consumer kind over a knockless dial with a session codec', async () => {
+    interface LowEnvelope {
+      t: 'low.envelope'
+      v: 1
+      wire: string
+    }
+    const lowCodec = (raw: unknown): LowEnvelope => {
+      const m = raw as Partial<LowEnvelope> | null
+      if (m?.t !== 'low.envelope' || m.v !== 1 || typeof m.wire !== 'string') {
+        throw new TypeError('not a low.envelope')
+      }
+      return { t: m.t, v: m.v, wire: m.wire }
+    }
+    const hub = createMemoryHub()
+    const [answerer, dialer] = await Promise.all([makeWallet(), makeWallet()])
+    // The answerer by hand, as a consumer of the primitives: the bare offer, its answer, the
+    // handshake with the consumer's codec.
+    const hand = await handSignaler(hub, answerer)
+    const answered = (async () => {
+      const p = await hand.next(10000)
+      if (p?.kind !== 'offer' || p.sdp === undefined) throw new Error('expected an offer')
+      const { link, sdp } = await PeerLink.acceptOffer(p.sdp, { ...rtc, maxMessageBytes: 65536 })
+      rawLinks.push(link)
+      const session = authenticate(link, { wallet: answerer.wallet, codec: lowCodec })
+      await hand.send('answer', p.from, p.sid, { sdp })
+      return await session
+    })()
+    const sender = hubClient(hub, dialer)
+    const peer = await sender.connect(answerer.identityKey, { knock: false, codec: lowCodec })
+    const atAnswerer = await answered
+    const got = atAnswerer.waitFor((m): m is LowEnvelope => m.t === 'low.envelope', 10000)
+    await peer.send({ t: 'low.envelope', v: 1, wire: '0a0b0c' })
+    expect(await got).toEqual({ t: 'low.envelope', v: 1, wire: '0a0b0c' })
+    expect(hand.received.map(p => p.kind)).toEqual(['offer'])
+    peer.close()
+  })
+
+  it('reports a reject as rejected', async () => {
+    const hub = createMemoryHub()
+    const payee = await makeWallet()
+    const hand = await handSignaler(hub, payee)
+    void (async () => {
+      const p = await hand.next(10000)
+      if (p?.kind === 'offer') await hand.send('reject', p.from, p.sid, { reason: 'busy' })
+    })().catch(() => undefined)
+    const sender = hubClient(hub, await makeWallet())
+    const e = await failure(sender.connect(payee.identityKey, { knock: false }))
+    expect(e).toMatchObject({ code: 'rejected', reason: 'busy' })
+    expect(hand.received.map(p => p.kind)).toEqual(['offer'])
   })
 })

@@ -13,6 +13,7 @@ export { authenticate, bindingTranscript } from './session/handshake.js'
 export type { AuthenticateOptions, BindingTranscriptInput } from './session/handshake.js'
 // By name: the module's backlog limit is an implementation detail, not API.
 export { AuthenticatedPeer } from './session/AuthenticatedPeer.js'
+export type { SessionCodec } from './session/AuthenticatedPeer.js'
 export * from './payments/wire.js'
 export * from './payments/accept.js'
 export * from './payments/requests.js'

@@ -7,6 +7,7 @@ import { fromHex, randomBytes, toBase64, toHex, utf8Encode } from '../util/bytes
 import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 import { AuthenticatedPeer, MAX_BACKLOG } from './AuthenticatedPeer.js'
+import type { SessionCodec } from './AuthenticatedPeer.js'
 
 /** First line of every channel-binding transcript. */
 const BINDING_LABEL = 'webrtpay/1 channel-binding'
@@ -83,7 +84,7 @@ export function bindingTranscript(a: BindingTranscriptInput): number[] {
 }
 
 /** Options for {@link authenticate}. */
-export interface AuthenticateOptions {
+export interface AuthenticateOptions<M = WireMessage> {
   wallet: Pick<WalletLike, 'getPublicKey' | 'createSignature' | 'verifySignature'>
   /** Passed to every wallet call. */
   originator?: string
@@ -106,6 +107,13 @@ export interface AuthenticateOptions {
    * rejection fails the handshake with that error and closes the link.
    */
   startAfter?: Promise<unknown>
+  /**
+   * How the session reads the peer's messages once the handshake is over; defaults to
+   * `parseWireMessage`, the payments wire. A value the codec throws on is answered with
+   * `{ t: 'error', code: 'protocol' }` and closes the session. The handshake's own messages
+   * are always read as the payments wire; the option is the session's, not the protocol's.
+   */
+  codec?: SessionCodec<M>
 }
 
 /**
@@ -131,13 +139,16 @@ export interface AuthenticateOptions {
  * (or `closed`) when it closes first, such as `too_large` for a message over 65536 bytes
  * before the peer authenticated; `RangeError` for an invalid `maxMessageBytes`.
  */
-export function authenticate(link: PeerLink, o: AuthenticateOptions): Promise<AuthenticatedPeer> {
+export function authenticate<M = WireMessage>(
+  link: PeerLink,
+  o: AuthenticateOptions<M>
+): Promise<AuthenticatedPeer<M>> {
   const cap = o.maxMessageBytes ?? DEFAULTS.maxMessageBytes
   if (!Number.isSafeInteger(cap) || cap < 0) {
     return Promise.reject(new RangeError(`Invalid message size cap: ${cap}`))
   }
   return new Promise((resolve, reject) => {
-    new Handshake(link, o, cap, resolve, reject).begin()
+    new Handshake<M>(link, o, cap, resolve, reject).begin()
   })
 }
 
@@ -146,7 +157,7 @@ function authFailed(message: string, cause?: unknown): WebRTPayError {
 }
 
 /** One run of the handshake on one link; settles exactly once. */
-class Handshake {
+class Handshake<M> {
   /** The peer message expected next; they always come hello, auth, ready. */
   private expecting: 'hello' | 'auth' | 'ready' = 'hello'
   /** Peer messages not yet handled, oldest first. */
@@ -163,9 +174,9 @@ class Handshake {
 
   constructor(
     private readonly link: PeerLink,
-    private readonly o: AuthenticateOptions,
+    private readonly o: AuthenticateOptions<M>,
     private readonly cap: number,
-    private readonly resolve: (peer: AuthenticatedPeer) => void,
+    private readonly resolve: (peer: AuthenticatedPeer<M>) => void,
     private readonly reject: (error: unknown) => void
   ) {
     // Before anything can arrive: only an authenticated peer gets the full message size.
@@ -339,7 +350,8 @@ class Handshake {
     const session = new AuthenticatedPeer(
       this.link,
       { localIdentityKey: this.localKey, peerIdentityKey: this.peer!.identityKey },
-      this.inbox.splice(0)
+      this.inbox.splice(0),
+      this.o.codec
     )
     this.offMessage()
     this.offClose()
