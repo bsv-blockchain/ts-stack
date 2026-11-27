@@ -80,7 +80,7 @@ async function findLocalInputs(
 }
 
 /**
- * The outpoints a rejection names as spent, as `txid.vout`. Arcade relays the
+ * The outpoints a rejection names as spent, as `txid.vout`. BSV Broadcaster relays the
  * validator's text, e.g. "UTXO_SPENT (70): [ProcessTransaction][<txid>]
  * <txid>:<vout> utxo already spent by tx <spender>[0]".
  */
@@ -93,8 +93,8 @@ function namedOutpoints(extraInfo: string | undefined): Set<string> {
 }
 
 /**
- * Quarantine the locally-owned inputs of a transaction after Arcade supplies
- * explicit missing-input/conflict evidence. This path is deliberately
+ * Quarantine the locally-owned inputs of a transaction after BSV Broadcaster
+ * supplies explicit missing-input/conflict evidence. This path is deliberately
  * independent of explorer or UTXO providers: a positive broadcaster verdict
  * is enough to stop the failed transaction from feeding the same inputs into
  * another action. When the rejection names which of the transaction's inputs

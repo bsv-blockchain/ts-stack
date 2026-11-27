@@ -1,6 +1,6 @@
 import { Beef, HttpClient, HttpClientRequestOptions, HttpClientResponse } from '@bsv/sdk'
 import { TaskSendWaiting } from '../../src/monitor/tasks/TaskSendWaiting'
-import { Arcade } from '../../src/services/providers/Arcade'
+import { BsvBroadcaster } from '../../src/services/providers/BsvBroadcaster'
 import { WERR_INTERNAL } from '../../src/sdk/WERR_errors'
 import { PostBeefResult } from '../../src/sdk/WalletServices.interfaces'
 import { EntityProvenTxReq } from '../../src/storage/schema/entities/EntityProvenTxReq'
@@ -35,14 +35,14 @@ interface Captured {
 function arcadeAnswering(
   response: Pick<HttpClientResponse<unknown>, 'ok' | 'status' | 'statusText' | 'data'>,
   captured: Captured[]
-): Arcade {
+): BsvBroadcaster {
   const httpClient: HttpClient = {
     async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
       captured.push({ url, authorization: (options.headers as Record<string, string>)?.Authorization })
       return response as HttpClientResponse<D>
     }
   }
-  return new Arcade('https://arcade.example', { httpClient, apiKey: API_KEY })
+  return new BsvBroadcaster('https://arcade.example', { httpClient, apiKey: API_KEY })
 }
 
 describe('TaskSendWaiting through an API-key protected Arcade', () => {
@@ -53,7 +53,7 @@ describe('TaskSendWaiting through an API-key protected Arcade', () => {
     for (const ctx of ctxs.splice(0)) await ctx.storage.destroy()
   })
 
-  async function sendWaitingThrough(arcade: Arcade, database: string): Promise<TestWallet<{}>> {
+  async function sendWaitingThrough(arcade: BsvBroadcaster, database: string): Promise<TestWallet<{}>> {
     const ctx = await _tu.createLegacyWalletSQLiteCopy(database)
     ctxs.push(ctx)
     ctx.services.postBeef = jest.fn(async (beef: Beef, txids: string[]): Promise<PostBeefResult[]> =>

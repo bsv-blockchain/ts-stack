@@ -1,4 +1,4 @@
-import { Arcade } from '../providers/Arcade'
+import { BsvBroadcaster } from '../providers/BsvBroadcaster'
 import { arcadeDefaultUrl } from '../createDefaultWalletServicesOptions'
 
 /**
@@ -20,8 +20,8 @@ import { arcadeDefaultUrl } from '../createDefaultWalletServicesOptions'
 const ARCADE_URL = process.env.ARCADE_URL ?? arcadeDefaultUrl('ttn')!
 const ARCADE_API_KEY = process.env.ARCADE_API_KEY
 
-function arcade(): Arcade {
-  return new Arcade(ARCADE_URL, { apiKey: ARCADE_API_KEY })
+function arcade(): BsvBroadcaster {
+  return new BsvBroadcaster(ARCADE_URL, { apiKey: ARCADE_API_KEY })
 }
 
 describe('Arcade integration (live)', () => {
@@ -38,7 +38,7 @@ describe('Arcade integration (live)', () => {
 
   test('malformed tx → HTTP 400 classified as invalidTx (serviceError=false), not a transient service error', async () => {
     const arc = arcade()
-    // Unparseable wire bytes: Arcade replies 400 "failed to parse transaction".
+    // Unparseable wire bytes: BsvBroadcaster replies 400 "failed to parse transaction".
     const malformed = '0100000000000000000000'
     const r = await arc.postRawTx(malformed)
     expect(r.status).toBe('error')

@@ -38,12 +38,16 @@ export {
   type OverlayMonitorThresholds,
   type OverlayMonitorWarning
 } from './src/OverlayMonitor.js'
+// remove-arcade-alias: ArcadeProvider, ArcadeMerkleProof and ArcadeProviderConfig.
 export {
   ArcadeProvider,
+  BsvBroadcasterProvider,
   isTerminalArcStatus,
   type ArcadeMerkleProof,
-  type ArcadeProviderConfig
-} from './src/ArcadeProvider.js'
+  type ArcadeProviderConfig,
+  type BsvBroadcasterMerkleProof,
+  type BsvBroadcasterProviderConfig
+} from './src/BsvBroadcasterProvider.js'
 export { ProviderChainBroadcaster, type NamedBroadcaster } from './src/ProviderChainBroadcaster.js'
 export {
   ChaintracksProvider,

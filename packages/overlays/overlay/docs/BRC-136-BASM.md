@@ -196,11 +196,11 @@ that observed the reorg. The engine reconciles this automatically.
 ### Chaintracks is the reorg authority
 
 Reorg detection is **not** reinvented here. The production chain tracker should
-be a go-chaintracks compatible service. Arcade exposes go-chaintracks under
+be a go-chaintracks compatible service. BSV Broadcaster exposes go-chaintracks under
 `/chaintracks/v2`, and a standalone go-chaintracks deployment may expose the same
 API at `/v2`:
 
-- **Arcade-mounted Chaintracks:** `GET /chaintracks/v2/reorg/stream`
+- **BSV Broadcaster-mounted Chaintracks:** `GET /chaintracks/v2/reorg/stream`
 - **Standalone go-chaintracks:** `GET /v2/reorg/stream`
 
 The stream emits `data: <JSON>\n\n` frames (no `event:`/`id:` lines;
@@ -269,7 +269,7 @@ maintenance path is refresh-before-evict:
    proof, `handleNewMerkleProof` re-proves it at its new height and the anchor
    includes it again.
 2. If no callback arrives, `refreshUnprovenTransactionProofs` asks configured
-   proof providers such as Arcade for a fresh proof.
+   proof providers such as BSV Broadcaster for a fresh proof.
 3. `maintainUnprovenTransactions` refreshes proofs first, then calls
    `evictUnprovenTransactions` for rows that are still unproven past the
    configured threshold.
@@ -303,7 +303,7 @@ server.configureUnprovenMaintenance({
 })
 ```
 
-- `apiPrefix` — `/chaintracks/v2` for Arcade-mounted Chaintracks; `/v2` for many
+- `apiPrefix` — `/chaintracks/v2` for BSV Broadcaster-mounted Chaintracks; `/v2` for many
   standalone go-chaintracks deployments.
 - `reorgStream` — when enabled, the SSE adapter reconciles reorgs in real time.
 - `scanDepth` — sweep depth from tip (default `3`).

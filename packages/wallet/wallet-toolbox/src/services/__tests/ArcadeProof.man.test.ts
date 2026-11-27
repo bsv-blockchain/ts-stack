@@ -5,7 +5,7 @@ import { createDefaultWalletServicesOptions } from '../createDefaultWalletServic
 /**
  * Verifies Arcade proof acquisition for a MINED transaction: fetch the BUMP from
  * `GET /tx/{txid}`, parse it, compute the merkle root and locate the tx's leaf, then validate
- * the root against the chaintracker — the same data path `TaskArcadeSSE.fetchProofFromArcade` uses.
+ * the root against the chaintracker — the same data path `TaskBsvBroadcasterSSE.fetchProofFromArcade` uses.
  *
  *   PROOF_TXID=<txid> node_modules/.bin/jest --runTestsByPath \
  *     src/services/__tests/ArcadeProof.man.test.ts
@@ -31,7 +31,7 @@ describe('Arcade proof acquisition (live)', () => {
     expect(data.txStatus === 'MINED' || data.txStatus === 'IMMUTABLE').toBe(true)
     expect(data.merklePath).toBeTruthy()
 
-    // Parse + compute root + locate the leaf — exactly TaskArcadeSSE.fetchProofFromArcade.
+    // Parse + compute root + locate the leaf — exactly TaskBsvBroadcasterSSE.fetchProofFromArcade.
     const merklePath = MerklePath.fromHex(data.merklePath)
     const merkleRoot = merklePath.computeRoot(PROOF_TXID)
     const leaf = merklePath.path[0].find(l => l.txid === true && l.hash === PROOF_TXID)

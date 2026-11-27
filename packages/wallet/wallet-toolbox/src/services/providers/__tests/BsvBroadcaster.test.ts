@@ -10,14 +10,14 @@ import {
   UnlockingScript
 } from '@bsv/sdk'
 import { ARC, type ArcConfig } from '../ARC'
-import { Arcade } from '../Arcade'
+import { BsvBroadcaster } from '../BsvBroadcaster'
 import { BlockHeader, WalletServices } from '../../../sdk/WalletServices.interfaces'
 import { blockHash } from '../../chaintracker/chaintracks/util/blockHeaderUtilities'
 
 /**
- * Unit tests for the Arcade (bsv-blockchain/arcade) broadcaster.
+ * Unit tests for the BSV Broadcaster (bsv-blockchain/broadcaster, formerly Arcade) client.
  *
- * Arcade extends ARC and differs only where it must:
+ * BsvBroadcaster is ARC-compatible and differs only where it must:
  *   - endpoints live at `/tx` and `/tx/{txid}` (no `/v1` prefix),
  *   - a submit returns HTTP 202; HTTP 400 is a terminal validation failure (REJECTED),
  *   - submission encoding is Extended Format (EF), not BEEF.
@@ -60,10 +60,10 @@ function mockHttpClientSequence(
 
 const RAW_TX = '0100000000000000000000'
 
-describe('Arcade broadcaster', () => {
+describe('BsvBroadcaster', () => {
   describe('construction', () => {
     test('defaults its provider name to "arcade"', () => {
-      expect(new Arcade('https://arcade.example').name).toBe('arcade')
+      expect(new BsvBroadcaster('https://arcade.example').name).toBe('arcade')
     })
 
     test('standard ARC defaults its name to "ARC"', () => {
@@ -78,7 +78,7 @@ describe('Arcade broadcaster', () => {
         { ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       await arc.postRawTx(RAW_TX)
       expect(captured[0].url).toBe('https://arcade.example/tx')
     })
@@ -101,7 +101,7 @@ describe('Arcade broadcaster', () => {
         { ok: true, status: 200, statusText: 'OK', data: { txid, txStatus: 'MINED' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       await arc.getTxData(txid)
       expect(captured[0].url).toBe(`https://arcade.example/tx/${txid}`)
     })
@@ -154,7 +154,7 @@ describe('Arcade broadcaster', () => {
         ],
         captured
       )
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([
+      const result = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).getStatusForTxids([
         accepted,
         mined,
         rejected,
@@ -195,7 +195,7 @@ describe('Arcade broadcaster', () => {
         []
       )
 
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([loser])
+      const result = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).getStatusForTxids([loser])
 
       expect(result.results[0]).toMatchObject({
         txid: loser,
@@ -214,7 +214,7 @@ describe('Arcade broadcaster', () => {
         { ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } },
         captured
       )
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
+      const result = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
 
       expect(result.status).toBe('error')
       expect(result.results).toEqual([{ txid, status: 'unknown', depth: undefined }])
@@ -233,7 +233,7 @@ describe('Arcade broadcaster', () => {
         []
       )
 
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
+      const result = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
 
       expect(result.status).toBe('error')
       expect(result.results).toEqual([{ txid, status: 'unknown', depth: undefined }])
@@ -252,7 +252,7 @@ describe('Arcade broadcaster', () => {
       })
       const http = mockHttpClient({ ok: true, status: 200, statusText: 'OK', data }, [])
 
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
+      const result = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
 
       expect(result.status).toBe('error')
       expect(invoked).toBe(false)
@@ -269,7 +269,7 @@ describe('Arcade broadcaster', () => {
         { ok: true, status: 202, statusText: 'Accepted', data: { txid, status: 202, txStatus: 'RECEIVED' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX, [txid])
       expect(r.status).toBe('success')
       expect(r.doubleSpend).toBeFalsy()
@@ -288,7 +288,7 @@ describe('Arcade broadcaster', () => {
         },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
       expect(r.serviceError).toBe(false)
@@ -300,7 +300,7 @@ describe('Arcade broadcaster', () => {
         { ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
       expect(r.serviceError).toBe(true)
@@ -311,7 +311,7 @@ describe('Arcade broadcaster', () => {
       const http = mockHttpClient(() => {
         throw new Error('ECONNREFUSED')
       }, captured)
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
       expect(r.serviceError).toBe(true)
@@ -325,7 +325,7 @@ describe('Arcade broadcaster', () => {
       },
       {
         name: 'Arcade',
-        create: (http: HttpClient) => new Arcade('https://arcade.example', { httpClient: http }),
+        create: (http: HttpClient) => new BsvBroadcaster('https://arcade.example', { httpClient: http }),
         status: 202
       }
     ])('$name preserves double-spend response details', async ({ create, status }) => {
@@ -392,7 +392,7 @@ describe('Arcade broadcaster', () => {
       },
       {
         name: 'Arcade',
-        create: (http: HttpClient) => new Arcade('https://arcade.example', { httpClient: http })
+        create: (http: HttpClient) => new BsvBroadcaster('https://arcade.example', { httpClient: http })
       }
     ])('$name safely classifies nonstandard status and string error data', async ({ create }) => {
       const captured: CapturedRequest[] = []
@@ -434,7 +434,7 @@ describe('Arcade broadcaster', () => {
         captured
       )
 
-      const result = await new Arcade('https://arcade.example', {
+      const result = await new BsvBroadcaster('https://arcade.example', {
         httpClient: http
       }).postRawTx(RAW_TX)
 
@@ -705,7 +705,7 @@ describe('Arcade broadcaster', () => {
         { ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', {
+      const arc = new BsvBroadcaster('https://arcade.example', {
         httpClient: http,
         apiKey: 'server-key',
         callbackToken: 'wallet-token'
@@ -733,7 +733,7 @@ describe('Arcade broadcaster', () => {
       },
       {
         name: 'Arcade',
-        create: (config: ArcConfig) => new Arcade('https://arcade.example', config),
+        create: (config: ArcConfig) => new BsvBroadcaster('https://arcade.example', config),
         response: {
           ok: true,
           status: 202,
@@ -765,7 +765,7 @@ describe('Arcade broadcaster', () => {
 
     test.each([
       ['standard ARC', (config: ArcConfig) => new ARC('https://arc.example', config)],
-      ['Arcade', (config: ArcConfig) => new Arcade('https://arcade.example', config)]
+      ['Arcade', (config: ArcConfig) => new BsvBroadcaster('https://arcade.example', config)]
     ])('%s rejects accessor-backed and prototype-bearing configuration', (_name, create) => {
       const getter = jest.fn(() => 'stolen')
       const accessorConfig: Record<string, unknown> = {}
@@ -865,7 +865,7 @@ describe('Arcade broadcaster', () => {
         },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
 
       const r = await arc.postBeef(beef, [spendTxid])
 
@@ -890,7 +890,7 @@ describe('Arcade broadcaster', () => {
         },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       // A wire/storage bundle arrives as binary: its transactions carry no
       // sourceTransaction links until ancestry is attached during extraction.
       const rehydrated = Beef.fromBinary(beef.toBinary())
@@ -931,7 +931,7 @@ describe('Arcade broadcaster', () => {
         { ok: true, status: 202, statusText: 'Accepted', data: { txid: '', status: 202, txStatus: 'RECEIVED' } },
         captured
       )
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
       const { beef, orphanTxid } = buildBeef()
 
       await expect(arc.postBeef(beef, [orphanTxid])).rejects.toThrow('exact ID')
@@ -959,7 +959,7 @@ describe('Arcade broadcaster', () => {
           return response as HttpClientResponse<D>
         }
       }
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
 
       const r = await arc.postBeef(beef, txids)
 
@@ -991,13 +991,90 @@ describe('Arcade broadcaster', () => {
           return response as HttpClientResponse<D>
         }
       }
-      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
 
       const r = await arc.postBeef(beef, txids)
 
       expect(maxInFlight).toBe(1)
       expect(callOrder).toEqual(txids)
       expect(r.status).toBe('success')
+    })
+
+    test('records an EF build failure as a service error and still posts the rest of the batch', async () => {
+      const { beef, txids } = buildBeefBatch(2)
+      const original = Beef.prototype.findAtomicTransaction
+      const find = jest.spyOn(Beef.prototype, 'findAtomicTransaction').mockImplementation(function (
+        this: Beef,
+        txid: string
+      ) {
+        if (txid === txids[0]) throw new Error('parent source data missing')
+        return original.call(this, txid)
+      })
+      const posted: string[] = []
+      const http: HttpClient = {
+        async request<D>(): Promise<HttpClientResponse<D>> {
+          posted.push(txids[1])
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid: txids[1], status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      try {
+        const r = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).postBeef(beef, txids)
+
+        expect(posted).toEqual([txids[1]])
+        expect(r.status).toBe('error')
+        expect(r.txidResults[0]).toMatchObject({ txid: txids[0], status: 'error', serviceError: true })
+        expect(r.txidResults[0].notes?.[0]).toMatchObject({ what: 'arcadeEfBuildFailed', txid: txids[0] })
+        expect(r.txidResults[1]).toMatchObject({ txid: txids[1], status: 'success' })
+      } finally {
+        find.mockRestore()
+      }
+    })
+
+    test('makes progress on a cyclic dependency graph, one transaction at a time', async () => {
+      const { beef, txids } = buildBeefBatch(2)
+      const [first, second] = txids
+      const find = jest.spyOn(Beef.prototype, 'findAtomicTransaction').mockImplementation(
+        (txid: string) =>
+          ({
+            inputs: [{ sourceTXID: txid === first ? second : first }],
+            toHexEF: () => (txid === first ? 'aa' : 'bb')
+          }) as unknown as Transaction
+      )
+      const posted: string[] = []
+      let inFlight = 0
+      let maxInFlight = 0
+      const http: HttpClient = {
+        async request<D>(_url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+          const txid = (options.data as { rawTx: string }).rawTx === 'aa' ? first : second
+          posted.push(txid)
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise(resolve => setTimeout(resolve, 5))
+          inFlight--
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid, status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      try {
+        const r = await new BsvBroadcaster('https://arcade.example', { httpClient: http }).postBeef(beef, txids)
+
+        expect(posted).toEqual([first, second])
+        expect(maxInFlight).toBe(1)
+        expect(r.status).toBe('success')
+      } finally {
+        find.mockRestore()
+      }
     })
   })
 
@@ -1050,7 +1127,7 @@ describe('Arcade broadcaster', () => {
     }
 
     test('MINED tx with a BUMP that reconciles to the canonical header → returns merklePath + header', async () => {
-      const arc = new Arcade('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
       const r = await arc.getMerklePath(F283_TXID, fakeServices(header(F283_ROOT)))
       expect(r.merklePath).toBeDefined()
       expect(r.merklePath!.computeRoot(F283_TXID)).toBe(F283_ROOT)
@@ -1059,21 +1136,21 @@ describe('Arcade broadcaster', () => {
     })
 
     test('not-yet-mined tx → no merklePath (falls through to other providers)', async () => {
-      const arc = new Arcade('https://arcade.example', { httpClient: minedHttp(undefined, 'SEEN_ON_NETWORK') })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: minedHttp(undefined, 'SEEN_ON_NETWORK') })
       const r = await arc.getMerklePath(F283_TXID, fakeServices(header(F283_ROOT)))
       expect(r.merklePath).toBeUndefined()
       expect(r.error).toBeUndefined()
     })
 
     test('BUMP that does not reconcile with the canonical block → rejected (no merklePath)', async () => {
-      const arc = new Arcade('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
       // Header reports a different merkle root than the BUMP computes → must be rejected.
       const r = await arc.getMerklePath(F283_TXID, fakeServices(header('00'.repeat(32))))
       expect(r.merklePath).toBeUndefined()
     })
 
     test('unknown block (chaintracker throws) → no merklePath, surfaced as error note', async () => {
-      const arc = new Arcade('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
+      const arc = new BsvBroadcaster('https://arcade.example', { httpClient: minedHttp(F283_BUMP) })
       const r = await arc.getMerklePath(F283_TXID, fakeServices(new Error('unknown blockhash')))
       expect(r.merklePath).toBeUndefined()
       expect(r.error).toBeDefined()
@@ -1108,7 +1185,7 @@ describe('Arcade API key', () => {
       ],
       captured
     )
-    const arc = new Arcade('https://arcade.example', { httpClient: http, apiKey: API_KEY })
+    const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http, apiKey: API_KEY })
 
     await arc.postRawTx(RAW_TX, [TXID])
     await arc.getTxData(TXID)
@@ -1133,7 +1210,7 @@ describe('Arcade API key', () => {
       ],
       captured
     )
-    const arc = new Arcade('https://arcade.example', { httpClient: http })
+    const arc = new BsvBroadcaster('https://arcade.example', { httpClient: http })
 
     await arc.postRawTx(RAW_TX, [TXID])
     await arc.getTxData(TXID)
@@ -1148,7 +1225,7 @@ describe('Arcade API key', () => {
     'HTTP %i (key refused) → serviceError=true, never an invalid-transaction verdict',
     async status => {
       const captured: CapturedRequest[] = []
-      const arc = new Arcade('https://arcade.example', {
+      const arc = new BsvBroadcaster('https://arcade.example', {
         httpClient: mockHttpClient(refused(status), captured),
         apiKey: API_KEY
       })
@@ -1172,7 +1249,7 @@ describe('Arcade API key', () => {
   )
 
   test('HTTP 401 without a configured key says the instance requires one', async () => {
-    const arc = new Arcade('https://arcade.example', { httpClient: mockHttpClient(refused(401), []) })
+    const arc = new BsvBroadcaster('https://arcade.example', { httpClient: mockHttpClient(refused(401), []) })
 
     const r = await arc.postRawTx(RAW_TX, [TXID])
 
@@ -1181,7 +1258,7 @@ describe('Arcade API key', () => {
   })
 
   test('HTTP 429 (quota exhausted) → serviceError=true', async () => {
-    const arc = new Arcade('https://arcade.example', {
+    const arc = new BsvBroadcaster('https://arcade.example', {
       httpClient: mockHttpClient(
         { ok: false, status: 429, statusText: 'Too Many Requests', data: { error: 'rate limit exceeded' } },
         []
@@ -1210,7 +1287,7 @@ describe('Arcade API key', () => {
     const childTxid = child.id('hex')
 
     const captured: CapturedRequest[] = []
-    const arc = new Arcade('https://arcade.example', {
+    const arc = new BsvBroadcaster('https://arcade.example', {
       httpClient: mockHttpClient(refused(401), captured),
       apiKey: API_KEY
     })
@@ -1226,7 +1303,7 @@ describe('Arcade API key', () => {
   })
 
   test.each([401, 403] as const)('getTxData rejects on HTTP %i instead of reporting the tx unknown', async status => {
-    const arc = new Arcade('https://arcade.example', {
+    const arc = new BsvBroadcaster('https://arcade.example', {
       httpClient: mockHttpClient(refused(status), []),
       apiKey: API_KEY
     })
@@ -1234,7 +1311,7 @@ describe('Arcade API key', () => {
   })
 
   test('getStatusForTxids on HTTP 401 is an inconclusive provider error, not "unknown"', async () => {
-    const arc = new Arcade('https://arcade.example', {
+    const arc = new BsvBroadcaster('https://arcade.example', {
       httpClient: mockHttpClient(refused(401), []),
       apiKey: API_KEY
     })

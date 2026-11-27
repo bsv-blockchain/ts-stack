@@ -76,31 +76,35 @@ describe('OverlayExpress public configuration boundaries', () => {
 
   it('validates and retains Arcade request metadata as bounded single-line values', () => {
     const overlay = create()
-    expect(() => overlay.configureArcade('https://arcade.example', null as any)).toThrow(
+    expect(() => overlay.configureBsvBroadcaster('https://arcade.example', null as any)).toThrow(
       'Arcade configuration must be an object'
     )
-    expect(() => overlay.configureArcade('https://arcade.example', { apiKey: 'bad\nkey' })).toThrow(
-      'control characters'
-    )
     expect(() =>
-      overlay.configureArcade('https://arcade.example', { deploymentId: 'bad\ndeployment' })
+      overlay.configureBsvBroadcaster('https://arcade.example', { apiKey: 'bad\nkey' })
     ).toThrow('control characters')
     expect(() =>
-      overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: 'bad\nprefix' })
+      overlay.configureBsvBroadcaster('https://arcade.example', { deploymentId: 'bad\ndeployment' })
+    ).toThrow('control characters')
+    expect(() =>
+      overlay.configureBsvBroadcaster('https://arcade.example', {
+        chaintracksApiPrefix: 'bad\nprefix'
+      })
     ).toThrow('control characters')
 
-    const configureArcade = readFileSync(join(process.cwd(), 'src/OverlayExpress.ts'), 'utf8')
-    const arcadeMethod = configureArcade.slice(configureArcade.indexOf('configureArcade('))
+    const source = readFileSync(join(process.cwd(), 'src/OverlayExpress.ts'), 'utf8')
+    const arcadeMethod = source.slice(source.indexOf('configureBsvBroadcaster('))
     expect(arcadeMethod).toContain('const chaintracksStreamUrl = new ChaintracksProvider')
     expect(arcadeMethod).toContain('.reorgStreamUrl()')
     expect(() =>
-      overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: '//evil.example' })
+      overlay.configureBsvBroadcaster('https://arcade.example', {
+        chaintracksApiPrefix: '//evil.example'
+      })
     ).toThrow('protocol-relative')
     expect(() =>
-      overlay.configureArcade('https://arcade.example', { chaintracksApiPrefix: 'foo?x=1' })
+      overlay.configureBsvBroadcaster('https://arcade.example', { chaintracksApiPrefix: 'foo?x=1' })
     ).toThrow('URL path')
 
-    overlay.configureArcade('https://arcade.example', {
+    overlay.configureBsvBroadcaster('https://arcade.example', {
       apiKey: 'api-key',
       deploymentId: 'deployment',
       chaintracksApiPrefix: '/chaintracks/v2'
