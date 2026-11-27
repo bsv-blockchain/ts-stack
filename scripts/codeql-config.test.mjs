@@ -72,6 +72,12 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
     authoredPythonFiles.includes('conformance/runner/scripts/brc118-vectors.py'),
     'the independent BRC-118 oracle must remain inside the authored CodeQL boundary'
   )
+  assert.ok(
+    authoredPythonFiles.includes(
+      'packages/wallet/rabin-permission-module/conformance/rabin_check.py'
+    ),
+    'the BRC-206 checker must remain inside the authored CodeQL boundary'
+  )
   assert.match(workflow, /^  push:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)

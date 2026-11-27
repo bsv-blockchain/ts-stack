@@ -28,6 +28,7 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 | [@bsv/btms-permission-module](./btms-permission-module.md)   | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
 | [@bsv/ecpm-permission-module](./ecpm-permission-module.md)   | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                      |
 | [@bsv/color-permission-module](./color-permission-module.md) | BRC-207 module for holding, sending and receiving BRC-162 fungible tokens                                                          |
+| [@bsv/rabin-permission-module](./rabin-permission-module.md) | BRC-206 module for Rabin moduli and signatures carried through encrypt                                                             |
 | [@bsv/sigma-permission-module](./sigma-permission-module.md) | BRC-98 semantic module for wallet-held Sigma-protocol proofs (Schnorr, DLEQ, OR) that Bitcoin Script can verify                    |
 | [@bsv/wallet-relay](./wallet-relay.md)                       | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
@@ -71,6 +72,12 @@ BRC-207 `color` scheme. Applications send, receive and list tokens through the
 ordinary BRC-100 calls; the module selects, signs and verifies token outputs
 against the asset overlays.
 
+### I need a wallet-native Rabin signature
+
+Use [@bsv/rabin-permission-module](./rabin-permission-module.md) to install the
+BRC-206 `p rabin` scheme. Applications request a modulus or a signature through
+`encrypt`. The signature verifies on chain with Rúnar's
+`(signature^2 + padding) mod n` equation, and `decrypt` is rejected.
 ### I need proofs that a contract can verify with a wallet-held key
 
 Use [@bsv/sigma-permission-module](./sigma-permission-module.md) to install the
@@ -107,6 +114,7 @@ verifies, without ever holding the secret scalar.
 | **btms-permission-module**  | ✓             | ✓                 | ✓                        |
 | **ecpm-permission-module**  | ✓             | ✓                 | Host-dependent           |
 | **color-permission-module** | ✓             | ✓                 | Host-dependent           |
+| **rabin-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **sigma-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **wallet-relay**            | Server        | React components  | Supported via relay      |
 
