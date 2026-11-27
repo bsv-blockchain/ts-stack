@@ -1163,18 +1163,20 @@ Available from both `@bsv/wallet-relay` and `@bsv/wallet-relay/client`.
 ```ts
 function parsePairingUri(
   raw: string,
-  acceptedSchemas?: ReadonlySet<string>, // default: DEFAULT_ACCEPTED_SCHEMAS
+  acceptedSchemas?: ReadonlySet<string> | typeof ANY_PAIRING_SCHEME, // default: DEFAULT_ACCEPTED_SCHEMAS
   options?: { allowLocalNetworkHttp?: boolean } // default: false
 ): ParseResult
 ```
 
 Parses and validates a `bsv-browser://pair?…` QR code URI. Returns `{ params, error: null }` on success or `{ params: null, error: string }` on failure.
 
+Pass `ANY_PAIRING_SCHEME` as `acceptedSchemas` so the wallet can pair with apps whose QR targets another wallet's scheme (for example `example-wallet://pair?…`). It accepts any scheme except web and executable ones (`http`, `https`, `javascript`, `vbscript`, `data`, `blob`, `file`, `ftp`). The scheme is not covered by the pairing signature and is discarded after parsing; the signature and origin checks in `resolveRelay()` are unchanged, so accepting other schemes does not weaken pairing. A wallet still receives OS deep links only for the schemes it registers.
+
 Validations performed:
 
 | Check               | Detail                                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Protocol            | Must be `bsv-browser:`                                                                                                                |
+| Protocol            | In `acceptedSchemas` (default `bsv-browser:`); with `ANY_PAIRING_SCHEME`, any non-web scheme                                          |
 | Required fields     | `topic`, `backendIdentityKey`, `protocolID`, `origin`, `expiry` all present                                                           |
 | Expiry              | `expiry` must be in the future                                                                                                        |
 | Origin scheme       | Must be `https://`; `http://` is allowed for loopback, and for private-network IP addresses only with `options.allowLocalNetworkHttp` |

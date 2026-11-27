@@ -1,5 +1,6 @@
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import {
+  ANY_PAIRING_SCHEME,
   buildPairingUri,
   DEFAULT_ACCEPTED_SCHEMAS,
   parsePairingUri,
@@ -44,6 +45,49 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
     expect(parsePairingUri(uri, new Set(['my-app:'])).error).toBeNull()
     // rejected without the custom schema
     expect(parsePairingUri(uri).error).toBeTruthy()
+  })
+
+  it('accepts any non-web wallet scheme with ANY_PAIRING_SCHEME', () => {
+    for (const schema of ['bsv-browser', 'example-wallet', 'other-wallet', 'x+y.z-1']) {
+      const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, schema })
+      const result = parsePairingUri(uri, ANY_PAIRING_SCHEME)
+      expect(result.error).toBeNull()
+      expect(result.params?.topic).toBe('session-abc-123')
+    }
+  })
+
+  it('rejects web and executable schemes with ANY_PAIRING_SCHEME', () => {
+    const query = new URL(buildPairingUri(VALID_BUILD_PARAMS)).search
+    const webSchemes = ['http', 'https', 'HTTPS', 'javascript', 'vbscript', 'data', 'blob']
+    for (const scheme of [...webSchemes, 'file', 'ftp']) {
+      const result = parsePairingUri(`${scheme}://pair${query}`, ANY_PAIRING_SCHEME)
+      expect(result).toEqual({
+        params: null,
+        error: 'URI scheme is not a recognised wallet pairing scheme'
+      })
+    }
+  })
+
+  it('keeps the bsv-browser-only default and explicit allowlists strict', () => {
+    const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, schema: 'example-wallet' })
+    expect(parsePairingUri(uri).params).toBeNull()
+    expect(parsePairingUri(uri, new Set(['other-wallet:'])).params).toBeNull()
+  })
+
+  it('applies the route and field checks with ANY_PAIRING_SCHEME', () => {
+    const query = new URL(buildPairingUri(VALID_BUILD_PARAMS)).search
+    expect(parsePairingUri(`example://notpair${query}`, ANY_PAIRING_SCHEME)).toEqual({
+      params: null,
+      error: 'QR code must use the exact wallet://pair route'
+    })
+    expect(parsePairingUri('example://pair?topic=abc', ANY_PAIRING_SCHEME)).toEqual({
+      params: null,
+      error: 'QR code contains a missing or duplicate security field'
+    })
+  })
+
+  it('is a registry symbol so CJS and ESM copies of the package agree', () => {
+    expect(ANY_PAIRING_SCHEME).toBe(Symbol.for('@bsv/wallet-relay/any-pairing-scheme'))
   })
 
   it('relay URL is not embedded in the URI', () => {
@@ -96,6 +140,45 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
 })
 
 describe('parsePairingUri validation', () => {
+  it('reports field errors in a fixed order', () => {
+    const fields: Record<string, string> = {
+      topic: '!!',
+      backendIdentityKey: 'nope',
+      protocolID: '{',
+      origin: 'http://app.example.com',
+      expiry: 'soon',
+      sig: ''
+    }
+    const parse = () => parsePairingUri(`bsv-browser://pair?${new URLSearchParams(fields)}`)
+    const steps: Array<[string, string, string]> = [
+      ['QR code topic is not a bounded URL-safe identifier', 'topic', 'session-abc-123'],
+      ['QR code expiry is not a valid Unix timestamp', 'expiry', '1'],
+      ['This QR code has expired — ask the desktop to generate a new one', 'expiry', '9999999999'],
+      [
+        'origin must be HTTPS, except for loopback development',
+        'origin',
+        'https://app.example.com'
+      ],
+      [
+        'Backend identity key is not a valid compressed public key',
+        'backendIdentityKey',
+        BACKEND_KEY
+      ],
+      ['protocolID is not valid JSON', 'protocolID', '[9,"x"]'],
+      [
+        'protocolID must be the mobile wallet session protocol',
+        'protocolID',
+        JSON.stringify(PROTOCOL_ID)
+      ],
+      ['QR code contains a malformed security field', 'sig', 'AQ']
+    ]
+    for (const [error, field, fix] of steps) {
+      expect(parse()).toEqual({ params: null, error })
+      fields[field] = fix
+    }
+    expect(parse().error).toBeNull()
+  })
+
   it('rejects an unrecognised URI scheme', () => {
     const result = parsePairingUri('https://example.com/pair?foo=bar')
     expect(result.error).toBeTruthy()

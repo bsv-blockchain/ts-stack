@@ -180,13 +180,15 @@ async function sendPayment(client: WalletRelayClient) {
 
 ```typescript
 import {
+  ANY_PAIRING_SCHEME,
   WalletPairingSession,
   parsePairingUri,
   verifyPairingSignature
 } from '@bsv/wallet-relay/client'
 
-// Scan desktop QR code to get the pairing URI.
-const { params, error } = parsePairingUri(scannedQR)
+// Scan desktop QR code to get the pairing URI. ANY_PAIRING_SCHEME accepts any
+// non-web deep-link scheme, so QRs built for other wallets still pair.
+const { params, error } = parsePairingUri(scannedQR, ANY_PAIRING_SCHEME)
 if (!params) throw new Error(error ?? 'Invalid pairing URI')
 if (!(await verifyPairingSignature(params))) {
   throw new Error('Unsigned or invalid pairing URI')
