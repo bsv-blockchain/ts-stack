@@ -3,7 +3,7 @@ id: pkg-amountinator
 title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: '2.1.10'
+version: '2.1.11'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-11-22'
 last_verified: '2026-11-22'
