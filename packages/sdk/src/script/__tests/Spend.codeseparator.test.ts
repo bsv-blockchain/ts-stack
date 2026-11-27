@@ -28,6 +28,8 @@ describe('Spend — CHECKSIG subscript across OP_CODESEPARATOR in the unlocking 
     const satoshis = 1000
     // Original-digest signatures remove their own push from scriptCode. A
     // FORKID signature would retain it and cannot use this signing fixture.
+    // The default interpreter now requires SIGHASH_FORKID, so this fixture
+    // opts out with an explicit flag set that does not include it.
     const scope = TransactionSignature.SIGHASH_ALL
 
     // Non-empty locking-script tail that MUST be part of the subscript (proves the concat).
@@ -82,7 +84,8 @@ describe('Spend — CHECKSIG subscript across OP_CODESEPARATOR in the unlocking 
       unlockingScript,
       outputs: [],
       inputSequence: 0xffffffff,
-      lockTime: 0
+      lockTime: 0,
+      verifyFlags: ['DERSIG', 'STRICTENC', 'UTXO_AFTER_GENESIS', 'UTXO_AFTER_CHRONICLE']
     })
 
     expect(spend.validate()).toBe(true)

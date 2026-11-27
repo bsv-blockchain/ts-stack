@@ -12,7 +12,9 @@ import type { SyncSessionProgress } from '../sync/syncSession'
 import { SNAPSHOT_JOURNAL_SOURCE_MIGRATION } from '../snapshot/journal/SnapshotJournalLifecycle'
 import type { SnapshotJournalDestinationBinding } from '../snapshot/journal/SnapshotJournalDestinationWindow'
 
-jest.setTimeout(30000)
+// Two fresh SQLite databases, migrations, and activation exceed the 30s Jest
+// default on the ARM coverage runner. The slowest case below already allows 120s.
+jest.setTimeout(120000)
 const identity = '02' + '11'.repeat(32)
 function gate() {
   let resolve!: () => void
@@ -50,7 +52,7 @@ beforeEach(async () => {
   manager = new WalletStorageManager(identity, source, [target])
   await manager.makeAvailable()
   await manager.setActive(source.getSettings().storageIdentityKey)
-})
+}, 120000)
 afterEach(async () => {
   jest.restoreAllMocks()
   const drained = await Promise.allSettled(opened.map(async store => await store.destroy()))
@@ -61,7 +63,7 @@ afterEach(async () => {
       failures.map(value => value.reason),
       'Journal fixture did not drain'
     )
-})
+}, 120000)
 async function insertBasket(name: string) {
   const { user } = await source.findOrInsertUser(identity)
   return await source.insertOutputBasket({

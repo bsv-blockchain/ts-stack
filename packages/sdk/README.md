@@ -382,10 +382,13 @@ The raw token requires a nonempty, even number of hex digits.
 ### Script verification
 
 `Spend` accepts explicit `verifyFlags` for applications that know the spending
-block's flags and the source output's era. The default JavaScript interpreter
-does not know either height, so its version-based behavior is not a substitute
-for node consensus validation. `Transaction.verify()` uses that default when no
-optional verification backend is selected.
+block's flags and the source output's era. When `verifyFlags` is omitted, every
+signature must set `SIGHASH_FORKID`, the same requirement the node enforces
+before it will accept a spend. An explicit flag set stays authoritative: omit
+`SIGHASH_FORKID` to keep the previous opt-out. The default interpreter still
+does not know block height, so its version-based behavior is not a full
+substitute for node consensus validation. `Transaction.verify()` uses that
+default when no optional verification backend is selected.
 
 `OP_NUM2BIN` sizes above the node's signed 32-bit limit are invalid. There is
 no default local allocation cap. Callers evaluating untrusted scripts can pass

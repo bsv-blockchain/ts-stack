@@ -601,8 +601,17 @@ export default class Spend {
   }
 
   #enforceSignatureForkId(sig: TransactionSignature): void {
-    if (!this.#hasExplicitFlags() || !this.#hasFlag('STRICTENC')) return
     const hasForkId = (sig.scope & TransactionSignature.SIGHASH_FORKID) !== 0
+    // Callers that omit verifyFlags, including Transaction.verify(), follow the
+    // network rule that every signature sets SIGHASH_FORKID. An explicit flag
+    // set stays authoritative and can omit that requirement.
+    if (!this.#hasExplicitFlags()) {
+      if (!hasForkId) {
+        this.#scriptEvaluationError('The signature must use SIGHASH_FORKID.')
+      }
+      return
+    }
+    if (!this.#hasFlag('STRICTENC')) return
     if (this.#hasFlag('SIGHASH_FORKID') && !hasForkId) {
       this.#scriptEvaluationError('The signature must use SIGHASH_FORKID.')
     }
@@ -627,7 +636,8 @@ export default class Spend {
         this.#scriptEvaluationError('The signature must have a low S value.')
         return false
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof ScriptEvaluationError) throw error
       if (enforceDer) {
         this.#scriptEvaluationError('The signature format is invalid.')
         return false
