@@ -1109,7 +1109,8 @@ async function resolveInputScript(
   }
   // The host's input policy runs only now, after the source output is resolved
   // from authenticated storage or verified BEEF: a caller cannot misstate the
-  // source locking script to pass it.
+  // source locking script to pass it. The action-batch path does not accept
+  // explicit inputs while this hook is set; those actions use this path.
   if (storage.validateResolvedActionInput != null) await storage.validateResolvedActionInput(vargs, input)
 }
 

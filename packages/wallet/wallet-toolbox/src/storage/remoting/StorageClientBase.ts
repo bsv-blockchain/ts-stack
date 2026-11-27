@@ -1234,6 +1234,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param auth Identifies client by identity key and the storage identity key of their currently active storage.
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param args Validated extension of original wallet `createAction` arguments.
+   * `args.isAdminOriginator`, when present, is exactly what the client asserts.
+   * A storage server must not trust that flag for authorization.
    * @returns `StorageCreateActionResults` supporting additional wallet processing to yield `createAction` results.
    */
   async createAction(auth: AuthId, args: ValidCreateActionArgs): Promise<StorageCreateActionResult> {

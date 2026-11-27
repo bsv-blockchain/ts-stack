@@ -25,6 +25,7 @@ import {
 } from '../../storage/methods/generateChange'
 import { randomizeOutputVouts, repeatableRandom, selectCanonicalChange } from '../../storage/methods/actionPlanning'
 import { validateManagedChangePolicy } from '../../storage/methods/managedChangePolicy'
+import { isAdminOriginatorAction } from '../../utility/adminOriginator'
 
 export interface ActionBatchPlannedAction {
   dcr: StorageCreateActionResult
@@ -234,6 +235,9 @@ async function planFunding(
   const changeBasket = state.begin.changeBasket
   const policy = validateManagedChangePolicy(state.begin.managedChangePolicy)
   const preferredSatoshis = Math.max(1, changeBasket.minimumDesiredUTXOValue)
+  // An admin exact-input action must not gain inputs from pool shaping,
+  // migration, or a preferred change size. Match legacy createAction.
+  const admin = isAdminOriginatorAction(args)
   const params = {
     fixedInputs: explicit.map((output, index) => ({
       satoshis: output.satoshis,
@@ -250,13 +254,13 @@ async function planFunding(
     ],
     feeModel: state.begin.feeModel,
     changeInitialSatoshis: preferredSatoshis,
-    changeFirstSatoshis: preferredSatoshis,
+    changeFirstSatoshis: admin ? 1 : preferredSatoshis,
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
-    targetNetCount: changeBasket.numberOfDesiredUTXOs - state.estimatedChangeCount,
+    targetNetCount: admin ? undefined : changeBasket.numberOfDesiredUTXOs - state.estimatedChangeCount,
     maxChangeOutputs: policy.maxOutputsPerAction,
-    surplusPoolShaping: true,
-    maxMigrationInputs: policy.migrationInputsPerAction,
+    surplusPoolShaping: !admin,
+    maxMigrationInputs: admin ? 0 : policy.migrationInputsPerAction,
     randomVals: args.randomVals
   }
   const allocate = (

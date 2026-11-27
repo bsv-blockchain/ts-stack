@@ -7,6 +7,14 @@ import { WalletProtocol } from './Wallet.interfaces.js'
 
 type CachedKeyValue = PublicKey | PrivateKey | SymmetricKey | Point | number[]
 
+function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
+  return (
+    typeof value === 'object' &&
+    value != null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
+
 function cloneCachedKeyValue(value: CachedKeyValue): CachedKeyValue {
   if (value instanceof PublicKey) return new PublicKey(value)
   if (value instanceof PrivateKey) return new PrivateKey(value)
@@ -21,7 +29,7 @@ function cloneCachedKeyValue(value: CachedKeyValue): CachedKeyValue {
  * It supports configurable cache size with sane defaults and maintains cache entries using LRU (Least Recently Used) eviction policy.
  */
 export default class CachedKeyDeriver implements KeyDeriverApi {
-  private readonly keyDeriver: KeyDeriver
+  private readonly keyDeriver: KeyDeriverApi
   private readonly cache: Map<string, CachedKeyValue>
   private readonly maxCacheSize: number
 
@@ -113,12 +121,9 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     )
     const cachedValue = this.cacheGet(cacheKey)
     if (cachedValue !== undefined) return cachedValue as PublicKey
-    const result = await this.keyDeriver.derivePublicKeyAsync(
-      protocolID,
-      keyID,
-      counterparty,
-      forSelf
-    )
+    const derivePublicKeyAsync = this.keyDeriver.derivePublicKeyAsync
+    if (derivePublicKeyAsync == null) throw new Error('key deriver does not implement derivePublicKeyAsync')
+    const result = await derivePublicKeyAsync.call(this.keyDeriver, protocolID, keyID, counterparty, forSelf)
     this.cacheSet(cacheKey, result)
     return result
   }
@@ -150,7 +155,9 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     }
   }
 
-  derivePrivateKeys(derivations: readonly PrivateKeyDerivation[]): PrivateKey[] {
+  derivePrivateKeys(
+    derivations: readonly PrivateKeyDerivation[]
+  ): PrivateKey[] | Promise<PrivateKey[]> {
     const results: PrivateKey[] = []
     const missing: PrivateKeyDerivation[] = []
     const missingIndexes: number[] = []
@@ -172,12 +179,31 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
         missingCacheKeys.push(cacheKey)
       }
     }
-    if (missing.length > 0) {
-      const derived = this.keyDeriver.derivePrivateKeys(missing)
-      for (let index = 0; index < derived.length; index++) {
-        results[missingIndexes[index]] = derived[index]
-        this.cacheSet(missingCacheKeys[index], derived[index])
-      }
+    if (missing.length === 0) return results
+    const derive = this.keyDeriver.derivePrivateKeys
+    if (derive == null) throw new Error('key deriver does not implement derivePrivateKeys')
+    const derived = derive.call(this.keyDeriver, missing)
+    if (isThenable(derived)) {
+      // Cache only after fulfillment. A rejection must not be stored.
+      return derived.then(keys =>
+        this.storeDerivedKeys(keys, missingIndexes, missingCacheKeys, results)
+      )
+    }
+    return this.storeDerivedKeys(derived, missingIndexes, missingCacheKeys, results)
+  }
+
+  private storeDerivedKeys(
+    keys: PrivateKey[],
+    missingIndexes: number[],
+    missingCacheKeys: string[],
+    results: PrivateKey[]
+  ): PrivateKey[] {
+    if (keys.length !== missingIndexes.length || keys.some(key => !(key instanceof PrivateKey))) {
+      throw new Error('derivePrivateKeys returned an unexpected result')
+    }
+    for (let index = 0; index < keys.length; index++) {
+      results[missingIndexes[index]] = keys[index]
+      this.cacheSet(missingCacheKeys[index], keys[index])
     }
     return results
   }
@@ -218,7 +244,11 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     const cacheKey = this.generateCacheKey('deriveSymmetricKey', protocolID, keyID, counterparty)
     const cachedValue = this.cacheGet(cacheKey)
     if (cachedValue !== undefined) return cachedValue as SymmetricKey
-    const result = await this.keyDeriver.deriveSymmetricKeyAsync(protocolID, keyID, counterparty)
+    const deriveSymmetricKeyAsync = this.keyDeriver.deriveSymmetricKeyAsync
+    if (deriveSymmetricKeyAsync == null) {
+      throw new Error('key deriver does not implement deriveSymmetricKeyAsync')
+    }
+    const result = await deriveSymmetricKeyAsync.call(this.keyDeriver, protocolID, keyID, counterparty)
     this.cacheSet(cacheKey, result)
     return result
   }

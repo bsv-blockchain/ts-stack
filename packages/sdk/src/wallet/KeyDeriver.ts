@@ -64,8 +64,15 @@ export interface KeyDeriverApi {
    * Derives several private keys while sharing each counterparty ECDH result.
    * Implementations that do not provide this additive lane retain the
    * per-key `derivePrivateKey` contract.
+   *
+   * The result may be a Promise, so a native or off-thread deriver can answer
+   * asynchronously. A synchronous implementation that returns `PrivateKey[]`
+   * remains valid. Callers must await the result: `await` returns an array
+   * unchanged and unwraps a Promise.
    */
-  derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
+  derivePrivateKeys?: (
+    derivations: readonly PrivateKeyDerivation[]
+  ) => PrivateKey[] | Promise<PrivateKey[]>
 
   /**
    * Derives a symmetric key based on protocol ID, key ID, and counterparty.
