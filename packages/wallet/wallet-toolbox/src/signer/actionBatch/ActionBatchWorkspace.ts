@@ -351,17 +351,37 @@ class ActionBatchWorkspace {
     }
   }
 
-  private missingExplicitOutpoints(args: ValidCreateActionArgs): Array<{ txid: string; vout: number }> {
-    return [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange].filter(outpoint => {
+  /**
+   * Explicit inputs this batch must still reserve. An input whose source is
+   * already in `sharedBeef` is usually external and needs no reservation, but
+   * one this wallet stores must be reserved, or commit rejects it as "not
+   * reserved by this action batch"; only those are looked up in storage.
+   */
+  private async missingExplicitOutpoints(args: ValidCreateActionArgs): Promise<Array<{ txid: string; vout: number }>> {
+    const unclaimed = [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange].filter(outpoint => {
       const key = `${outpoint.txid}.${outpoint.vout}`
-      return (
-        !this.state.staged.has(key) &&
-        !this.state.explicit.has(key) &&
-        !this.state.reserved.has(key) &&
-        (this.state.discardedStagedTxids.has(outpoint.txid) ||
-          this.state.sharedBeef.findTxid(outpoint.txid)?.tx == null)
-      )
+      return !this.state.staged.has(key) && !this.state.explicit.has(key) && !this.state.reserved.has(key)
     })
+    const inBeef = (outpoint: { txid: string }): boolean =>
+      !this.state.discardedStagedTxids.has(outpoint.txid) && this.state.sharedBeef.findTxid(outpoint.txid)?.tx != null
+    const stored = await this.storedOutpoints(unclaimed.filter(inBeef))
+    return unclaimed.filter(outpoint => !inBeef(outpoint) || stored.has(`${outpoint.txid}.${outpoint.vout}`))
+  }
+
+  /**
+   * Outpoints among `outpoints` that this wallet stores. `findOutputs` is the
+   * user-scoped lookup that every `StorageServer` version serves; the batch
+   * `findOutputsByOutpoints` is not exposed through the manager or remote
+   * storage. Each lookup starts only after the previous one settles, so a
+   * remote storage sees no burst.
+   */
+  private async storedOutpoints(outpoints: Array<{ txid: string; vout: number }>): Promise<Set<string>> {
+    return await outpoints.reduce<Promise<Set<string>>>(async (previous, { txid, vout }) => {
+      const stored = await previous
+      const rows = await this.wallet.storage.findOutputs({ partial: { txid, vout }, noScript: true })
+      if (rows.length > 0) stored.add(`${txid}.${vout}`)
+      return stored
+    }, Promise.resolve(new Set<string>()))
   }
 
   private extend(
@@ -440,7 +460,7 @@ class ActionBatchWorkspace {
     if (args.inputBEEF != null) {
       this.state.sharedBeef.mergeBeef(args.inputBEEF)
     }
-    const missing = this.missingExplicitOutpoints(args)
+    const missing = await this.missingExplicitOutpoints(args)
     if (missing.length > 0) await this.extend(1, 1, missing, args.isSignAction)
 
     let planned: ActionBatchPlannedAction | undefined
