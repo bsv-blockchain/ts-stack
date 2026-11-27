@@ -109,6 +109,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [2.9.1] - 2026-11-26
+
+- /arc-ingest answers 503 instead of 202 to a MINED or IMMUTABLE callback that carries no Merkle path, so Arcade retries it with the stored path instead of treating the callback as delivered and leaving the transaction unproven.
+
+  Migration: No consumer migration is required.
+
 ## [2.4.1] - 2026-06-27
 
 ### Added

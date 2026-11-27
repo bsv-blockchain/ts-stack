@@ -911,6 +911,70 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ---
 
+## [4.2.0] - 2026-11-26
+
+- HTTPSOverlayBroadcastFacilitator.send now rejects a non-2xx answer with OverlayBroadcastHTTPError, which keeps the HTTP status and the first 8 KiB of the response body while the message stays 'Failed to facilitate broadcast'. The body is untrusted, server-controlled text: do not render it as HTML or log it unescaped. validateSTEAK is now exported.
+
+  Migration: No consumer migration is required.
+
+- When a certificate request is embedded in an initialResponse, Peer holds that session's general messages,
+  bounded at 30 seconds, until its own answer has been sent or has ended without one; certificates-received
+  listeners still run first and can prevent disclosure. A new opt-in sendEmptyCertificateResponses option on
+  Peer and AuthFetch answers such a request with an empty certificateResponse when the wallet holds no
+  requested certificate; by default nothing is sent, as before.
+
+  Migration: Embedded certificate requests: no API break and empty answers stay off by default. toPeer on a session whose embedded certificate answer is pending can be delayed, at most 30 seconds, by the wallet's certificate lookup; a send from inside a certificates-received listener is not held. Enable sendEmptyCertificateResponses only for servers that accept an empty answer: @bsv/auth-express-middleware replies 400 ERR_CERTIFICATES_REQUIRED and clears that session's active certificate request. go-sdk's Peer already sends empty answers and accepts them.
+
+- LivePolicy accepts an optional second constructor argument { policyUrl, httpClient } so the fee rate can be read
+  from any ARC-compatible /v1/policy endpoint through an injected HttpClient. The default endpoint, client
+  resolution, caching, fallback and LivePolicy.getInstance() are unchanged.
+
+  Migration: LivePolicy endpoint: no consumer migration is required; both options are optional and the default endpoint, client, cache and fallback rate are unchanged. To use another network, pass a configured LivePolicy to Transaction.fee() instead of relying on the default.
+
+- Adds the opt-in LookupQueryOptions.wholeBeef (forwarded as LookupRequestOptions.wholeBeef): the HTTPS lookup
+  facilitator omits X-Aggregation and reads the per-output JSON answer, keeping history a lookup service
+  returns beyond each output's first proven transaction, which the aggregated answer drops; a binary answer to
+  such a request counts as a rejection without a reputation penalty. Default lookups, SLAP discovery and
+  outpoint deduplication are unchanged.
+
+  Migration: Whole-BEEF lookups: no API, wire or data migration; the default is unchanged and callers opt in per query. A lookup service answering whole-BEEF queries with plain BEEF should put each output's subject last; callers that need the longest history from several hosts merge the onEvidence copies themselves.
+
+- Adds SignedMessage.signWithWallet, which produces a BRC-77 signature through a WalletInterface
+  (byte-compatible with SignedMessage.sign), and an optional expectedSigner option on SignedMessage.verify so a
+  caller can require a particular signer. Existing calls and signatures are unchanged.
+
+  Migration: SignedMessage: no consumer migration is required. signWithWallet and the expectedSigner option are additive, and three-argument verify calls behave as before. A caller that passes expectedSigner gets false, not a thrown error, for a designated-verifier signature by another key even when the recipient key is missing or wrong.
+
+- Initial-response certificate validation accepts a zero-field proof when the initiating Peer's retained
+  session request lists the certificate's type with an empty field array: the signed core, subject and
+  requested certifier and type are checked, the keyring must be empty, null or omitted, and nothing is
+  decrypted. validateCertificates gains an optional allowZeroFields argument, default false. An initial
+  response on a responder session or after the handshake keeps the nonempty path, standalone zero-field
+  responses stay refused, and a lost session snapshot is no longer backfilled from the mutable
+  certificatesToRequest.
+
+  Migration: Zero-field certificate proofs: existing validateCertificates callers keep the nonempty path unless they pass allowZeroFields true, which they should do only for a request they retained locally and bound to an authenticated message. A zero-field proof carries no keyring for the verifier and the initial-response signature does not cover certificates, so it shows that a valid certificate names the authenticated identity as subject, not that the holder presented it; do not call decryptFields on such a certificate. Behaviour change on the nonempty path: a session whose store lost its request snapshot no longer freezes a policy at authentication time, so later standalone certificate responses on that session are checked against the Peer's current certificatesToRequest. No API break, wire or stored-data change.
+
+- StorageDownloader.download now throws StorageDownloadError, which keeps the existing messages and adds attempts: each advertised host tried, with a reason (http with its status, timeout, size, integrity, empty or network); an empty list means no host advertises the file. Adds the opt-in DownloaderConfig.timeoutMs per-host deadline (1 to 2147483647) covering the request and the body; a host that misses it has its request aborted and its body read cancelled, and the next host is tried. There is still no deadline by default. StorageDownloader reads a response with no WHATWG body stream (such as React Native fetch) through arrayBuffer() when the host declares a Content-Length within maxDownloadBytes, with the same size and hash checks; without one the host is recorded as a size failure and the next host is tried. StorageUploader reads such provider replies through arrayBuffer() too. Native fetch responses keep the streamed path. Additive only.
+
+  Migration: No consumer migration is required.
+
+- StorageUploader again treats an upload reply without requiredHeaders as no extra upload headers, so paid uploads to go-uhrp-storage-server hosts no longer fail after payment. A present requiredHeaders, including null, is validated as before.
+
+  Migration: No consumer migration is required.
+
+- StorageUploader.publishFile now sends the provider's required content-type header in place of the file's own type, so signed upload URLs that cover content-type no longer reject the PUT with 403. With no required content type the file's type is still sent.
+
+  Migration: No consumer migration is required.
+
+- Add optional BroadcastResponse.txStatus and BroadcastResponse.arcStatus, set by Teranode and ARC when the service reports them and kept by validateBroadcastResult. Teranode.broadcast now reads ARC-style status bodies: a JSON body with a txStatus is read with ARC's rules and the result carries it as data. RECEIVED stays a success but means received, not yet validated, and may still be rejected. A well-formed competingTxs list is carried as ARC carries it, and ARC reads competingTxs: null, which ARC sends when nothing competes, as no competing transactions instead of ERR_INVALID_RESPONSE. A non-2xx keeps its HTTP code and description and adds the body's ARC status, txStatus and detail under more. A bare 2xx with no body, OK or any non-status body is unchanged, so plain Teranode nodes see the same result.
+
+  Migration: Behaviour change: a 2xx body reporting a status in ARC's failure set (REJECTED, DOUBLE_SPEND_ATTEMPTED, INVALID, MALFORMED, MINED_IN_STALE_BLOCK), a txStatus naming an orphan, or another well-formed txid is now a failure, with code txStatus and more { txStatus, arcStatus, competingTxs } (or ERR_TXID_MISMATCH). Callers that treated every 2xx Teranode answer as success must handle that failure result. Callers that need certainty for RECEIVED check txStatus or poll the service (GET /tx/{txid}).
+
+- Export transactionSize, transactionInputSize, transactionOutputSize and varUintSize so a fee can be estimated from script lengths before a transaction is built; SatoshisPerKilobyte sizes through the same function with identical results.
+
+  Migration: No consumer migration is required.
+
 ## [2.1.4] - 2026-05-26
 
 ### Fixed
