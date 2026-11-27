@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.18.0'
-last_updated: '2026-11-20'
-last_verified: '2026-11-20'
+version: '2.18.1'
+last_updated: '2026-11-21'
+last_verified: '2026-11-21'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -33,6 +33,13 @@ transaction connection reset. Such a transaction now stays queued for retry or
 fails over instead of being marked invalid with its inputs released. No API,
 wire, configuration or schema migration is required. Source is not publication
 or deployment.
+
+## sendMax from unproven change
+
+The 2.18.1 source candidate lets a sendMax (`maxPossibleSatoshis`) `createAction`
+be funded from unproven change when the wallet holds no confirmed coins, instead
+of failing with an invalid output amount. No API, wire or schema migration is
+required. Source is not publication or deployment.
 
 ## Certificate pagination
 

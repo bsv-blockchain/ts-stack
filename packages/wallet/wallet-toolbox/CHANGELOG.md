@@ -304,6 +304,79 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.18.1
+
+- The ARC broadcaster treats HTTP 401 and 403 as service errors, as Arcade does
+  since 2.15.1. An API-key protected ARC answers 401 before it reads the
+  transaction; arc.taal.com and arc-test.taal.com, the default arcUrl on main and
+  test, answer every keyless request that way, so a transaction was recorded as
+  rejected and its inputs released when no other provider accepted it in the same
+  attempt. A failed status read for an extra txid in ARC.postBeef becomes a
+  service error for that txid instead of an exception. WhatsOnChain post answers
+  for 401, 403, 408, an exhausted 429 retry or 5xx, including node-side service
+  failures it relays, are service errors; a relayed node refusal of the
+  transaction keeps its classification. A per-transaction ECONNRESET in a Bitails
+  answer is a service error.
+
+  Migration: No consumer migration is required.
+
+- Wallet Toolbox makes WalletPermissionsManager honor the caller's BRC-100
+  seekPermission: false on listActions, internalizeAction, listOutputs, encrypt,
+  decrypt, createHmac, verifyHmac, createSignature, verifySignature,
+  discoverByIdentityKey and discoverByAttributes, and on the built-in BRC-177
+  module's label check for listActions, as getPublicKey already did. A call that
+  passes false and would otherwise prompt now fails with the existing
+  seekPermission=false errors instead of prompting. Calls that need no prompt (an
+  admin originator, an existing grant, an exempt protocol), and calls that omit
+  the flag or pass true, are unaffected.
+
+  Migration: No consumer migration is required. Exports, types, storage and wire formats are unchanged. An application that passed seekPermission: false and relied on the prompt appearing anyway now receives the existing seekPermission=false error and should omit the flag or pass true to allow the prompt.
+
+- Services.nLockTimeIsFinal and MockServices.nLockTimeIsFinal apply the node's
+  finality rule for the next block. A height lock time is final when it is below
+  tip + 1, so a lock time equal to the tip is no longer refused. A time lock time
+  is final when it is below the median time past of the tip and its ten
+  predecessors (BIP113) rather than the wall clock. Median time past usually runs
+  about an hour behind the wall clock, so a transaction with a non-final input
+  sequence and a lock time set to "now" is refused for about that long, as the
+  network would refuse it. Inputs with an omitted sequence count as final, as they
+  serialize as 0xffffffff. Judging a time lock reads up to eleven block headers,
+  and a header-service failure propagates instead of reporting the transaction as
+  not final.
+
+  Migration: No API, wire or schema migration. Height acceptance widens by one block; time-lock acceptance follows median time past, usually about an hour behind the wall clock.
+
+- TaskCheckNoSends runs its scheduled, unfiltered sweep again. The sweep catches
+  externally broadcast nosend rows that the block-triggered aging schedule defers,
+  but it shared its clock with every run of the task, so block-triggered runs kept
+  postponing it while blocks arrived, and at start it was spent on a run that
+  returned early before the first header. It now keeps its own clock, waits for
+  the first processed header and is not filtered by the aging schedule when a
+  block has also set checkNow.
+
+  Migration: No API, wire or schema migration. A new process sweeps once at its first processed header, then once per triggerMsecs (one day by default).
+
+- A sendMax (maxPossibleSatoshis) createAction is funded from unproven change when
+  confirmed coins cannot pay the fee, instead of failing in the signer with an
+  invalid output amount.
+
+  Migration: No API, wire or schema migration. The ordinary createAction path runs in Storage, so upgrade a remote Storage server for it; the action batch path is fixed by upgrading the wallet host.
+
+- WhatsOnChain getUtxoStatus accepts /unspent/all entries whose status is
+  'unconfirmed' and that carry no height, as WhatsOnChain returns them for mempool
+  outputs; any answer containing one previously failed as a whole, so isUtxo could
+  report neither that output nor confirmed outputs of the same script until it was
+  mined. A present height is still validated and a confirmed entry still requires
+  one. Entries marked isSpentInMempoolTx: true are no longer reported as unspent,
+  and this applies to confirmed outputs too: a confirmed output already spent by a
+  mempool transaction, which getUtxoStatus previously reported as unspent, now
+  reads as spent, so reviewSpendableOutputs (and its release mode), proof recovery
+  and confirmed-spend recovery treat it as spent even if that mempool transaction
+  is later evicted or loses a race. A non-boolean value for that field, or an
+  outpoint listed twice, fails the answer.
+
+  Migration: No consumer migration is required.
+
 ## wallet-toolbox 2.15.3 (source candidate)
 
 - Restore ordinary internalization of exactly framed legacy AtomicBEEF with
